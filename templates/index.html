@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Video — Scene Parser</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>JSON Video Generator</h1>
+            <p class="subtitle">Парсинг сцен для генерации изображений и видео</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="post" action="{{ url_for('parse') }}" id="main-form">
+            <section class="project-name-section">
+                <label for="project_name">Название проекта</label>
+                <input
+                    type="text"
+                    id="project_name"
+                    name="project_name"
+                    placeholder="Например: Finance Explainer Episode 1"
+                    value="{{ project_name or '' }}"
+                >
+            </section>
+            <section class="input-section">
+                <div class="input-header">
+                    <label for="json_input">JSON-код сцен</label>
+                    <div class="input-actions">
+                        <button type="button" id="load-example" class="btn btn-secondary">Load Example</button>
+                        <button type="button" id="clear-btn" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+                <textarea
+                    id="json_input"
+                    name="json_input"
+                    rows="16"
+                    placeholder="Вставьте JSON-сценарий..."
+                >{{ json_input or '' }}</textarea>
+            </section>
+
+            <section class="settings-section">
+                <h2>Настройки генерации</h2>
+                <div class="settings-grid">
+                    <div class="setting">
+                        <label for="aspect_ratio">Aspect Ratio</label>
+                        <select id="aspect_ratio" name="aspect_ratio">
+                            <option value="16:9" {{ 'selected' if (aspect_ratio or '16:9') == '16:9' else '' }}>16:9</option>
+                            <option value="9:16" {{ 'selected' if aspect_ratio == '9:16' else '' }}>9:16</option>
+                        </select>
+                    </div>
+                    <div class="setting">
+                        <label for="video_duration">Длительность видео</label>
+                        <select id="video_duration" name="video_duration">
+                            <option value="10" {{ 'selected' if (video_duration|string or '10') == '10' else '' }}>10 seconds</option>
+                            <option value="15" {{ 'selected' if video_duration|string == '15' else '' }}>15 seconds</option>
+                        </select>
+                    </div>
+                    <div class="setting">
+                        <label for="image_model">Image Model</label>
+                        <select id="image_model" name="image_model">
+                            <option value="nano-banana" {{ 'selected' if image_model == 'nano-banana' else '' }}>nano-banana</option>
+                            <option value="nano-banana-pro" {{ 'selected' if (image_model or 'nano-banana-pro') == 'nano-banana-pro' else '' }}>nano-banana-pro</option>
+                            <option value="placeholder-image-model" {{ 'selected' if image_model == 'placeholder-image-model' else '' }}>placeholder-image-model</option>
+                        </select>
+                    </div>
+                    <div class="setting">
+                        <label for="video_model">Video Model</label>
+                        <select id="video_model" name="video_model">
+                            <option value="veo3" {{ 'selected' if (video_model or 'veo3') == 'veo3' else '' }}>veo3</option>
+                            <option value="veo3-fast" {{ 'selected' if video_model == 'veo3-fast' else '' }}>veo3-fast</option>
+                            <option value="placeholder-video-model" {{ 'selected' if video_model == 'placeholder-video-model' else '' }}>placeholder-video-model</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section class="buttons-section">
+                <button type="submit" class="btn btn-primary">Parse Scenes</button>
+                {% if scenes %}
+                <button type="submit" formaction="{{ url_for('save') }}" class="btn btn-success">Save Job</button>
+                {% endif %}
+            </section>
+        </form>
+
+        {% if errors %}
+        <section class="errors-section">
+            <h2 class="errors-title">Ошибки парсинга</h2>
+            <ul class="error-list">
+                {% for err in errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        {% if scenes and not errors %}
+        <section class="preview-section">
+            <h2>Preview</h2>
+            <div class="summary">
+                <span>Всего сцен: <strong>{{ summary.total }}</strong></span>
+                <span>Start prompt: <strong>{{ summary.with_start_prompt }}</strong></span>
+                <span>End prompt: <strong>{{ summary.with_end_prompt }}</strong></span>
+                <span>Video prompt: <strong>{{ summary.with_video_prompt }}</strong></span>
+            </div>
+            <div class="scenes-grid">
+                {% for scene in scenes %}
+                <div class="scene-card">
+                    <div class="scene-id">{{ scene.scene_id }}</div>
+                    <div class="scene-text" title="{{ scene.text }}">{{ scene.text[:80] }}{% if scene.text|length > 80 %}...{% endif %}</div>
+                    <div class="scene-badges">
+                        <span class="badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">
+                            Start: {{ 'YES' if scene.start.prompt else 'NO' }}
+                        </span>
+                        <span class="badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">
+                            End: {{ 'YES' if scene.end.prompt else 'NO' }}
+                        </span>
+                        <span class="badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">
+                            Video: {{ 'YES' if scene.video.prompt else 'NO' }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="projects-section">
+            <h2>Проекты</h2>
+            {% if jobs %}
+            <div class="projects-list">
+                {% for job in jobs %}
+                <div class="project-card">
+                    <div class="project-main">
+                        <a href="{{ url_for('job_page', job_id=job.job_id) }}" class="project-name">{{ job.project_name or job.job_id }}</a>
+                        <span class="project-meta">{{ job.scenes_count }} сцен · {{ job.status }}</span>
+                    </div>
+                    <form method="post" action="{{ url_for('delete_job', job_id=job.job_id) }}" class="project-delete-form" onsubmit="return confirm('Удалить проект {{ job.job_id }}?');">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Удалить">✕</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="projects-empty">Нет сохранённых проектов.</p>
+            {% endif %}
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

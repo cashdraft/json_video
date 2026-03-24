@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проект {{ job_id }} — Генерация</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="{{ url_for('index') }}" class="back-link">← На главную</a>
+            <form method="post" action="{{ url_for('rename_job', job_id=job_id) }}" class="project-name-form">
+                <label for="project_name" class="sr-only">Название проекта</label>
+                <input
+                    type="text"
+                    id="project_name"
+                    name="project_name"
+                    class="project-name-input"
+                    placeholder="{{ job_id }}"
+                    value="{{ job.project_name or '' }}"
+                >
+                <button type="submit" class="btn btn-secondary btn-sm">Изменить</button>
+            </form>
+            <p class="subtitle">Генерация изображений и видео по сценам · {{ job_id }}</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <section class="job-settings">
+            <h2>Настройки проекта</h2>
+            <div class="settings-grid">
+                <div class="setting">
+                    <span class="setting-label">Aspect Ratio</span>
+                    <span class="setting-value">{{ job.job_meta.aspect_ratio }}</span>
+                </div>
+                <div class="setting">
+                    <span class="setting-label">Длительность видео</span>
+                    <span class="setting-value">{{ job.job_meta.video_duration }} sec</span>
+                </div>
+                <div class="setting">
+                    <span class="setting-label">Image Model</span>
+                    <span class="setting-value">{{ job.job_meta.image_model }}</span>
+                </div>
+                <div class="setting">
+                    <span class="setting-label">Video Model</span>
+                    <span class="setting-value">{{ job.job_meta.video_model }}</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="job-summary">
+            <div class="summary">
+                <span>Всего сцен: <strong>{{ summary.total }}</strong></span>
+                <span>Start prompt: <strong>{{ summary.with_start_prompt }}</strong></span>
+                <span>End prompt: <strong>{{ summary.with_end_prompt }}</strong></span>
+                <span>Video prompt: <strong>{{ summary.with_video_prompt }}</strong></span>
+            </div>
+        </section>
+
+        <section class="generation-section">
+            <h2>Генерация</h2>
+            <p class="generation-hint">Здесь будет запуск генерации через KeyAI API.</p>
+            <button type="button" class="btn btn-primary" id="start-generation" disabled>
+                Запустить генерацию (скоро)
+            </button>
+        </section>
+
+        <section class="scenes-section">
+            <h2>Сцены</h2>
+            <div class="scenes-grid">
+                {% for scene in scenes %}
+                <div class="scene-card">
+                    <div class="scene-id">{{ scene.scene_id }}</div>
+                    <div class="scene-text" title="{{ scene.text }}">{{ scene.text[:80] }}{% if scene.text|length > 80 %}...{% endif %}</div>
+                    <div class="scene-badges">
+                        <span class="badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">
+                            Start: {{ 'YES' if scene.start.prompt else 'NO' }}
+                        </span>
+                        <span class="badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">
+                            End: {{ 'YES' if scene.end.prompt else 'NO' }}
+                        </span>
+                        <span class="badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">
+                            Video: {{ 'YES' if scene.video.prompt else 'NO' }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</body>
+</html>
