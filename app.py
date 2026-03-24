@@ -12,7 +12,9 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
+
+from kie_client import create_image_task, get_task_result
 
 load_dotenv()
 
@@ -22,6 +24,7 @@ JOBS_DIR = BASE_DIR / "data" / "jobs"
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+GENERATION_TASKS: dict[str, dict] = {}
 
 
 # --- Parsing logic ---
@@ -149,6 +152,7 @@ def build_job_payload(
     video_duration: int,
     image_model: str,
     video_model: str,
+    resolution: str = "2K",
     project_name: str = "",
 ) -> dict:
     """Собирает payload для сохранения job."""
@@ -160,6 +164,7 @@ def build_job_payload(
         "selected_video_duration": video_duration,
         "selected_image_model": image_model,
         "selected_video_model": video_model,
+        "selected_resolution": resolution,
         "created_at": datetime.now().isoformat(),
         "status": "draft",
         "job_meta": {
@@ -167,6 +172,8 @@ def build_job_payload(
             "video_duration": video_duration,
             "image_model": image_model,
             "video_model": video_model,
+            "resolution": resolution,
+            "output_format": "jpg",
         },
         "scenes": parsed_scenes,
     }
@@ -190,6 +197,13 @@ def load_job(job_id: str) -> dict | None:
         return None
     with open(filepath, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def save_job(job_id: str, job: dict) -> None:
+    """Persist job JSON to disk."""
+    filepath = JOBS_DIR / f"{job_id}.json"
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(job, f, ensure_ascii=False, indent=2)
 
 
 def update_job_field(job_id: str, field: str, value) -> bool:
@@ -258,6 +272,7 @@ def parse():
     raw_text = request.form.get("json_input", "")
     project_name = request.form.get("project_name", "")
     aspect_ratio = request.form.get("aspect_ratio", "16:9")
+    resolution = request.form.get("resolution", "2K")
     video_duration = int(request.form.get("video_duration", "10"))
     image_model = request.form.get("image_model", "nano-banana-pro")
     video_model = request.form.get("video_model", "veo3")
@@ -269,6 +284,7 @@ def parse():
             json_input=raw_text,
             project_name=project_name,
             aspect_ratio=aspect_ratio,
+            resolution=resolution,
             video_duration=video_duration,
             image_model=image_model,
             video_model=video_model,
@@ -281,6 +297,7 @@ def parse():
         json_input=raw_text,
         project_name=project_name,
         aspect_ratio=aspect_ratio,
+        resolution=resolution,
         video_duration=video_duration,
         image_model=image_model,
         video_model=video_model,
@@ -294,6 +311,7 @@ def save():
     raw_text = request.form.get("json_input", "")
     project_name = request.form.get("project_name", "")
     aspect_ratio = request.form.get("aspect_ratio", "16:9")
+    resolution = request.form.get("resolution", "2K")
     video_duration = int(request.form.get("video_duration", "10"))
     image_model = request.form.get("image_model", "nano-banana-pro")
     video_model = request.form.get("video_model", "veo3")
@@ -311,12 +329,236 @@ def save():
         video_duration=video_duration,
         image_model=image_model,
         video_model=video_model,
+        resolution=resolution,
         project_name=project_name,
     )
 
     filepath, job_id = save_job_file(payload)
     flash("Проект сохранён. Переход к генерации.", "success")
     return redirect(url_for("job_page", job_id=job_id))
+
+
+@app.route("/job/<job_id>/generate/start", methods=["POST"])
+def generate_slot_start(job_id: str):
+    """Старт генерации изображения (start/end). Возвращает task_id."""
+    job = load_job(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json() or {}
+    scene_idx = data.get("scene_index", 0)
+    slot = data.get("slot", "start")  # start | end
+
+    scenes = job.get("scenes", [])
+    if scene_idx < 0 or scene_idx >= len(scenes):
+        return jsonify({"error": "Invalid scene index"}), 400
+
+    scene = scenes[scene_idx]
+    meta = job.get("job_meta", {})
+    aspect_ratio = meta.get("aspect_ratio", "16:9")
+    resolution = meta.get("resolution", "2K")
+    output_format = meta.get("output_format", "jpg")
+
+    prompt = None
+    if slot == "start":
+        prompt = scene.get("start", {}).get("prompt")
+    elif slot == "end":
+        prompt = scene.get("end", {}).get("prompt")
+
+    if not prompt:
+        return jsonify({"error": f"No prompt for {slot}"}), 400
+
+    try:
+        task_id = create_image_task(
+            prompt=prompt,
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            output_format=output_format,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+    GENERATION_TASKS[task_id] = {
+        "job_id": job_id,
+        "scene_idx": scene_idx,
+        "slot": slot,
+        "started_at": datetime.now().timestamp(),
+    }
+
+    # Persist in job file to survive page reload/restart.
+    scene[slot] = scene.get(slot) or {"prompt": prompt}
+    # If user starts regeneration, hide previous image until new result is ready.
+    scene[slot].pop("image_url", None)
+    scene[slot]["generation"] = {
+        "task_id": task_id,
+        "state": "submitted",
+        "started_at": datetime.now().timestamp(),
+        "canceled": False,
+    }
+    job["scenes"] = scenes
+    save_job(job_id, job)
+
+    return jsonify({"task_id": task_id, "state": "submitted", "elapsed_seconds": 0})
+
+
+@app.route("/job/<job_id>/generate/status", methods=["GET"])
+def generate_slot_status(job_id: str):
+    """Проверка статуса генерации по task_id."""
+    task_id = request.args.get("task_id", "")
+    if not task_id:
+        return jsonify({"error": "task_id is required"}), 400
+
+    task_meta = GENERATION_TASKS.get(task_id)
+    if task_meta and task_meta.get("job_id") != job_id:
+        return jsonify({"error": "task_id does not belong to this job"}), 403
+
+    # Recover task meta from persisted job if server memory lost.
+    if not task_meta:
+        job = load_job(job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        for idx, scene in enumerate(job.get("scenes", [])):
+            for slot_name in ("start", "end"):
+                slot_obj = scene.get(slot_name, {})
+                gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
+                if gen.get("task_id") == task_id and not gen.get("canceled"):
+                    task_meta = {
+                        "job_id": job_id,
+                        "scene_idx": idx,
+                        "slot": slot_name,
+                        "started_at": gen.get("started_at", datetime.now().timestamp()),
+                    }
+                    GENERATION_TASKS[task_id] = task_meta
+                    break
+            if task_meta:
+                break
+        if not task_meta:
+            return jsonify({"error": "task_id not found"}), 404
+
+    elapsed_seconds = int(datetime.now().timestamp() - task_meta["started_at"])
+
+    try:
+        result = get_task_result(task_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+    state = result.get("state", "unknown")
+    state_text = {
+        "waiting": "Task accepted, waiting in queue",
+        "queuing": "Queued for generation",
+        "generating": "Generating image",
+        "success": "Generation complete",
+        "fail": "Generation failed",
+    }.get(state, "Processing task")
+
+    response = {
+        "task_id": task_id,
+        "state": state,
+        "state_text": state_text,
+        "elapsed_seconds": elapsed_seconds,
+    }
+
+    if state == "success":
+        urls = result.get("result_urls", [])
+        url = urls[0] if urls else ""
+        response["url"] = url
+        if url:
+            job = load_job(job_id)
+            if job is not None:
+                scene_idx = task_meta["scene_idx"]
+                slot = task_meta["slot"]
+                scenes = job.get("scenes", [])
+                if 0 <= scene_idx < len(scenes):
+                    scene = scenes[scene_idx]
+                    scene[slot] = scene.get(slot) or {"prompt": None}
+                    scene[slot]["image_url"] = url
+                    scene[slot]["generation"] = {
+                        "task_id": task_id,
+                        "state": "success",
+                        "started_at": task_meta["started_at"],
+                        "completed_at": datetime.now().timestamp(),
+                        "canceled": False,
+                    }
+                    job["scenes"] = scenes
+                    save_job(job_id, job)
+        GENERATION_TASKS.pop(task_id, None)
+    elif state == "fail":
+        response["error"] = result.get("error", "Generation failed")
+        job = load_job(job_id)
+        if job is not None:
+            scene_idx = task_meta["scene_idx"]
+            slot = task_meta["slot"]
+            scenes = job.get("scenes", [])
+            if 0 <= scene_idx < len(scenes):
+                scene = scenes[scene_idx]
+                scene[slot] = scene.get(slot) or {"prompt": None}
+                scene[slot]["generation"] = {
+                    "task_id": task_id,
+                    "state": "fail",
+                    "started_at": task_meta["started_at"],
+                    "completed_at": datetime.now().timestamp(),
+                    "canceled": False,
+                    "error": response["error"],
+                }
+                job["scenes"] = scenes
+                save_job(job_id, job)
+        GENERATION_TASKS.pop(task_id, None)
+    else:
+        # Persist progress for refresh/recovery.
+        job = load_job(job_id)
+        if job is not None:
+            scene_idx = task_meta["scene_idx"]
+            slot = task_meta["slot"]
+            scenes = job.get("scenes", [])
+            if 0 <= scene_idx < len(scenes):
+                scene = scenes[scene_idx]
+                scene[slot] = scene.get(slot) or {"prompt": None}
+                scene[slot]["generation"] = {
+                    "task_id": task_id,
+                    "state": state,
+                    "started_at": task_meta["started_at"],
+                    "canceled": False,
+                }
+                job["scenes"] = scenes
+                save_job(job_id, job)
+
+    return jsonify(response)
+
+
+@app.route("/job/<job_id>/generate/cancel", methods=["POST"])
+def generate_slot_cancel(job_id: str):
+    """Локальная отмена трекинга генерации по task_id."""
+    data = request.get_json() or {}
+    task_id = data.get("task_id", "")
+    if not task_id:
+        return jsonify({"error": "task_id is required"}), 400
+
+    task_meta = GENERATION_TASKS.get(task_id)
+    if task_meta and task_meta.get("job_id") != job_id:
+        return jsonify({"error": "task_id does not belong to this job"}), 403
+
+    # Mark canceled in persisted job.
+    job = load_job(job_id)
+    if job:
+        scenes = job.get("scenes", [])
+        for scene in scenes:
+            for slot_name in ("start", "end"):
+                slot_obj = scene.get(slot_name, {})
+                gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
+                if gen.get("task_id") == task_id:
+                    gen["canceled"] = True
+                    gen["state"] = "canceled"
+                    gen["completed_at"] = datetime.now().timestamp()
+                    scene[slot_name]["generation"] = gen
+        job["scenes"] = scenes
+        save_job(job_id, job)
+
+    GENERATION_TASKS.pop(task_id, None)
+    return jsonify({"ok": True, "message": "Tracking canceled"})
 
 
 @app.route("/job/<job_id>/rename", methods=["POST"])
@@ -353,12 +595,14 @@ def job_page(job_id: str):
     # Совместимость со старыми job без project_name, job_meta
     job.setdefault("project_name", "")
     if "job_meta" not in job:
-        job["job_meta"] = {
-            "aspect_ratio": job.get("selected_aspect_ratio", "16:9"),
-            "video_duration": job.get("selected_video_duration", 10),
-            "image_model": job.get("selected_image_model", "nano-banana-pro"),
-            "video_model": job.get("selected_video_model", "veo3"),
-        }
+        job["job_meta"] = {}
+    meta = job["job_meta"]
+    meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
+    meta.setdefault("video_duration", job.get("selected_video_duration", 10))
+    meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
+    meta.setdefault("video_model", job.get("selected_video_model", "veo3"))
+    meta.setdefault("resolution", job.get("selected_resolution", "2K"))
+    meta.setdefault("output_format", "jpg")
 
     summary = compute_summary(job.get("scenes", []))
     return render_template(

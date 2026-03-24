@@ -54,6 +54,14 @@
                     <span class="setting-label">Video Model</span>
                     <span class="setting-value">{{ job.job_meta.video_model }}</span>
                 </div>
+                <div class="setting">
+                    <span class="setting-label">Resolution</span>
+                    <span class="setting-value">{{ job.job_meta.resolution or '2K' }}</span>
+                </div>
+                <div class="setting">
+                    <span class="setting-label">Output</span>
+                    <span class="setting-value">{{ job.job_meta.output_format or 'jpg' }}</span>
+                </div>
             </div>
         </section>
 
@@ -68,34 +76,342 @@
 
         <section class="generation-section">
             <h2>Генерация</h2>
-            <p class="generation-hint">Здесь будет запуск генерации через KeyAI API.</p>
-            <button type="button" class="btn btn-primary" id="start-generation" disabled>
-                Запустить генерацию (скоро)
-            </button>
+            <p class="generation-hint">Kie.ai Nano Banana Pro. Нажми ↻ у слота для генерации изображения.</p>
         </section>
 
-        <section class="scenes-section">
+        <section
+            class="scenes-section"
+            style="--slot-aspect-ratio: {{ (job.job_meta.aspect_ratio or '16:9')|replace(':', '/') }};"
+        >
             <h2>Сцены</h2>
-            <div class="scenes-grid">
+            <div class="scenes-grid {{ 'portrait-layout' if (job.job_meta.aspect_ratio or '16:9') == '9:16' else '' }}">
                 {% for scene in scenes %}
-                <div class="scene-card">
-                    <div class="scene-id">{{ scene.scene_id }}</div>
-                    <div class="scene-text" title="{{ scene.text }}">{{ scene.text[:80] }}{% if scene.text|length > 80 %}...{% endif %}</div>
-                    <div class="scene-badges">
-                        <span class="badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">
-                            Start: {{ 'YES' if scene.start.prompt else 'NO' }}
-                        </span>
-                        <span class="badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">
-                            End: {{ 'YES' if scene.end.prompt else 'NO' }}
-                        </span>
-                        <span class="badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">
-                            Video: {{ 'YES' if scene.video.prompt else 'NO' }}
-                        </span>
+                <div class="scene-card" data-scene-index="{{ loop.index0 }}">
+                    <div class="scene-header">
+                        <div class="scene-id">{{ scene.scene_id }}</div>
+                        <div class="scene-text" title="{{ scene.text }}">{{ scene.text[:80] }}{% if scene.text|length > 80 %}...{% endif %}</div>
+                    </div>
+                    <div class="scene-slots">
+                        <div class="scene-slot" data-slot="start">
+                            <div class="slot-header">
+                                <span class="slot-badge-wrap">
+                                    <span class="slot-badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
+                                    <span class="slot-prompt-tooltip">{{ scene.start.prompt or '—' }}</span>
+                                </span>
+                                {% if scene.start.prompt %}
+                                <button type="button" class="btn-regenerate btn-generate" data-scene-index="{{ loop.index0 }}" data-slot="start" title="Generate">↻</button>
+                                {% endif %}
+                            </div>
+                            {% set start_gen = scene.start.generation if scene.start and scene.start.generation else none %}
+                            {% set start_active = start_gen and start_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not start_gen.canceled %}
+                            <div
+                                class="slot-placeholder"
+                                data-status="{{ (start_gen.state if start_gen else ('done' if scene.start.image_url else 'pending')) }}"
+                                data-task-id="{{ start_gen.task_id if start_gen else '' }}"
+                                data-started-at="{{ start_gen.started_at if start_gen else '' }}"
+                            >
+                                {% if start_active %}
+                                <span class="slot-status slot-status-with-spinner">{{ start_gen.state|capitalize }}…</span>
+                                {% elif start_gen and start_gen.state == 'canceled' %}
+                                <span class="slot-status">Canceled</span>
+                                {% elif start_gen and start_gen.state == 'fail' %}
+                                <span class="slot-status slot-status-error">{{ start_gen.error or 'Generation failed' }}</span>
+                                {% elif scene.start.image_url %}
+                                <img src="{{ scene.start.image_url }}" alt="Start" class="slot-image">
+                                {% else %}
+                                <span class="slot-status">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="scene-slot" data-slot="end">
+                            <div class="slot-header">
+                                <span class="slot-badge-wrap">
+                                    <span class="slot-badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">End: {{ 'YES' if scene.end.prompt else 'NO' }}</span>
+                                    <span class="slot-prompt-tooltip">{{ scene.end.prompt or '—' }}</span>
+                                </span>
+                                {% if scene.end.prompt %}
+                                <button type="button" class="btn-regenerate btn-generate" data-scene-index="{{ loop.index0 }}" data-slot="end" title="Generate">↻</button>
+                                {% endif %}
+                            </div>
+                            {% set end_gen = scene.end.generation if scene.end and scene.end.generation else none %}
+                            {% set end_active = end_gen and end_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not end_gen.canceled %}
+                            <div
+                                class="slot-placeholder"
+                                data-status="{{ (end_gen.state if end_gen else ('done' if scene.end.image_url else 'pending')) }}"
+                                data-task-id="{{ end_gen.task_id if end_gen else '' }}"
+                                data-started-at="{{ end_gen.started_at if end_gen else '' }}"
+                            >
+                                {% if end_active %}
+                                <span class="slot-status slot-status-with-spinner">{{ end_gen.state|capitalize }}…</span>
+                                {% elif end_gen and end_gen.state == 'canceled' %}
+                                <span class="slot-status">Canceled</span>
+                                {% elif end_gen and end_gen.state == 'fail' %}
+                                <span class="slot-status slot-status-error">{{ end_gen.error or 'Generation failed' }}</span>
+                                {% elif scene.end.image_url %}
+                                <img src="{{ scene.end.image_url }}" alt="End" class="slot-image">
+                                {% else %}
+                                <span class="slot-status">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="scene-slot" data-slot="video">
+                            <div class="slot-header">
+                                <span class="slot-badge-wrap">
+                                    <span class="slot-badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
+                                    <span class="slot-prompt-tooltip">{{ scene.video.prompt or '—' }}</span>
+                                </span>
+                                <button type="button" class="btn-regenerate" title="Скоро" disabled>↻</button>
+                            </div>
+                            <div class="slot-placeholder" data-status="pending">
+                                <span class="slot-status">Pending</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
             </div>
         </section>
     </div>
+
+    <div class="lightbox" id="lightbox" aria-hidden="true">
+        <div class="lightbox-meta" id="lightbox-meta">
+            <div class="lightbox-meta-main">
+                <div class="lightbox-scene-id" id="lightbox-scene-id"></div>
+                <div class="lightbox-slot-label" id="lightbox-slot-label"></div>
+                <button type="button" class="btn-regenerate lightbox-regen-btn" id="lightbox-regen-current" title="Regenerate current">↻</button>
+            </div>
+            <div class="lightbox-scene-text" id="lightbox-scene-text"></div>
+        </div>
+        <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Close">×</button>
+        <button type="button" class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Previous">‹</button>
+        <img src="" alt="Preview" class="lightbox-image" id="lightbox-image">
+        <button type="button" class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Next">›</button>
+        <div class="lightbox-counter" id="lightbox-counter"></div>
+    </div>
+
+    <script>
+    let galleryImages = [];
+    let currentImageIndex = 0;
+
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImage = document.getElementById('lightbox-image');
+    const lightboxCounter = document.getElementById('lightbox-counter');
+    const lightboxSceneId = document.getElementById('lightbox-scene-id');
+    const lightboxSlotLabel = document.getElementById('lightbox-slot-label');
+    const lightboxSceneText = document.getElementById('lightbox-scene-text');
+    const lightboxRegenCurrent = document.getElementById('lightbox-regen-current');
+
+    const refreshGallery = () => {
+        galleryImages = Array.from(document.querySelectorAll('.slot-image')).map(img => {
+            const sceneCard = img.closest('.scene-card');
+            const sceneSlot = img.closest('.scene-slot');
+            const sceneIndex = sceneCard ? parseInt(sceneCard.dataset.sceneIndex, 10) : 0;
+            const sceneIdEl = sceneCard ? sceneCard.querySelector('.scene-id') : null;
+            const sceneTextEl = sceneCard ? sceneCard.querySelector('.scene-text') : null;
+            const slotName = sceneSlot ? (sceneSlot.dataset.slot || '') : '';
+            return {
+                el: img,
+                src: img.src,
+                sceneIndex,
+                sceneId: sceneIdEl ? sceneIdEl.textContent.trim() : '',
+                sceneText: sceneTextEl ? sceneTextEl.textContent.trim() : '',
+                slot: slotName
+            };
+        });
+    };
+
+    const updateLightboxMeta = () => {
+        if (!galleryImages.length) return;
+        const item = galleryImages[currentImageIndex];
+        lightboxSceneId.textContent = item.sceneId || '';
+        lightboxSlotLabel.textContent = item.slot ? item.slot.charAt(0).toUpperCase() + item.slot.slice(1) : '';
+        lightboxSceneText.textContent = item.sceneText || '';
+        lightboxRegenCurrent.dataset.sceneIndex = String(item.sceneIndex);
+        lightboxRegenCurrent.dataset.slot = item.slot || '';
+        lightboxRegenCurrent.disabled = !item.slot || item.slot === 'video';
+        lightboxRegenCurrent.title = item.slot ? `Regenerate ${item.slot}` : 'Regenerate';
+    };
+
+    const openLightbox = (index) => {
+        refreshGallery();
+        if (!galleryImages.length) return;
+        currentImageIndex = Math.max(0, Math.min(index, galleryImages.length - 1));
+        lightboxImage.src = galleryImages[currentImageIndex].src;
+        updateLightboxMeta();
+        lightboxCounter.textContent = `${currentImageIndex + 1} / ${galleryImages.length}`;
+        lightbox.classList.add('open');
+        lightbox.setAttribute('aria-hidden', 'false');
+    };
+
+    const closeLightbox = () => {
+        lightbox.classList.remove('open');
+        lightbox.setAttribute('aria-hidden', 'true');
+        lightboxImage.src = '';
+    };
+
+    const stepLightbox = (delta) => {
+        if (!galleryImages.length) return;
+        currentImageIndex = (currentImageIndex + delta + galleryImages.length) % galleryImages.length;
+        lightboxImage.src = galleryImages[currentImageIndex].src;
+        updateLightboxMeta();
+        lightboxCounter.textContent = `${currentImageIndex + 1} / ${galleryImages.length}`;
+    };
+
+    document.addEventListener('click', (e) => {
+        const img = e.target.closest('.slot-image');
+        if (img) {
+            refreshGallery();
+            const idx = galleryImages.findIndex(item => item.el === img);
+            openLightbox(idx >= 0 ? idx : 0);
+        }
+    });
+
+    document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+    document.getElementById('lightbox-prev').addEventListener('click', () => stepLightbox(-1));
+    document.getElementById('lightbox-next').addEventListener('click', () => stepLightbox(1));
+
+    lightbox.addEventListener('click', (e) => {
+        if (e.target === lightbox) closeLightbox();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (!lightbox.classList.contains('open')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') stepLightbox(-1);
+        if (e.key === 'ArrowRight') stepLightbox(1);
+    });
+
+    const triggerRegenerate = (sceneIndex, slot) => {
+        const btn = document.querySelector(`.btn-generate[data-scene-index="${sceneIndex}"][data-slot="${slot}"]`);
+        if (btn) {
+            btn.click();
+            closeLightbox();
+        }
+    };
+    lightboxRegenCurrent.addEventListener('click', () => {
+        const sceneIndex = lightboxRegenCurrent.dataset.sceneIndex;
+        const slot = lightboxRegenCurrent.dataset.slot;
+        if (sceneIndex !== undefined && slot) triggerRegenerate(sceneIndex, slot);
+    });
+
+    const jobId = '{{ job_id }}';
+    const canceledTasks = new Set();
+
+    const renderStatus = (placeholder, text, elapsed, withSpinner = false, taskId = '') => {
+        const safe = `${text} (${elapsed}s)`;
+        placeholder.setAttribute('data-status', withSpinner ? 'generating' : 'pending');
+        if (withSpinner && taskId) {
+            placeholder.innerHTML = `
+                <div class="slot-status-row">
+                    <span class="slot-status slot-status-with-spinner">${safe}</span>
+                    <button type="button" class="btn-cancel-generation" data-task-id="${taskId}">Cancel</button>
+                </div>
+            `;
+            const cancelBtn = placeholder.querySelector('.btn-cancel-generation');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', async () => {
+                    canceledTasks.add(taskId);
+                    cancelBtn.disabled = true;
+                    try {
+                        await fetch(`/job/${jobId}/generate/cancel`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ task_id: taskId })
+                        });
+                    } catch (_) {}
+                    placeholder.setAttribute('data-status', 'pending');
+                    placeholder.innerHTML = `<span class="slot-status">Canceled (${elapsed}s)</span>`;
+                });
+            }
+        } else {
+            placeholder.innerHTML = `<span class="slot-status ${withSpinner ? 'slot-status-with-spinner' : ''}">${safe}</span>`;
+        }
+    };
+
+    const pollTask = async (btn, placeholder, slot, taskId) => {
+        let done = false;
+        while (!done) {
+            if (canceledTasks.has(taskId)) break;
+            await new Promise(r => setTimeout(r, 2000));
+            if (canceledTasks.has(taskId)) break;
+            const statusResp = await fetch(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`);
+            const statusData = await statusResp.json();
+            if (!statusResp.ok) {
+                throw new Error(statusData.error || 'Status check failed');
+            }
+
+            const elapsed = statusData.elapsed_seconds || 0;
+            const state = statusData.state || 'unknown';
+            const stateText = statusData.state_text || 'Processing task';
+
+            if (state === 'success' && statusData.url) {
+                placeholder.setAttribute('data-status', 'done');
+                placeholder.innerHTML = `<img src="${statusData.url}" alt="${slot}" class="slot-image">`;
+                refreshGallery();
+                done = true;
+            } else if (state === 'fail') {
+                placeholder.setAttribute('data-status', 'pending');
+                placeholder.innerHTML = `<span class="slot-status slot-status-error">${statusData.error || 'Generation failed'} (${elapsed}s)</span>`;
+                done = true;
+            } else {
+                renderStatus(placeholder, stateText, elapsed, true, taskId);
+            }
+        }
+        btn.disabled = false;
+    };
+
+    const startGenerationForButton = async (btn) => {
+        const sceneIndex = parseInt(btn.dataset.sceneIndex, 10);
+        const slot = btn.dataset.slot;
+        const placeholder = btn.closest('.scene-slot').querySelector('.slot-placeholder');
+        btn.disabled = true;
+        renderStatus(placeholder, 'Task submitted', 0, true);
+        try {
+            const startResp = await fetch(`/job/${jobId}/generate/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scene_index: sceneIndex, slot: slot })
+            });
+            const startData = await startResp.json();
+            if (!startResp.ok || !startData.task_id) {
+                throw new Error(startData.error || 'Failed to submit task');
+            }
+            const taskId = startData.task_id;
+            placeholder.dataset.taskId = taskId;
+            renderStatus(placeholder, 'Task submitted', 0, true, taskId);
+            await pollTask(btn, placeholder, slot, taskId);
+        } catch (e) {
+            placeholder.setAttribute('data-status', 'pending');
+            placeholder.innerHTML = `<span class="slot-status slot-status-error">${e.message}</span>`;
+            btn.disabled = false;
+        }
+    };
+
+    document.querySelectorAll('.btn-generate').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            await startGenerationForButton(this);
+        });
+    });
+
+    // Resume polling after page refresh for active tasks.
+    document.querySelectorAll('.scene-slot[data-slot="start"], .scene-slot[data-slot="end"]').forEach(slotEl => {
+        const placeholder = slotEl.querySelector('.slot-placeholder');
+        const taskId = placeholder?.dataset?.taskId;
+        const slot = slotEl.dataset.slot;
+        if (!taskId) return;
+        if (placeholder.dataset.status === 'waiting' || placeholder.dataset.status === 'queuing' || placeholder.dataset.status === 'generating' || placeholder.dataset.status === 'submitted') {
+            const btn = slotEl.querySelector('.btn-generate');
+            if (btn) {
+                renderStatus(placeholder, 'Resuming task tracking', 0, true, taskId);
+                btn.disabled = true;
+                pollTask(btn, placeholder, slot, taskId).catch((e) => {
+                    placeholder.setAttribute('data-status', 'pending');
+                    placeholder.innerHTML = `<span class="slot-status slot-status-error">${e.message}</span>`;
+                    btn.disabled = false;
+                });
+            }
+        }
+    });
+    </script>
 </body>
 </html>

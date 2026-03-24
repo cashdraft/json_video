@@ -30,6 +30,16 @@ python app.py
 
 Откроется на http://127.0.0.1:5000
 
+## Push на GitHub (Personal Access Token)
+
+1. Создай PAT: GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)** → **Generate new token** → право **repo**
+2. В `.env` добавь:
+   ```
+   GITHUB_USERNAME=твой_логин_на_github
+   GITHUB_PAT=твой_токен
+   ```
+3. Пушим: `./push.sh` (или попроси AI «запушь»)
+
 ## GitHub Secrets (для CI/CD)
 
 Если используешь GitHub Actions и нужны секреты:

@@ -61,6 +61,17 @@
                         </select>
                     </div>
                     <div class="setting">
+                        <label>Resolution</label>
+                        <div class="resolution-toggle">
+                            <input type="radio" id="res_1k" name="resolution" value="1K" {{ 'checked' if (resolution or '2K') == '1K' else '' }}>
+                            <label for="res_1k">1K</label>
+                            <input type="radio" id="res_2k" name="resolution" value="2K" {{ 'checked' if (resolution or '2K') == '2K' else '' }}>
+                            <label for="res_2k">2K</label>
+                            <input type="radio" id="res_4k" name="resolution" value="4K" {{ 'checked' if resolution == '4K' else '' }}>
+                            <label for="res_4k">4K</label>
+                        </div>
+                    </div>
+                    <div class="setting">
                         <label for="video_duration">Длительность видео</label>
                         <select id="video_duration" name="video_duration">
                             <option value="10" {{ 'selected' if (video_duration|string or '10') == '10' else '' }}>10 seconds</option>
