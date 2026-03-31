@@ -81,17 +81,14 @@
                     <div class="setting">
                         <label for="image_model">Image Model</label>
                         <select id="image_model" name="image_model">
-                            <option value="nano-banana" {{ 'selected' if image_model == 'nano-banana' else '' }}>nano-banana</option>
                             <option value="nano-banana-pro" {{ 'selected' if (image_model or 'nano-banana-pro') == 'nano-banana-pro' else '' }}>nano-banana-pro</option>
-                            <option value="placeholder-image-model" {{ 'selected' if image_model == 'placeholder-image-model' else '' }}>placeholder-image-model</option>
                         </select>
                     </div>
                     <div class="setting">
                         <label for="video_model">Video Model</label>
                         <select id="video_model" name="video_model">
-                            <option value="veo3" {{ 'selected' if (video_model or 'veo3') == 'veo3' else '' }}>veo3</option>
-                            <option value="veo3-fast" {{ 'selected' if video_model == 'veo3-fast' else '' }}>veo3-fast</option>
-                            <option value="placeholder-video-model" {{ 'selected' if video_model == 'placeholder-video-model' else '' }}>placeholder-video-model</option>
+                            <option value="veo3" {{ 'selected' if video_model == 'veo3' else '' }}>Veo 3.1 Quality</option>
+                            <option value="veo3_fast" {{ 'selected' if (video_model or 'veo3_fast') in ['veo3_fast', 'veo3-fast'] else '' }}>Veo 3.1 Fast</option>
                         </select>
                     </div>
                 </div>

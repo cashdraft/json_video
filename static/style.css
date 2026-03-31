@@ -245,6 +245,7 @@ textarea::placeholder {
 }
 
 .resolution-toggle label {
+    position: relative;
     padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
     background: var(--bg-input);
@@ -265,10 +266,25 @@ textarea::placeholder {
     border-right: none;
 }
 
+.resolution-toggle label:not(:last-of-type)::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 1px;
+    height: 100%;
+    background: var(--border);
+    z-index: 2;
+}
+
 .resolution-toggle input:checked + label {
     background: rgba(74, 158, 255, 0.15);
     border-color: var(--accent);
     color: var(--accent);
+}
+
+.resolution-toggle input:checked + label:not(:last-of-type)::after {
+    background: var(--accent);
 }
 
 .setting-label {
@@ -526,9 +542,28 @@ textarea::placeholder {
     flex-shrink: 0;
 }
 
+.btn-regenerate .btn-icon {
+    display: inline-block;
+    line-height: 1;
+}
+
 .btn-regenerate:hover {
     color: var(--accent);
     border-color: var(--accent);
+}
+
+.btn-regenerate.btn-video-locked,
+.btn-regenerate.btn-video-locked:hover {
+    color: #ff9a9a;
+    border-color: var(--error);
+    background: rgba(255, 77, 79, 0.12);
+    cursor: not-allowed;
+}
+
+.btn-regenerate.btn-video-locked .btn-icon {
+    font-size: 0.62rem;
+    font-weight: 700;
+    transform: none;
 }
 
 .slot-placeholder {

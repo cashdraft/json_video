@@ -1,6 +1,8 @@
 """
-Kie.ai Nano Banana Pro API client for image generation.
-Docs: https://docs.kie.ai/market/google/pro-image-to-image
+Kie.ai API client for image and video generation.
+Docs:
+- https://docs.kie.ai/market/google/pro-image-to-image
+- https://docs.kie.ai/veo3-api/generate-veo-3-video/
 """
 
 import json
@@ -13,6 +15,8 @@ import requests
 API_BASE = "https://api.kie.ai"
 CREATE_TASK = f"{API_BASE}/api/v1/jobs/createTask"
 GET_TASK = f"{API_BASE}/api/v1/jobs/recordInfo"
+CREATE_VIDEO_TASK = f"{API_BASE}/api/v1/veo/generate"
+GET_VIDEO_TASK = f"{API_BASE}/api/v1/veo/record-info"
 
 
 def _get_api_key() -> str:
@@ -80,6 +84,84 @@ def get_task_result(task_id: str) -> dict[str, Any]:
             result["result_urls"] = []
     elif state == "fail":
         result["error"] = task_data.get("failMsg", "Generation failed")
+    return result
+
+
+def _map_video_model(model: str) -> str:
+    """
+    Normalize UI model names to Kie API values.
+    UI has "veo3-fast", API expects "veo3_fast".
+    """
+    normalized = (model or "").strip().lower()
+    if normalized == "veo3-fast":
+        return "veo3_fast"
+    if normalized in {"veo3", "veo3_fast"}:
+        return normalized
+    return "veo3_fast"
+
+
+def create_video_task(
+    prompt: str,
+    model: str = "veo3_fast",
+    aspect_ratio: str = "16:9",
+    image_urls: list[str] | None = None,
+    generation_type: str = "TEXT_2_VIDEO",
+) -> str:
+    """Create video generation task. Returns taskId."""
+    api_key = _get_api_key()
+    payload = {
+        "prompt": prompt,
+        "model": _map_video_model(model),
+        "generationType": generation_type,
+        "aspect_ratio": aspect_ratio,
+    }
+    if image_urls:
+        payload["imageUrls"] = image_urls
+    resp = requests.post(
+        CREATE_VIDEO_TASK,
+        json=payload,
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=30,
+    )
+    data = resp.json()
+    if resp.status_code != 200 or data.get("code") != 200:
+        msg = data.get("msg", resp.text)
+        raise RuntimeError(f"Kie.ai API error: {msg}")
+    task_id = data.get("data", {}).get("taskId")
+    if not task_id:
+        raise RuntimeError("No taskId in response")
+    return task_id
+
+
+def get_video_task_result(task_id: str) -> dict[str, Any]:
+    """
+    Get Veo task status and result.
+    Returns {state, result_urls?, error?} where state matches waiting/generating/success/fail.
+    """
+    api_key = _get_api_key()
+    resp = requests.get(
+        GET_VIDEO_TASK,
+        params={"taskId": task_id},
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=30,
+    )
+    data = resp.json()
+    if resp.status_code != 200 or data.get("code") != 200:
+        raise RuntimeError(f"Kie.ai API error: {data.get('msg', resp.text)}")
+
+    task_data = data.get("data", {})
+    success_flag = task_data.get("successFlag")
+    result: dict[str, Any] = {}
+    if success_flag == 1:
+        result["state"] = "success"
+        response_obj = task_data.get("response") or {}
+        result["result_urls"] = response_obj.get("resultUrls", []) or []
+    elif success_flag in (2, 3):
+        result["state"] = "fail"
+        result["error"] = task_data.get("errorMessage") or "Video generation failed"
+    else:
+        # Veo API uses successFlag 0 for in-progress.
+        result["state"] = "generating"
     return result
 
 

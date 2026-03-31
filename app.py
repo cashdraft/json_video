@@ -14,7 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
 
-from kie_client import create_image_task, get_task_result
+from kie_client import create_image_task, create_video_task, get_task_result, get_video_task_result
 
 load_dotenv()
 
@@ -253,6 +253,21 @@ def compute_summary(scenes: list[dict]) -> dict:
     }
 
 
+def normalize_video_model(value: str | None) -> str:
+    """Normalize UI video model ids to canonical values."""
+    normalized = (value or "").strip().lower()
+    if normalized in {"veo3-fast", "veo3_fast", "veo 3.1 fast"}:
+        return "veo3_fast"
+    if normalized in {"veo3", "veo 3.1 quality"}:
+        return "veo3"
+    return "veo3_fast"
+
+
+def video_model_label(value: str | None) -> str:
+    model_id = normalize_video_model(value)
+    return "Veo 3.1 Fast" if model_id == "veo3_fast" else "Veo 3.1 Quality"
+
+
 # --- Routes ---
 
 def render_index(**kwargs):
@@ -275,7 +290,7 @@ def parse():
     resolution = request.form.get("resolution", "2K")
     video_duration = int(request.form.get("video_duration", "10"))
     image_model = request.form.get("image_model", "nano-banana-pro")
-    video_model = request.form.get("video_model", "veo3")
+    video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
 
     scenes, errors = parse_scene_blocks(raw_text)
 
@@ -314,7 +329,7 @@ def save():
     resolution = request.form.get("resolution", "2K")
     video_duration = int(request.form.get("video_duration", "10"))
     image_model = request.form.get("image_model", "nano-banana-pro")
-    video_model = request.form.get("video_model", "veo3")
+    video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
 
     scenes, errors = parse_scene_blocks(raw_text)
 
@@ -340,14 +355,14 @@ def save():
 
 @app.route("/job/<job_id>/generate/start", methods=["POST"])
 def generate_slot_start(job_id: str):
-    """Старт генерации изображения (start/end). Возвращает task_id."""
+    """Старт генерации для слота (start/end/video). Возвращает task_id."""
     job = load_job(job_id)
     if job is None:
         return jsonify({"error": "Job not found"}), 404
 
     data = request.get_json() or {}
     scene_idx = data.get("scene_index", 0)
-    slot = data.get("slot", "start")  # start | end
+    slot = data.get("slot", "start")  # start | end | video
 
     scenes = job.get("scenes", [])
     if scene_idx < 0 or scene_idx >= len(scenes):
@@ -358,23 +373,56 @@ def generate_slot_start(job_id: str):
     aspect_ratio = meta.get("aspect_ratio", "16:9")
     resolution = meta.get("resolution", "2K")
     output_format = meta.get("output_format", "jpg")
+    video_model = normalize_video_model(meta.get("video_model", "veo3_fast"))
 
     prompt = None
     if slot == "start":
         prompt = scene.get("start", {}).get("prompt")
     elif slot == "end":
         prompt = scene.get("end", {}).get("prompt")
+    elif slot == "video":
+        prompt = scene.get("video", {}).get("prompt")
 
     if not prompt:
         return jsonify({"error": f"No prompt for {slot}"}), 400
 
+    video_image_urls: list[str] = []
+    video_generation_type = "TEXT_2_VIDEO"
+    if slot == "video":
+        start_prompt_exists = bool(scene.get("start", {}).get("prompt"))
+        end_prompt_exists = bool(scene.get("end", {}).get("prompt"))
+        start_image_url = scene.get("start", {}).get("image_url")
+        end_image_url = scene.get("end", {}).get("image_url")
+
+        if start_prompt_exists and not start_image_url:
+            return jsonify({"error": "Generate Start image first"}), 400
+        if end_prompt_exists and not end_image_url:
+            return jsonify({"error": "Generate End image first"}), 400
+
+        if start_image_url:
+            video_image_urls.append(start_image_url)
+        if end_image_url:
+            video_image_urls.append(end_image_url)
+
+        if video_image_urls:
+            video_generation_type = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+
     try:
-        task_id = create_image_task(
-            prompt=prompt,
-            aspect_ratio=aspect_ratio,
-            resolution=resolution,
-            output_format=output_format,
-        )
+        if slot == "video":
+            task_id = create_video_task(
+                prompt=prompt,
+                model=video_model,
+                aspect_ratio=aspect_ratio,
+                image_urls=video_image_urls,
+                generation_type=video_generation_type,
+            )
+        else:
+            task_id = create_image_task(
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                output_format=output_format,
+            )
     except ValueError as e:
         return jsonify({"error": str(e)}), 500
     except RuntimeError as e:
@@ -389,8 +437,9 @@ def generate_slot_start(job_id: str):
 
     # Persist in job file to survive page reload/restart.
     scene[slot] = scene.get(slot) or {"prompt": prompt}
-    # If user starts regeneration, hide previous image until new result is ready.
+    # If user starts regeneration, hide previous media until new result is ready.
     scene[slot].pop("image_url", None)
+    scene[slot].pop("video_url", None)
     scene[slot]["generation"] = {
         "task_id": task_id,
         "state": "submitted",
@@ -420,7 +469,7 @@ def generate_slot_status(job_id: str):
         if not job:
             return jsonify({"error": "Job not found"}), 404
         for idx, scene in enumerate(job.get("scenes", [])):
-            for slot_name in ("start", "end"):
+            for slot_name in ("start", "end", "video"):
                 slot_obj = scene.get(slot_name, {})
                 gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
                 if gen.get("task_id") == task_id and not gen.get("canceled"):
@@ -440,17 +489,22 @@ def generate_slot_status(job_id: str):
     elapsed_seconds = int(datetime.now().timestamp() - task_meta["started_at"])
 
     try:
-        result = get_task_result(task_id)
+        slot_name = task_meta.get("slot", "start")
+        if slot_name == "video":
+            result = get_video_task_result(task_id)
+        else:
+            result = get_task_result(task_id)
     except ValueError as e:
         return jsonify({"error": str(e)}), 500
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
 
     state = result.get("state", "unknown")
+    slot_label = "video" if task_meta.get("slot") == "video" else "image"
     state_text = {
         "waiting": "Task accepted, waiting in queue",
         "queuing": "Queued for generation",
-        "generating": "Generating image",
+        "generating": f"Generating {slot_label}",
         "success": "Generation complete",
         "fail": "Generation failed",
     }.get(state, "Processing task")
@@ -475,7 +529,10 @@ def generate_slot_status(job_id: str):
                 if 0 <= scene_idx < len(scenes):
                     scene = scenes[scene_idx]
                     scene[slot] = scene.get(slot) or {"prompt": None}
-                    scene[slot]["image_url"] = url
+                    if slot == "video":
+                        scene[slot]["video_url"] = url
+                    else:
+                        scene[slot]["image_url"] = url
                     scene[slot]["generation"] = {
                         "task_id": task_id,
                         "state": "success",
@@ -546,7 +603,7 @@ def generate_slot_cancel(job_id: str):
     if job:
         scenes = job.get("scenes", [])
         for scene in scenes:
-            for slot_name in ("start", "end"):
+            for slot_name in ("start", "end", "video"):
                 slot_obj = scene.get(slot_name, {})
                 gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
                 if gen.get("task_id") == task_id:
@@ -600,7 +657,9 @@ def job_page(job_id: str):
     meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
     meta.setdefault("video_duration", job.get("selected_video_duration", 10))
     meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
-    meta.setdefault("video_model", job.get("selected_video_model", "veo3"))
+    meta.setdefault("video_model", job.get("selected_video_model", "veo3_fast"))
+    meta["video_model"] = normalize_video_model(meta.get("video_model"))
+    meta["video_model_label"] = video_model_label(meta.get("video_model"))
     meta.setdefault("resolution", job.get("selected_resolution", "2K"))
     meta.setdefault("output_format", "jpg")
 
