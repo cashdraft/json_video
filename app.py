@@ -14,7 +14,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
 
-from kie_client import create_image_task, create_video_task, get_task_result, get_video_task_result
+from kie_client import (
+    create_image_task,
+    create_video_task,
+    get_task_result,
+    get_video_task_result,
+    get_video_1080p_result,
+)
 
 load_dotenv()
 
@@ -519,30 +525,92 @@ def generate_slot_status(job_id: str):
     if state == "success":
         urls = result.get("result_urls", [])
         url = urls[0] if urls else ""
-        response["url"] = url
-        if url:
+        slot = task_meta["slot"]
+
+        if slot == "video":
+            # Show base video immediately, then keep polling until 1080p is ready.
+            hd_started_at = task_meta.get("hd_started_at")
+            if not hd_started_at:
+                hd_started_at = datetime.now().timestamp()
+                task_meta["hd_started_at"] = hd_started_at
+                GENERATION_TASKS[task_id] = task_meta
+
+            response["url"] = url
+            response["state"] = "upgrading_1080"
+            response["state_text"] = "720p waiting 1080p"
+            response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
+            response["hd_status_text"] = f"720p waiting 1080p ({response['hd_elapsed_seconds']} sec)"
+
+            hd_done = False
+            hd_url = ""
+            hd_error = ""
+            try:
+                hd_result = get_video_1080p_result(task_id=task_id, index=0)
+                hd_done = bool(hd_result.get("ready") and hd_result.get("url"))
+                hd_url = hd_result.get("url", "")
+            except RuntimeError as e:
+                hd_error = str(e)
+
             job = load_job(job_id)
             if job is not None:
                 scene_idx = task_meta["scene_idx"]
-                slot = task_meta["slot"]
                 scenes = job.get("scenes", [])
                 if 0 <= scene_idx < len(scenes):
                     scene = scenes[scene_idx]
                     scene[slot] = scene.get(slot) or {"prompt": None}
-                    if slot == "video":
+                    if url:
                         scene[slot]["video_url"] = url
+
+                    if hd_done and hd_url:
+                        scene[slot]["video_url"] = hd_url
+                        scene[slot]["generation"] = {
+                            "task_id": task_id,
+                            "state": "success",
+                            "started_at": task_meta["started_at"],
+                            "completed_at": datetime.now().timestamp(),
+                            "hd_state": "done",
+                            "hd_started_at": hd_started_at,
+                            "canceled": False,
+                        }
+                        response["state"] = "success"
+                        response["state_text"] = "Generation complete"
+                        response["url"] = hd_url
+                        response["hd_status_text"] = "1080p - done"
+                        response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
+                        GENERATION_TASKS.pop(task_id, None)
                     else:
-                        scene[slot]["image_url"] = url
-                    scene[slot]["generation"] = {
-                        "task_id": task_id,
-                        "state": "success",
-                        "started_at": task_meta["started_at"],
-                        "completed_at": datetime.now().timestamp(),
-                        "canceled": False,
-                    }
+                        scene[slot]["generation"] = {
+                            "task_id": task_id,
+                            "state": "upgrading_1080",
+                            "started_at": task_meta["started_at"],
+                            "hd_state": "waiting",
+                            "hd_started_at": hd_started_at,
+                            "hd_error": hd_error,
+                            "canceled": False,
+                        }
                     job["scenes"] = scenes
                     save_job(job_id, job)
-        GENERATION_TASKS.pop(task_id, None)
+        else:
+            response["url"] = url
+            if url:
+                job = load_job(job_id)
+                if job is not None:
+                    scene_idx = task_meta["scene_idx"]
+                    scenes = job.get("scenes", [])
+                    if 0 <= scene_idx < len(scenes):
+                        scene = scenes[scene_idx]
+                        scene[slot] = scene.get(slot) or {"prompt": None}
+                        scene[slot]["image_url"] = url
+                        scene[slot]["generation"] = {
+                            "task_id": task_id,
+                            "state": "success",
+                            "started_at": task_meta["started_at"],
+                            "completed_at": datetime.now().timestamp(),
+                            "canceled": False,
+                        }
+                        job["scenes"] = scenes
+                        save_job(job_id, job)
+            GENERATION_TASKS.pop(task_id, None)
     elif state == "fail":
         response["error"] = result.get("error", "Generation failed")
         job = load_job(job_id)
@@ -578,6 +646,8 @@ def generate_slot_status(job_id: str):
                     "task_id": task_id,
                     "state": state,
                     "started_at": task_meta["started_at"],
+                    "hd_state": scene[slot].get("generation", {}).get("hd_state") if slot == "video" else None,
+                    "hd_started_at": scene[slot].get("generation", {}).get("hd_started_at") if slot == "video" else None,
                     "canceled": False,
                 }
                 job["scenes"] = scenes

@@ -180,6 +180,13 @@
                                     title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
                                     {{ '' if video_ready else 'disabled' }}
                                 ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
+                                <span class="video-hd-status {{ 'active' if video_gen and video_gen.hd_state in ['waiting', 'done'] else '' }}" data-video-hd-status>
+                                    {% if video_gen and video_gen.hd_state == 'done' %}
+                                    1080p - done
+                                    {% elif video_gen and video_gen.hd_state == 'waiting' %}
+                                    720p waiting 1080p
+                                    {% endif %}
+                                </span>
                                 {% endif %}
                             </div>
                             {% set video_gen = scene.video.generation if scene.video and scene.video.generation else none %}
@@ -378,6 +385,14 @@
             : 'Generate required start/end images first';
     };
 
+    const updateVideoHdStatus = (sceneCard, text = '') => {
+        if (!sceneCard) return;
+        const statusEl = sceneCard.querySelector('[data-video-hd-status]');
+        if (!statusEl) return;
+        statusEl.textContent = text || '';
+        statusEl.classList.toggle('active', Boolean(text));
+    };
+
     document.querySelectorAll('.scene-card').forEach(updateVideoButtonState);
 
     const renderStatus = (placeholder, text, elapsed, withSpinner = false, taskId = '') => {
@@ -430,16 +445,41 @@
             if (state === 'success' && statusData.url) {
                 placeholder.setAttribute('data-status', 'done');
                 if (slot === 'video') {
-                    placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
+                    const existingVideo = placeholder.querySelector('video.slot-image');
+                    if (existingVideo) {
+                        if (existingVideo.src !== statusData.url) {
+                            existingVideo.src = statusData.url;
+                        }
+                    } else {
+                        placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
+                    }
+                    updateVideoHdStatus(btn.closest('.scene-card'), statusData.hd_status_text || '1080p - done');
                 } else {
                     placeholder.innerHTML = `<img src="${statusData.url}" alt="${slot}" class="slot-image">`;
                     refreshGallery();
                 }
                 updateVideoButtonState(btn.closest('.scene-card'));
                 done = true;
+            } else if (state === 'upgrading_1080' && slot === 'video') {
+                if (statusData.url) {
+                    placeholder.setAttribute('data-status', 'done');
+                    const existingVideo = placeholder.querySelector('video.slot-image');
+                    if (existingVideo) {
+                        if (existingVideo.src !== statusData.url) {
+                            existingVideo.src = statusData.url;
+                        }
+                    } else {
+                        placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
+                    }
+                }
+                updateVideoHdStatus(
+                    btn.closest('.scene-card'),
+                    statusData.hd_status_text || `720p waiting 1080p (${statusData.hd_elapsed_seconds || 0} sec)`
+                );
             } else if (state === 'fail') {
                 placeholder.setAttribute('data-status', 'pending');
                 placeholder.innerHTML = `<span class="slot-status slot-status-error">${statusData.error || 'Generation failed'} (${elapsed}s)</span>`;
+                if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
                 done = true;
             } else {
                 renderStatus(placeholder, stateText, elapsed, true, taskId);

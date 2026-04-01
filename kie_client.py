@@ -17,6 +17,7 @@ CREATE_TASK = f"{API_BASE}/api/v1/jobs/createTask"
 GET_TASK = f"{API_BASE}/api/v1/jobs/recordInfo"
 CREATE_VIDEO_TASK = f"{API_BASE}/api/v1/veo/generate"
 GET_VIDEO_TASK = f"{API_BASE}/api/v1/veo/record-info"
+GET_VIDEO_1080P = f"{API_BASE}/api/v1/veo/get-1080p-video"
 
 
 def _get_api_key() -> str:
@@ -163,6 +164,41 @@ def get_video_task_result(task_id: str) -> dict[str, Any]:
         # Veo API uses successFlag 0 for in-progress.
         result["state"] = "generating"
     return result
+
+
+def get_video_1080p_result(task_id: str, index: int = 0) -> dict[str, Any]:
+    """
+    Request/check 1080p upscaled video by original task id.
+    Returns:
+      - {"ready": True, "url": "..."} when available
+      - {"ready": False} when still processing/not ready
+    Raises RuntimeError on non-recoverable API errors.
+    """
+    api_key = _get_api_key()
+    resp = requests.get(
+        GET_VIDEO_1080P,
+        params={"taskId": task_id, "index": index},
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=30,
+    )
+    # Kie endpoints sometimes return business code in JSON while HTTP remains 200.
+    try:
+        data = resp.json()
+    except ValueError:
+        raise RuntimeError(f"Kie.ai API error: {resp.text}")
+
+    code = data.get("code")
+    if resp.status_code == 200 and code == 200:
+        url = (data.get("data") or {}).get("resultUrl", "")
+        if url:
+            return {"ready": True, "url": url}
+        return {"ready": False}
+
+    # Not ready yet / validation-in-progress states should be retried.
+    if code in (422, 429):
+        return {"ready": False}
+
+    raise RuntimeError(f"Kie.ai API error: {data.get('msg', resp.text)}")
 
 
 def generate_image(

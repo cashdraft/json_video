@@ -566,6 +566,23 @@ textarea::placeholder {
     transform: none;
 }
 
+.video-hd-status {
+    display: inline-block;
+    margin-left: 0.4rem;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    position: relative;
+    top: -1px;
+    vertical-align: middle;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.video-hd-status.active {
+    opacity: 1;
+}
+
 .slot-placeholder {
     aspect-ratio: var(--slot-aspect-ratio, 16/9);
     min-height: 50px;
