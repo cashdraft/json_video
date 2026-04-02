@@ -501,6 +501,329 @@ textarea::placeholder {
     color: var(--text-muted);
 }
 
+.hidden {
+    display: none !important;
+}
+
+/* ElevenLabs TTS (страница проекта) */
+.tts-section {
+    margin-bottom: 2rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-card);
+}
+
+.tts-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.65rem 0;
+}
+
+.tts-warning {
+    color: var(--warning, #e8a317);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.tts-hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    margin: 0 0 1rem 0;
+}
+
+.tts-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.tts-label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.tts-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.45;
+    resize: vertical;
+    min-height: 6rem;
+}
+
+.tts-char-row {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tts-char-warn {
+    color: #e8b44f;
+    font-weight: 600;
+}
+
+.tts-split-hint {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+}
+
+.tts-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.tts-field {
+    flex: 1 1 12rem;
+}
+
+.tts-field-grow {
+    flex: 2 1 16rem;
+}
+
+.tts-select {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 0.88rem;
+}
+
+.tts-sliders {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem 1.25rem;
+}
+
+.tts-slider-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.tts-slider-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.tts-slider-val {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.tts-range {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+.tts-slider-ends {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.tts-check {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    cursor: pointer;
+}
+
+.tts-check input {
+    margin-top: 0.2rem;
+}
+
+.tts-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.tts-busy {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.tts-error {
+    margin: 0;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    background: rgba(240, 113, 120, 0.12);
+    color: #f07178;
+    font-size: 0.85rem;
+}
+
+.tts-player-wrap {
+    margin-top: 0.75rem;
+    width: 100%;
+}
+
+.tts-player-native {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.tts-player-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.65rem 0.5rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+}
+
+.tts-play-btn {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg-card);
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tts-play-btn:hover {
+    background: var(--border);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+}
+
+.tts-play-btn:focus-visible,
+.tts-download-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.tts-play-btn .tts-ic {
+    display: block;
+}
+
+.tts-play-btn .tts-ic-pause {
+    display: none;
+}
+
+.tts-play-btn--playing .tts-ic-play {
+    display: none;
+}
+
+.tts-play-btn--playing .tts-ic-pause {
+    display: block;
+}
+
+.tts-player-track {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.tts-seek {
+    width: 100%;
+    height: 0.35rem;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.tts-seek::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+}
+
+.tts-seek::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.tts-seek::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+}
+
+.tts-seek::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    cursor: pointer;
+}
+
+.tts-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.tts-time-sep {
+    opacity: 0.6;
+}
+
+.tts-download-btn {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tts-download-btn:hover {
+    background: rgba(74, 158, 255, 0.12);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+}
+
 .job-settings,
 .job-summary,
 .generation-section,

@@ -30,6 +30,10 @@ data/input/*
 data/image_templates/*
 !data/image_templates/.gitkeep
 
+# Per-job TTS audio (ElevenLabs)
+data/job_audio/*
+!data/job_audio/.gitkeep
+
 # Keep folder structure
 !data/jobs/.gitkeep
 !data/logs/.gitkeep

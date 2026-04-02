@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
+import tempfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -33,6 +37,14 @@ from image_templates import (
     list_templates,
     safe_template_dir,
 )
+from elevenlabs_client import (
+    TTS_MODELS,
+    list_voices as elevenlabs_list_voices,
+    max_chars_for_model,
+    merge_mp3_files_ffmpeg,
+    split_tts_text_into_chunks,
+    text_to_speech_bytes,
+)
 from kie_client import (
     create_image_task,
     create_video_task,
@@ -46,6 +58,11 @@ load_dotenv()
 # --- Paths ---
 BASE_DIR = Path(__file__).resolve().parent
 JOBS_DIR = BASE_DIR / "data" / "jobs"
+JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
+
+
+def _safe_job_audio_filename(name: str) -> bool:
+    return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.mp3$", name))
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -836,10 +853,154 @@ def delete_job(job_id: str):
     filepath = JOBS_DIR / f"{job_id}.json"
     if filepath.exists():
         filepath.unlink()
+        audio_dir = JOB_AUDIO_DIR / job_id
+        if audio_dir.is_dir():
+            shutil.rmtree(audio_dir, ignore_errors=True)
         flash("Проект удалён.", "success")
     else:
         flash("Проект не найден.", "error")
     return redirect(url_for("index"))
+
+
+@app.route("/job/<job_id>/elevenlabs/voices", methods=["GET"])
+def job_elevenlabs_voices(job_id: str):
+    if load_job(job_id) is None:
+        return jsonify({"error": "Job not found"}), 404
+    try:
+        voices = elevenlabs_list_voices()
+        return jsonify({"voices": voices})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/job/<job_id>/elevenlabs/tts", methods=["POST"])
+def job_elevenlabs_tts(job_id: str):
+    """Генерация озвучки ElevenLabs, файл в data/job_audio/<job_id>/."""
+    job = load_job(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    voice_id = (data.get("voice_id") or "").strip()
+    model_id = (data.get("model_id") or "eleven_multilingual_v2").strip()
+    voice_name = (data.get("voice_name") or "").strip() or voice_id
+
+    if not text:
+        return jsonify({"error": "Введите текст"}), 400
+    if not voice_id:
+        return jsonify({"error": "Выберите голос"}), 400
+
+    max_c = max_chars_for_model(model_id)
+    chunks = split_tts_text_into_chunks(text, max_c)
+    if not chunks:
+        return jsonify({"error": "Пустой текст"}), 400
+
+    def _pct(key: str, default: float) -> float:
+        try:
+            return float(data.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    stability_pct = _pct("stability_pct", 50)
+    similarity_pct = _pct("similarity_pct", 75)
+    style_pct = _pct("style_pct", 0)
+    speed_pct = _pct("speed_pct", 50)
+    raw_boost = data.get("use_speaker_boost", True)
+    if isinstance(raw_boost, str):
+        use_speaker_boost = raw_boost.lower() in ("true", "1", "yes", "on")
+    else:
+        use_speaker_boost = bool(raw_boost)
+
+    tts_kw = dict(
+        voice_id=voice_id,
+        model_id=model_id,
+        stability_pct=stability_pct,
+        similarity_pct=similarity_pct,
+        style_pct=style_pct,
+        speed_pct=speed_pct,
+        use_speaker_boost=use_speaker_boost,
+    )
+
+    JOB_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = JOB_AUDIO_DIR / job_id
+    if out_dir.is_dir():
+        shutil.rmtree(out_dir, ignore_errors=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.mp3"
+    out_path = out_dir / fname
+
+    try:
+        if len(chunks) == 1:
+            audio = text_to_speech_bytes(text=chunks[0], **tts_kw)
+            out_path.write_bytes(audio)
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                part_paths: list[Path] = []
+                for i, ch in enumerate(chunks):
+                    part_bytes = text_to_speech_bytes(text=ch, **tts_kw)
+                    p = Path(tmp) / f"part_{i:04d}.mp3"
+                    p.write_bytes(part_bytes)
+                    part_paths.append(p)
+                merge_mp3_files_ffmpeg(part_paths, out_path)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+    audio_url = url_for("job_audio_file", job_id=job_id, filename=fname)
+    entry = {
+        "filename": fname,
+        "url": audio_url,
+        "created_at": datetime.now().timestamp(),
+        "voice_id": voice_id,
+        "voice_name": voice_name,
+        "model_id": model_id,
+        "chars": len(text),
+        "tts_chunks": len(chunks),
+        "tts_chunk_limit": max_c,
+        "text_preview": text[:120] + ("…" if len(text) > 120 else ""),
+        "settings": {
+            "stability_pct": stability_pct,
+            "similarity_pct": similarity_pct,
+            "style_pct": style_pct,
+            "speed_pct": speed_pct,
+            "use_speaker_boost": use_speaker_boost,
+        },
+    }
+    job.pop("tts_outputs", None)
+    job["tts_defaults"] = {
+        "voice_id": voice_id,
+        "model_id": model_id,
+        "stability_pct": stability_pct,
+        "similarity_pct": similarity_pct,
+        "style_pct": style_pct,
+        "speed_pct": speed_pct,
+        "use_speaker_boost": use_speaker_boost,
+    }
+    save_job(job_id, job)
+    return jsonify({"ok": True, **entry})
+
+
+@app.route("/job/<job_id>/audio/<filename>")
+def job_audio_file(job_id: str, filename: str):
+    if load_job(job_id) is None:
+        abort(404)
+    if not _safe_job_audio_filename(filename):
+        abort(404)
+    d = (JOB_AUDIO_DIR / job_id).resolve()
+    if not d.is_dir():
+        abort(404)
+    target = (d / filename).resolve()
+    try:
+        target.relative_to(d)
+    except ValueError:
+        abort(404)
+    if not target.is_file():
+        abort(404)
+    return send_from_directory(d, filename, mimetype="audio/mpeg", max_age=0)
 
 
 @app.route("/job/<job_id>")
@@ -865,8 +1026,16 @@ def job_page(job_id: str):
     meta.setdefault("output_format", "jpg")
     meta.setdefault("image_template", job.get("selected_image_template", ""))
 
+    if "tts_outputs" in job:
+        job.pop("tts_outputs", None)
+        ad = JOB_AUDIO_DIR / job_id
+        if ad.is_dir():
+            shutil.rmtree(ad, ignore_errors=True)
+        save_job(job_id, job)
+
     summary = compute_summary(job.get("scenes", []))
     template_display = job_template_display(meta.get("image_template", ""))
+    elevenlabs_key_set = bool((os.getenv("ELEVENLABS_API_KEY") or "").strip())
     return render_template(
         "job.html",
         job_id=job_id,
@@ -874,6 +1043,9 @@ def job_page(job_id: str):
         scenes=job.get("scenes", []),
         summary=summary,
         template_display=template_display,
+        tts_models=TTS_MODELS,
+        elevenlabs_key_set=elevenlabs_key_set,
+        tts_defaults=job.get("tts_defaults") or {},
     )
 
 

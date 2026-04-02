@@ -104,6 +104,103 @@
             </div>
         </section>
 
+        <section class="tts-section" id="elevenlabs-tts">
+            <h2>Озвучка (ElevenLabs)</h2>
+            {% if not elevenlabs_key_set %}
+            <p class="tts-warning">
+                Укажите <code>ELEVENLABS_API_KEY</code> в <code>.env</code> и перезапустите сервис (<code>systemctl restart json-video</code>).
+            </p>
+            {% else %}
+            <p class="tts-hint">
+                Число справа — лимит <strong>одного</strong> запроса к API (зависит от модели). Если текст длиннее, он автоматически делится по символу <strong>точки</strong> на предложения,
+                пакуется в куски ≤ лимита, для каждого куска уходит отдельный запрос, затем фрагменты <strong>склеиваются в один MP3</strong> (на сервере нужен <code>ffmpeg</code>).
+                С баланса списываются все символы. Точки в «Dr.» и числах 3.14 тоже режут текст — при необходимости временно замените их.
+            </p>
+            <div class="tts-form">
+                <label class="tts-label" for="tts-text">Текст</label>
+                <textarea id="tts-text" class="tts-textarea" rows="7" placeholder="Вставьте текст для озвучки…"></textarea>
+                <div class="tts-char-row">
+                    <span id="tts-char-count">0</span> символов · лимит <strong>одного</strong> запроса: <span id="tts-char-max">10000</span>
+                    <span id="tts-split-hint" class="tts-split-hint hidden"></span>
+                </div>
+                <div class="tts-row">
+                    <div class="tts-field">
+                        <label class="tts-label" for="tts-model">Модель</label>
+                        <select id="tts-model" class="tts-select">
+                            {% for m in tts_models %}
+                            <option value="{{ m.id }}" data-max="{{ m.max_chars }}">{{ m.label }} — {{ m.hint }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="tts-field tts-field-grow">
+                        <label class="tts-label" for="tts-voice">Голос</label>
+                        <select id="tts-voice" class="tts-select" disabled>
+                            <option value="">Загрузка голосов…</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="tts-sliders">
+                    <div class="tts-slider-block">
+                        <label class="tts-slider-label" for="tts-speed">Скорость <span class="tts-slider-val" id="tts-speed-val">{{ tts_defaults.speed_pct | default(50) | int }}</span></label>
+                        <input type="range" id="tts-speed" min="0" max="100" value="{{ tts_defaults.speed_pct | default(50) | int }}" class="tts-range">
+                        <div class="tts-slider-ends"><span>Медленнее</span><span>Быстрее</span></div>
+                    </div>
+                    <div class="tts-slider-block">
+                        <label class="tts-slider-label" for="tts-stability">Стабильность <span class="tts-slider-val" id="tts-stability-val">{{ tts_defaults.stability_pct | default(50) | int }}</span></label>
+                        <input type="range" id="tts-stability" min="0" max="100" value="{{ tts_defaults.stability_pct | default(50) | int }}" class="tts-range">
+                        <div class="tts-slider-ends"><span>Выразительнее</span><span>Стабильнее</span></div>
+                    </div>
+                    <div class="tts-slider-block">
+                        <label class="tts-slider-label" for="tts-similarity">Сходство <span class="tts-slider-val" id="tts-similarity-val">{{ tts_defaults.similarity_pct | default(75) | int }}</span></label>
+                        <input type="range" id="tts-similarity" min="0" max="100" value="{{ tts_defaults.similarity_pct | default(75) | int }}" class="tts-range">
+                        <div class="tts-slider-ends"><span>Ниже</span><span>Выше</span></div>
+                    </div>
+                    <div class="tts-slider-block">
+                        <label class="tts-slider-label" for="tts-style">Выразительность стиля <span class="tts-slider-val" id="tts-style-val">{{ tts_defaults.style_pct | default(0) | int }}</span></label>
+                        <input type="range" id="tts-style" min="0" max="100" value="{{ tts_defaults.style_pct | default(0) | int }}" class="tts-range">
+                        <div class="tts-slider-ends"><span>Нет</span><span>Сильнее</span></div>
+                    </div>
+                </div>
+                <label class="tts-check">
+                    <input type="checkbox" id="tts-speaker-boost" {% if tts_defaults.get('use_speaker_boost', True) %}checked{% endif %}>
+                    Speaker boost (сильнее похоже на оригинальный голос, чуть выше задержка)
+                </label>
+                <div class="tts-actions">
+                    <button type="button" class="btn btn-primary" id="tts-generate">Сгенерировать озвучку</button>
+                    <span id="tts-busy" class="tts-busy hidden">Запрос к ElevenLabs…</span>
+                </div>
+                <p id="tts-error" class="tts-error hidden" role="alert"></p>
+                <div id="tts-player-wrap" class="tts-player-wrap hidden">
+                    <p class="tts-label">Последний результат</p>
+                    <div class="tts-player-bar">
+                        <audio id="tts-player" class="tts-player-native" preload="metadata"></audio>
+                        <button type="button" class="tts-play-btn" id="tts-play-toggle" aria-label="Воспроизвести">
+                            <svg class="tts-ic tts-ic-play" viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+                                <path fill="currentColor" d="M8 5v14l11-7L8 5z"/>
+                            </svg>
+                            <svg class="tts-ic tts-ic-pause" viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+                                <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/>
+                            </svg>
+                        </button>
+                        <div class="tts-player-track">
+                            <input type="range" id="tts-seek" class="tts-seek" min="0" max="100" value="0" aria-label="Позиция"/>
+                            <div class="tts-time-row">
+                                <span id="tts-time-current">0:00</span>
+                                <span class="tts-time-sep">/</span>
+                                <span id="tts-time-total">0:00</span>
+                            </div>
+                        </div>
+                        <button type="button" class="tts-download-btn" id="tts-download-btn" title="Скачать MP3" aria-label="Скачать MP3">
+                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </section>
+
         <section class="generation-section">
             <h2>Генерация</h2>
             <p class="generation-hint">Kie.ai: Nano Banana Pro (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
@@ -603,6 +700,290 @@
             }
         }
     });
+    {% if elevenlabs_key_set %}
+    (function elevenlabsTTS() {
+        const jobId = {{ job_id | tojson }};
+        const defaultVoiceId = {{ (tts_defaults.voice_id or '') | tojson }};
+        const defaultModelId = {{ (tts_defaults.model_id or '') | tojson }};
+        const modelSel = document.getElementById('tts-model');
+        const voiceSel = document.getElementById('tts-voice');
+        const textEl = document.getElementById('tts-text');
+        const charCountEl = document.getElementById('tts-char-count');
+        const charMaxEl = document.getElementById('tts-char-max');
+        const splitHintEl = document.getElementById('tts-split-hint');
+        const btnGen = document.getElementById('tts-generate');
+        const busyEl = document.getElementById('tts-busy');
+        const errEl = document.getElementById('tts-error');
+        const playerWrap = document.getElementById('tts-player-wrap');
+        const player = document.getElementById('tts-player');
+        const playToggle = document.getElementById('tts-play-toggle');
+        const seekEl = document.getElementById('tts-seek');
+        const timeCurrent = document.getElementById('tts-time-current');
+        const timeTotal = document.getElementById('tts-time-total');
+        const downloadBtn = document.getElementById('tts-download-btn');
+        let ttsDownloadFilename = 'tts.mp3';
+        if (!modelSel || !voiceSel) return;
+
+        const fmtTtsTime = (sec) => {
+            if (sec == null || !Number.isFinite(sec) || sec < 0) return '0:00';
+            const s = Math.floor(sec);
+            const m = Math.floor(s / 60);
+            const r = s % 60;
+            return `${m}:${r.toString().padStart(2, '0')}`;
+        };
+
+        const syncTtsPlayingUi = () => {
+            if (!playToggle || !player) return;
+            const playing = !player.paused;
+            playToggle.classList.toggle('tts-play-btn--playing', playing);
+            playToggle.setAttribute('aria-label', playing ? 'Пауза' : 'Воспроизвести');
+        };
+
+        if (playToggle && player) {
+            playToggle.addEventListener('click', () => {
+                if (player.paused) player.play().catch(() => {});
+                else player.pause();
+            });
+            player.addEventListener('play', syncTtsPlayingUi);
+            player.addEventListener('pause', syncTtsPlayingUi);
+            player.addEventListener('ended', syncTtsPlayingUi);
+            player.addEventListener('timeupdate', () => {
+                if (seekEl && seekEl.dataset.seeking !== '1') {
+                    const d = player.duration;
+                    if (Number.isFinite(d) && d > 0) {
+                        seekEl.value = String((player.currentTime / d) * 100);
+                    }
+                }
+                if (timeCurrent) timeCurrent.textContent = fmtTtsTime(player.currentTime);
+            });
+            player.addEventListener('loadedmetadata', () => {
+                if (timeTotal) timeTotal.textContent = fmtTtsTime(player.duration);
+            });
+        }
+        if (seekEl && player) {
+            seekEl.addEventListener('pointerdown', () => { seekEl.dataset.seeking = '1'; });
+            seekEl.addEventListener('pointerup', () => { delete seekEl.dataset.seeking; });
+            seekEl.addEventListener('change', () => { delete seekEl.dataset.seeking; });
+            seekEl.addEventListener('input', () => {
+                const d = player.duration;
+                if (Number.isFinite(d) && d > 0) {
+                    player.currentTime = (parseFloat(seekEl.value) / 100) * d;
+                }
+            });
+        }
+        if (downloadBtn && player) {
+            downloadBtn.addEventListener('click', () => {
+                const url = player.currentSrc || player.src;
+                if (!url) return;
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = ttsDownloadFilename;
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            });
+        }
+
+        const getMaxChars = () => {
+            const opt = modelSel.options[modelSel.selectedIndex];
+            return parseInt(opt?.dataset?.max || '10000', 10);
+        };
+
+        /** Как на сервере: elevenlabs_client.sentences_split_by_dot + pack_sentences_into_chunks */
+        const sentencesSplitByDot = (text) => {
+            const t = text.trim();
+            if (!t) return [];
+            if (!t.includes('.')) return [t];
+            const out = [];
+            for (const part of t.split('.')) {
+                const p = part.trim();
+                if (!p) continue;
+                out.push(`${p}.`);
+            }
+            return out.length ? out : [t];
+        };
+
+        const packSentencesIntoChunks = (sentences, maxChars) => {
+            if (maxChars < 1) return [];
+            const chunks = [];
+            let buf = [];
+            let bufLen = 0;
+            const flush = () => {
+                if (buf.length) {
+                    chunks.push(buf.join(''));
+                    buf = [];
+                    bufLen = 0;
+                }
+            };
+            for (const s of sentences) {
+                if (s.length > maxChars) {
+                    flush();
+                    for (let i = 0; i < s.length; i += maxChars) {
+                        chunks.push(s.slice(i, i + maxChars));
+                    }
+                    continue;
+                }
+                if (bufLen + s.length <= maxChars) {
+                    buf.push(s);
+                    bufLen += s.length;
+                } else {
+                    flush();
+                    buf = [s];
+                    bufLen = s.length;
+                }
+            }
+            flush();
+            return chunks;
+        };
+
+        const countTtsChunks = (text, maxChars) => {
+            const raw = text || '';
+            if (!raw.trim()) return 0;
+            return packSentencesIntoChunks(sentencesSplitByDot(raw), maxChars).length;
+        };
+
+        const ruRequestsWord = (n) => {
+            const m10 = n % 10;
+            const m100 = n % 100;
+            if (m100 >= 11 && m100 <= 14) return 'запросов';
+            if (m10 === 1) return 'запрос';
+            if (m10 >= 2 && m10 <= 4) return 'запроса';
+            return 'запросов';
+        };
+
+        const updateCharUi = () => {
+            const max = getMaxChars();
+            charMaxEl.textContent = String(max);
+            const raw = textEl?.value || '';
+            const n = raw.length;
+            charCountEl.textContent = String(n);
+            const nChunks = countTtsChunks(raw, max);
+            const over = n > max;
+            charCountEl.classList.toggle('tts-char-warn', over);
+            if (splitHintEl) {
+                if (nChunks > 1) {
+                    splitHintEl.classList.remove('hidden');
+                    splitHintEl.textContent = `→ будет ${nChunks} ${ruRequestsWord(nChunks)} к API и склейка MP3`;
+                } else {
+                    splitHintEl.classList.add('hidden');
+                    splitHintEl.textContent = '';
+                }
+            }
+        };
+
+        const bindSlider = (rangeId, valId) => {
+            const r = document.getElementById(rangeId);
+            const v = document.getElementById(valId);
+            if (!r || !v) return;
+            const sync = () => { v.textContent = r.value; };
+            r.addEventListener('input', sync);
+            sync();
+        };
+        bindSlider('tts-speed', 'tts-speed-val');
+        bindSlider('tts-stability', 'tts-stability-val');
+        bindSlider('tts-similarity', 'tts-similarity-val');
+        bindSlider('tts-style', 'tts-style-val');
+
+        modelSel.addEventListener('change', updateCharUi);
+        textEl?.addEventListener('input', updateCharUi);
+        if (defaultModelId) {
+            for (let i = 0; i < modelSel.options.length; i++) {
+                if (modelSel.options[i].value === defaultModelId) {
+                    modelSel.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        updateCharUi();
+
+        fetch(`/job/${jobId}/elevenlabs/voices`)
+            .then((r) => r.json())
+            .then((data) => {
+                voiceSel.innerHTML = '';
+                if (data.error || !data.voices?.length) {
+                    voiceSel.innerHTML = `<option value="">${data.error || 'Нет голосов'}</option>`;
+                    voiceSel.disabled = true;
+                    return;
+                }
+                data.voices.forEach((v) => {
+                    const o = document.createElement('option');
+                    o.value = v.voice_id;
+                    o.textContent = v.name;
+                    voiceSel.appendChild(o);
+                });
+                voiceSel.disabled = false;
+                if (defaultVoiceId) {
+                    for (let i = 0; i < voiceSel.options.length; i++) {
+                        if (voiceSel.options[i].value === defaultVoiceId) {
+                            voiceSel.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            })
+            .catch(() => {
+                voiceSel.innerHTML = '<option value="">Ошибка загрузки голосов</option>';
+            });
+
+        btnGen?.addEventListener('click', async () => {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+            const text = (textEl?.value || '').trim();
+            const voice_id = voiceSel.value;
+            const max = getMaxChars();
+            if (!text) {
+                errEl.textContent = 'Введите текст.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            if (!voice_id) {
+                errEl.textContent = 'Выберите голос.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            const voice_name = voiceSel.options[voiceSel.selectedIndex]?.textContent || '';
+            btnGen.disabled = true;
+            busyEl.classList.remove('hidden');
+            try {
+                const resp = await fetch(`/job/${jobId}/elevenlabs/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text,
+                        voice_id,
+                        voice_name,
+                        model_id: modelSel.value,
+                        speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
+                        stability_pct: parseInt(document.getElementById('tts-stability').value, 10),
+                        similarity_pct: parseInt(document.getElementById('tts-similarity').value, 10),
+                        style_pct: parseInt(document.getElementById('tts-style').value, 10),
+                        use_speaker_boost: document.getElementById('tts-speaker-boost').checked,
+                    }),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {
+                    throw new Error(data.error || `HTTP ${resp.status}`);
+                }
+                ttsDownloadFilename = data.filename || 'tts.mp3';
+                player.src = data.url;
+                player.load();
+                if (seekEl) seekEl.value = '0';
+                if (timeCurrent) timeCurrent.textContent = '0:00';
+                if (timeTotal) timeTotal.textContent = '0:00';
+                player.pause();
+                syncTtsPlayingUi();
+                playerWrap.classList.remove('hidden');
+            } catch (e) {
+                errEl.textContent = e.message || String(e);
+                errEl.classList.remove('hidden');
+            } finally {
+                btnGen.disabled = false;
+                busyEl.classList.add('hidden');
+            }
+        });
+    })();
+    {% endif %}
     </script>
 </body>
 </html>
