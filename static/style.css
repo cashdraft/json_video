@@ -490,10 +490,6 @@ textarea::placeholder {
     width: 100%;
 }
 
-.job-template-empty {
-    color: var(--text-muted);
-}
-
 .job-template-missing {
     font-size: 0.9rem;
 }

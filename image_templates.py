@@ -4,7 +4,7 @@ Image reference templates for Nano Banana Pro (Kie image_input).
 Layout on disk (user-managed):
   data/image_templates/<TemplateName>/
     logo.png | logo.jpg   — превью в UI (не уходит в API как референс)
-    *.jpg / *.png / *.webp — до 3 файлов как image_input (сортировка по имени)
+    *.jpg / *.png / *.webp — до 5 файлов как image_input (сортировка по имени)
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
-MAX_REFERENCE_IMAGES = 8  # лимит API; по ТЗ используем максимум 3
-MAX_REFERENCE_FOR_PRODUCT = 3
+MAX_REFERENCE_IMAGES = 8  # официальный лимит Kie image_input
+MAX_REFERENCE_FOR_PRODUCT = 5  # наш лимит шаблона (≤ Kie)
 
 MODULE_DIR = Path(__file__).resolve().parent
 IMAGE_TEMPLATES_DIR = MODULE_DIR / "data" / "image_templates"

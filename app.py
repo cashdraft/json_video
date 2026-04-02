@@ -536,7 +536,7 @@ def generate_slot_start(job_id: str):
                 if not image_input_urls:
                     return jsonify(
                         {
-                            "error": "В шаблоне нет референс-изображений: добавьте 1–3 файла .jpg/.png/.webp (logo.png не считается)"
+                            "error": "В шаблоне нет референс-изображений: добавьте 1–5 файлов .jpg/.png/.webp (logo.png не считается)"
                         }
                     ), 400
             task_id = create_image_task(
