@@ -12,8 +12,27 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
+from flask import (
+    Flask,
+    abort,
+    flash,
+    has_request_context,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    url_for,
+)
 
+from image_templates import (
+    IMAGE_TEMPLATES_DIR,
+    build_image_input_urls,
+    collect_reference_and_logo,
+    list_templates,
+    safe_template_dir,
+)
 from kie_client import (
     create_image_task,
     create_video_task,
@@ -31,6 +50,67 @@ JOBS_DIR = BASE_DIR / "data" / "jobs"
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 GENERATION_TASKS: dict[str, dict] = {}
+
+
+def public_base_url_for_kie() -> str:
+    """Базовый URL этого приложения, доступный из интернета (Kie скачивает image_input по URL)."""
+    b = (os.getenv("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if b:
+        return b
+    if has_request_context():
+        return request.url_root.rstrip("/")
+    return ""
+
+
+def templates_ui_rows() -> list[dict]:
+    rows = list_templates()
+    for r in rows:
+        lf = r.get("logo_file")
+        if lf:
+            r["logo_url"] = url_for(
+                "template_assets",
+                template_name=r["folder_name"],
+                filename=lf,
+            )
+        else:
+            r["logo_url"] = None
+    return rows
+
+
+def job_template_display(folder_name: str) -> dict:
+    """Контекст для страницы проекта: превью выбранного шаблона."""
+    name = (folder_name or "").strip()
+    if not name:
+        return {"kind": "none", "folder_name": ""}
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, name)
+    if not td:
+        return {"kind": "missing", "folder_name": name}
+    _refs, logo = collect_reference_and_logo(td)
+    logo_url = (
+        url_for("template_assets", template_name=name, filename=logo.name)
+        if logo
+        else None
+    )
+    return {"kind": "ok", "folder_name": name, "logo_url": logo_url}
+
+
+@app.route("/template-assets/<template_name>/<path:filename>")
+def template_assets(template_name: str, filename: str):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        abort(404)
+    if "/" in template_name or "\\" in template_name:
+        abort(404)
+    d = safe_template_dir(IMAGE_TEMPLATES_DIR, template_name)
+    if not d:
+        abort(404)
+    target = (d / filename).resolve()
+    try:
+        target.relative_to(d.resolve())
+    except ValueError:
+        abort(404)
+    if not target.is_file():
+        abort(404)
+    return send_from_directory(d, filename, max_age=86400)
 
 
 # --- Parsing logic ---
@@ -160,8 +240,10 @@ def build_job_payload(
     video_model: str,
     resolution: str = "2K",
     project_name: str = "",
+    image_template: str = "",
 ) -> dict:
     """Собирает payload для сохранения job."""
+    it = (image_template or "").strip()
     return {
         "project_name": project_name.strip(),
         "raw_input": raw_input,
@@ -171,6 +253,7 @@ def build_job_payload(
         "selected_image_model": image_model,
         "selected_video_model": video_model,
         "selected_resolution": resolution,
+        "selected_image_template": it,
         "created_at": datetime.now().isoformat(),
         "status": "draft",
         "job_meta": {
@@ -180,6 +263,7 @@ def build_job_payload(
             "video_model": video_model,
             "resolution": resolution,
             "output_format": "jpg",
+            "image_template": it,
         },
         "scenes": parsed_scenes,
     }
@@ -278,9 +362,13 @@ def video_model_label(value: str | None) -> str:
 
 def render_index(**kwargs):
     """Рендер главной с общим контекстом (список проектов)."""
-    ctx = {"jobs": list_jobs()}
+    ctx = {"jobs": list_jobs(), "image_templates": templates_ui_rows()}
     ctx.update(kwargs)
-    return render_template("index.html", **ctx)
+    resp = make_response(render_template("index.html", **ctx))
+    # Avoid stale HTML (settings form) after deploy — some browsers cache aggressively.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 @app.route("/")
@@ -294,9 +382,10 @@ def parse():
     project_name = request.form.get("project_name", "")
     aspect_ratio = request.form.get("aspect_ratio", "16:9")
     resolution = request.form.get("resolution", "2K")
-    video_duration = int(request.form.get("video_duration", "10"))
+    video_duration = 10
     image_model = request.form.get("image_model", "nano-banana-pro")
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
+    image_template = request.form.get("image_template", "").strip()
 
     scenes, errors = parse_scene_blocks(raw_text)
 
@@ -309,6 +398,7 @@ def parse():
             video_duration=video_duration,
             image_model=image_model,
             video_model=video_model,
+            image_template=image_template,
             errors=errors,
         )
 
@@ -322,6 +412,7 @@ def parse():
         video_duration=video_duration,
         image_model=image_model,
         video_model=video_model,
+        image_template=image_template,
         scenes=scenes,
         summary=summary,
     )
@@ -333,9 +424,13 @@ def save():
     project_name = request.form.get("project_name", "")
     aspect_ratio = request.form.get("aspect_ratio", "16:9")
     resolution = request.form.get("resolution", "2K")
-    video_duration = int(request.form.get("video_duration", "10"))
+    video_duration = 10
     image_model = request.form.get("image_model", "nano-banana-pro")
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
+    image_template = request.form.get("image_template", "").strip()
+    if image_template and not safe_template_dir(IMAGE_TEMPLATES_DIR, image_template):
+        flash("Выбранный шаблон не найден в data/image_templates/.", "error")
+        return redirect(url_for("index"))
 
     scenes, errors = parse_scene_blocks(raw_text)
 
@@ -352,6 +447,7 @@ def save():
         video_model=video_model,
         resolution=resolution,
         project_name=project_name,
+        image_template=image_template,
     )
 
     filepath, job_id = save_job_file(payload)
@@ -423,11 +519,32 @@ def generate_slot_start(job_id: str):
                 generation_type=video_generation_type,
             )
         else:
+            image_input_urls: list[str] = []
+            tid = (meta.get("image_template") or "").strip()
+            if tid:
+                td = safe_template_dir(IMAGE_TEMPLATES_DIR, tid)
+                if not td:
+                    return jsonify({"error": "Image template not found"}), 400
+                base = public_base_url_for_kie()
+                if not base:
+                    return jsonify(
+                        {
+                            "error": "Укажите PUBLIC_BASE_URL в .env — Kie.ai должен скачать картинки шаблона по HTTP"
+                        }
+                    ), 500
+                image_input_urls = build_image_input_urls(base, tid, td)
+                if not image_input_urls:
+                    return jsonify(
+                        {
+                            "error": "В шаблоне нет референс-изображений: добавьте 1–3 файла .jpg/.png/.webp (logo.png не считается)"
+                        }
+                    ), 400
             task_id = create_image_task(
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
                 resolution=resolution,
                 output_format=output_format,
+                image_input=image_input_urls if image_input_urls else None,
             )
     except ValueError as e:
         return jsonify({"error": str(e)}), 500
@@ -446,6 +563,8 @@ def generate_slot_start(job_id: str):
     # If user starts regeneration, hide previous media until new result is ready.
     scene[slot].pop("image_url", None)
     scene[slot].pop("video_url", None)
+    if slot == "video":
+        scene[slot].pop("video_quality", None)
     scene[slot]["generation"] = {
         "task_id": task_id,
         "state": "submitted",
@@ -508,12 +627,19 @@ def generate_slot_status(job_id: str):
     state = result.get("state", "unknown")
     slot_label = "video" if task_meta.get("slot") == "video" else "image"
     state_text = {
-        "waiting": "Task accepted, waiting in queue",
-        "queuing": "Queued for generation",
-        "generating": f"Generating {slot_label}",
-        "success": "Generation complete",
-        "fail": "Generation failed",
-    }.get(state, "Processing task")
+        "waiting": "В очереди Kie.ai (задача принята)",
+        "queuing": "В очереди на генерацию",
+        "generating": f"Генерация {slot_label}",
+        "success": "Готово",
+        "fail": "Ошибка генерации",
+    }.get(state, "Обработка…")
+
+    # Долгое waiting — обычно перегрузка/очередь на стороне провайдера, не баг UI.
+    if state in ("waiting", "queuing") and elapsed_seconds >= 180:
+        state_text += (
+            " · Уже долго — так бывает при загрузке у Kie. Можно Cancel и снова ↻, "
+            "или подождать; другие сцены могут обработаться быстрее."
+        )
 
     response = {
         "task_id": task_id,
@@ -560,9 +686,11 @@ def generate_slot_status(job_id: str):
                     scene[slot] = scene.get(slot) or {"prompt": None}
                     if url:
                         scene[slot]["video_url"] = url
+                        scene[slot]["video_quality"] = "720p"
 
                     if hd_done and hd_url:
                         scene[slot]["video_url"] = hd_url
+                        scene[slot]["video_quality"] = "1080p"
                         scene[slot]["generation"] = {
                             "task_id": task_id,
                             "state": "success",
@@ -579,6 +707,7 @@ def generate_slot_status(job_id: str):
                         response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
                         GENERATION_TASKS.pop(task_id, None)
                     else:
+                        scene[slot]["video_quality"] = "720p"
                         scene[slot]["generation"] = {
                             "task_id": task_id,
                             "state": "upgrading_1080",
@@ -621,6 +750,8 @@ def generate_slot_status(job_id: str):
             if 0 <= scene_idx < len(scenes):
                 scene = scenes[scene_idx]
                 scene[slot] = scene.get(slot) or {"prompt": None}
+                if slot == "video":
+                    scene[slot].pop("video_quality", None)
                 scene[slot]["generation"] = {
                     "task_id": task_id,
                     "state": "fail",
@@ -732,14 +863,17 @@ def job_page(job_id: str):
     meta["video_model_label"] = video_model_label(meta.get("video_model"))
     meta.setdefault("resolution", job.get("selected_resolution", "2K"))
     meta.setdefault("output_format", "jpg")
+    meta.setdefault("image_template", job.get("selected_image_template", ""))
 
     summary = compute_summary(job.get("scenes", []))
+    template_display = job_template_display(meta.get("image_template", ""))
     return render_template(
         "job.html",
         job_id=job_id,
         job=job,
         scenes=job.get("scenes", []),
         summary=summary,
+        template_display=template_display,
     )
 
 

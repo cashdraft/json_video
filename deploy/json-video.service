@@ -1,0 +1,18 @@
+[Unit]
+Description=JSON Video Generator (Flask)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/json_video
+# python-dotenv loads .env from WorkingDirectory
+ExecStart=/srv/json_video/.venv/bin/python /srv/json_video/run_server.py
+Restart=always
+RestartSec=5
+
+# Hardening (optional, safe for this app)
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

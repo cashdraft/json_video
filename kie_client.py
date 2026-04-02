@@ -32,17 +32,21 @@ def create_image_task(
     aspect_ratio: str = "16:9",
     resolution: str = "2K",
     output_format: str = "jpg",
+    image_input: list[str] | None = None,
 ) -> str:
     """Create image generation task. Returns taskId."""
     api_key = _get_api_key()
+    inp: dict[str, Any] = {
+        "prompt": prompt,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+        "output_format": output_format,
+    }
+    if image_input:
+        inp["image_input"] = image_input
     payload = {
         "model": "nano-banana-pro",
-        "input": {
-            "prompt": prompt,
-            "aspect_ratio": aspect_ratio,
-            "resolution": resolution,
-            "output_format": output_format,
-        },
+        "input": inp,
     }
     resp = requests.post(
         CREATE_TASK,

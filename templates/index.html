@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    {% macro template_no_image_visual() %}
+    <span class="template-option-visual template-option-visual--placeholder" aria-hidden="true">
+        <svg class="template-placeholder-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <rect width="120" height="120" rx="8" fill="var(--bg)"/>
+            <rect x="10" y="10" width="100" height="100" rx="6" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="7 5"/>
+            <circle cx="44" cy="48" r="11" fill="var(--text-muted)" opacity="0.28"/>
+            <path d="M22 86 L50 56 L68 72 L98 44" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" fill="none"/>
+            <path d="M22 92 L98 92" stroke="var(--border)" stroke-width="1.5" opacity="0.6"/>
+        </svg>
+    </span>
+    {% endmacro %}
     <div class="container">
         <header>
             <h1>JSON Video Generator</h1>
@@ -72,16 +83,9 @@
                         </div>
                     </div>
                     <div class="setting">
-                        <label for="video_duration">Длительность видео</label>
-                        <select id="video_duration" name="video_duration">
-                            <option value="10" {{ 'selected' if (video_duration|string or '10') == '10' else '' }}>10 seconds</option>
-                            <option value="15" {{ 'selected' if video_duration|string == '15' else '' }}>15 seconds</option>
-                        </select>
-                    </div>
-                    <div class="setting">
                         <label for="image_model">Image Model</label>
                         <select id="image_model" name="image_model">
-                            <option value="nano-banana-pro" {{ 'selected' if (image_model or 'nano-banana-pro') == 'nano-banana-pro' else '' }}>nano-banana-pro</option>
+                            <option value="nano-banana-pro" {{ 'selected' if (image_model or 'nano-banana-pro') == 'nano-banana-pro' else '' }}>Nano Banana Pro</option>
                         </select>
                     </div>
                     <div class="setting">
@@ -90,6 +94,52 @@
                             <option value="veo3" {{ 'selected' if video_model == 'veo3' else '' }}>Veo 3.1 Quality</option>
                             <option value="veo3_fast" {{ 'selected' if (video_model or 'veo3_fast') in ['veo3_fast', 'veo3-fast'] else '' }}>Veo 3.1 Fast</option>
                         </select>
+                    </div>
+                    <div class="setting setting-wide template-setting">
+                        <label>Шаблон изображений (Nano Banana Pro)</label>
+                        <p class="template-setting-hint">
+                            Папки на сервере: <code>data/image_templates/</code> — имя подпапки = имя шаблона.
+                            Внутри: <strong>1–3</strong> референса (.jpg / .png / .webp) и опционально <code>logo.png</code> или <code>logo.jpg</code> для превью.
+                        </p>
+                        {% if image_templates %}
+                        <div class="template-picker" role="radiogroup" aria-label="Шаблон">
+                            <label class="template-option">
+                                <input class="template-option-input" type="radio" name="image_template" value="" {{ 'checked' if not (image_template or '') else '' }}>
+                                <span class="template-option-inner">
+                                    <span class="template-option-frame">
+                                        {{ template_no_image_visual() }}
+                                    </span>
+                                    <span class="template-option-name">Без шаблона</span>
+                                </span>
+                            </label>
+                            {% for t in image_templates %}
+                            <label class="template-option">
+                                <input
+                                    class="template-option-input"
+                                    type="radio"
+                                    name="image_template"
+                                    value="{{ t.folder_name }}"
+                                    {{ 'checked' if (image_template or '') == t.folder_name else '' }}
+                                >
+                                <span class="template-option-inner">
+                                    <span class="template-option-frame">
+                                        {% if t.logo_url %}
+                                        <span class="template-option-visual">
+                                            <img src="{{ t.logo_url }}" alt="" class="template-logo-preview" loading="lazy">
+                                        </span>
+                                        {% else %}
+                                        {{ template_no_image_visual() }}
+                                        {% endif %}
+                                    </span>
+                                    <span class="template-option-name">{{ t.folder_name }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <input type="hidden" name="image_template" value="">
+                        <p class="template-setting-empty">Шаблонов пока нет — создай подпапки в <code>data/image_templates/</code>.</p>
+                        {% endif %}
                     </div>
                 </div>
             </section>

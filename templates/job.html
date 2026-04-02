@@ -43,12 +43,8 @@
                     <span class="setting-value">{{ job.job_meta.aspect_ratio }}</span>
                 </div>
                 <div class="setting">
-                    <span class="setting-label">Длительность видео</span>
-                    <span class="setting-value">{{ job.job_meta.video_duration }} sec</span>
-                </div>
-                <div class="setting">
                     <span class="setting-label">Image Model</span>
-                    <span class="setting-value">{{ job.job_meta.image_model }}</span>
+                    <span class="setting-value">{{ 'Nano Banana Pro' if (job.job_meta.image_model or 'nano-banana-pro') == 'nano-banana-pro' else job.job_meta.image_model }}</span>
                 </div>
                 <div class="setting">
                     <span class="setting-label">Video Model</span>
@@ -57,6 +53,32 @@
                 <div class="setting">
                     <span class="setting-label">Resolution</span>
                     <span class="setting-value">{{ job.job_meta.resolution or '2K' }}</span>
+                </div>
+                <div class="setting setting-job-template">
+                    <span class="setting-label">Шаблон изображений</span>
+                    {% if template_display.kind == 'none' %}
+                    <span class="setting-value job-template-empty">Без шаблона</span>
+                    {% elif template_display.kind == 'missing' %}
+                    <span class="setting-value job-template-missing">{{ template_display.folder_name }} <span class="job-template-missing-note">(папка не найдена на сервере)</span></span>
+                    {% else %}
+                    <div class="job-template-preview" aria-label="Шаблон: {{ template_display.folder_name }}">
+                        <div class="job-template-frame">
+                            {% if template_display.logo_url %}
+                            <img src="{{ template_display.logo_url }}" alt="" class="job-template-logo" loading="lazy" width="72" height="72">
+                            {% else %}
+                            <div class="job-template-ph" aria-hidden="true">
+                                <svg class="job-template-ph-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                                    <rect width="120" height="120" rx="8" fill="var(--bg)"/>
+                                    <rect x="10" y="10" width="100" height="100" rx="6" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="7 5"/>
+                                    <circle cx="44" cy="48" r="11" fill="var(--text-muted)" opacity="0.28"/>
+                                    <path d="M22 86 L50 56 L68 72 L98 44" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" fill="none"/>
+                                </svg>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <span class="job-template-name">{{ template_display.folder_name }}</span>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="setting">
                     <span class="setting-label">Output</span>
@@ -166,6 +188,11 @@
                             </div>
                         </div>
                         <div class="scene-slot" data-slot="video">
+                            {% set video_gen = scene.video.generation if scene.video and scene.video.generation else none %}
+                            {% set video_active = video_gen and video_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not video_gen.canceled %}
+                            {% set video_quality = scene.video['video_quality'] if scene.video and 'video_quality' in scene.video else none %}
+                            {% set show_hd_done = (video_gen and video_gen.hd_state == 'done') or (video_quality == '1080p') %}
+                            {% set show_hd_wait = video_gen and video_gen.hd_state == 'waiting' %}
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
                                     <span class="slot-badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
@@ -180,17 +207,17 @@
                                     title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
                                     {{ '' if video_ready else 'disabled' }}
                                 ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
-                                <span class="video-hd-status {{ 'active' if video_gen and video_gen.hd_state in ['waiting', 'done'] else '' }}" data-video-hd-status>
-                                    {% if video_gen and video_gen.hd_state == 'done' %}
+                                <span class="video-hd-status {{ 'active' if show_hd_done or show_hd_wait else '' }}" data-video-hd-status>
+                                    {% if show_hd_done %}
                                     1080p - done
-                                    {% elif video_gen and video_gen.hd_state == 'waiting' %}
+                                    {% elif show_hd_wait %}
                                     720p waiting 1080p
+                                    {% elif video_quality == '720p' and scene.video and scene.video.video_url %}
+                                    720p
                                     {% endif %}
                                 </span>
                                 {% endif %}
                             </div>
-                            {% set video_gen = scene.video.generation if scene.video and scene.video.generation else none %}
-                            {% set video_active = video_gen and video_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not video_gen.canceled %}
                             <div
                                 class="slot-placeholder"
                                 data-status="{{ (video_gen.state if video_gen else ('done' if scene.video.video_url else 'pending')) }}"
@@ -366,6 +393,35 @@
     const jobId = '{{ job_id }}';
     const canceledTasks = new Set();
 
+    /** Avoid "Unexpected token '<'" when server returns HTML (502 page, crash, proxy). */
+    const parseJsonOrThrow = async (resp, label) => {
+        const text = await resp.text();
+        const trimmed = text.trim();
+        if (!trimmed) {
+            throw new Error(`${label}: пустой ответ (HTTP ${resp.status})`);
+        }
+        if (trimmed.startsWith('<')) {
+            throw new Error(
+                `${label}: сервер вернул HTML вместо JSON (HTTP ${resp.status}). ` +
+                `Часто это таймаут прокси, 502/503 или падение процесса — смотри journalctl -u json-video.`
+            );
+        }
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            throw new Error(`${label}: невалидный JSON (HTTP ${resp.status})`);
+        }
+    };
+
+    const showPlaceholderError = (placeholder, message) => {
+        placeholder.setAttribute('data-status', 'pending');
+        placeholder.replaceChildren();
+        const span = document.createElement('span');
+        span.className = 'slot-status slot-status-error';
+        span.textContent = message;
+        placeholder.appendChild(span);
+    };
+
     const updateVideoButtonState = (sceneCard) => {
         if (!sceneCard) return;
         const videoBtn = sceneCard.querySelector('.btn-generate[data-slot="video"]');
@@ -433,7 +489,7 @@
             await new Promise(r => setTimeout(r, 2000));
             if (canceledTasks.has(taskId)) break;
             const statusResp = await fetch(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`);
-            const statusData = await statusResp.json();
+            const statusData = await parseJsonOrThrow(statusResp, 'Status');
             if (!statusResp.ok) {
                 throw new Error(statusData.error || 'Status check failed');
             }
@@ -500,7 +556,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ scene_index: sceneIndex, slot: slot })
             });
-            const startData = await startResp.json();
+            const startData = await parseJsonOrThrow(startResp, 'Start');
             if (!startResp.ok || !startData.task_id) {
                 throw new Error(startData.error || 'Failed to submit task');
             }
@@ -509,8 +565,7 @@
             renderStatus(placeholder, 'Task submitted', 0, true, taskId);
             await pollTask(btn, placeholder, slot, taskId);
         } catch (e) {
-            placeholder.setAttribute('data-status', 'pending');
-            placeholder.innerHTML = `<span class="slot-status slot-status-error">${e.message}</span>`;
+            showPlaceholderError(placeholder, e.message || String(e));
             btn.disabled = false;
         }
     };
@@ -533,8 +588,7 @@
                 renderStatus(placeholder, 'Resuming task tracking', 0, true, taskId);
                 btn.disabled = true;
                 pollTask(btn, placeholder, slot, taskId).catch((e) => {
-                    placeholder.setAttribute('data-status', 'pending');
-                    placeholder.innerHTML = `<span class="slot-status slot-status-error">${e.message}</span>`;
+                    showPlaceholderError(placeholder, e.message || String(e));
                     btn.disabled = false;
                     updateVideoButtonState(btn.closest('.scene-card'));
                 });

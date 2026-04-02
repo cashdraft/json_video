@@ -26,6 +26,10 @@ data/jobs/*.json
 data/logs/*
 data/input/*
 
+# Image reference templates (user content; keep only marker in git)
+data/image_templates/*
+!data/image_templates/.gitkeep
+
 # Keep folder structure
 !data/jobs/.gitkeep
 !data/logs/.gitkeep
