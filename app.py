@@ -65,9 +65,11 @@ from rewrite_pipeline import (
     REWRITE_STAGES,
     any_stage_has_result,
     build_stage_user_message,
+    combine_system_prompt,
     merge_stages_from_request,
     new_stages_dict,
     normalize_rewrite_job_data,
+    snapshot_master_prompt_from_body,
     snapshot_stages_from_body,
     validate_prerequisites,
 )
@@ -391,6 +393,9 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "last_text": "",
         "last_result": "",
         "source_locked": False,
+        "master_prompt": "",
+        "master_prompt_locked": False,
+        "duration_minutes": 5,
     }
 
 
@@ -579,6 +584,18 @@ def rewrite_project_save(rewrite_id: str):
             rw["source_text"] = str(body.get("source_text") or "")
     if locked_in_body is not None:
         rw["source_locked"] = bool(locked_in_body)
+    m_lock_in = body.get("master_prompt_locked") if "master_prompt_locked" in body else None
+    if "master_prompt" in body:
+        if not rw.get("master_prompt_locked") or m_lock_in is False:
+            rw["master_prompt"] = str(body.get("master_prompt") or "")
+    if m_lock_in is not None:
+        rw["master_prompt_locked"] = bool(m_lock_in)
+    if "duration_minutes" in body:
+        try:
+            dm = int(body.get("duration_minutes"))
+            rw["duration_minutes"] = max(1, min(30, dm))
+        except (TypeError, ValueError):
+            pass
     merge_stages_from_request(rw, body.get("stages"))
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
@@ -600,6 +617,7 @@ def rewrite_project_run(rewrite_id: str):
     body = request.get_json(silent=True) or {}
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
+    master_prompt = snapshot_master_prompt_from_body(body)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
     def gen():
@@ -621,7 +639,7 @@ def rewrite_project_run(rewrite_id: str):
             return
         cell = stages_snap.get(stage_key) or {}
         model = normalize_rewrite_model(str(cell.get("model") or ""))
-        prompt = str(cell.get("prompt") or "")
+        prompt = combine_system_prompt(str(cell.get("prompt") or ""), master_prompt)
         user_text = build_stage_user_message(source_text, stage_key, stages_snap)
         for item in iter_rewrite_completion(api_key, model, prompt, user_text):
             yield json.dumps(item, ensure_ascii=False) + "\n"

@@ -43,9 +43,31 @@
 
         <section class="scenes-section rewrite-pipeline">
             <div class="scene-card rewrite-source-card">
-                <div class="scene-header">
-                    <div class="scene-id">Исходный текст</div>
-                    <div class="scene-text">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</div>
+                <div class="rewrite-master-duration-row">
+                    <div class="rewrite-master-duration-row__master">
+                        <h3 class="rewrite-source-subtitle">Master Prompt</h3>
+                        <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
+                        <div class="rewrite-source-toolbar slot-header">
+                            <span class="slot-badge badge-yes">Master</span>
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-master-save" {% if not openai_key_set or (rw.master_prompt_locked|default(false)) %}disabled{% endif %}>Сохранить</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-master-edit" {% if not openai_key_set or not (rw.master_prompt_locked|default(false)) %}disabled{% endif %}>Редактировать</button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--master-prompt">
+                            <textarea id="rewrite-master-prompt" class="rewrite-source-textarea{% if rw.master_prompt_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Общие инструкции для всех этапов…" {% if not openai_key_set %}disabled{% elif rw.master_prompt_locked|default(false) %}readonly{% endif %}>{{ rw.master_prompt or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="tts-slider-block rewrite-source-duration rewrite-master-duration-row__duration">
+                        <label class="tts-slider-label" for="rewrite-duration-min">Длительность <span class="tts-slider-val" id="rewrite-duration-min-val">{{ rw.duration_minutes|default(5)|int }}</span> мин</label>
+                        <input type="range" id="rewrite-duration-min" name="duration_minutes" min="1" max="30" step="1" value="{{ rw.duration_minutes|default(5)|int }}" class="tts-range" {% if not openai_key_set %}disabled{% endif %} aria-valuemin="1" aria-valuemax="30">
+                        <div class="tts-slider-ends">
+                            <span>1 мин</span>
+                            <span>30 мин</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="rewrite-source-body-header">
+                    <div class="scene-id rewrite-source-body-title">Исходный текст</div>
+                    <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
                 </div>
                 <div class="rewrite-source-toolbar slot-header">
                     <span class="slot-badge badge-yes">Source</span>
@@ -64,55 +86,48 @@
             {% set cell = rw.stages[stage_key] %}
             {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
-                <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}">
+            {% set prompt_locked = cell.prompt_locked|default(false) %}
+                <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}">
                     <div class="scene-header">
                         <div class="scene-id">{{ stage_label }}</div>
                         <div class="scene-text">Этап конвейера · ключ <code class="rewrite-stage-code">{{ stage_key }}</code></div>
                     </div>
-                    <div class="scene-slots rewrite-stage-slots">
-                        <div class="scene-slot">
-                            <div class="slot-header">
-                                <span class="slot-badge badge-yes">Model</span>
-                            </div>
-                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--model">
-                                <select id="rewrite-stage-{{ stage_key }}-model" class="tts-select rewrite-stage-model rewrite-slot-select" {% if not openai_key_set %}disabled{% endif %}>
+                    <div class="rewrite-stage-stack">
+                        <div class="rewrite-stage-row rewrite-stage-row--controls">
+                            <div class="rewrite-stage-model-cell">
+                                <div class="slot-header rewrite-stage-compact-header">
+                                    <span class="slot-badge badge-yes">Model</span>
+                                </div>
+                                <select id="rewrite-stage-{{ stage_key }}-model" class="tts-select rewrite-stage-model rewrite-stage-model-compact" {% if not openai_key_set %}disabled{% endif %}>
                                     {% for m in rewrite_models %}
                                     <option value="{{ m.id }}" {% if (cell.model or '') == m.id %}selected{% endif %}>{{ m.label }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                        </div>
-                        <div class="scene-slot">
-                            <div class="slot-header">
-                                <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }}">Prompt: {{ 'YES' if has_prompt else 'NO' }}</span>
+                            <div class="rewrite-stage-prompt-cell">
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">Prompt: {{ 'YES' if has_prompt else 'NO' }}</span>
+                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-save-prompt" {% if not openai_key_set or prompt_locked %}disabled{% endif %}>Сохранить</button>
+                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-edit-prompt" {% if not openai_key_set or not prompt_locked %}disabled{% endif %}>Редактировать</button>
+                                </div>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline">
+                                    <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
+                                </div>
                             </div>
-                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt">
-                                <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea" rows="6" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% endif %}>{{ cell.prompt or '' }}</textarea>
-                            </div>
                         </div>
-                        <div class="scene-slot">
-                            <div class="slot-header">
+                        <div class="rewrite-stage-row rewrite-stage-row--result">
+                            <div class="slot-header rewrite-stage-result-toolbar">
                                 <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
                                 <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                <span class="rewrite-stage-result-counts" aria-live="polite"></span>
                             </div>
-                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--result">
-                                <span class="rewrite-result-pending slot-status{% if has_result %} hidden{% endif %}">Pending</span>
-                                <div class="rewrite-stage-result rewrite-result-content{% if not has_result %} hidden{% endif %}">{{ cell.last_result or '' }}</div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result">
+                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result" rows="8" readonly placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
                         </div>
                     </div>
                 </article>
             {% endfor %}
-            </div>
-
-            <div id="rewrite-status-wrap" class="rewrite-status-wrap hidden">
-                <h2 class="rewrite-subtitle">Статус</h2>
-                <ul id="rewrite-status-list" class="rewrite-status-list" aria-live="polite"></ul>
-            </div>
-
-            <div id="rewrite-error-wrap" class="rewrite-error-wrap hidden" role="alert">
-                <h2 class="rewrite-subtitle">Ошибка</h2>
-                <pre id="rewrite-error" class="rewrite-error-pre"></pre>
             </div>
         </section>
 
@@ -132,12 +147,20 @@
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
     const sourceCountsEl = document.getElementById('rewrite-source-counts');
+    const masterEl = document.getElementById('rewrite-master-prompt');
+    const masterSaveBtn = document.getElementById('rewrite-master-save');
+    const masterEditBtn = document.getElementById('rewrite-master-edit');
     let sourceLocked = {{ rw.source_locked|default(false)|tojson }};
+    let masterLocked = {{ rw.master_prompt_locked|default(false)|tojson }};
     const openaiOk = document.body.getAttribute('data-openai-key') === '1';
-    const statusWrap = document.getElementById('rewrite-status-wrap');
-    const statusList = document.getElementById('rewrite-status-list');
-    const errWrap = document.getElementById('rewrite-error-wrap');
-    const errPre = document.getElementById('rewrite-error');
+    const durationRangeEl = document.getElementById('rewrite-duration-min');
+    const durationValEl = document.getElementById('rewrite-duration-min-val');
+
+    function clampDurationMinutes(v) {
+        var n = parseInt(v, 10);
+        if (isNaN(n)) return 5;
+        return Math.min(30, Math.max(1, n));
+    }
 
     function countWords(s) {
         var t = (s || '').trim();
@@ -158,6 +181,22 @@
         sourceEl.addEventListener('change', updateSourceCounts);
     }
     updateSourceCounts();
+
+    if (durationRangeEl && durationValEl) {
+        durationRangeEl.addEventListener('input', function () {
+            durationValEl.textContent = durationRangeEl.value;
+        });
+    }
+
+    function applyMasterLockUI() {
+        if (!masterEl || !openaiOk) return;
+        masterEl.readOnly = masterLocked;
+        masterEl.classList.toggle('rewrite-source-textarea--locked', masterLocked);
+        if (masterSaveBtn) masterSaveBtn.disabled = masterLocked;
+        if (masterEditBtn) masterEditBtn.disabled = !masterLocked;
+    }
+
+    applyMasterLockUI();
 
     function applySourceLockUI() {
         if (!sourceEl || !openaiOk) return;
@@ -180,12 +219,16 @@
             stages[key] = {
                 model: modelEl ? modelEl.value : '',
                 prompt: promptEl ? promptEl.value : '',
-                last_result: resEl ? (resEl.textContent || '') : ''
+                last_result: resEl ? (resEl.value || '') : '',
+                prompt_locked: block.getAttribute('data-prompt-locked') === '1'
             };
         });
         return {
             source_text: sourceEl ? sourceEl.value : '',
             source_locked: sourceLocked,
+            master_prompt: masterEl ? masterEl.value : '',
+            master_prompt_locked: masterLocked,
+            duration_minutes: durationRangeEl ? clampDurationMinutes(durationRangeEl.value) : 5,
             stages: stages
         };
     }
@@ -224,6 +267,56 @@
         }
     });
 
+    if (masterSaveBtn) {
+        masterSaveBtn.addEventListener('click', async function () {
+            masterSaveBtn.disabled = true;
+            if (masterEditBtn) masterEditBtn.disabled = true;
+            try {
+                var snap = collectSnapshot();
+                snap.master_prompt_locked = true;
+                const r = await fetch(saveUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(snap)
+                });
+                if (r.ok) {
+                    masterLocked = true;
+                    applyMasterLockUI();
+                } else {
+                    alert('Не удалось сохранить Master Prompt');
+                }
+            } catch (e) {
+                alert(String(e));
+            } finally {
+                masterSaveBtn.disabled = false;
+                applyMasterLockUI();
+            }
+        });
+    }
+
+    if (masterEditBtn) {
+        masterEditBtn.addEventListener('click', async function () {
+            var prev = masterLocked;
+            masterLocked = false;
+            applyMasterLockUI();
+            try {
+                const ok = await saveToServer();
+                if (!ok) {
+                    masterLocked = prev;
+                    applyMasterLockUI();
+                    alert('Не удалось сохранить режим редактирования');
+                    return;
+                }
+                applyMasterLockUI();
+                if (masterEl) masterEl.focus();
+            } catch (e) {
+                masterLocked = prev;
+                applyMasterLockUI();
+                alert(String(e));
+            }
+        });
+    }
+
     if (editSourceBtn) {
         editSourceBtn.addEventListener('click', async function () {
             var prevLocked = sourceLocked;
@@ -247,38 +340,86 @@
         });
     }
 
+    function applyPromptLockUI(block) {
+        if (!block) return;
+        const locked = block.getAttribute('data-prompt-locked') === '1';
+        const ta = block.querySelector('.rewrite-stage-prompt');
+        const saveB = block.querySelector('.rewrite-stage-save-prompt');
+        const editB = block.querySelector('.rewrite-stage-edit-prompt');
+        if (!openaiOk) {
+            if (saveB) saveB.disabled = true;
+            if (editB) editB.disabled = true;
+            return;
+        }
+        if (ta) {
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+        }
+        if (saveB) saveB.disabled = locked;
+        if (editB) editB.disabled = !locked;
+    }
+
     function setBusy(on) {
         const dis = on || !openaiOk;
-        saveAllBtn.disabled = dis;
+        if (saveAllBtn) saveAllBtn.disabled = dis;
         if (editSourceBtn) editSourceBtn.disabled = dis || !sourceLocked;
+        if (masterSaveBtn) masterSaveBtn.disabled = dis || masterLocked;
+        if (masterEditBtn) masterEditBtn.disabled = dis || !masterLocked;
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
+        if (durationRangeEl) durationRangeEl.disabled = dis;
+        document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+            const locked = block.getAttribute('data-prompt-locked') === '1';
+            const saveB = block.querySelector('.rewrite-stage-save-prompt');
+            const editB = block.querySelector('.rewrite-stage-edit-prompt');
+            if (saveB) saveB.disabled = dis || locked;
+            if (editB) editB.disabled = dis || !locked;
+        });
         busy.classList.toggle('hidden', !on);
+        if (!on) {
+            document.querySelectorAll('.rewrite-stage-card').forEach(applyPromptLockUI);
+            applyMasterLockUI();
+            applySourceLockUI();
+        }
     }
 
-    function resetOutput() {
-        statusList.innerHTML = '';
-        statusWrap.classList.add('hidden');
-        errWrap.classList.add('hidden');
-        errPre.textContent = '';
+    function updateResultCounts(block) {
+        const ta = block.querySelector('.rewrite-stage-result');
+        const el = block.querySelector('.rewrite-stage-result-counts');
+        if (!ta || !el) return;
+        var text = ta.value || '';
+        el.textContent = text.length + ' симв. · ' + countWords(text) + ' сл.';
     }
 
-    function pushStatus(msg) {
-        statusWrap.classList.remove('hidden');
-        const li = document.createElement('li');
-        li.className = 'rewrite-status-item';
-        const t = new Date();
-        const ts = t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        li.textContent = '[' + ts + '] ' + msg;
-        statusList.appendChild(li);
-        li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    function resetStageRunUi(block) {
+        const ta = block.querySelector('.rewrite-stage-result');
+        if (ta) ta.classList.remove('rewrite-stage-result--error');
+    }
+
+    /** Статус стрима — одна строка прямо в поле результата (вместо отдельного блока). */
+    function pushStageStatus(block, msg) {
+        const resTextarea = block.querySelector('.rewrite-stage-result');
+        if (!resTextarea) return;
+        var t = new Date();
+        var ts = t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        resTextarea.value = '[' + ts + '] ' + msg;
+        resTextarea.classList.add('rewrite-stage-result--busy');
+        updateResultCounts(block);
+    }
+
+    function showStageError(block, text) {
+        const resTextarea = block.querySelector('.rewrite-stage-result');
+        if (!resTextarea) return;
+        resTextarea.value = 'Ошибка: ' + text;
+        resTextarea.classList.remove('rewrite-stage-result--busy');
+        resTextarea.classList.add('rewrite-stage-result--error');
+        updateResultCounts(block);
     }
 
     function syncPromptBadge(block) {
         const promptEl = block.querySelector('.rewrite-stage-prompt');
-        const badges = block.querySelectorAll('.slot-badge');
-        if (!promptEl || badges.length < 2) return;
+        const promptBadge = block.querySelector('.rewrite-stage-prompt-badge');
+        if (!promptEl || !promptBadge) return;
         var hasP = (promptEl.value || '').trim().length > 0;
-        var promptBadge = badges[1];
         promptBadge.textContent = hasP ? 'Prompt: YES' : 'Prompt: NO';
         promptBadge.classList.toggle('badge-yes', hasP);
         promptBadge.classList.toggle('badge-no', !hasP);
@@ -289,18 +430,73 @@
         if (pe) {
             pe.addEventListener('input', function () { syncPromptBadge(block); });
         }
+        applyPromptLockUI(block);
+        var saveP = block.querySelector('.rewrite-stage-save-prompt');
+        var editP = block.querySelector('.rewrite-stage-edit-prompt');
+        if (saveP) {
+            saveP.addEventListener('click', async function () {
+                saveP.disabled = true;
+                if (editP) editP.disabled = true;
+                try {
+                    block.setAttribute('data-prompt-locked', '1');
+                    const snap = collectSnapshot();
+                    const r = await fetch(saveUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(snap)
+                    });
+                    if (r.ok) {
+                        applyPromptLockUI(block);
+                    } else {
+                        block.setAttribute('data-prompt-locked', '0');
+                        alert('Не удалось сохранить промпт этапа');
+                    }
+                } catch (e) {
+                    block.setAttribute('data-prompt-locked', '0');
+                    alert(String(e));
+                } finally {
+                    applyPromptLockUI(block);
+                }
+            });
+        }
+        if (editP) {
+            editP.addEventListener('click', async function () {
+                var prev = block.getAttribute('data-prompt-locked') === '1';
+                block.setAttribute('data-prompt-locked', '0');
+                applyPromptLockUI(block);
+                try {
+                    const ok = await saveToServer();
+                    if (!ok) {
+                        block.setAttribute('data-prompt-locked', prev ? '1' : '0');
+                        applyPromptLockUI(block);
+                        alert('Не удалось сохранить режим редактирования');
+                        return;
+                    }
+                    applyPromptLockUI(block);
+                    var ta = block.querySelector('.rewrite-stage-prompt');
+                    if (ta) ta.focus();
+                } catch (e) {
+                    block.setAttribute('data-prompt-locked', prev ? '1' : '0');
+                    applyPromptLockUI(block);
+                    alert(String(e));
+                }
+            });
+        }
+        updateResultCounts(block);
     });
 
     async function runStage(stageKey, block) {
-        resetOutput();
-        const pendingEl = block.querySelector('.rewrite-result-pending');
-        const resBody = block.querySelector('.rewrite-stage-result');
+        resetStageRunUi(block);
+        const resTextarea = block.querySelector('.rewrite-stage-result');
         const resultBadge = block.querySelector('.rewrite-stage-result-badge');
+        const savedBeforeRun = resTextarea ? resTextarea.value : '';
+        let streamError = false;
         setBusy(true);
-        if (pendingEl && resBody) {
-            pendingEl.classList.remove('hidden');
-            pendingEl.textContent = 'Генерация…';
-            resBody.classList.add('hidden');
+        if (resTextarea) {
+            resTextarea.value = 'Генерация…';
+            resTextarea.classList.add('rewrite-stage-result--busy');
+            resTextarea.classList.remove('rewrite-stage-result--error');
+            updateResultCounts(block);
         }
         try {
             const snap = collectSnapshot();
@@ -311,15 +507,8 @@
             });
             const reader = res.body && res.body.getReader();
             if (!reader) {
-                pushStatus('Нет тела ответа');
-                errWrap.classList.remove('hidden');
-                errPre.textContent = 'Браузер не поддерживает потоковое чтение ответа.';
-                if (pendingEl) {
-                    pendingEl.textContent = 'Pending';
-                    var had = (resBody && (resBody.textContent || '').trim().length > 0);
-                    if (had) resBody.classList.remove('hidden');
-                    else pendingEl.classList.toggle('hidden', false);
-                }
+                showStageError(block, 'Браузер не поддерживает потоковое чтение ответа.');
+                streamError = true;
                 return;
             }
             const dec = new TextDecoder();
@@ -338,54 +527,41 @@
                     try {
                         ev = JSON.parse(line);
                     } catch (e) {
-                        pushStatus('Строка JSON не разобрана: ' + line.slice(0, 80));
+                        pushStageStatus(block, 'Строка JSON не разобрана: ' + line.slice(0, 80));
                         continue;
                     }
                     if (ev.type === 'status' && ev.message) {
-                        pushStatus(ev.message);
+                        pushStageStatus(block, ev.message);
                     } else if (ev.type === 'error' && ev.message) {
-                        errWrap.classList.remove('hidden');
-                        errPre.textContent = ev.message;
+                        showStageError(block, ev.message);
+                        streamError = true;
                     } else if (ev.type === 'result' && typeof ev.content === 'string') {
                         lastContent = ev.content;
-                        if (pendingEl) {
-                            pendingEl.classList.add('hidden');
-                            pendingEl.textContent = 'Pending';
-                        }
-                        if (resBody) {
-                            resBody.textContent = ev.content;
-                            resBody.classList.remove('hidden');
+                        if (resTextarea) {
+                            resTextarea.value = ev.content;
+                            resTextarea.classList.remove('rewrite-stage-result--busy');
+                            resTextarea.classList.remove('rewrite-stage-result--error');
                         }
                         if (resultBadge) {
                             resultBadge.textContent = 'Result: DONE';
                             resultBadge.classList.remove('badge-no');
                             resultBadge.classList.add('badge-yes');
                         }
+                        updateResultCounts(block);
                     }
                 }
             }
-            if (lastContent === null && pendingEl) {
-                pendingEl.textContent = 'Pending';
-                var hadR = resBody && (resBody.textContent || '').trim().length > 0;
-                if (hadR) {
-                    pendingEl.classList.add('hidden');
-                    resBody.classList.remove('hidden');
-                }
+            if (lastContent === null && resTextarea && !streamError) {
+                resTextarea.value = savedBeforeRun;
+                resTextarea.classList.remove('rewrite-stage-result--busy');
+                updateResultCounts(block);
             }
             if (lastContent !== null) {
                 await saveToServer();
             }
         } catch (e) {
-            errWrap.classList.remove('hidden');
-            errPre.textContent = String(e);
-            if (pendingEl) {
-                pendingEl.textContent = 'Pending';
-                var hadE = resBody && (resBody.textContent || '').trim().length > 0;
-                if (hadE) {
-                    pendingEl.classList.add('hidden');
-                    resBody.classList.remove('hidden');
-                }
-            }
+            showStageError(block, String(e));
+            streamError = true;
         } finally {
             setBusy(false);
         }
