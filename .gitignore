@@ -23,6 +23,7 @@ build/
 
 # Data (jobs contain prompts, keep local)
 data/jobs/*.json
+data/rewrite_jobs/*.json
 data/logs/*
 data/input/*
 
@@ -36,5 +37,6 @@ data/job_audio/*
 
 # Keep folder structure
 !data/jobs/.gitkeep
+!data/rewrite_jobs/.gitkeep
 !data/logs/.gitkeep
 !data/input/.gitkeep

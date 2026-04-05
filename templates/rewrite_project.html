@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ rw.project_name or rw.rewrite_id }} — ReWrite</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-openai-key="{{ '1' if openai_key_set else '0' }}">
+    <div class="container">
+        <header>
+            <a href="{{ url_for('rewrite_index') }}" class="back-link">← Все проекты ReWrite</a>
+            <form method="post" action="{{ url_for('rewrite_project_rename', rewrite_id=rw.rewrite_id) }}" class="project-name-form">
+                <label for="project_name" class="sr-only">Название проекта</label>
+                <input
+                    type="text"
+                    id="project_name"
+                    name="project_name"
+                    class="project-name-input"
+                    placeholder="{{ rw.rewrite_id }}"
+                    value="{{ rw.project_name or '' }}"
+                >
+                <button type="submit" class="btn btn-secondary btn-sm">Изменить</button>
+            </form>
+            <p class="subtitle">ReWrite Master · конвейер этапов · {{ rw.rewrite_id }}</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if not openai_key_set %}
+        <p class="rewrite-warning">
+            Укажите <code>OPENAI_API_KEY</code> в <code>.env</code> и перезапустите сервис (<code>systemctl restart json-video</code>).
+        </p>
+        {% endif %}
+
+        <section class="scenes-section rewrite-pipeline">
+            <div class="scene-card rewrite-source-card">
+                <div class="scene-header">
+                    <div class="scene-id">Исходный текст</div>
+                    <div class="scene-text">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</div>
+                </div>
+                <div class="rewrite-source-toolbar slot-header">
+                    <span class="slot-badge badge-yes">Source</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-save-all" {% if not openai_key_set %}disabled{% endif %}>Сохранить всё</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-source-edit" {% if not openai_key_set or not (rw.source_locked|default(false)) %}disabled{% endif %}>Редактировать</button>
+                    <span id="rewrite-busy" class="tts-busy hidden">Идёт запрос…</span>
+                    <span class="rewrite-source-counts" id="rewrite-source-counts" aria-live="polite"></span>
+                </div>
+                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                    <textarea id="rewrite-source-text" class="rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="9" placeholder="Вставьте текст…" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %}>{{ rw.source_text or rw.last_text or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="scenes-grid rewrite-stages-list">
+            {% for stage_key, stage_label in rewrite_stages %}
+            {% set cell = rw.stages[stage_key] %}
+            {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
+            {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
+                <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}">
+                    <div class="scene-header">
+                        <div class="scene-id">{{ stage_label }}</div>
+                        <div class="scene-text">Этап конвейера · ключ <code class="rewrite-stage-code">{{ stage_key }}</code></div>
+                    </div>
+                    <div class="scene-slots rewrite-stage-slots">
+                        <div class="scene-slot">
+                            <div class="slot-header">
+                                <span class="slot-badge badge-yes">Model</span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--model">
+                                <select id="rewrite-stage-{{ stage_key }}-model" class="tts-select rewrite-stage-model rewrite-slot-select" {% if not openai_key_set %}disabled{% endif %}>
+                                    {% for m in rewrite_models %}
+                                    <option value="{{ m.id }}" {% if (cell.model or '') == m.id %}selected{% endif %}>{{ m.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="scene-slot">
+                            <div class="slot-header">
+                                <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }}">Prompt: {{ 'YES' if has_prompt else 'NO' }}</span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt">
+                                <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea" rows="6" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% endif %}>{{ cell.prompt or '' }}</textarea>
+                            </div>
+                        </div>
+                        <div class="scene-slot">
+                            <div class="slot-header">
+                                <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
+                                <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--result">
+                                <span class="rewrite-result-pending slot-status{% if has_result %} hidden{% endif %}">Pending</span>
+                                <div class="rewrite-stage-result rewrite-result-content{% if not has_result %} hidden{% endif %}">{{ cell.last_result or '' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+            </div>
+
+            <div id="rewrite-status-wrap" class="rewrite-status-wrap hidden">
+                <h2 class="rewrite-subtitle">Статус</h2>
+                <ul id="rewrite-status-list" class="rewrite-status-list" aria-live="polite"></ul>
+            </div>
+
+            <div id="rewrite-error-wrap" class="rewrite-error-wrap hidden" role="alert">
+                <h2 class="rewrite-subtitle">Ошибка</h2>
+                <pre id="rewrite-error" class="rewrite-error-pre"></pre>
+            </div>
+        </section>
+
+        <section class="rewrite-danger-zone">
+            <form method="post" action="{{ url_for('rewrite_project_delete', rewrite_id=rw.rewrite_id) }}" onsubmit="return confirm('Удалить проект {{ rw.rewrite_id }}?');">
+                <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
+            </form>
+        </section>
+    </div>
+
+    <script>
+(function () {
+    const runUrl = {{ url_for('rewrite_project_run', rewrite_id=rw.rewrite_id) | tojson }};
+    const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
+    const saveAllBtn = document.getElementById('rewrite-save-all');
+    const editSourceBtn = document.getElementById('rewrite-source-edit');
+    const busy = document.getElementById('rewrite-busy');
+    const sourceEl = document.getElementById('rewrite-source-text');
+    const sourceCountsEl = document.getElementById('rewrite-source-counts');
+    let sourceLocked = {{ rw.source_locked|default(false)|tojson }};
+    const openaiOk = document.body.getAttribute('data-openai-key') === '1';
+    const statusWrap = document.getElementById('rewrite-status-wrap');
+    const statusList = document.getElementById('rewrite-status-list');
+    const errWrap = document.getElementById('rewrite-error-wrap');
+    const errPre = document.getElementById('rewrite-error');
+
+    function countWords(s) {
+        var t = (s || '').trim();
+        if (!t) return 0;
+        return t.split(/\s+/).filter(Boolean).length;
+    }
+
+    function updateSourceCounts() {
+        if (!sourceCountsEl || !sourceEl) return;
+        var text = sourceEl.value;
+        var chars = text.length;
+        var words = countWords(text);
+        sourceCountsEl.textContent = chars + ' симв. · ' + words + ' сл.';
+    }
+
+    if (sourceEl) {
+        sourceEl.addEventListener('input', updateSourceCounts);
+        sourceEl.addEventListener('change', updateSourceCounts);
+    }
+    updateSourceCounts();
+
+    function applySourceLockUI() {
+        if (!sourceEl || !openaiOk) return;
+        sourceEl.readOnly = sourceLocked;
+        sourceEl.classList.toggle('rewrite-source-textarea--locked', sourceLocked);
+        if (editSourceBtn) {
+            editSourceBtn.disabled = !sourceLocked;
+        }
+    }
+
+    applySourceLockUI();
+
+    function collectSnapshot() {
+        const stages = {};
+        document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+            const key = block.getAttribute('data-stage-key');
+            const modelEl = block.querySelector('.rewrite-stage-model');
+            const promptEl = block.querySelector('.rewrite-stage-prompt');
+            const resEl = block.querySelector('.rewrite-stage-result');
+            stages[key] = {
+                model: modelEl ? modelEl.value : '',
+                prompt: promptEl ? promptEl.value : '',
+                last_result: resEl ? (resEl.textContent || '') : ''
+            };
+        });
+        return {
+            source_text: sourceEl ? sourceEl.value : '',
+            source_locked: sourceLocked,
+            stages: stages
+        };
+    }
+
+    async function saveToServer() {
+        const r = await fetch(saveUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(collectSnapshot())
+        });
+        return r.ok;
+    }
+
+    saveAllBtn.addEventListener('click', async function () {
+        saveAllBtn.disabled = true;
+        if (editSourceBtn) editSourceBtn.disabled = true;
+        try {
+            const snap = collectSnapshot();
+            snap.source_locked = true;
+            const r = await fetch(saveUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(snap)
+            });
+            if (r.ok) {
+                sourceLocked = true;
+                applySourceLockUI();
+            } else {
+                alert('Не удалось сохранить');
+            }
+        } catch (e) {
+            alert(String(e));
+        } finally {
+            saveAllBtn.disabled = false;
+            applySourceLockUI();
+        }
+    });
+
+    if (editSourceBtn) {
+        editSourceBtn.addEventListener('click', async function () {
+            var prevLocked = sourceLocked;
+            sourceLocked = false;
+            applySourceLockUI();
+            try {
+                const ok = await saveToServer();
+                if (!ok) {
+                    sourceLocked = prevLocked;
+                    applySourceLockUI();
+                    alert('Не удалось сохранить режим редактирования');
+                    return;
+                }
+                applySourceLockUI();
+                if (sourceEl) sourceEl.focus();
+            } catch (e) {
+                sourceLocked = prevLocked;
+                applySourceLockUI();
+                alert(String(e));
+            }
+        });
+    }
+
+    function setBusy(on) {
+        const dis = on || !openaiOk;
+        saveAllBtn.disabled = dis;
+        if (editSourceBtn) editSourceBtn.disabled = dis || !sourceLocked;
+        document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
+        busy.classList.toggle('hidden', !on);
+    }
+
+    function resetOutput() {
+        statusList.innerHTML = '';
+        statusWrap.classList.add('hidden');
+        errWrap.classList.add('hidden');
+        errPre.textContent = '';
+    }
+
+    function pushStatus(msg) {
+        statusWrap.classList.remove('hidden');
+        const li = document.createElement('li');
+        li.className = 'rewrite-status-item';
+        const t = new Date();
+        const ts = t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        li.textContent = '[' + ts + '] ' + msg;
+        statusList.appendChild(li);
+        li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function syncPromptBadge(block) {
+        const promptEl = block.querySelector('.rewrite-stage-prompt');
+        const badges = block.querySelectorAll('.slot-badge');
+        if (!promptEl || badges.length < 2) return;
+        var hasP = (promptEl.value || '').trim().length > 0;
+        var promptBadge = badges[1];
+        promptBadge.textContent = hasP ? 'Prompt: YES' : 'Prompt: NO';
+        promptBadge.classList.toggle('badge-yes', hasP);
+        promptBadge.classList.toggle('badge-no', !hasP);
+    }
+
+    document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+        var pe = block.querySelector('.rewrite-stage-prompt');
+        if (pe) {
+            pe.addEventListener('input', function () { syncPromptBadge(block); });
+        }
+    });
+
+    async function runStage(stageKey, block) {
+        resetOutput();
+        const pendingEl = block.querySelector('.rewrite-result-pending');
+        const resBody = block.querySelector('.rewrite-stage-result');
+        const resultBadge = block.querySelector('.rewrite-stage-result-badge');
+        setBusy(true);
+        if (pendingEl && resBody) {
+            pendingEl.classList.remove('hidden');
+            pendingEl.textContent = 'Генерация…';
+            resBody.classList.add('hidden');
+        }
+        try {
+            const snap = collectSnapshot();
+            const res = await fetch(runUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
+                body: JSON.stringify(Object.assign({ stage: stageKey }, snap))
+            });
+            const reader = res.body && res.body.getReader();
+            if (!reader) {
+                pushStatus('Нет тела ответа');
+                errWrap.classList.remove('hidden');
+                errPre.textContent = 'Браузер не поддерживает потоковое чтение ответа.';
+                if (pendingEl) {
+                    pendingEl.textContent = 'Pending';
+                    var had = (resBody && (resBody.textContent || '').trim().length > 0);
+                    if (had) resBody.classList.remove('hidden');
+                    else pendingEl.classList.toggle('hidden', false);
+                }
+                return;
+            }
+            const dec = new TextDecoder();
+            let buf = '';
+            let lastContent = null;
+            while (true) {
+                const chunk = await reader.read();
+                if (chunk.done) break;
+                buf += dec.decode(chunk.value, { stream: true });
+                let i;
+                while ((i = buf.indexOf('\n')) >= 0) {
+                    const line = buf.slice(0, i).trim();
+                    buf = buf.slice(i + 1);
+                    if (!line) continue;
+                    let ev;
+                    try {
+                        ev = JSON.parse(line);
+                    } catch (e) {
+                        pushStatus('Строка JSON не разобрана: ' + line.slice(0, 80));
+                        continue;
+                    }
+                    if (ev.type === 'status' && ev.message) {
+                        pushStatus(ev.message);
+                    } else if (ev.type === 'error' && ev.message) {
+                        errWrap.classList.remove('hidden');
+                        errPre.textContent = ev.message;
+                    } else if (ev.type === 'result' && typeof ev.content === 'string') {
+                        lastContent = ev.content;
+                        if (pendingEl) {
+                            pendingEl.classList.add('hidden');
+                            pendingEl.textContent = 'Pending';
+                        }
+                        if (resBody) {
+                            resBody.textContent = ev.content;
+                            resBody.classList.remove('hidden');
+                        }
+                        if (resultBadge) {
+                            resultBadge.textContent = 'Result: DONE';
+                            resultBadge.classList.remove('badge-no');
+                            resultBadge.classList.add('badge-yes');
+                        }
+                    }
+                }
+            }
+            if (lastContent === null && pendingEl) {
+                pendingEl.textContent = 'Pending';
+                var hadR = resBody && (resBody.textContent || '').trim().length > 0;
+                if (hadR) {
+                    pendingEl.classList.add('hidden');
+                    resBody.classList.remove('hidden');
+                }
+            }
+            if (lastContent !== null) {
+                await saveToServer();
+            }
+        } catch (e) {
+            errWrap.classList.remove('hidden');
+            errPre.textContent = String(e);
+            if (pendingEl) {
+                pendingEl.textContent = 'Pending';
+                var hadE = resBody && (resBody.textContent || '').trim().length > 0;
+                if (hadE) {
+                    pendingEl.classList.add('hidden');
+                    resBody.classList.remove('hidden');
+                }
+            }
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+        const key = block.getAttribute('data-stage-key');
+        const runBtn = block.querySelector('.rewrite-stage-run');
+        if (runBtn && key) {
+            runBtn.addEventListener('click', function () {
+                runStage(key, block);
+            });
+        }
+    });
+})();
+    </script>
+</body>
+</html>

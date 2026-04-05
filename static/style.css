@@ -63,6 +63,28 @@ header h1 {
     font-size: 0.95rem;
 }
 
+.home-cross-link {
+    margin: 0.65rem 0 0 0;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.home-cross-link a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.home-cross-link a:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+
+.home-cross-link-hint {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
 /* Flash messages */
 .flash-messages {
     margin-bottom: 1.5rem;
@@ -503,6 +525,266 @@ textarea::placeholder {
 
 .hidden {
     display: none !important;
+}
+
+/* ReWrite Master (/rewrite, /rewrite/<id>).
+   Страница проекта: колонка с карточками — .scenes-section (как блок «Сцены»), без общей рамки/фона. */
+.rewrite-warning {
+    color: var(--warning, #e8a317);
+    font-size: 0.9rem;
+    margin: 0 0 1rem 0;
+    padding: 0.65rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid rgba(232, 163, 23, 0.35);
+    background: rgba(232, 163, 23, 0.08);
+}
+
+.rewrite-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.rewrite-field {
+    width: 100%;
+}
+
+.rewrite-textarea {
+    min-height: 0;
+}
+
+.rewrite-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.rewrite-subtitle {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.25rem 0 0.5rem 0;
+}
+
+.rewrite-stages-list ~ .rewrite-status-wrap .rewrite-subtitle,
+.rewrite-form + .rewrite-status-wrap .rewrite-subtitle {
+    margin-top: 1.5rem;
+}
+
+.rewrite-status-list {
+    margin: 0;
+    padding: 0.65rem 0.85rem;
+    list-style: none;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    max-height: 14rem;
+    overflow-y: auto;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.rewrite-status-item {
+    padding: 0.2rem 0;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.rewrite-status-item:last-child {
+    border-bottom: none;
+}
+
+.rewrite-error-wrap {
+    margin-top: 1rem;
+}
+
+.rewrite-error-pre {
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(240, 113, 120, 0.4);
+    background: rgba(240, 113, 120, 0.1);
+    color: #f07178;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.rewrite-result-wrap {
+    margin-top: 1rem;
+}
+
+.rewrite-result-body {
+    margin: 0;
+    padding: 1rem 1.1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.rewrite-hub-h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 0.65rem 0;
+}
+
+.rewrite-new-section {
+    margin-bottom: 2rem;
+}
+
+.rewrite-new-form .rewrite-new-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+    margin-top: 0.35rem;
+}
+
+.rewrite-new-form input[type="text"] {
+    flex: 1;
+    min-width: 12rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text);
+}
+
+.rewrite-danger-zone {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+/* ReWrite: карточки как у сцен (scene-card + слоты) */
+.rewrite-source-card {
+    margin-bottom: 1rem;
+}
+
+.rewrite-source-toolbar {
+    margin-bottom: 0.65rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.rewrite-source-counts {
+    margin-left: auto;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+    white-space: nowrap;
+    align-self: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.rewrite-stages-list {
+    margin-top: 0.25rem;
+}
+
+.rewrite-stage-card .scene-header {
+    margin-bottom: 0.85rem;
+}
+
+.rewrite-stage-code {
+    font-size: 0.68em;
+    font-weight: 400;
+    opacity: 0.9;
+}
+
+.slot-placeholder.rewrite-slot-placeholder {
+    aspect-ratio: unset;
+    min-height: 4.5rem;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+}
+
+.rewrite-slot--source {
+    min-height: 10rem;
+}
+
+.rewrite-source-textarea--locked {
+    opacity: 0.58;
+    cursor: default;
+    color: var(--text-muted);
+    filter: brightness(0.88) saturate(0.75);
+}
+
+.rewrite-source-textarea,
+.rewrite-slot-textarea {
+    width: 100%;
+    min-height: 100%;
+    flex: 1;
+    margin: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    padding: 0.55rem 0.65rem;
+    box-sizing: border-box;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.rewrite-source-textarea {
+    min-height: 8rem;
+    font-size: 0.85rem;
+}
+
+.rewrite-slot--model {
+    min-height: 3.25rem;
+    padding: 0.45rem 0.5rem;
+    align-items: center;
+}
+
+.rewrite-slot-select {
+    width: 100%;
+    max-width: 100%;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+    box-sizing: border-box;
+}
+
+.rewrite-slot--result {
+    min-height: 7rem;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+}
+
+.rewrite-result-content {
+    width: 100%;
+    max-height: 16rem;
+    overflow: auto;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: left;
+    color: var(--text);
+    box-sizing: border-box;
+}
+
+.rewrite-result-pending {
+    align-self: center;
+    margin: auto;
+}
+
+@media (max-width: 52rem) {
+    .rewrite-stage-card .scene-slots {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ElevenLabs TTS (страница проекта) */

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReWrite Master — проекты</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="{{ url_for('index') }}" class="back-link">← JSON Video — главная</a>
+            <h1>ReWrite Master</h1>
+            <p class="subtitle">Проекты обработки текста через OpenAI — как отдельный раздел, не на главной парсера сцен</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if not openai_key_set %}
+        <p class="rewrite-warning">
+            Укажите <code>OPENAI_API_KEY</code> в <code>.env</code> и перезапустите сервис (<code>systemctl restart json-video</code>).
+        </p>
+        {% endif %}
+
+        <section class="project-name-section rewrite-new-section">
+            <h2 class="rewrite-hub-h2">Новый проект</h2>
+            <form method="post" action="{{ url_for('rewrite_index') }}" class="rewrite-new-form">
+                <label for="rewrite_new_name">Название проекта</label>
+                <div class="rewrite-new-row">
+                    <input type="text" id="rewrite_new_name" name="project_name" placeholder="Например: Статья для блога — правки">
+                    <button type="submit" class="btn btn-primary" {% if not openai_key_set %}disabled{% endif %}>Создать</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="projects-section">
+            <h2>Проекты ReWrite</h2>
+            {% if rewrite_jobs %}
+            <div class="projects-list">
+                {% for rj in rewrite_jobs %}
+                <div class="project-card">
+                    <div class="project-main">
+                        <a href="{{ url_for('rewrite_project_page', rewrite_id=rj.rewrite_id) }}" class="project-name">{{ rj.project_name }}</a>
+                        <span class="project-meta">{{ rj.rewrite_id }}{% if rj.has_result %} · есть ответ{% endif %}{% if rj.updated_at %} · {{ rj.updated_at }}{% endif %}</span>
+                    </div>
+                    <form method="post" action="{{ url_for('rewrite_project_delete', rewrite_id=rj.rewrite_id) }}" class="project-delete-form" onsubmit="return confirm('Удалить проект {{ rj.rewrite_id }}?');">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Удалить">✕</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="projects-empty">Пока нет проектов — создайте первый выше.</p>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

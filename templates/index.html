@@ -24,6 +24,11 @@
             <p class="subtitle">Парсинг сцен для генерации изображений и видео</p>
         </header>
 
+        <p class="home-cross-link">
+            <a href="{{ url_for('rewrite_index') }}">ReWrite Master</a>
+            <span class="home-cross-link-hint"> — отдельная страница с проектами (OpenAI)</span>
+        </p>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div class="flash-messages">

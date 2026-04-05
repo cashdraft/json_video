@@ -18,6 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     has_request_context,
@@ -27,6 +28,7 @@ from flask import (
     render_template,
     request,
     send_from_directory,
+    stream_with_context,
     url_for,
 )
 
@@ -52,6 +54,23 @@ from kie_client import (
     get_video_task_result,
     get_video_1080p_result,
 )
+from rewrite_openai import (
+    REWRITE_DEFAULT_MODEL,
+    REWRITE_MODELS,
+    iter_rewrite_completion,
+    normalize_rewrite_model,
+)
+from rewrite_pipeline import (
+    REWRITE_STAGE_KEYS,
+    REWRITE_STAGES,
+    any_stage_has_result,
+    build_stage_user_message,
+    merge_stages_from_request,
+    new_stages_dict,
+    normalize_rewrite_job_data,
+    snapshot_stages_from_body,
+    validate_prerequisites,
+)
 
 load_dotenv()
 
@@ -59,6 +78,9 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 JOBS_DIR = BASE_DIR / "data" / "jobs"
 JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
+REWRITE_JOBS_DIR = BASE_DIR / "data" / "rewrite_jobs"
+
+_REWRITE_ID_RE = re.compile(r"^rewrite_\d{8}_\d{6}$")
 
 
 def _safe_job_audio_filename(name: str) -> bool:
@@ -347,6 +369,90 @@ def list_jobs() -> list[dict]:
     return jobs
 
 
+def rewrite_id_ok(rid: str) -> bool:
+    return bool(_REWRITE_ID_RE.match(rid or ""))
+
+
+def _rewrite_filepath(rewrite_id: str) -> Path:
+    return REWRITE_JOBS_DIR / f"{rewrite_id}.json"
+
+
+def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
+    now = datetime.now().isoformat(timespec="seconds")
+    return {
+        "rewrite_id": rewrite_id,
+        "project_name": (project_name or "").strip() or rewrite_id,
+        "created_at": now,
+        "updated_at": now,
+        "source_text": "",
+        "stages": new_stages_dict(),
+        "model": REWRITE_DEFAULT_MODEL,
+        "last_prompt": "",
+        "last_text": "",
+        "last_result": "",
+        "source_locked": False,
+    }
+
+
+def create_rewrite_job(project_name: str) -> str:
+    REWRITE_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    rewrite_id = f"rewrite_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    payload = new_rewrite_payload(rewrite_id, project_name)
+    with open(_rewrite_filepath(rewrite_id), "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return rewrite_id
+
+
+def load_rewrite_job(rewrite_id: str) -> dict | None:
+    if not rewrite_id_ok(rewrite_id):
+        return None
+    fp = _rewrite_filepath(rewrite_id)
+    if not fp.is_file():
+        return None
+    try:
+        with open(fp, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        normalize_rewrite_job_data(data)
+        return data
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def save_rewrite_job(rewrite_id: str, data: dict) -> None:
+    if not rewrite_id_ok(rewrite_id):
+        raise ValueError("bad rewrite_id")
+    REWRITE_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    data = dict(data)
+    data["rewrite_id"] = rewrite_id
+    data["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    with open(_rewrite_filepath(rewrite_id), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def list_rewrite_jobs() -> list[dict]:
+    rows = []
+    if not REWRITE_JOBS_DIR.is_dir():
+        return rows
+    for f in sorted(REWRITE_JOBS_DIR.glob("rewrite_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        rid = f.stem
+        if not rewrite_id_ok(rid):
+            continue
+        try:
+            data = json.load(open(f, "r", encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        normalize_rewrite_job_data(data)
+        rows.append(
+            {
+                "rewrite_id": rid,
+                "project_name": data.get("project_name", "") or rid,
+                "updated_at": data.get("updated_at", data.get("created_at", "")),
+                "has_result": any_stage_has_result(data),
+            }
+        )
+    return rows
+
+
 def compute_summary(scenes: list[dict]) -> dict:
     """Вычисляет summary по сценам."""
     start_count = sum(1 for s in scenes if s.get("start", {}).get("prompt"))
@@ -391,6 +497,152 @@ def render_index(**kwargs):
 @app.route("/")
 def index():
     return render_index()
+
+
+@app.route("/rewrite", methods=["GET", "POST"])
+def rewrite_index():
+    """Список проектов ReWrite Master + создание нового."""
+    if request.method == "POST":
+        project_name = request.form.get("project_name", "").strip()
+        rid = create_rewrite_job(project_name)
+        flash("Проект создан.", "success")
+        return redirect(url_for("rewrite_project_page", rewrite_id=rid))
+
+    resp = make_response(
+        render_template(
+            "rewrite_index.html",
+            rewrite_jobs=list_rewrite_jobs(),
+            openai_key_set=bool((os.getenv("OPENAI_API_KEY") or "").strip()),
+        )
+    )
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
+@app.route("/rewrite/<rewrite_id>")
+def rewrite_project_page(rewrite_id: str):
+    """Страница одного проекта ReWrite (форма + статусы + ответ)."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        flash("Проект ReWrite не найден.", "error")
+        return redirect(url_for("rewrite_index"))
+    key_set = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    resp = make_response(
+        render_template(
+            "rewrite_project.html",
+            rw=rw,
+            rewrite_stages=REWRITE_STAGES,
+            rewrite_models=REWRITE_MODELS,
+            openai_key_set=key_set,
+        )
+    )
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
+@app.route("/rewrite/<rewrite_id>/rename", methods=["POST"])
+def rewrite_project_rename(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        flash("Проект не найден.", "error")
+        return redirect(url_for("rewrite_index"))
+    name = request.form.get("project_name", "").strip()
+    rw["project_name"] = name or rewrite_id
+    save_rewrite_job(rewrite_id, rw)
+    flash("Название обновлено.", "success")
+    return redirect(url_for("rewrite_project_page", rewrite_id=rewrite_id))
+
+
+@app.route("/rewrite/<rewrite_id>/delete", methods=["POST"])
+def rewrite_project_delete(rewrite_id: str):
+    fp = _rewrite_filepath(rewrite_id)
+    if rewrite_id_ok(rewrite_id) and fp.is_file():
+        fp.unlink()
+        flash("Проект ReWrite удалён.", "success")
+    else:
+        flash("Проект не найден.", "error")
+    return redirect(url_for("rewrite_index"))
+
+
+@app.route("/rewrite/<rewrite_id>/save", methods=["POST"])
+def rewrite_project_save(rewrite_id: str):
+    """Сохранение: исходный текст, настройки и результаты по этапам."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    locked_in_body = body.get("source_locked") if "source_locked" in body else None
+    if "source_text" in body:
+        if not rw.get("source_locked") or locked_in_body is False:
+            rw["source_text"] = str(body.get("source_text") or "")
+    if locked_in_body is not None:
+        rw["source_locked"] = bool(locked_in_body)
+    merge_stages_from_request(rw, body.get("stages"))
+    if "model" in body:
+        rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
+    if "last_prompt" in body:
+        rw["last_prompt"] = str(body.get("last_prompt") or "")
+    if "last_text" in body:
+        rw["last_text"] = str(body.get("last_text") or "")
+    if "last_result" in body:
+        rw["last_result"] = str(body.get("last_result") or "")
+    save_rewrite_job(rewrite_id, rw)
+    return jsonify({"ok": True})
+
+
+@app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
+def rewrite_project_run(rewrite_id: str):
+    """Стрим NDJSON для одного этапа: system = промпт этапа, user = исходник + предыдущие результаты."""
+    if load_rewrite_job(rewrite_id) is None:
+        return jsonify({"error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    stage_key = str(body.get("stage") or "").strip().lower()
+    source_text, stages_snap = snapshot_stages_from_body(body)
+    api_key = os.getenv("OPENAI_API_KEY") or ""
+
+    def gen():
+        if stage_key not in REWRITE_STAGE_KEYS:
+            yield json.dumps(
+                {"type": "error", "message": "Неизвестный этап. Обновите страницу."},
+                ensure_ascii=False,
+            ) + "\n"
+            return
+        if not (source_text or "").strip():
+            yield json.dumps(
+                {"type": "error", "message": "Введите исходный текст в верхнем поле."},
+                ensure_ascii=False,
+            ) + "\n"
+            return
+        pre_err = validate_prerequisites(stage_key, stages_snap)
+        if pre_err:
+            yield json.dumps({"type": "error", "message": pre_err}, ensure_ascii=False) + "\n"
+            return
+        cell = stages_snap.get(stage_key) or {}
+        model = normalize_rewrite_model(str(cell.get("model") or ""))
+        prompt = str(cell.get("prompt") or "")
+        user_text = build_stage_user_message(source_text, stage_key, stages_snap)
+        for item in iter_rewrite_completion(api_key, model, prompt, user_text):
+            yield json.dumps(item, ensure_ascii=False) + "\n"
+
+    return Response(
+        stream_with_context(gen()),
+        mimetype="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/rewrite-master")
+def rewrite_master_legacy_redirect():
+    """Старый URL → хаб проектов ReWrite."""
+    return redirect(url_for("rewrite_index"), code=301)
+
+
+@app.route("/reright-master")
+def rewrite_reright_legacy_redirect():
+    """Старый URL /reright-master → /rewrite."""
+    return redirect(url_for("rewrite_index"), code=301)
 
 
 @app.route("/parse", methods=["POST"])
