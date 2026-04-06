@@ -878,6 +878,25 @@ textarea::placeholder {
     margin-bottom: 0.85rem;
 }
 
+.rewrite-stage-header-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.35rem;
+}
+
+.rewrite-stage-header-row .scene-id {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+.rewrite-stage-header-row .rewrite-stage-api-export {
+    flex-shrink: 0;
+}
+
 .rewrite-stage-card .rewrite-stage-send-hint {
     max-height: none;
     overflow: visible;

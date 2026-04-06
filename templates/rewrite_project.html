@@ -147,7 +147,10 @@
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
                 <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}">
                     <div class="scene-header">
-                        <div class="scene-id">{{ stage_label }}</div>
+                        <div class="rewrite-stage-header-row">
+                            <div class="scene-id">{{ stage_label }}</div>
+                            <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>Запрос .txt</button>
+                        </div>
                         <div class="scene-text rewrite-stage-send-hint">{{ rewrite_stage_send_hints[stage_key] }}</div>
                     </div>
                     <div class="rewrite-stage-stack">
@@ -202,6 +205,7 @@
     <script>
 (function () {
     const runUrl = {{ url_for('rewrite_project_run', rewrite_id=rw.rewrite_id) | tojson }};
+    const apiPayloadUrl = {{ url_for('rewrite_project_api_payload', rewrite_id=rw.rewrite_id) | tojson }};
     const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
@@ -350,6 +354,7 @@
                     break;
                 }
             }
+            const apiBtn = block.querySelector('.rewrite-stage-api-export');
             if (runBtn && blockedEl) {
                 if (ok) {
                     runBtn.removeAttribute('hidden');
@@ -359,6 +364,9 @@
                     blockedEl.removeAttribute('hidden');
                 }
                 runBtn.disabled = !ok || !openaiOk;
+            }
+            if (apiBtn) {
+                apiBtn.disabled = !ok || !openaiOk;
             }
         });
     }
@@ -659,6 +667,9 @@
         const dis = on || !openaiOk;
         document.querySelectorAll('.rewrite-lock-toggle').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
+        if (on) {
+            document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
+        }
         if (durationRangeEl) durationRangeEl.disabled = dis || audioTimingLocked;
         if (charsPerMinEl) charsPerMinEl.disabled = dis || audioTimingLocked;
         if (heroPromptEl) {
@@ -818,7 +829,9 @@
             }
             const dec = new TextDecoder();
             let buf = '';
-            let lastContent = null;
+            let gotFinalResult = false;
+            const useOpenAIStreamUi = (stageKey === 'draft1');
+            let streamBuf = '';
             while (true) {
                 const chunk = await reader.read();
                 if (chunk.done) break;
@@ -832,16 +845,41 @@
                     try {
                         ev = JSON.parse(line);
                     } catch (e) {
-                        pushStageStatus(block, 'Строка JSON не разобрана: ' + line.slice(0, 80));
+                        if (!useOpenAIStreamUi || streamBuf.length === 0) {
+                            pushStageStatus(block, 'Строка JSON не разобрана: ' + line.slice(0, 80));
+                        }
                         continue;
                     }
                     if (ev.type === 'status' && ev.message) {
-                        pushStageStatus(block, ev.message);
+                        if (!useOpenAIStreamUi || streamBuf.length === 0) {
+                            pushStageStatus(block, ev.message);
+                        }
+                    } else if (ev.type === 'delta' && typeof ev.content === 'string') {
+                        streamBuf += ev.content;
+                        if (resTextarea) {
+                            resTextarea.value = streamBuf;
+                            resTextarea.classList.add('rewrite-stage-result--busy');
+                            resTextarea.scrollTop = resTextarea.scrollHeight;
+                        }
+                        updateResultCounts(block);
                     } else if (ev.type === 'error' && ev.message) {
-                        showStageError(block, ev.message);
                         streamError = true;
+                        if (streamBuf.length > 0 && resTextarea) {
+                            resTextarea.value = streamBuf + '\n\n--- Ошибка ---\n' + ev.message;
+                            resTextarea.classList.remove('rewrite-stage-result--busy');
+                            resTextarea.classList.add('rewrite-stage-result--error');
+                            if (resultBadge) {
+                                resultBadge.textContent = 'Result: Pending';
+                                resultBadge.classList.remove('badge-yes');
+                                resultBadge.classList.add('badge-no');
+                            }
+                            updateResultCounts(block);
+                            syncStageRunButtons();
+                        } else {
+                            showStageError(block, ev.message);
+                        }
                     } else if (ev.type === 'result' && typeof ev.content === 'string') {
-                        lastContent = ev.content;
+                        gotFinalResult = true;
                         if (resTextarea) {
                             resTextarea.value = ev.content;
                             resTextarea.classList.remove('rewrite-stage-result--busy');
@@ -857,13 +895,19 @@
                     }
                 }
             }
-            if (lastContent === null && resTextarea && !streamError) {
-                resTextarea.value = savedBeforeRun;
-                resTextarea.classList.remove('rewrite-stage-result--busy');
-                updateResultCounts(block);
-                syncStageRunButtons();
+            if (!gotFinalResult && resTextarea && !streamError) {
+                if (useOpenAIStreamUi && streamBuf.length > 0) {
+                    resTextarea.classList.remove('rewrite-stage-result--busy');
+                    updateResultCounts(block);
+                    syncStageRunButtons();
+                } else {
+                    resTextarea.value = savedBeforeRun;
+                    resTextarea.classList.remove('rewrite-stage-result--busy');
+                    updateResultCounts(block);
+                    syncStageRunButtons();
+                }
             }
-            if (lastContent !== null) {
+            if (gotFinalResult) {
                 await saveToServer();
             }
         } catch (e) {
@@ -874,12 +918,54 @@
         }
     }
 
+    async function downloadStageApiPayload(stageKey, block) {
+        const btn = block.querySelector('.rewrite-stage-api-export');
+        if (btn) btn.disabled = true;
+        try {
+            const r = await fetch(apiPayloadUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ stage: stageKey }, collectSnapshot()))
+            });
+            var fname = 'openai_request.txt';
+            var cd = r.headers.get('Content-Disposition');
+            if (cd) {
+                var m = cd.match(/filename="([^"]+)"/);
+                if (m) fname = m[1];
+            }
+            if (!r.ok) {
+                var errData = await r.json().catch(function () { return {}; });
+                alert(errData.message || 'Не удалось сформировать запрос');
+                return;
+            }
+            var blob = await r.blob();
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert(String(e));
+        } finally {
+            syncStageRunButtons();
+        }
+    }
+
     document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
         const key = block.getAttribute('data-stage-key');
         const runBtn = block.querySelector('.rewrite-stage-run');
         if (runBtn && key) {
             runBtn.addEventListener('click', function () {
                 runStage(key, block);
+            });
+        }
+        const apiBtn = block.querySelector('.rewrite-stage-api-export');
+        if (apiBtn && key) {
+            apiBtn.addEventListener('click', function () {
+                downloadStageApiPayload(key, block);
             });
         }
     });

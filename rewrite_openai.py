@@ -23,6 +23,8 @@ REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}
 
 REWRITE_DEFAULT_MODEL = "gpt-4.1"
 
+REWRITE_CHAT_TEMPERATURE = 0.3
+
 
 def normalize_rewrite_model(model: str) -> str:
     m = (model or "").strip()
@@ -108,7 +110,7 @@ def iter_rewrite_completion(
             {"role": "system", "content": prompt},
             {"role": "user", "content": text},
         ],
-        "temperature": 0.7,
+        "temperature": REWRITE_CHAT_TEMPERATURE,
     }
 
     yield {"type": "status", "message": "Отправка chat/completions на api.openai.com…"}
@@ -178,3 +180,104 @@ def iter_rewrite_completion(
 
     yield {"type": "status", "message": "Готово."}
     yield {"type": "result", "content": content}
+
+
+def iter_rewrite_completion_stream(
+    api_key: str,
+    model: str,
+    prompt: str,
+    text: str,
+    *,
+    timeout: int | None = None,
+) -> Iterator[dict[str, Any]]:
+    """
+    Поток chat/completions (stream=true). События для NDJSON:
+    {"type": "status", "message": "..."}
+    {"type": "delta", "content": "..."} — фрагмент ответа (подряд склеиваются в полный текст)
+    {"type": "error", "message": "..."}
+    {"type": "result", "content": "..."} — полный накопленный ответ в конце
+    """
+    prompt = (prompt or "").strip()
+    text = (text or "").strip()
+    model = normalize_rewrite_model(model)
+    if timeout is None:
+        timeout = _chat_timeout_seconds()
+
+    yield {"type": "status", "message": "Проверка ввода…"}
+    if not api_key.strip():
+        yield {"type": "error", "message": "Не задан OPENAI_API_KEY в .env"}
+        return
+    if not prompt:
+        yield {"type": "error", "message": "Введите промпт (инструкцию для модели)."}
+        return
+    if not text:
+        yield {"type": "error", "message": "Введите текст для обработки."}
+        return
+
+    yield {"type": "status", "message": f"Модель: {model}"}
+    yield {"type": "status", "message": "Потоковый запрос к OpenAI (stream)…"}
+
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": text},
+        ],
+        "temperature": REWRITE_CHAT_TEMPERATURE,
+        "stream": True,
+    }
+
+    acc = ""
+    try:
+        with requests.post(
+            OPENAI_CHAT_URL,
+            headers={
+                "Authorization": f"Bearer {api_key.strip()}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(payload),
+            timeout=(30, timeout),
+            stream=True,
+        ) as r:
+            if not r.ok:
+                yield {"type": "error", "message": _openai_error_message(r)}
+                return
+
+            for raw in r.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                line = raw.strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk: dict[str, Any] = json.loads(data)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    continue
+                for choice in chunk.get("choices") or []:
+                    if not isinstance(choice, dict):
+                        continue
+                    delta = choice.get("delta") or {}
+                    if not isinstance(delta, dict):
+                        continue
+                    piece = delta.get("content")
+                    if piece is None:
+                        continue
+                    if not isinstance(piece, str):
+                        piece = str(piece)
+                    if not piece:
+                        continue
+                    acc += piece
+                    yield {"type": "delta", "content": piece}
+    except requests.RequestException as e:
+        yield {"type": "error", "message": f"Сеть / таймаут: {e}"}
+        return
+
+    if not acc.strip():
+        yield {"type": "error", "message": "Пустой ответ в потоке (нет текста от модели)."}
+        return
+
+    yield {"type": "status", "message": "Готово."}
+    yield {"type": "result", "content": acc}

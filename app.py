@@ -58,6 +58,7 @@ from rewrite_openai import (
     REWRITE_DEFAULT_MODEL,
     REWRITE_MODELS,
     iter_rewrite_completion,
+    iter_rewrite_completion_stream,
     normalize_rewrite_model,
 )
 from rewrite_pipeline import (
@@ -65,14 +66,7 @@ from rewrite_pipeline import (
     REWRITE_STAGE_SEND_HINTS,
     REWRITE_STAGES,
     any_stage_has_result,
-    build_draft1_rewriter_system_prompt,
-    build_draft1_rewriter_user_message,
-    build_draft2_retention_editor_system_prompt,
-    build_draft2_retention_editor_user_message,
-    build_rewrite_system_prompt,
-    build_stage_user_message,
-    build_structure_system_prompt,
-    build_structure_user_message,
+    compose_rewrite_openai_request_body,
     merge_stages_from_request,
     new_stages_dict,
     normalize_rewrite_job_data,
@@ -80,7 +74,6 @@ from rewrite_pipeline import (
     snapshot_pipeline_extras_from_body,
     snapshot_stages_from_body,
     stage_run_prerequisites_met,
-    validate_prerequisites,
 )
 from rewrite_templates import (
     list_rewrite_template_names,
@@ -724,69 +717,66 @@ def rewrite_project_run(rewrite_id: str):
                 ensure_ascii=False,
             ) + "\n"
             return
-        pre_err = validate_prerequisites(stage_key, stages_snap)
-        if pre_err:
-            yield json.dumps({"type": "error", "message": pre_err}, ensure_ascii=False) + "\n"
+        payload, compose_err = compose_rewrite_openai_request_body(
+            stage_key,
+            source_text=source_text,
+            stages_snap=stages_snap,
+            master_prompt=master_prompt,
+            hero_prompt=hero_prompt,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        if compose_err:
+            yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
             return
-        cell = stages_snap.get(stage_key) or {}
-        model = normalize_rewrite_model(str(cell.get("model") or ""))
-        if stage_key == "structure":
-            analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
-            prompt = build_structure_system_prompt(
-                master_prompt,
-                str(cell.get("prompt") or ""),
-                analysis_res,
-                duration_minutes=duration_minutes,
-                chars_per_minute=chars_per_minute,
-            )
-            user_text = build_structure_user_message(analysis_res)
-        elif stage_key == "draft1":
-            analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
-            structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
-            prompt = build_draft1_rewriter_system_prompt(
-                master_prompt,
-                str(cell.get("prompt") or ""),
-                source_text,
-                hero_prompt,
-                duration_minutes=duration_minutes,
-                chars_per_minute=chars_per_minute,
-            )
-            user_text = build_draft1_rewriter_user_message(
-                source_text, analysis_res, structure_res
-            )
-        elif stage_key == "draft2":
-            draft1_res = str((stages_snap.get("draft1") or {}).get("last_result") or "")
-            prompt = build_draft2_retention_editor_system_prompt(
-                master_prompt,
-                str(cell.get("prompt") or ""),
-                draft1_res,
-                hero_prompt,
-                duration_minutes=duration_minutes,
-                chars_per_minute=chars_per_minute,
-            )
-            user_text = build_draft2_retention_editor_user_message(draft1_res)
+        msgs = payload["messages"]
+        prompt = str(msgs[0].get("content") or "")
+        user_text = str(msgs[1].get("content") or "")
+        model = str(payload.get("model") or "")
+        if stage_key == "draft1":
+            for item in iter_rewrite_completion_stream(api_key, model, prompt, user_text):
+                yield json.dumps(item, ensure_ascii=False) + "\n"
         else:
-            prompt = build_rewrite_system_prompt(
-                master_prompt,
-                str(cell.get("prompt") or ""),
-                source_text,
-                duration_minutes=duration_minutes,
-                chars_per_minute=chars_per_minute,
-            )
-            user_text = build_stage_user_message(
-                source_text,
-                stage_key,
-                stages_snap,
-                hero_prompt=hero_prompt,
-            )
-        for item in iter_rewrite_completion(api_key, model, prompt, user_text):
-            yield json.dumps(item, ensure_ascii=False) + "\n"
+            for item in iter_rewrite_completion(api_key, model, prompt, user_text):
+                yield json.dumps(item, ensure_ascii=False) + "\n"
 
     return Response(
         stream_with_context(gen()),
         mimetype="application/x-ndjson",
         headers={"X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/rewrite/<rewrite_id>/api-payload", methods=["POST"])
+def rewrite_project_api_payload(rewrite_id: str):
+    """Скачивание JSON тела запроса к OpenAI для этапа (как при запуске ↻)."""
+    if load_rewrite_job(rewrite_id) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    stage_key = str(body.get("stage") or "").strip().lower()
+    source_text, stages_snap = snapshot_stages_from_body(body)
+    master_prompt = snapshot_master_prompt_from_body(body)
+    hero_prompt, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    payload, err = compose_rewrite_openai_request_body(
+        stage_key,
+        source_text=source_text,
+        stages_snap=stages_snap,
+        master_prompt=master_prompt,
+        hero_prompt=hero_prompt,
+        duration_minutes=duration_minutes,
+        chars_per_minute=chars_per_minute,
+    )
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    export_payload = dict(payload)
+    if stage_key == "draft1":
+        export_payload["stream"] = True
+    txt = json.dumps(export_payload, ensure_ascii=False, indent=2) + "\n"
+    fname = f"{rewrite_id}_{stage_key}_openai_request.txt"
+    resp = make_response(txt)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
 
 
 @app.route("/rewrite-master")

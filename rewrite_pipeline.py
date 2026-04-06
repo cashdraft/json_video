@@ -7,16 +7,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from rewrite_openai import REWRITE_DEFAULT_MODEL, normalize_rewrite_model
+from rewrite_openai import REWRITE_CHAT_TEMPERATURE, REWRITE_DEFAULT_MODEL, normalize_rewrite_model
 
 
 def format_duration_length_spec_block(
-    source_text: str,
     *,
     duration_minutes: int | None = None,
     chars_per_minute: int | None = None,
 ) -> str:
-    """Блок Duration для system: ориентир + JSON length_spec (mode от длины исходника)."""
+    """Блок Duration для system: ориентир + JSON length_spec (без поля mode)."""
     if duration_minutes is None or chars_per_minute is None:
         return ""
     dm = max(1, min(30, int(duration_minutes)))
@@ -24,16 +23,8 @@ def format_duration_length_spec_block(
     target = dm * cpm
     target_min = max(1, target - 1000)
     target_max = target + 1000
-    src_len = len((source_text or "").strip())
-    if src_len > target_max:
-        mode = "compress"
-    elif src_len < target_min:
-        mode = "expand"
-    else:
-        mode = "match"
     length_spec = {
         "length_spec": {
-            "mode": mode,
             "target_chars_min": target_min,
             "target_chars_ideal": target,
             "target_chars_max": target_max,
@@ -44,7 +35,7 @@ def format_duration_length_spec_block(
         "--- Ориентир объёма озвучки (шаблон проекта) ---",
         (
             f"Целевая длительность: {dm} мин. Ориентир: ~{target} символов "
-            f"({cpm} симв./мин). Режим: {mode}."
+            f"({cpm} симв./мин)."
         ),
         "Применяй следующие правила длины итогового текста (JSON):",
         "```json",
@@ -68,7 +59,6 @@ def build_rewrite_system_prompt(
     if m:
         parts.append(m)
     dur = format_duration_length_spec_block(
-        source_text,
         duration_minutes=duration_minutes,
         chars_per_minute=chars_per_minute,
     ).strip()
@@ -89,21 +79,16 @@ def build_structure_user_message(analysis_last_result: str) -> str:
 def build_structure_system_prompt(
     master_prompt: str,
     structure_prompt: str,
-    analysis_last_result: str,
     *,
     duration_minutes: int | None = None,
     chars_per_minute: int | None = None,
 ) -> str:
-    """Только этап Structure: в system строго Master → Duration → Structure.
-
-    Режим length_spec (compress/match/expand) считается по длине текста Analysis Result.
-    """
+    """Только этап Structure: в system строго Master → Duration → Structure."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
         parts.append(m)
     dur = format_duration_length_spec_block(
-        analysis_last_result,
         duration_minutes=duration_minutes,
         chars_per_minute=chars_per_minute,
     ).strip()
@@ -118,7 +103,6 @@ def build_structure_system_prompt(
 def build_draft1_rewriter_system_prompt(
     master_prompt: str,
     draft1_rewriter_prompt: str,
-    source_text: str,
     hero_prompt: str,
     *,
     duration_minutes: int | None = None,
@@ -130,7 +114,6 @@ def build_draft1_rewriter_system_prompt(
     if m:
         parts.append(m)
     dur = format_duration_length_spec_block(
-        source_text,
         duration_minutes=duration_minutes,
         chars_per_minute=chars_per_minute,
     ).strip()
@@ -146,18 +129,14 @@ def build_draft1_rewriter_system_prompt(
 
 
 def build_draft1_rewriter_user_message(
-    source_text: str,
     analysis_last_result: str,
     structure_last_result: str,
 ) -> str:
-    """User для draft1: Input text, затем Analysis Result, затем Structure Result."""
-    src = (source_text or "").strip() or "(пусто)"
+    """User для draft1: Analysis Result, затем Structure Result."""
     ar = (analysis_last_result or "").strip() or "(пусто)"
     sr = (structure_last_result or "").strip() or "(пусто)"
     return (
-        "--- Input text ---\n"
-        + src
-        + "\n\n--- Analysis Result ---\n"
+        "--- Analysis Result ---\n"
         + ar
         + "\n\n--- Structure Result ---\n"
         + sr
@@ -167,22 +146,17 @@ def build_draft1_rewriter_user_message(
 def build_draft2_retention_editor_system_prompt(
     master_prompt: str,
     draft2_retention_editor_prompt: str,
-    draft1_last_result: str,
     hero_prompt: str,
     *,
     duration_minutes: int | None = None,
     chars_per_minute: int | None = None,
 ) -> str:
-    """Этап draft2: в system строго Master → Duration → Hero → Draft2 Retention Editor Prompt.
-
-    Режим length_spec считается по длине Draft1 Rewriter Result.
-    """
+    """Этап draft2: в system строго Master → Duration → Hero → Draft2 Retention Editor Prompt."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
         parts.append(m)
     dur = format_duration_length_spec_block(
-        draft1_last_result,
         duration_minutes=duration_minutes,
         chars_per_minute=chars_per_minute,
     ).strip()
@@ -226,7 +200,8 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     ),
     "draft1": (
         "Отправляем. В system (по порядку): Master Prompt, Duration, Hero Prompt, Draft1 Rewriter Prompt. "
-        "В user (по порядку): Input text, Analysis Result, Structure Result."
+        "В user (по порядку): Analysis Result, Structure Result. "
+        "К OpenAI уходит stream=true; ответ в UI собирается из чанков подряд."
     ),
     "draft2": (
         "Отправляем. В system (по порядку): Master Prompt, Duration, Hero Prompt, "
@@ -371,6 +346,87 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
 def stage_run_prerequisites_met(stage_key: str, stages: dict[str, Any]) -> bool:
     """True, если для этапа можно запускать генерацию (у предыдущих этапов есть сохранённый Result)."""
     return validate_prerequisites(stage_key, stages) is None
+
+
+def compose_rewrite_openai_request_body(
+    stage_key: str,
+    *,
+    source_text: str,
+    stages_snap: dict[str, Any],
+    master_prompt: str,
+    hero_prompt: str,
+    duration_minutes: int,
+    chars_per_minute: int,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
+    if stage_key not in REWRITE_STAGE_KEYS:
+        return None, "Неизвестный этап."
+    if stage_key not in ("structure", "draft2") and not (source_text or "").strip():
+        return None, "Введите исходный текст в верхнем поле."
+    pre_err = validate_prerequisites(stage_key, stages_snap)
+    if pre_err:
+        return None, pre_err
+    cell = stages_snap.get(stage_key) or {}
+    model = normalize_rewrite_model(str(cell.get("model") or ""))
+    if stage_key == "structure":
+        analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
+        prompt = build_structure_system_prompt(
+            master_prompt,
+            str(cell.get("prompt") or ""),
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_structure_user_message(analysis_res)
+    elif stage_key == "draft1":
+        analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
+        structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
+        prompt = build_draft1_rewriter_system_prompt(
+            master_prompt,
+            str(cell.get("prompt") or ""),
+            hero_prompt,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_draft1_rewriter_user_message(analysis_res, structure_res)
+    elif stage_key == "draft2":
+        draft1_res = str((stages_snap.get("draft1") or {}).get("last_result") or "")
+        prompt = build_draft2_retention_editor_system_prompt(
+            master_prompt,
+            str(cell.get("prompt") or ""),
+            hero_prompt,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_draft2_retention_editor_user_message(draft1_res)
+    else:
+        prompt = build_rewrite_system_prompt(
+            master_prompt,
+            str(cell.get("prompt") or ""),
+            source_text,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_stage_user_message(
+            source_text,
+            stage_key,
+            stages_snap,
+            hero_prompt=hero_prompt,
+        )
+    prompt = (prompt or "").strip()
+    user_text = (user_text or "").strip()
+    if not prompt:
+        return None, "Введите промпт (инструкцию для модели)."
+    if not user_text:
+        return None, "Введите текст для обработки."
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_text},
+        ],
+        "temperature": REWRITE_CHAT_TEMPERATURE,
+    }
+    return payload, None
 
 
 def build_stage_user_message(
