@@ -70,9 +70,11 @@ from rewrite_pipeline import (
     new_stages_dict,
     normalize_rewrite_job_data,
     snapshot_master_prompt_from_body,
+    snapshot_pipeline_extras_from_body,
     snapshot_stages_from_body,
     validate_prerequisites,
 )
+from rewrite_templates import list_rewrite_template_names, load_rewrite_template
 
 load_dotenv()
 
@@ -396,6 +398,11 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "master_prompt": "",
         "master_prompt_locked": False,
         "duration_minutes": 5,
+        "hero_prompt": "",
+        "chars_per_minute": 344,
+        "rewrite_template": "",
+        "hero_prompt_locked": False,
+        "audio_timing_locked": False,
     }
 
 
@@ -539,12 +546,26 @@ def rewrite_project_page(rewrite_id: str):
             rw=rw,
             rewrite_stages=REWRITE_STAGES,
             rewrite_models=REWRITE_MODELS,
+            rewrite_template_names=list_rewrite_template_names(),
             openai_key_set=key_set,
         )
     )
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     return resp
+
+
+@app.route("/rewrite/api/templates", methods=["GET"])
+def rewrite_api_templates_list():
+    return jsonify({"ok": True, "templates": list_rewrite_template_names()})
+
+
+@app.route("/rewrite/api/templates/<name>", methods=["GET"])
+def rewrite_api_template_get(name: str):
+    data = load_rewrite_template(name)
+    if data is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, **data})
 
 
 @app.route("/rewrite/<rewrite_id>/rename", methods=["POST"])
@@ -590,12 +611,32 @@ def rewrite_project_save(rewrite_id: str):
             rw["master_prompt"] = str(body.get("master_prompt") or "")
     if m_lock_in is not None:
         rw["master_prompt_locked"] = bool(m_lock_in)
+    h_lock_in = body.get("hero_prompt_locked") if "hero_prompt_locked" in body else None
+    if "hero_prompt" in body:
+        if not rw.get("hero_prompt_locked") or h_lock_in is False:
+            rw["hero_prompt"] = str(body.get("hero_prompt") or "")
+    if h_lock_in is not None:
+        rw["hero_prompt_locked"] = bool(h_lock_in)
+
+    at_lock_in = body.get("audio_timing_locked") if "audio_timing_locked" in body else None
     if "duration_minutes" in body:
-        try:
-            dm = int(body.get("duration_minutes"))
-            rw["duration_minutes"] = max(1, min(30, dm))
-        except (TypeError, ValueError):
-            pass
+        if not rw.get("audio_timing_locked") or at_lock_in is False:
+            try:
+                dm = int(body.get("duration_minutes"))
+                rw["duration_minutes"] = max(1, min(30, dm))
+            except (TypeError, ValueError):
+                pass
+    if "chars_per_minute" in body:
+        if not rw.get("audio_timing_locked") or at_lock_in is False:
+            try:
+                cpm = int(body.get("chars_per_minute"))
+                rw["chars_per_minute"] = max(1, min(2000, cpm))
+            except (TypeError, ValueError):
+                pass
+    if at_lock_in is not None:
+        rw["audio_timing_locked"] = bool(at_lock_in)
+    if "rewrite_template" in body:
+        rw["rewrite_template"] = str(body.get("rewrite_template") or "").strip()
     merge_stages_from_request(rw, body.get("stages"))
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
@@ -618,6 +659,7 @@ def rewrite_project_run(rewrite_id: str):
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
+    hero_prompt, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
     def gen():
@@ -640,7 +682,14 @@ def rewrite_project_run(rewrite_id: str):
         cell = stages_snap.get(stage_key) or {}
         model = normalize_rewrite_model(str(cell.get("model") or ""))
         prompt = combine_system_prompt(str(cell.get("prompt") or ""), master_prompt)
-        user_text = build_stage_user_message(source_text, stage_key, stages_snap)
+        user_text = build_stage_user_message(
+            source_text,
+            stage_key,
+            stages_snap,
+            hero_prompt=hero_prompt,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
         for item in iter_rewrite_completion(api_key, model, prompt, user_text):
             yield json.dumps(item, ensure_ascii=False) + "\n"
 

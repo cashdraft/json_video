@@ -92,6 +92,21 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         dm = 5
     job["duration_minutes"] = max(1, min(30, dm))
 
+    job.setdefault("hero_prompt", "")
+    job["hero_prompt"] = str(job.get("hero_prompt") or "")
+    try:
+        cpm = int(job.get("chars_per_minute", 344))
+    except (TypeError, ValueError):
+        cpm = 344
+    job["chars_per_minute"] = max(1, min(2000, cpm))
+    job.setdefault("rewrite_template", "")
+    job["rewrite_template"] = str(job.get("rewrite_template") or "")
+
+    job.setdefault("hero_prompt_locked", False)
+    job["hero_prompt_locked"] = bool(job.get("hero_prompt_locked"))
+    job.setdefault("audio_timing_locked", False)
+    job["audio_timing_locked"] = bool(job.get("audio_timing_locked"))
+
     return job
 
 
@@ -141,14 +156,37 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
     return None
 
 
-def build_stage_user_message(source_text: str, stage_key: str, stages: dict[str, Any]) -> str:
+def build_stage_user_message(
+    source_text: str,
+    stage_key: str,
+    stages: dict[str, Any],
+    *,
+    hero_prompt: str = "",
+    duration_minutes: int | None = None,
+    chars_per_minute: int | None = None,
+) -> str:
     """User-сообщение: исходный текст + результаты всех предыдущих этапов."""
     lines: list[str] = [
         "Данные для текущего этапа конвейера ReWrite (исходник и результаты предыдущих шагов).",
         "",
-        "--- Исходный текст пользователя ---",
-        (source_text or "").strip() or "(пусто)",
     ]
+    h = (hero_prompt or "").strip()
+    if h:
+        lines.append("--- Описание героя (шаблон проекта) ---")
+        lines.append(h)
+        lines.append("")
+    if duration_minutes is not None and chars_per_minute is not None:
+        dm = max(1, min(30, int(duration_minutes)))
+        cpm = max(1, min(2000, int(chars_per_minute)))
+        target = dm * cpm
+        lines.append("--- Ориентир объёма озвучки (шаблон проекта) ---")
+        lines.append(
+            f"Целевая длительность: {dm} мин. Ориентир: ~{target} символов исходного текста "
+            f"({cpm} симв./мин)."
+        )
+        lines.append("")
+    lines.append("--- Исходный текст пользователя ---")
+    lines.append((source_text or "").strip() or "(пусто)")
     idx = _STAGE_ORDER_INDEX[stage_key]
     for i in range(idx):
         pk, plabel = REWRITE_STAGES[i]
@@ -180,3 +218,19 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
 
 def snapshot_master_prompt_from_body(body: dict[str, Any]) -> str:
     return str(body.get("master_prompt") or "")
+
+
+def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int, int]:
+    """hero_prompt, duration_minutes (1–30), chars_per_minute (1–2000)."""
+    hero = str(body.get("hero_prompt") or "")
+    try:
+        dm = int(body.get("duration_minutes"))
+        dm = max(1, min(30, dm))
+    except (TypeError, ValueError):
+        dm = 5
+    try:
+        cpm = int(body.get("chars_per_minute"))
+        cpm = max(1, min(2000, cpm))
+    except (TypeError, ValueError):
+        cpm = 344
+    return hero, dm, cpm
