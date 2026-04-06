@@ -746,6 +746,18 @@ textarea::placeholder {
     line-height: 1.35;
 }
 
+.rewrite-duration-mode-hint {
+    margin: 0.4rem 0 0 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.rewrite-duration-mode-value {
+    color: #7ad67a;
+    font-weight: 600;
+}
+
 /* ReWrite: один переключатель — ✎ когда поле заблокировано, ✓ когда можно сохранить (высота как .slot-badge, 24px) */
 .rewrite-lock-toggle.btn-icon {
     display: inline-flex;
@@ -866,6 +878,32 @@ textarea::placeholder {
     margin-bottom: 0.85rem;
 }
 
+.rewrite-stage-card .rewrite-stage-send-hint {
+    max-height: none;
+    overflow: visible;
+    line-height: 1.45;
+}
+
+.rewrite-stage-run-blocked {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    color: #f07178;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+    cursor: default;
+}
+
+/* Author rules for .btn-regenerate set display; must beat that so [hidden] actually hides. */
+.rewrite-stage-run[hidden],
+.rewrite-stage-run-blocked[hidden] {
+    display: none !important;
+}
+
 .rewrite-stage-code {
     font-size: 0.68em;
     font-weight: 400;
@@ -880,7 +918,7 @@ textarea::placeholder {
 
 .rewrite-stage-row--controls {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.65rem 1rem;
     align-items: start;
 }
@@ -890,7 +928,7 @@ textarea::placeholder {
 }
 
 .rewrite-stage-model-cell {
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: flex-start;
     max-width: 100%;
@@ -921,6 +959,14 @@ textarea::placeholder {
 
 .rewrite-slot--prompt-inline {
     min-height: 5rem;
+}
+
+.rewrite-stage-card--prompt-collapsed .rewrite-slot--prompt-inline {
+    display: none;
+}
+
+.rewrite-stage-card--prompt-collapsed .rewrite-stage-row--controls {
+    gap: 0;
 }
 
 .rewrite-stage-row--result .slot-header {

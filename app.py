@@ -62,19 +62,31 @@ from rewrite_openai import (
 )
 from rewrite_pipeline import (
     REWRITE_STAGE_KEYS,
+    REWRITE_STAGE_SEND_HINTS,
     REWRITE_STAGES,
     any_stage_has_result,
+    build_draft1_rewriter_system_prompt,
+    build_draft1_rewriter_user_message,
+    build_draft2_retention_editor_system_prompt,
+    build_draft2_retention_editor_user_message,
+    build_rewrite_system_prompt,
     build_stage_user_message,
-    combine_system_prompt,
+    build_structure_system_prompt,
+    build_structure_user_message,
     merge_stages_from_request,
     new_stages_dict,
     normalize_rewrite_job_data,
     snapshot_master_prompt_from_body,
     snapshot_pipeline_extras_from_body,
     snapshot_stages_from_body,
+    stage_run_prerequisites_met,
     validate_prerequisites,
 )
-from rewrite_templates import list_rewrite_template_names, load_rewrite_template
+from rewrite_templates import (
+    list_rewrite_template_names,
+    load_rewrite_template,
+    save_rewrite_template_to_disk,
+)
 
 load_dotenv()
 
@@ -540,11 +552,21 @@ def rewrite_project_page(rewrite_id: str):
         flash("Проект ReWrite не найден.", "error")
         return redirect(url_for("rewrite_index"))
     key_set = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    st = rw.get("stages")
+    if not isinstance(st, dict):
+        st = {}
+    rewrite_stage_run_ok = {
+        sk: stage_run_prerequisites_met(sk, st) for sk in REWRITE_STAGE_KEYS
+    }
+    rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
     resp = make_response(
         render_template(
             "rewrite_project.html",
             rw=rw,
             rewrite_stages=REWRITE_STAGES,
+            rewrite_stage_send_hints=REWRITE_STAGE_SEND_HINTS,
+            rewrite_stage_run_ok=rewrite_stage_run_ok,
+            rewrite_stage_key_order=rewrite_stage_key_order,
             rewrite_models=REWRITE_MODELS,
             rewrite_template_names=list_rewrite_template_names(),
             openai_key_set=key_set,
@@ -566,6 +588,37 @@ def rewrite_api_template_get(name: str):
     if data is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     return jsonify({"ok": True, **data})
+
+
+@app.route("/rewrite/api/templates/<name>/save", methods=["POST"])
+def rewrite_api_template_save(name: str):
+    """Сохранить текущие поля промптов и Config в подпапку rewrite_templates/<name>/."""
+    body = request.get_json(silent=True) or {}
+    known = set(list_rewrite_template_names())
+    if name.strip() not in known:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    stages = body.get("stages")
+    if not isinstance(stages, dict):
+        stages = {}
+    try:
+        cpm = int(body.get("chars_per_minute", 344))
+    except (TypeError, ValueError):
+        cpm = 344
+    try:
+        dm = int(body.get("duration_minutes", 5))
+    except (TypeError, ValueError):
+        dm = 5
+    ok, err = save_rewrite_template_to_disk(
+        name.strip(),
+        hero_prompt=str(body.get("hero_prompt") or ""),
+        master_prompt=str(body.get("master_prompt") or ""),
+        chars_per_minute=cpm,
+        duration_minutes=dm,
+        stages=stages,
+    )
+    if not ok:
+        return jsonify({"ok": False, "error": err or "save_failed"}), 400
+    return jsonify({"ok": True})
 
 
 @app.route("/rewrite/<rewrite_id>/rename", methods=["POST"])
@@ -600,39 +653,35 @@ def rewrite_project_save(rewrite_id: str):
         return jsonify({"ok": False, "error": "not_found"}), 404
     body = request.get_json(silent=True) or {}
     locked_in_body = body.get("source_locked") if "source_locked" in body else None
+    # Снимок с формы — источник истины; lock только режим UI, не отбрасываем значения.
     if "source_text" in body:
-        if not rw.get("source_locked") or locked_in_body is False:
-            rw["source_text"] = str(body.get("source_text") or "")
+        rw["source_text"] = str(body.get("source_text") or "")
     if locked_in_body is not None:
         rw["source_locked"] = bool(locked_in_body)
     m_lock_in = body.get("master_prompt_locked") if "master_prompt_locked" in body else None
     if "master_prompt" in body:
-        if not rw.get("master_prompt_locked") or m_lock_in is False:
-            rw["master_prompt"] = str(body.get("master_prompt") or "")
+        rw["master_prompt"] = str(body.get("master_prompt") or "")
     if m_lock_in is not None:
         rw["master_prompt_locked"] = bool(m_lock_in)
     h_lock_in = body.get("hero_prompt_locked") if "hero_prompt_locked" in body else None
     if "hero_prompt" in body:
-        if not rw.get("hero_prompt_locked") or h_lock_in is False:
-            rw["hero_prompt"] = str(body.get("hero_prompt") or "")
+        rw["hero_prompt"] = str(body.get("hero_prompt") or "")
     if h_lock_in is not None:
         rw["hero_prompt_locked"] = bool(h_lock_in)
 
     at_lock_in = body.get("audio_timing_locked") if "audio_timing_locked" in body else None
     if "duration_minutes" in body:
-        if not rw.get("audio_timing_locked") or at_lock_in is False:
-            try:
-                dm = int(body.get("duration_minutes"))
-                rw["duration_minutes"] = max(1, min(30, dm))
-            except (TypeError, ValueError):
-                pass
+        try:
+            dm = int(body.get("duration_minutes"))
+            rw["duration_minutes"] = max(1, min(30, dm))
+        except (TypeError, ValueError):
+            pass
     if "chars_per_minute" in body:
-        if not rw.get("audio_timing_locked") or at_lock_in is False:
-            try:
-                cpm = int(body.get("chars_per_minute"))
-                rw["chars_per_minute"] = max(1, min(2000, cpm))
-            except (TypeError, ValueError):
-                pass
+        try:
+            cpm = int(body.get("chars_per_minute"))
+            rw["chars_per_minute"] = max(1, min(2000, cpm))
+        except (TypeError, ValueError):
+            pass
     if at_lock_in is not None:
         rw["audio_timing_locked"] = bool(at_lock_in)
     if "rewrite_template" in body:
@@ -652,7 +701,7 @@ def rewrite_project_save(rewrite_id: str):
 
 @app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
 def rewrite_project_run(rewrite_id: str):
-    """Стрим NDJSON для одного этапа: system = промпт этапа, user = исходник + предыдущие результаты."""
+    """Стрим NDJSON: отдельная сборка для structure, draft1, draft2; остальные — общая."""
     if load_rewrite_job(rewrite_id) is None:
         return jsonify({"error": "not_found"}), 404
     body = request.get_json(silent=True) or {}
@@ -669,7 +718,7 @@ def rewrite_project_run(rewrite_id: str):
                 ensure_ascii=False,
             ) + "\n"
             return
-        if not (source_text or "").strip():
+        if stage_key not in ("structure", "draft2") and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
                 ensure_ascii=False,
@@ -681,15 +730,55 @@ def rewrite_project_run(rewrite_id: str):
             return
         cell = stages_snap.get(stage_key) or {}
         model = normalize_rewrite_model(str(cell.get("model") or ""))
-        prompt = combine_system_prompt(str(cell.get("prompt") or ""), master_prompt)
-        user_text = build_stage_user_message(
-            source_text,
-            stage_key,
-            stages_snap,
-            hero_prompt=hero_prompt,
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
+        if stage_key == "structure":
+            analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
+            prompt = build_structure_system_prompt(
+                master_prompt,
+                str(cell.get("prompt") or ""),
+                analysis_res,
+                duration_minutes=duration_minutes,
+                chars_per_minute=chars_per_minute,
+            )
+            user_text = build_structure_user_message(analysis_res)
+        elif stage_key == "draft1":
+            analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
+            structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
+            prompt = build_draft1_rewriter_system_prompt(
+                master_prompt,
+                str(cell.get("prompt") or ""),
+                source_text,
+                hero_prompt,
+                duration_minutes=duration_minutes,
+                chars_per_minute=chars_per_minute,
+            )
+            user_text = build_draft1_rewriter_user_message(
+                source_text, analysis_res, structure_res
+            )
+        elif stage_key == "draft2":
+            draft1_res = str((stages_snap.get("draft1") or {}).get("last_result") or "")
+            prompt = build_draft2_retention_editor_system_prompt(
+                master_prompt,
+                str(cell.get("prompt") or ""),
+                draft1_res,
+                hero_prompt,
+                duration_minutes=duration_minutes,
+                chars_per_minute=chars_per_minute,
+            )
+            user_text = build_draft2_retention_editor_user_message(draft1_res)
+        else:
+            prompt = build_rewrite_system_prompt(
+                master_prompt,
+                str(cell.get("prompt") or ""),
+                source_text,
+                duration_minutes=duration_minutes,
+                chars_per_minute=chars_per_minute,
+            )
+            user_text = build_stage_user_message(
+                source_text,
+                stage_key,
+                stages_snap,
+                hero_prompt=hero_prompt,
+            )
         for item in iter_rewrite_completion(api_key, model, prompt, user_text):
             yield json.dumps(item, ensure_ascii=False) + "\n"
 

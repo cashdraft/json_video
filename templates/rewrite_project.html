@@ -55,6 +55,17 @@
                     {% endif %}
                 </select>
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-apply" {% if not openai_key_set %}disabled{% endif %}>Применить</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-save-disk" {% if not openai_key_set %}disabled{% endif %} title="Перезаписать .txt шаблона на диске из текущих полей">Обновить шаблон</button>
+                <label for="rewrite-global-model" class="rewrite-template-bar__label">Model</label>
+                {% set cur_model = (rw.stages.analysis.model or '')|trim %}
+                {% if not cur_model and rewrite_models %}
+                    {% set cur_model = rewrite_models[0].id %}
+                {% endif %}
+                <select id="rewrite-global-model" class="tts-select rewrite-template-select" {% if not openai_key_set %}disabled{% endif %}>
+                    {% for m in rewrite_models %}
+                    <option value="{{ m.id }}" {% if cur_model == m.id %}selected{% endif %}>{{ m.label }}</option>
+                    {% endfor %}
+                </select>
                 <span class="rewrite-template-bar__hint">Создайте подпапку в <code>rewrite_templates/</code> (как <code>baseline</code>) — её имя = шаблон. Внутрь положите <code>.txt</code>: <code>Config</code>, Hero, Master, Analysis … Файлы не в подпапке не подхватываются.</span>
             </div>
 
@@ -105,6 +116,7 @@
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                             </button>
                         </div>
+                        <p class="rewrite-duration-mode-hint" id="rewrite-duration-mode-hint" aria-live="polite"></p>
                         <p class="rewrite-duration-char-hint" id="rewrite-duration-char-hint" aria-live="polite"></p>
                     </div>
                 </div>
@@ -132,10 +144,11 @@
             {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
             {% set prompt_locked = cell.prompt_locked|default(false) %}
+            {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
                 <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}">
                     <div class="scene-header">
                         <div class="scene-id">{{ stage_label }}</div>
-                        <div class="scene-text">Этап конвейера · ключ <code class="rewrite-stage-code">{{ stage_key }}</code></div>
+                        <div class="scene-text rewrite-stage-send-hint">{{ rewrite_stage_send_hints[stage_key] }}</div>
                     </div>
                     <div class="rewrite-stage-stack">
                         <div class="rewrite-stage-row rewrite-stage-row--controls">
@@ -165,7 +178,8 @@
                         <div class="rewrite-stage-row rewrite-stage-row--result">
                             <div class="slot-header rewrite-stage-result-toolbar">
                                 <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
-                                <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
+                                <span class="rewrite-stage-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
                                 <span class="rewrite-stage-result-counts" aria-live="polite"></span>
                             </div>
                             <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result">
@@ -202,13 +216,18 @@
     let heroLocked = {{ rw.hero_prompt_locked|default(false)|tojson }};
     let audioTimingLocked = {{ rw.audio_timing_locked|default(false)|tojson }};
     const openaiOk = document.body.getAttribute('data-openai-key') === '1';
+    const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const durationRangeEl = document.getElementById('rewrite-duration-min');
     const durationValEl = document.getElementById('rewrite-duration-min-val');
     const charsPerMinEl = document.getElementById('rewrite-chars-per-min');
     const durationCharHintEl = document.getElementById('rewrite-duration-char-hint');
+    const durationModeHintEl = document.getElementById('rewrite-duration-mode-hint');
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
     const templateSelectEl = document.getElementById('rewrite-template-select');
     const templateApplyBtn = document.getElementById('rewrite-template-apply');
+    const templateSaveDiskBtn = document.getElementById('rewrite-template-save-disk');
+    const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
+    const globalModelEl = document.getElementById('rewrite-global-model');
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
 
     function clampDurationMinutes(v) {
@@ -225,6 +244,20 @@
 
     function rewriteTemplateFetchUrl(name) {
         return templateListUrl + '/' + encodeURIComponent(name);
+    }
+
+    function rewriteTemplateSaveDiskUrl(name) {
+        return templateListUrl + '/' + encodeURIComponent(name) + '/save';
+    }
+
+    function updateTemplateSaveDiskBtn() {
+        if (!templateSaveDiskBtn || !templateSelectEl) return;
+        var n = (templateSelectEl.value || '').trim();
+        var onDisk = REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(n) >= 0;
+        templateSaveDiskBtn.disabled = !openaiOk || !n || !onDisk;
+        templateSaveDiskBtn.title = onDisk
+            ? 'Перезаписать .txt в rewrite_templates/' + n + '/'
+            : 'Выберите шаблон, который есть на диске (подпапка в rewrite_templates/)';
     }
 
     function styleToggleBtn(btn, locked) {
@@ -287,19 +320,73 @@
         if (sourceToggleBtn) sourceToggleBtn.disabled = false;
     }
 
+    function stageResultNonEmpty(block) {
+        const ta = block.querySelector('.rewrite-stage-result');
+        if (!ta) return false;
+        if (ta.classList.contains('rewrite-stage-result--busy')) return false;
+        const v = (ta.value || '').trim();
+        if (!v.length) return false;
+        if (v === 'Генерация…') return false;
+        return true;
+    }
+
+    function syncStageRunButtons() {
+        const cards = Array.from(document.querySelectorAll('.rewrite-stage-card'));
+        const byKey = {};
+        cards.forEach(function (c) {
+            const k = c.getAttribute('data-stage-key');
+            if (k) byKey[k] = c;
+        });
+        STAGE_KEYS_ORDER.forEach(function (sk, idx) {
+            const block = byKey[sk];
+            if (!block) return;
+            const runBtn = block.querySelector('.rewrite-stage-run');
+            const blockedEl = block.querySelector('.rewrite-stage-run-blocked');
+            let ok = true;
+            for (let i = 0; i < idx; i++) {
+                const prev = byKey[STAGE_KEYS_ORDER[i]];
+                if (!stageResultNonEmpty(prev)) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (runBtn && blockedEl) {
+                if (ok) {
+                    runBtn.removeAttribute('hidden');
+                    blockedEl.setAttribute('hidden', '');
+                } else {
+                    runBtn.setAttribute('hidden', '');
+                    blockedEl.removeAttribute('hidden');
+                }
+                runBtn.disabled = !ok || !openaiOk;
+            }
+        });
+    }
+
     function applyAllLockUIs() {
         applyHeroLockUI();
         applyAudioLockUI();
         applyMasterLockUI();
         applySourceLockUI();
         document.querySelectorAll('.rewrite-stage-card').forEach(applyPromptLockUI);
+        syncStageRunButtons();
     }
 
     function updateDurationCharHint() {
         if (!durationCharHintEl) return;
         var dm = durationRangeEl ? clampDurationMinutes(durationRangeEl.value) : 5;
         var cpm = charsPerMinEl ? clampCharsPerMinute(charsPerMinEl.value) : 344;
-        durationCharHintEl.textContent = 'Ориентир: ~' + (dm * cpm) + ' симв. при ' + dm + ' мин (' + cpm + ' симв./мин).';
+        var target = dm * cpm;
+        var targetMin = Math.max(1, target - 1000);
+        var targetMax = target + 1000;
+        var srcLen = sourceEl ? (sourceEl.value || '').trim().length : 0;
+        var mode = 'match';
+        if (srcLen > targetMax) mode = 'compress';
+        else if (srcLen < targetMin) mode = 'expand';
+        durationCharHintEl.textContent = 'Ориентир: ~' + target + ' симв. при ' + dm + ' мин (' + cpm + ' симв./мин).';
+        if (durationModeHintEl) {
+            durationModeHintEl.innerHTML = 'Length mode: <span class="rewrite-duration-mode-value">' + mode + '</span>';
+        }
     }
 
     function countWords(s) {
@@ -317,8 +404,8 @@
     }
 
     if (sourceEl) {
-        sourceEl.addEventListener('input', updateSourceCounts);
-        sourceEl.addEventListener('change', updateSourceCounts);
+        sourceEl.addEventListener('input', function () { updateSourceCounts(); updateDurationCharHint(); });
+        sourceEl.addEventListener('change', function () { updateSourceCounts(); updateDurationCharHint(); });
     }
     updateSourceCounts();
 
@@ -389,19 +476,58 @@
                 alert(String(e));
             } finally {
                 templateApplyBtn.disabled = !openaiOk;
+                updateTemplateSaveDiskBtn();
             }
         });
     }
 
+    if (templateSaveDiskBtn && templateSelectEl) {
+        templateSaveDiskBtn.addEventListener('click', async function () {
+            var name = (templateSelectEl.value || '').trim();
+            if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) {
+                alert('Выберите шаблон, который есть на диске (подпапка в rewrite_templates/).');
+                return;
+            }
+            if (!confirm('Перезаписать .txt в rewrite_templates/' + name + '/ текущими полями (Hero, Master, Config, промпты этапов)?')) {
+                return;
+            }
+            templateSaveDiskBtn.disabled = true;
+            try {
+                var snap = collectSnapshot();
+                var r = await fetch(rewriteTemplateSaveDiskUrl(name), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        hero_prompt: snap.hero_prompt,
+                        master_prompt: snap.master_prompt,
+                        chars_per_minute: snap.chars_per_minute,
+                        duration_minutes: snap.duration_minutes,
+                        stages: snap.stages
+                    })
+                });
+                var data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    alert(data.error === 'not_found' ? 'Папка шаблона не найдена.' : 'Не удалось сохранить шаблон на диск.');
+                    return;
+                }
+            } catch (e) {
+                alert(String(e));
+            } finally {
+                updateTemplateSaveDiskBtn();
+            }
+        });
+        templateSelectEl.addEventListener('change', updateTemplateSaveDiskBtn);
+    }
+
     function collectSnapshot() {
         const stages = {};
+        const globalModel = globalModelEl ? (globalModelEl.value || '').trim() : '';
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             const key = block.getAttribute('data-stage-key');
-            const modelEl = block.querySelector('.rewrite-stage-model');
             const promptEl = block.querySelector('.rewrite-stage-prompt');
             const resEl = block.querySelector('.rewrite-stage-result');
             stages[key] = {
-                model: modelEl ? modelEl.value : '',
+                model: globalModel,
                 prompt: promptEl ? promptEl.value : '',
                 last_result: resEl ? (resEl.value || '') : '',
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1'
@@ -508,9 +634,12 @@
         const locked = block.getAttribute('data-prompt-locked') === '1';
         const ta = block.querySelector('.rewrite-stage-prompt');
         const toggle = block.querySelector('.rewrite-stage-prompt-toggle');
+        const promptWrap = block.querySelector('.rewrite-slot--prompt-inline');
         if (!openaiOk) {
             if (ta) ta.disabled = true;
             if (toggle) toggle.disabled = true;
+            if (promptWrap) promptWrap.hidden = true;
+            block.classList.add('rewrite-stage-card--prompt-collapsed');
             return;
         }
         if (ta) {
@@ -518,6 +647,8 @@
             ta.readOnly = locked;
             ta.classList.toggle('rewrite-source-textarea--locked', locked);
         }
+        if (promptWrap) promptWrap.hidden = locked;
+        block.classList.toggle('rewrite-stage-card--prompt-collapsed', locked);
         if (toggle) {
             toggle.disabled = false;
             styleToggleBtn(toggle, locked);
@@ -544,6 +675,8 @@
         }
         if (templateSelectEl) templateSelectEl.disabled = dis;
         if (templateApplyBtn) templateApplyBtn.disabled = dis;
+        if (templateSaveDiskBtn && dis) templateSaveDiskBtn.disabled = true;
+        if (globalModelEl) globalModelEl.disabled = dis;
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             const locked = block.getAttribute('data-prompt-locked') === '1';
             const ta = block.querySelector('.rewrite-stage-prompt');
@@ -555,6 +688,7 @@
         busy.classList.toggle('hidden', !on);
         if (!on) {
             applyAllLockUIs();
+            updateTemplateSaveDiskBtn();
         }
     }
 
@@ -580,6 +714,7 @@
         resTextarea.value = '[' + ts + '] ' + msg;
         resTextarea.classList.add('rewrite-stage-result--busy');
         updateResultCounts(block);
+        syncStageRunButtons();
     }
 
     function showStageError(block, text) {
@@ -589,6 +724,7 @@
         resTextarea.classList.remove('rewrite-stage-result--busy');
         resTextarea.classList.add('rewrite-stage-result--error');
         updateResultCounts(block);
+        syncStageRunButtons();
     }
 
     function syncPromptBadge(block) {
@@ -666,6 +802,7 @@
             resTextarea.classList.remove('rewrite-stage-result--error');
             updateResultCounts(block);
         }
+        syncStageRunButtons();
         try {
             const snap = collectSnapshot();
             const res = await fetch(runUrl, {
@@ -716,6 +853,7 @@
                             resultBadge.classList.add('badge-yes');
                         }
                         updateResultCounts(block);
+                        syncStageRunButtons();
                     }
                 }
             }
@@ -723,6 +861,7 @@
                 resTextarea.value = savedBeforeRun;
                 resTextarea.classList.remove('rewrite-stage-result--busy');
                 updateResultCounts(block);
+                syncStageRunButtons();
             }
             if (lastContent !== null) {
                 await saveToServer();
@@ -746,6 +885,13 @@
     });
 
     applyAllLockUIs();
+    updateTemplateSaveDiskBtn();
+    if (globalModelEl) {
+        globalModelEl.addEventListener('change', async function () {
+            if (!openaiOk || globalModelEl.disabled) return;
+            try { await saveToServer(); } catch (e) {}
+        });
+    }
 })();
     </script>
 </body>

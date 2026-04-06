@@ -1,0 +1,2 @@
+chars_per_minute: 893
+duration_minutes: 23

@@ -1,0 +1,15 @@
+{
+  "preservation_matrix": {
+    "core_claims": "preserve",
+    "numbers": "preserve_exact",
+    "facts": "preserve_exact",
+    "examples": "preserve_adapt",
+    "research": "preserve_exact",
+    "argument_sequence": "semi_preserve",
+    "wording": "rewrite",
+    "hooks": "rewrite",
+    "intro": "rewrite",
+    "transitions": "rewrite",
+    "cta": "rewrite"
+  }
+}

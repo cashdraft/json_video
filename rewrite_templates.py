@@ -15,13 +15,15 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — симв./мин и длительность (см. parse_template_config)
   Hero Prompt, Master Prompt
-  Analysis … Final Prompt
+  Analysis … Final Prompt (draft1: «Draft1 Rewriter Prompt.txt», draft2: «Draft2 Retention Editor Prompt.txt»)
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
+
+from typing import Any
 
 from image_templates import safe_template_dir
 from rewrite_pipeline import REWRITE_STAGE_KEYS
@@ -37,9 +39,24 @@ _STEM_TO_TARGET: dict[str, str] = {
     "analysis prompt": "stage:analysis",
     "structure prompt": "stage:structure",
     "draft1 prompt": "stage:draft1",
+    "draft1 rewriter prompt": "stage:draft1",
     "draft2 prompt": "stage:draft2",
+    "draft2 retention editor prompt": "stage:draft2",
     "draft3 prompt": "stage:draft3",
     "final prompt": "stage:final",
+}
+
+# Обратно к имени файла при записи на диск (как при чтении).
+_TARGET_TO_FILENAME: dict[str, str] = {
+    "template_config": "Config.txt",
+    "hero_prompt": "Hero Prompt.txt",
+    "master_prompt": "Master Prompt.txt",
+    "stage:analysis": "Analysis Prompt.txt",
+    "stage:structure": "Structure Prompt.txt",
+    "stage:draft1": "Draft1 Rewriter Prompt.txt",
+    "stage:draft2": "Draft2 Retention Editor Prompt.txt",
+    "stage:draft3": "Draft3 Prompt.txt",
+    "stage:final": "Final Prompt.txt",
 }
 
 
@@ -195,3 +212,43 @@ def load_rewrite_template(name: str) -> dict | None:
             out["duration_minutes"] = cfg["duration_minutes"]
 
     return out
+
+
+def save_rewrite_template_to_disk(
+    name: str,
+    *,
+    hero_prompt: str,
+    master_prompt: str,
+    chars_per_minute: int,
+    duration_minutes: int,
+    stages: dict[str, Any],
+) -> tuple[bool, str]:
+    """
+    Перезаписывает .txt в подпапке шаблона. Папка должна уже существовать.
+    Возвращает (True, "") или (False, код_ошибки).
+    """
+    d = safe_template_dir(REWRITE_TEMPLATES_DIR, name)
+    if d is None:
+        return False, "not_found"
+    try:
+        cpm = max(1, min(2000, int(chars_per_minute)))
+        dm = max(1, min(30, int(duration_minutes)))
+    except (TypeError, ValueError):
+        cpm, dm = 344, 5
+    cfg_text = f"chars_per_minute: {cpm}\nduration_minutes: {dm}\n"
+    (d / _TARGET_TO_FILENAME["template_config"]).write_text(cfg_text, encoding="utf-8")
+    (d / _TARGET_TO_FILENAME["hero_prompt"]).write_text(
+        (hero_prompt or "").rstrip() + "\n", encoding="utf-8"
+    )
+    (d / _TARGET_TO_FILENAME["master_prompt"]).write_text(
+        (master_prompt or "").rstrip() + "\n", encoding="utf-8"
+    )
+    for sk in REWRITE_STAGE_KEYS:
+        cell = stages.get(sk) if isinstance(stages, dict) else None
+        prompt = ""
+        if isinstance(cell, dict):
+            prompt = str(cell.get("prompt") or "")
+        fn = _TARGET_TO_FILENAME.get(f"stage:{sk}")
+        if fn:
+            (d / fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
+    return True, ""
