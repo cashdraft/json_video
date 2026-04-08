@@ -201,7 +201,8 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     "draft1": (
         "Отправляем. В system (по порядку): Master Prompt, Duration, Hero Prompt, Draft1 Rewriter Prompt. "
         "В user (по порядку): Analysis Result, Structure Result. "
-        "К OpenAI уходит stream=true; ответ в UI собирается из чанков подряд."
+        "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из Structure Result "
+        "и только после accept запускается следующий."
     ),
     "draft2": (
         "Отправляем. В system (по порядку): Master Prompt, Duration, Hero Prompt, "

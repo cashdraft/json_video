@@ -57,8 +57,8 @@ from kie_client import (
 from rewrite_openai import (
     REWRITE_DEFAULT_MODEL,
     REWRITE_MODELS,
+    iter_draft1_blockwise_completion,
     iter_rewrite_completion,
-    iter_rewrite_completion_stream,
     normalize_rewrite_model,
 )
 from rewrite_pipeline import (
@@ -734,7 +734,15 @@ def rewrite_project_run(rewrite_id: str):
         user_text = str(msgs[1].get("content") or "")
         model = str(payload.get("model") or "")
         if stage_key == "draft1":
-            for item in iter_rewrite_completion_stream(api_key, model, prompt, user_text):
+            analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
+            structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
+            for item in iter_draft1_blockwise_completion(
+                api_key,
+                model,
+                prompt,
+                analysis_res,
+                structure_res,
+            ):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
@@ -770,7 +778,10 @@ def rewrite_project_api_payload(rewrite_id: str):
         return jsonify({"ok": False, "message": err}), 400
     export_payload = dict(payload)
     if stage_key == "draft1":
-        export_payload["stream"] = True
+        export_payload["note"] = (
+            "Draft1 runs in block-by-block loop: backend sends one block request, "
+            "checks target_chars_min/max from Structure Result, then asks next/rewrite."
+        )
     txt = json.dumps(export_payload, ensure_ascii=False, indent=2) + "\n"
     fname = f"{rewrite_id}_{stage_key}_openai_request.txt"
     resp = make_response(txt)
