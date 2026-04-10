@@ -43,6 +43,29 @@ def _chat_timeout_seconds() -> int:
         return 600
 
 
+def _sanitize_for_openai_json(s: str) -> str:
+    """Убирает проблемные символы (в т.ч. lone surrogates), чтобы JSON-тело всегда кодировалось корректно."""
+    t = (s or "").replace("\x00", " ")
+    return t.encode("utf-8", "replace").decode("utf-8", "replace")
+
+
+def _openai_chat_json_body_bytes(payload: dict[str, Any]) -> bytes:
+    """Тело POST: строгий JSON (ASCII \\uXXXX для не-ASCII) + UTF-8 bytes — надёжнее, чем requests json= для некоторых прокси/шлюзов."""
+    return json.dumps(
+        payload,
+        ensure_ascii=True,
+        allow_nan=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _openai_chat_request_headers(api_key: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {api_key.strip()}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+
+
 def _openai_error_message(r: requests.Response) -> str:
     err_body = (r.text or "")[:2000]
     try:
@@ -57,10 +80,11 @@ def _openai_error_message(r: requests.Response) -> str:
 
 def _post_chat_completion(api_key: str, payload: dict[str, Any], timeout: int, out: queue.Queue) -> None:
     try:
+        body = _openai_chat_json_body_bytes(payload)
         r = requests.post(
             OPENAI_CHAT_URL,
-            headers={"Authorization": f"Bearer {api_key.strip()}"},
-            json=payload,
+            headers=_openai_chat_request_headers(api_key),
+            data=body,
             timeout=timeout,
         )
         out.put(("ok", r))
@@ -82,8 +106,8 @@ def iter_rewrite_completion(
     {"type": "error", "message": "..."} — последнее при ошибке
     {"type": "result", "content": "..."} — успех
     """
-    prompt = (prompt or "").strip()
-    text = (text or "").strip()
+    prompt = _sanitize_for_openai_json((prompt or "").strip())
+    text = _sanitize_for_openai_json((text or "").strip())
     model = normalize_rewrite_model(model)
     if timeout is None:
         timeout = _chat_timeout_seconds()
@@ -195,8 +219,8 @@ def iter_rewrite_completion_stream(
     {"type": "error", "message": "..."}
     {"type": "result", "content": "..."} — полный накопленный ответ в конце
     """
-    prompt = (prompt or "").strip()
-    text = (text or "").strip()
+    prompt = _sanitize_for_openai_json((prompt or "").strip())
+    text = _sanitize_for_openai_json((text or "").strip())
     model = normalize_rewrite_model(model)
     if timeout is None:
         timeout = _chat_timeout_seconds()
@@ -227,10 +251,11 @@ def iter_rewrite_completion_stream(
 
     acc = ""
     try:
+        body = _openai_chat_json_body_bytes(payload)
         with requests.post(
             OPENAI_CHAT_URL,
-            headers={"Authorization": f"Bearer {api_key.strip()}"},
-            json=payload,
+            headers=_openai_chat_request_headers(api_key),
+            data=body,
             timeout=(30, timeout),
             stream=True,
         ) as r:
@@ -284,10 +309,11 @@ def _post_chat_completion_sync(
     timeout: int,
 ) -> tuple[str | None, str | None]:
     try:
+        body = _openai_chat_json_body_bytes(payload)
         r = requests.post(
             OPENAI_CHAT_URL,
-            headers={"Authorization": f"Bearer {api_key.strip()}"},
-            json=payload,
+            headers=_openai_chat_request_headers(api_key),
+            data=body,
             timeout=timeout,
         )
     except requests.RequestException as e:
@@ -371,7 +397,7 @@ def iter_draft1_blockwise_completion(
     structure_result: str,
     *,
     timeout: int | None = None,
-    max_attempts_per_block: int = 7,
+    max_attempts_per_block: int = 3,
 ) -> Iterator[dict[str, Any]]:
     """Draft1: по одному блоку. Принятие строго при target_chars_min <= len <= target_chars_max.
 
@@ -379,9 +405,9 @@ def iter_draft1_blockwise_completion(
     target_chars_ideal, и помечаем принудительный приём.
     """
     model = normalize_rewrite_model(model)
-    system_prompt = (system_prompt or "").strip()
-    analysis_result = (analysis_result or "").strip()
-    structure_result = (structure_result or "").strip()
+    system_prompt = _sanitize_for_openai_json((system_prompt or "").strip())
+    analysis_result = _sanitize_for_openai_json((analysis_result or "").strip())
+    structure_result = _sanitize_for_openai_json((structure_result or "").strip())
     if timeout is None:
         timeout = _chat_timeout_seconds()
     if not api_key.strip():
@@ -396,6 +422,17 @@ def iter_draft1_blockwise_completion(
         yield {"type": "error", "message": "Structure Result должен быть JSON с массивом blocks и target_chars_*."}
         return
 
+    analysis_compact = analysis_result
+    if len(analysis_compact) > 40000:
+        analysis_compact = analysis_compact[:40000].rstrip() + "\n...[analysis truncated]..."
+    blocks_overview_lines = []
+    for bb in blocks:
+        blocks_overview_lines.append(
+            f"{bb['index']}. {bb['block_name']} "
+            f"(min={bb['target_chars_min']}, ideal={bb['target_chars_ideal']}, max={bb['target_chars_max']})"
+        )
+    blocks_overview = "\n".join(blocks_overview_lines)
+
     accepted: list[str] = []
     yield {"type": "status", "message": f"Draft1 block-loop: блоков {len(blocks)}."}
 
@@ -407,7 +444,8 @@ def iter_draft1_blockwise_completion(
         tmax = int(b["target_chars_max"])
         must_cover = "\n".join(f"- {x}" for x in b["must_cover"]) or "- (нет)"
         must_not_cover = "\n".join(f"- {x}" for x in b["must_not_cover"]) or "- (нет)"
-        accepted_so_far = "\n\n".join(accepted).strip() or "(пока пусто)"
+        accepted_indexes = [str(i + 1) for i in range(len(accepted))]
+        accepted_overview = ", ".join(accepted_indexes) if accepted_indexes else "(пока пусто)"
         feedback = ""
         accepted_this_block = False
         parsed_candidates: list[tuple[str, int]] = []
@@ -415,11 +453,25 @@ def iter_draft1_blockwise_completion(
             yield {"type": "status", "message": f"Блок {idx}/{len(blocks)}: попытка {attempt}…"}
             user_msg = (
                 "--- Analysis Result ---\n"
-                + (analysis_result or "(пусто)")
-                + "\n\n--- Structure Result ---\n"
-                + (structure_result or "(пусто)")
-                + "\n\n--- Already accepted blocks (DO NOT REWRITE) ---\n"
-                + accepted_so_far
+                + (analysis_compact or "(пусто)")
+                + "\n\n--- Blocks overview ---\n"
+                + blocks_overview
+                + "\n\n--- Current block spec ---\n"
+                + json.dumps(
+                    {
+                        "index": idx,
+                        "block_name": name,
+                        "target_chars_min": tmin,
+                        "target_chars_ideal": tideal,
+                        "target_chars_max": tmax,
+                        "must_cover": b["must_cover"],
+                        "must_not_cover": b["must_not_cover"],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n\n--- Already accepted block indexes (DO NOT REWRITE THEM) ---\n"
+                + accepted_overview
                 + "\n\n--- Task ---\n"
                 + f"Write ONLY block {idx} in this exact format:\n"
                 + f"BLOCK_START: {idx}\n"
@@ -438,6 +490,7 @@ def iter_draft1_blockwise_completion(
             )
             if feedback:
                 user_msg += "\n\nRewrite request:\n" + feedback
+            user_msg = _sanitize_for_openai_json(user_msg)
             payload = {
                 "model": model,
                 "messages": [

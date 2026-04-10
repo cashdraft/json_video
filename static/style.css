@@ -661,6 +661,44 @@ textarea::placeholder {
     margin-bottom: 1rem;
 }
 
+.rewrite-youtube-card {
+    margin-bottom: 1rem;
+}
+
+.rewrite-youtube-block__title {
+    margin-bottom: 0.3rem;
+}
+
+.rewrite-youtube-block__lead {
+    margin: 0 0 0.65rem 0;
+    line-height: 1.45;
+    max-height: none;
+    overflow: visible;
+    max-width: none;
+}
+
+.rewrite-youtube-block__url-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.rewrite-youtube-block__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+}
+
+.rewrite-youtube-block__status-row {
+    margin-top: 0.45rem;
+    min-height: 1.1em;
+    width: 100%;
+}
+
 .rewrite-source-body-header {
     margin: 0 0 0.65rem 0;
 }
@@ -710,10 +748,18 @@ textarea::placeholder {
     font-size: 0.85em;
 }
 
-.rewrite-hero-block {
-    margin-bottom: 1rem;
+.rewrite-prompts-duration-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(11.5rem, 15.5rem);
+    gap: 1rem 1.25rem;
+    align-items: start;
+    margin: 0 0 1rem 0;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--border);
+}
+
+.rewrite-prompts-duration-row__col {
+    min-width: 0;
 }
 
 .rewrite-cpm-row {
@@ -799,32 +845,9 @@ textarea::placeholder {
     display: none;
 }
 
-.rewrite-master-duration-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(11.5rem, 15.5rem);
-    gap: 1rem 1.35rem;
-    align-items: start;
-    margin: 0 0 1rem 0;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.rewrite-master-duration-row__master {
-    min-width: 0;
-}
-
-.rewrite-master-duration-row__duration {
-    margin-bottom: 0;
-    align-self: end;
-}
-
-@media (max-width: 48rem) {
-    .rewrite-master-duration-row {
+@media (max-width: 60rem) {
+    .rewrite-prompts-duration-row {
         grid-template-columns: 1fr;
-    }
-
-    .rewrite-master-duration-row__duration {
-        align-self: stretch;
     }
 }
 
@@ -850,7 +873,7 @@ textarea::placeholder {
     max-width: 100%;
 }
 
-.rewrite-master-duration-row .rewrite-source-duration {
+.rewrite-prompts-duration-row__col--duration .rewrite-source-duration {
     margin-bottom: 0;
 }
 
@@ -870,26 +893,116 @@ textarea::placeholder {
     font-variant-numeric: tabular-nums;
 }
 
+.rewrite-youtube-brand {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    flex-shrink: 0;
+    opacity: 0.9;
+    align-self: center;
+}
+
+.rewrite-youtube-url {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 0.48rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text);
+}
+
+.rewrite-youtube-status {
+    display: block;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.rewrite-youtube-status--error {
+    color: #f07178;
+}
+
 .rewrite-stages-list {
     margin-top: 0.25rem;
+}
+
+/* Этапы конвейера: 3 карточки в ряд */
+.scenes-grid.rewrite-stages-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem 1rem;
+    align-items: start;
+}
+
+@media (max-width: 60rem) {
+    .scenes-grid.rewrite-stages-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 36rem) {
+    .scenes-grid.rewrite-stages-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.rewrite-stage-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100%;
 }
 
 .rewrite-stage-card .scene-header {
     margin-bottom: 0.85rem;
 }
 
+.rewrite-stage-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rewrite-stage-index {
+    flex-shrink: 0;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--accent);
+    font-size: 0.62rem;
+    font-weight: 700;
+    font-family: ui-monospace, monospace;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.rewrite-stage-heading__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.rewrite-stage-heading__body .scene-id {
+    margin-bottom: 0;
+}
+
 .rewrite-stage-header-row {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 0.5rem 0.75rem;
     margin-bottom: 0.35rem;
 }
 
 .rewrite-stage-header-row .scene-id {
-    flex: 1 1 auto;
-    min-width: 0;
     margin-bottom: 0;
 }
 
@@ -1074,14 +1187,22 @@ textarea::placeholder {
 }
 
 .rewrite-slot--stage-result {
-    min-height: 9rem;
+    min-height: 0;
 }
 
-.rewrite-stage-result.rewrite-source-textarea {
-    min-height: 8rem;
-    max-height: 24rem;
+/* Result: старт ~3 строки, прокрутка; можно растянуть за уголок по вертикали */
+.rewrite-stage-card .rewrite-slot--stage-result .rewrite-stage-result.rewrite-source-textarea {
+    --rewrite-result-visible-lines: 3;
+    flex: 0 0 auto;
+    min-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    max-height: none;
+    height: auto;
+    resize: vertical;
+    overflow-y: auto;
     cursor: text;
     white-space: pre-wrap;
+    font-size: 0.8rem;
+    line-height: 1.45;
 }
 
 @media (max-width: 52rem) {

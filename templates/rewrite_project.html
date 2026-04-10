@@ -72,22 +72,8 @@
             <div class="scene-card rewrite-source-card">
                 {% set hero_locked = rw.hero_prompt_locked|default(false) %}
                 {% set audio_locked = rw.audio_timing_locked|default(false) %}
-                <div class="rewrite-hero-block">
-                    <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
-                    <p class="rewrite-source-subhint">Описание героя озвучки. Добавляется во все этапы (в user-сообщение, вместе с ориентиром по символам).</p>
-                    <div class="rewrite-source-toolbar slot-header">
-                        <span class="slot-badge badge-yes">Hero</span>
-                        <button type="button" class="rewrite-lock-toggle btn-icon{% if hero_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-hero-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                        </button>
-                    </div>
-                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
-                        <textarea id="rewrite-hero-prompt" class="rewrite-source-textarea{% if hero_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Герой, тон, контекст…" {% if not openai_key_set %}disabled{% elif hero_locked %}readonly{% endif %}>{{ rw.hero_prompt or '' }}</textarea>
-                    </div>
-                </div>
-                <div class="rewrite-master-duration-row">
-                    <div class="rewrite-master-duration-row__master">
+                <div class="rewrite-prompts-duration-row">
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--master">
                         <h3 class="rewrite-source-subtitle">Master Prompt</h3>
                         <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
                         <div class="rewrite-source-toolbar slot-header">
@@ -101,25 +87,83 @@
                             <textarea id="rewrite-master-prompt" class="rewrite-source-textarea{% if rw.master_prompt_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Общие инструкции для всех этапов…" {% if not openai_key_set %}disabled{% elif rw.master_prompt_locked|default(false) %}readonly{% endif %}>{{ rw.master_prompt or '' }}</textarea>
                         </div>
                     </div>
-                    <div class="tts-slider-block rewrite-source-duration rewrite-master-duration-row__duration">
-                        <label class="tts-slider-label" for="rewrite-duration-min">Длительность <span class="tts-slider-val" id="rewrite-duration-min-val">{{ rw.duration_minutes|default(5)|int }}</span> мин</label>
-                        <input type="range" id="rewrite-duration-min" name="duration_minutes" min="1" max="30" step="1" value="{{ rw.duration_minutes|default(5)|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="1" aria-valuemax="30">
-                        <div class="tts-slider-ends">
-                            <span>1 мин</span>
-                            <span>30 мин</span>
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--hero">
+                        <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
+                        <p class="rewrite-source-subhint">Описание героя озвучки. Добавляется во все этапы (в user-сообщение, вместе с ориентиром по символам).</p>
+                        <div class="rewrite-source-toolbar slot-header">
+                            <span class="slot-badge badge-yes">Hero</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon{% if hero_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-hero-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
                         </div>
-                        <div class="rewrite-cpm-row">
-                            <label class="rewrite-cpm-row__label" for="rewrite-chars-per-min">Симв./мин</label>
-                            <input type="number" id="rewrite-chars-per-min" class="rewrite-cpm-input" min="1" max="2000" step="1" value="{{ rw.chars_per_minute|default(344)|int }}" {% if not openai_key_set or audio_locked %}disabled{% endif %} title="Ориентир озвучки: символов на минуту">
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                            <textarea id="rewrite-hero-prompt" class="rewrite-source-textarea{% if hero_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Герой, тон, контекст…" {% if not openai_key_set %}disabled{% elif hero_locked %}readonly{% endif %}>{{ rw.hero_prompt or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--duration">
+                        <h3 class="rewrite-source-subtitle">Duration</h3>
+                        <p class="rewrite-source-subhint">Ориентир длины озвучки: длительность в минутах и символов в минуту.</p>
+                        <div class="rewrite-source-toolbar slot-header">
+                            <span class="slot-badge badge-yes">Duration</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if audio_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-audio-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                             </button>
                         </div>
-                        <p class="rewrite-duration-mode-hint" id="rewrite-duration-mode-hint" aria-live="polite"></p>
-                        <p class="rewrite-duration-char-hint" id="rewrite-duration-char-hint" aria-live="polite"></p>
+                        <div class="tts-slider-block rewrite-source-duration">
+                            <label class="tts-slider-label" for="rewrite-duration-min">Minutes <span class="tts-slider-val" id="rewrite-duration-min-val">{{ rw.duration_minutes|default(5)|int }}</span></label>
+                            <input type="range" id="rewrite-duration-min" name="duration_minutes" min="1" max="30" step="1" value="{{ rw.duration_minutes|default(5)|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="1" aria-valuemax="30">
+                            <div class="tts-slider-ends">
+                                <span>1 мин</span>
+                                <span>30 мин</span>
+                            </div>
+                            <div class="rewrite-cpm-row">
+                                <label class="rewrite-cpm-row__label" for="rewrite-chars-per-min">Симв./мин</label>
+                                <input type="number" id="rewrite-chars-per-min" class="rewrite-cpm-input" min="1" max="2000" step="1" value="{{ rw.chars_per_minute|default(344)|int }}" {% if not openai_key_set or audio_locked %}disabled{% endif %} title="Ориентир озвучки: символов на минуту">
+                            </div>
+                            <p class="rewrite-duration-mode-hint" id="rewrite-duration-mode-hint" aria-live="polite"></p>
+                            <p class="rewrite-duration-char-hint" id="rewrite-duration-char-hint" aria-live="polite"></p>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="scene-card rewrite-youtube-card">
+                <div class="rewrite-youtube-block">
+                    <div class="scene-id rewrite-youtube-block__title">YouTube</div>
+                    <p class="scene-text rewrite-youtube-block__lead">
+                        Ссылка на ролик: проверка, загрузка аудио и расшифровка. Готовый текст можно вставить в поле «Исходный текст».
+                    </p>
+                    <div class="rewrite-youtube-block__url-row">
+                        <img
+                            src="{{ url_for('static', filename='img/youtube_logo.png') }}"
+                            alt=""
+                            class="rewrite-youtube-brand"
+                            width="22"
+                            height="22"
+                            decoding="async"
+                        >
+                        <input
+                            type="url"
+                            id="rewrite-youtube-url"
+                            class="rewrite-youtube-url"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value="{{ rw.youtube_url or '' }}"
+                            {% if not openai_key_set %}disabled{% endif %}
+                        >
+                        <div class="rewrite-youtube-block__actions">
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set %}disabled{% endif %}>Расшифровать</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert" disabled>Вставить</button>
+                        </div>
+                    </div>
+                    <div class="rewrite-youtube-block__status-row">
+                        <span id="rewrite-youtube-status" class="rewrite-youtube-status" aria-live="polite"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="scene-card rewrite-source-card rewrite-source-card--body">
                 <div class="rewrite-source-body-header">
                     <div class="scene-id rewrite-source-body-title">Исходный текст</div>
                     <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
@@ -148,7 +192,12 @@
                 <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}">
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
-                            <div class="scene-id">{{ stage_label }}</div>
+                            <div class="rewrite-stage-heading">
+                                <span class="rewrite-stage-index" aria-label="Этап {{ loop.index }}">{{ loop.index }}</span>
+                                <div class="rewrite-stage-heading__body">
+                                    <div class="scene-id">{{ stage_label }}</div>
+                                </div>
+                            </div>
                             <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>Запрос .txt</button>
                         </div>
                         <div class="scene-text rewrite-stage-send-hint">{{ rewrite_stage_send_hints[stage_key] }}</div>
@@ -186,7 +235,7 @@
                                 <span class="rewrite-stage-result-counts" aria-live="polite"></span>
                             </div>
                             <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result">
-                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result" rows="8" readonly placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
+                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result" rows="3" readonly placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
                         </div>
                     </div>
@@ -207,6 +256,10 @@
     const runUrl = {{ url_for('rewrite_project_run', rewrite_id=rw.rewrite_id) | tojson }};
     const apiPayloadUrl = {{ url_for('rewrite_project_api_payload', rewrite_id=rw.rewrite_id) | tojson }};
     const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytTranscribeUrl = {{ url_for('rewrite_youtube_transcribe', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
     const sourceCountsEl = document.getElementById('rewrite-source-counts');
@@ -230,6 +283,13 @@
     const templateSelectEl = document.getElementById('rewrite-template-select');
     const templateApplyBtn = document.getElementById('rewrite-template-apply');
     const templateSaveDiskBtn = document.getElementById('rewrite-template-save-disk');
+    const ytUrlEl = document.getElementById('rewrite-youtube-url');
+    const ytDecodeBtn = document.getElementById('rewrite-youtube-decode');
+    const ytInsertBtn = document.getElementById('rewrite-youtube-insert');
+    const ytStatusEl = document.getElementById('rewrite-youtube-status');
+    var ytTranscriptReady = false;
+    var ytWorking = false;
+    var rewriteStageBusy = false;
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
@@ -244,6 +304,30 @@
         var n = parseInt(v, 10);
         if (isNaN(n)) return 344;
         return Math.min(2000, Math.max(1, n));
+    }
+
+    function setYtStatus(msg, isError) {
+        if (!ytStatusEl) return;
+        ytStatusEl.textContent = msg || '';
+        ytStatusEl.classList.toggle('rewrite-youtube-status--error', !!isError);
+    }
+
+    function applyYoutubeToolbar() {
+        if (!openaiOk) {
+            if (ytUrlEl) ytUrlEl.disabled = true;
+            if (ytDecodeBtn) ytDecodeBtn.disabled = true;
+            if (ytInsertBtn) ytInsertBtn.disabled = true;
+            return;
+        }
+        if (rewriteStageBusy) {
+            if (ytUrlEl) ytUrlEl.disabled = true;
+            if (ytDecodeBtn) ytDecodeBtn.disabled = true;
+            if (ytInsertBtn) ytInsertBtn.disabled = true;
+            return;
+        }
+        if (ytUrlEl) ytUrlEl.disabled = ytWorking;
+        if (ytDecodeBtn) ytDecodeBtn.disabled = ytWorking;
+        if (ytInsertBtn) ytInsertBtn.disabled = ytWorking || !ytTranscriptReady;
     }
 
     function rewriteTemplateFetchUrl(name) {
@@ -378,6 +462,7 @@
         applySourceLockUI();
         document.querySelectorAll('.rewrite-stage-card').forEach(applyPromptLockUI);
         syncStageRunButtons();
+        applyYoutubeToolbar();
     }
 
     function updateDurationCharHint() {
@@ -527,6 +612,114 @@
         templateSelectEl.addEventListener('change', updateTemplateSaveDiskBtn);
     }
 
+    async function ytBootstrapFromServer() {
+        if (!openaiOk) {
+            applyYoutubeToolbar();
+            return;
+        }
+        try {
+            const r = await fetch(ytTranscriptUrl);
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok) return;
+            var txt = (data.text || '').trim();
+            if (!txt) return;
+            ytTranscriptReady = true;
+            setYtStatus(
+                'Готово текст ' + txt.length + ' символов · ' + countWords(txt) + ' слов',
+                false
+            );
+        } catch (e) { /* ignore */ }
+        finally {
+            applyYoutubeToolbar();
+        }
+    }
+
+    async function ytFullDecode() {
+        if (!ytUrlEl || !openaiOk || ytWorking) return;
+        var u = (ytUrlEl.value || '').trim();
+        if (!u) {
+            setYtStatus('Вставьте ссылку YouTube.', true);
+            ytTranscriptReady = false;
+            applyYoutubeToolbar();
+            return;
+        }
+        ytWorking = true;
+        ytTranscriptReady = false;
+        applyYoutubeToolbar();
+        try {
+            setYtStatus('Проверяем ссылку…', false);
+            const r1 = await fetch(ytVerifyUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ youtube_url: u })
+            });
+            const d1 = await r1.json().catch(function () { return {}; });
+            if (!r1.ok || !d1.ok) {
+                setYtStatus(d1.message || 'Не удалось проверить ссылку.', true);
+                return;
+            }
+
+            setYtStatus('Скачиваем и конвертируем в mp3…', false);
+            const r2 = await fetch(ytDownloadUrl, { method: 'POST' });
+            const d2 = await r2.json().catch(function () { return {}; });
+            if (!r2.ok || !d2.ok) {
+                setYtStatus(d2.message || 'Не удалось скачать аудио.', true);
+                return;
+            }
+
+            setYtStatus('Отправляем аудио на расшифровку (OpenAI)…', false);
+            const r3 = await fetch(ytTranscribeUrl, { method: 'POST' });
+            const d3 = await r3.json().catch(function () { return {}; });
+            if (!r3.ok || !d3.ok) {
+                setYtStatus(d3.message || 'Не удалось расшифровать.', true);
+                return;
+            }
+            var ch = typeof d3.chars === 'number' ? d3.chars : 0;
+            var wd = typeof d3.words === 'number' ? d3.words : 0;
+            setYtStatus('Готово текст ' + ch + ' символов · ' + wd + ' слов', false);
+            ytTranscriptReady = true;
+        } catch (e) {
+            setYtStatus(String(e), true);
+            ytTranscriptReady = false;
+        } finally {
+            ytWorking = false;
+            applyYoutubeToolbar();
+        }
+    }
+
+    async function ytInsertToSource() {
+        if (!sourceEl || !ytTranscriptReady || ytWorking) return;
+        if (ytInsertBtn) ytInsertBtn.disabled = true;
+        setYtStatus('Загружаем текст расшифровки…', false);
+        try {
+            const r = await fetch(ytTranscriptUrl);
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok) {
+                setYtStatus(data.message || 'Не удалось получить расшифровку.', true);
+                return;
+            }
+            var txt = (data.text || '').trim();
+            if (!txt) {
+                setYtStatus('Расшифровка пока пустая.', true);
+                ytTranscriptReady = false;
+                return;
+            }
+            sourceEl.value = txt;
+            updateSourceCounts();
+            updateDurationCharHint();
+            var ok = await saveToServer();
+            if (!ok) {
+                setYtStatus('Текст вставлен, но не удалось сохранить.', true);
+            } else {
+                setYtStatus('Текст вставлен в исходное поле.', false);
+            }
+        } catch (e) {
+            setYtStatus(String(e), true);
+        } finally {
+            applyYoutubeToolbar();
+        }
+    }
+
     function collectSnapshot() {
         const stages = {};
         const globalModel = globalModelEl ? (globalModelEl.value || '').trim() : '';
@@ -664,6 +857,7 @@
     }
 
     function setBusy(on) {
+        rewriteStageBusy = !!on;
         const dis = on || !openaiOk;
         document.querySelectorAll('.rewrite-lock-toggle').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
@@ -688,6 +882,7 @@
         if (templateApplyBtn) templateApplyBtn.disabled = dis;
         if (templateSaveDiskBtn && dis) templateSaveDiskBtn.disabled = true;
         if (globalModelEl) globalModelEl.disabled = dis;
+        applyYoutubeToolbar();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             const locked = block.getAttribute('data-prompt-locked') === '1';
             const ta = block.querySelector('.rewrite-stage-prompt');
@@ -970,7 +1165,29 @@
         }
     });
 
+    if (ytDecodeBtn) ytDecodeBtn.addEventListener('click', ytFullDecode);
+    if (ytInsertBtn) ytInsertBtn.addEventListener('click', ytInsertToSource);
+    if (ytUrlEl) {
+        ytUrlEl.addEventListener('input', function () {
+            ytTranscriptReady = false;
+            applyYoutubeToolbar();
+            var t = (ytUrlEl.value || '').trim();
+            if (t) {
+                setYtStatus('Ссылка изменена — нажмите «Расшифровать».', false);
+            } else {
+                setYtStatus('', false);
+            }
+        });
+        ytUrlEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                ytFullDecode();
+            }
+        });
+    }
+
     applyAllLockUIs();
+    ytBootstrapFromServer();
     updateTemplateSaveDiskBtn();
     if (globalModelEl) {
         globalModelEl.addEventListener('change', async function () {

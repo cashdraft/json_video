@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import uuid
 from datetime import datetime
@@ -31,6 +32,8 @@ from flask import (
     stream_with_context,
     url_for,
 )
+import requests
+from yt_dlp import YoutubeDL
 
 from image_templates import (
     IMAGE_TEMPLATES_DIR,
@@ -88,6 +91,7 @@ BASE_DIR = Path(__file__).resolve().parent
 JOBS_DIR = BASE_DIR / "data" / "jobs"
 JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
 REWRITE_JOBS_DIR = BASE_DIR / "data" / "rewrite_jobs"
+REWRITE_MEDIA_DIR = BASE_DIR / "data" / "rewrite_media"
 
 _REWRITE_ID_RE = re.compile(r"^rewrite_\d{8}_\d{6}$")
 
@@ -386,6 +390,151 @@ def _rewrite_filepath(rewrite_id: str) -> Path:
     return REWRITE_JOBS_DIR / f"{rewrite_id}.json"
 
 
+def _rewrite_media_dir(rewrite_id: str) -> Path:
+    return REWRITE_MEDIA_DIR / rewrite_id
+
+
+def _youtube_url_normalize(url: str) -> str:
+    return (url or "").strip()
+
+
+def _youtube_url_is_valid(url: str) -> bool:
+    u = _youtube_url_normalize(url)
+    return bool(
+        re.match(
+            r"^(https?://)?(www\.)?(youtube\.com/watch\?v=[A-Za-z0-9_-]{6,}|youtu\.be/[A-Za-z0-9_-]{6,}).*$",
+            u,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _safe_rewrite_basename(name: str) -> str:
+    base = re.sub(r"[^a-zA-Z0-9._-]+", "_", (name or "").strip())
+    base = base.strip("._-")
+    return base[:80] or "audio"
+
+
+def _probe_audio_duration_seconds(audio_path: Path) -> float | None:
+    try:
+        p = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    raw = (p.stdout or "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _split_audio_for_transcription(audio_path: Path, segment_seconds: int = 480) -> list[Path]:
+    """Нарезает длинный mp3 на части через ffmpeg; если не удалось — возвращает исходный файл."""
+    duration = _probe_audio_duration_seconds(audio_path)
+    if duration is None or duration <= float(segment_seconds):
+        return [audio_path]
+
+    with tempfile.TemporaryDirectory(prefix="rw_transcribe_") as td:
+        out_pattern = str(Path(td) / "chunk_%03d.mp3")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(audio_path),
+                    "-f",
+                    "segment",
+                    "-segment_time",
+                    str(segment_seconds),
+                    "-c",
+                    "copy",
+                    out_pattern,
+                ],
+                check=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return [audio_path]
+        chunks = sorted(Path(td).glob("chunk_*.mp3"))
+        if not chunks:
+            return [audio_path]
+        persisted: list[Path] = []
+        persist_dir = audio_path.parent / "_transcribe_chunks"
+        persist_dir.mkdir(parents=True, exist_ok=True)
+        for i, c in enumerate(chunks, start=1):
+            p = persist_dir / f"{audio_path.stem}_chunk_{i:03d}.mp3"
+            shutil.copy2(c, p)
+            persisted.append(p)
+        return persisted
+
+
+def _rewrite_transcription_text(api_key: str, audio_path: Path) -> tuple[str | None, str | None]:
+    if not audio_path.is_file():
+        return None, "Аудиофайл не найден на сервере."
+    chunks = _split_audio_for_transcription(audio_path, segment_seconds=480)
+    parts: list[str] = []
+    for i, ap in enumerate(chunks, start=1):
+        try:
+            with open(ap, "rb") as f:
+                files = {
+                    "file": (ap.name, f, "audio/mpeg"),
+                }
+                data = {
+                    "model": "gpt-4o-mini-transcribe",
+                    "response_format": "text",
+                }
+                r = requests.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {api_key.strip()}"},
+                    files=files,
+                    data=data,
+                    timeout=900,
+                )
+        except requests.RequestException as e:
+            return None, f"Сеть / таймаут (chunk {i}/{len(chunks)}): {e}"
+        if not r.ok:
+            try:
+                err = r.json().get("error", {}).get("message") or ""
+            except Exception:
+                err = ""
+            msg = err or (r.text or "")[:500] or f"HTTP {r.status_code}"
+            return None, f"{msg} (chunk {i}/{len(chunks)})"
+        txt = (r.text or "").strip()
+        if txt:
+            parts.append(txt)
+    if not parts:
+        return None, "Пустой ответ транскрибации."
+    # Убираем временные чанки после успешной склейки
+    if len(chunks) > 1:
+        for p in chunks:
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
+        try:
+            (audio_path.parent / "_transcribe_chunks").rmdir()
+        except OSError:
+            pass
+    return "\n\n".join(parts).strip(), None
+
+
 def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
     now = datetime.now().isoformat(timespec="seconds")
     return {
@@ -408,6 +557,11 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "rewrite_template": "",
         "hero_prompt_locked": False,
         "audio_timing_locked": False,
+        "youtube_url": "",
+        "youtube_verified": False,
+        "youtube_title": "",
+        "youtube_audio_file": "",
+        "youtube_transcript_text": "",
     }
 
 
@@ -430,6 +584,16 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
         with open(fp, "r", encoding="utf-8") as f:
             data = json.load(f)
         normalize_rewrite_job_data(data)
+        data.setdefault("youtube_url", "")
+        data["youtube_url"] = str(data.get("youtube_url") or "")
+        data.setdefault("youtube_verified", False)
+        data["youtube_verified"] = bool(data.get("youtube_verified"))
+        data.setdefault("youtube_title", "")
+        data["youtube_title"] = str(data.get("youtube_title") or "")
+        data.setdefault("youtube_audio_file", "")
+        data["youtube_audio_file"] = str(data.get("youtube_audio_file") or "")
+        data.setdefault("youtube_transcript_text", "")
+        data["youtube_transcript_text"] = str(data.get("youtube_transcript_text") or "")
         return data
     except (json.JSONDecodeError, OSError):
         return None
@@ -690,6 +854,120 @@ def rewrite_project_save(rewrite_id: str):
         rw["last_result"] = str(body.get("last_result") or "")
     save_rewrite_job(rewrite_id, rw)
     return jsonify({"ok": True})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/verify", methods=["POST"])
+def rewrite_youtube_verify(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    url = _youtube_url_normalize(str(body.get("youtube_url") or ""))
+    if not _youtube_url_is_valid(url):
+        rw["youtube_url"] = url
+        rw["youtube_verified"] = False
+        rw["youtube_title"] = ""
+        save_rewrite_job(rewrite_id, rw)
+        return jsonify({"ok": False, "message": "Некорректная ссылка YouTube."}), 400
+    title = ""
+    try:
+        with YoutubeDL({"quiet": True, "skip_download": True, "noplaylist": True}) as ydl:
+            info = ydl.extract_info(url, download=False)
+            title = str((info or {}).get("title") or "").strip()
+    except Exception as e:
+        rw["youtube_url"] = url
+        rw["youtube_verified"] = False
+        rw["youtube_title"] = ""
+        save_rewrite_job(rewrite_id, rw)
+        return jsonify({"ok": False, "message": f"Не удалось проверить ссылку: {e}"}), 400
+    rw["youtube_url"] = url
+    rw["youtube_verified"] = True
+    rw["youtube_title"] = title
+    save_rewrite_job(rewrite_id, rw)
+    return jsonify({"ok": True, "youtube_title": title})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/download", methods=["POST"])
+def rewrite_youtube_download(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    url = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
+    if not rw.get("youtube_verified") or not _youtube_url_is_valid(url):
+        return jsonify({"ok": False, "message": "Сначала проверьте ссылку YouTube."}), 400
+    media_dir = _rewrite_media_dir(rewrite_id)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    for old in media_dir.glob("youtube_audio_*"):
+        if old.is_file():
+            old.unlink(missing_ok=True)
+    outtmpl = str(media_dir / "youtube_audio_%(id)s.%(ext)s")
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": outtmpl,
+        "noplaylist": True,
+        "quiet": True,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }
+        ],
+    }
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            video_id = str((info or {}).get("id") or "").strip()
+            title = str((info or {}).get("title") or "").strip()
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Не удалось скачать аудио: {e}"}), 400
+    if not video_id:
+        return jsonify({"ok": False, "message": "Не удалось определить id видео."}), 400
+    mp3_path = media_dir / f"youtube_audio_{video_id}.mp3"
+    if not mp3_path.is_file():
+        files = sorted(media_dir.glob("youtube_audio_*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if files:
+            mp3_path = files[0]
+        else:
+            return jsonify({"ok": False, "message": "MP3 не найден после скачивания."}), 500
+    rw["youtube_audio_file"] = str(mp3_path.relative_to(BASE_DIR))
+    if title:
+        rw["youtube_title"] = title
+    save_rewrite_job(rewrite_id, rw)
+    return jsonify({"ok": True, "audio_file": rw["youtube_audio_file"], "youtube_title": rw.get("youtube_title", "")})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/transcribe", methods=["POST"])
+def rewrite_youtube_transcribe(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "message": "Не задан OPENAI_API_KEY в .env"}), 400
+    rel = str(rw.get("youtube_audio_file") or "").strip()
+    if not rel:
+        return jsonify({"ok": False, "message": "Сначала скачайте аудио."}), 400
+    ap = (BASE_DIR / rel).resolve()
+    try:
+        ap.relative_to(BASE_DIR.resolve())
+    except ValueError:
+        return jsonify({"ok": False, "message": "Некорректный путь к аудио."}), 400
+    txt, err = _rewrite_transcription_text(api_key, ap)
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    rw["youtube_transcript_text"] = txt or ""
+    save_rewrite_job(rewrite_id, rw)
+    return jsonify({"ok": True, "chars": len(rw["youtube_transcript_text"]), "words": len(rw["youtube_transcript_text"].split())})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/transcript", methods=["GET"])
+def rewrite_youtube_transcript_get(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    txt = str(rw.get("youtube_transcript_text") or "")
+    return jsonify({"ok": True, "text": txt})
 
 
 @app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
