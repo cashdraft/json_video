@@ -143,6 +143,26 @@ header h1 {
     margin: 0.5rem 0 0.25rem 0;
 }
 
+.rewrite-project-header-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem 1rem;
+    margin: 0.5rem 0 0.25rem 0;
+}
+
+.rewrite-project-header-bar .project-name-form {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rewrite-project-delete-form {
+    flex-shrink: 0;
+    margin: 0;
+}
+
 .project-name-input {
     max-width: 400px;
     padding: 0.5rem 0.75rem;
@@ -650,15 +670,61 @@ textarea::placeholder {
     color: var(--text);
 }
 
-.rewrite-danger-zone {
-    margin-top: 2rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-}
-
 /* ReWrite: карточки как у сцен (scene-card + слоты) */
 .rewrite-source-card {
     margin-bottom: 1rem;
+}
+
+/* ReWrite: конвейер — та же сетка, что у .scene-card; без отдельного «свечения» */
+.rewrite-pipeline-runner {
+    margin-bottom: 1rem;
+}
+
+.rewrite-pipeline-runner__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.rewrite-pipeline-runner__title.scene-id {
+    margin-bottom: 0.35rem;
+}
+
+.rewrite-pipeline-runner__lead.scene-text {
+    max-height: none;
+    overflow: visible;
+    line-height: 1.45;
+    margin: 0;
+    max-width: 42rem;
+}
+
+.rewrite-pipeline-runner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+}
+
+.rewrite-pipeline-runner__log {
+    margin: 0;
+    padding: 0.65rem 0.75rem;
+    /* Ровно ~7 видимых строк текста + вертикальные отступы */
+    min-height: calc(1.3rem + 10.15em);
+    max-height: calc(1.3rem + 10.15em);
+    overflow-y: auto;
+    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+    background: var(--bg-input);
+    border-radius: 8px;
+    border: 1px solid var(--border);
 }
 
 .rewrite-youtube-card {
@@ -1120,6 +1186,10 @@ textarea::placeholder {
     color: var(--text-muted);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+}
+
+.rewrite-stage-copy-btn__svg {
+    display: block;
 }
 
 .rewrite-stage-result--busy {

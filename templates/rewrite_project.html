@@ -10,18 +10,28 @@
     <div class="container">
         <header>
             <a href="{{ url_for('rewrite_index') }}" class="back-link">← Все проекты ReWrite</a>
-            <form method="post" action="{{ url_for('rewrite_project_rename', rewrite_id=rw.rewrite_id) }}" class="project-name-form">
-                <label for="project_name" class="sr-only">Название проекта</label>
-                <input
-                    type="text"
-                    id="project_name"
-                    name="project_name"
-                    class="project-name-input"
-                    placeholder="{{ rw.rewrite_id }}"
-                    value="{{ rw.project_name or '' }}"
+            <div class="rewrite-project-header-bar">
+                <form method="post" action="{{ url_for('rewrite_project_rename', rewrite_id=rw.rewrite_id) }}" class="project-name-form">
+                    <label for="project_name" class="sr-only">Название проекта</label>
+                    <input
+                        type="text"
+                        id="project_name"
+                        name="project_name"
+                        class="project-name-input"
+                        placeholder="{{ rw.rewrite_id }}"
+                        value="{{ rw.project_name or '' }}"
+                    >
+                    <button type="submit" class="btn btn-secondary btn-sm">Изменить</button>
+                </form>
+                <form
+                    method="post"
+                    action="{{ url_for('rewrite_project_delete', rewrite_id=rw.rewrite_id) }}"
+                    class="rewrite-project-delete-form"
+                    onsubmit="return confirm('Удалить проект {{ rw.rewrite_id }}?');"
                 >
-                <button type="submit" class="btn btn-secondary btn-sm">Изменить</button>
-            </form>
+                    <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
+                </form>
+            </div>
             <p class="subtitle">ReWrite Master · конвейер этапов · {{ rw.rewrite_id }}</p>
         </header>
 
@@ -182,6 +192,20 @@
                 </div>
             </div>
 
+            <section class="scene-card rewrite-pipeline-runner" aria-label="Запуск всей цепочки этапов">
+                <div class="rewrite-pipeline-runner__head">
+                    <div>
+                        <div class="scene-id rewrite-pipeline-runner__title">Конвейер</div>
+                        <p class="scene-text rewrite-pipeline-runner__lead">По очереди: Analysis → Structure → Draft1 → Draft2 → Draft3 → Final. Журнал ниже; карточки этапов обновляются так же, как при ручном запуске.</p>
+                    </div>
+                    <div class="rewrite-pipeline-runner__actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="rewrite-pipeline-run-btn" {% if not openai_key_set %}disabled{% endif %}>Сгенерировать</button>
+                        <button type="button" class="btn btn-danger btn-sm" id="rewrite-pipeline-stop-btn" disabled>Остановить</button>
+                    </div>
+                </div>
+                <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — этапы 1…6 по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
+            </section>
+
             <div class="scenes-grid rewrite-stages-list">
             {% for stage_key, stage_label in rewrite_stages %}
             {% set cell = rw.stages[stage_key] %}
@@ -198,7 +222,7 @@
                                     <div class="scene-id">{{ stage_label }}</div>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>Запрос .txt</button>
+                            <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>txt</button>
                         </div>
                         <div class="scene-text rewrite-stage-send-hint">{{ rewrite_stage_send_hints[stage_key] }}</div>
                     </div>
@@ -232,6 +256,9 @@
                                 <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
                                 <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
                                 <span class="rewrite-stage-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" title="Копировать результат в буфер обмена" aria-label="Копировать результат">
+                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                </button>
                                 <span class="rewrite-stage-result-counts" aria-live="polite"></span>
                             </div>
                             <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result">
@@ -242,12 +269,6 @@
                 </article>
             {% endfor %}
             </div>
-        </section>
-
-        <section class="rewrite-danger-zone">
-            <form method="post" action="{{ url_for('rewrite_project_delete', rewrite_id=rw.rewrite_id) }}" onsubmit="return confirm('Удалить проект {{ rw.rewrite_id }}?');">
-                <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
-            </form>
         </section>
     </div>
 
@@ -274,6 +295,7 @@
     let audioTimingLocked = {{ rw.audio_timing_locked|default(false)|tojson }};
     const openaiOk = document.body.getAttribute('data-openai-key') === '1';
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
+    const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
     const durationRangeEl = document.getElementById('rewrite-duration-min');
     const durationValEl = document.getElementById('rewrite-duration-min-val');
     const charsPerMinEl = document.getElementById('rewrite-chars-per-min');
@@ -293,6 +315,25 @@
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
+    const pipelineRunBtn = document.getElementById('rewrite-pipeline-run-btn');
+    const pipelineStopBtn = document.getElementById('rewrite-pipeline-stop-btn');
+    const pipelineLogEl = document.getElementById('rewrite-pipeline-log');
+    var pipelineStatusForward = null;
+    var pipelineAbortController = null;
+    var pipelineRunActive = false;
+
+    function syncPipelineStopButton() {
+        if (!pipelineStopBtn) return;
+        pipelineStopBtn.disabled = !openaiOk || !pipelineRunActive;
+    }
+
+    function appendPipelineRunnerLog(msg) {
+        if (!pipelineLogEl) return;
+        var t = new Date();
+        var ts = t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        pipelineLogEl.textContent += '[' + ts + '] ' + msg + '\n';
+        pipelineLogEl.scrollTop = pipelineLogEl.scrollHeight;
+    }
 
     function clampDurationMinutes(v) {
         var n = parseInt(v, 10);
@@ -859,7 +900,9 @@
     function setBusy(on) {
         rewriteStageBusy = !!on;
         const dis = on || !openaiOk;
-        document.querySelectorAll('.rewrite-lock-toggle').forEach(function (b) { b.disabled = dis; });
+        if (pipelineRunBtn) pipelineRunBtn.disabled = dis;
+        syncPipelineStopButton();
+        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
@@ -902,8 +945,56 @@
         const ta = block.querySelector('.rewrite-stage-result');
         const el = block.querySelector('.rewrite-stage-result-counts');
         if (!ta || !el) return;
+        if (el.getAttribute('data-copy-hold') === '1') return;
         var text = ta.value || '';
         el.textContent = text.length + ' симв. · ' + countWords(text) + ' сл.';
+    }
+
+    function copyStageResult(block) {
+        const ta = block.querySelector('.rewrite-stage-result');
+        const counts = block.querySelector('.rewrite-stage-result-counts');
+        const btn = block.querySelector('.rewrite-stage-copy-btn');
+        if (!ta || !btn) return;
+        var raw = ta.value || '';
+        if (!raw.trim()) {
+            var prevT = btn.getAttribute('title') || '';
+            btn.setAttribute('title', 'Нет текста для копирования');
+            setTimeout(function () { btn.setAttribute('title', prevT || 'Копировать результат в буфер обмена'); }, 2200);
+            return;
+        }
+        var saved = counts ? counts.textContent : '';
+        function showCopied() {
+            if (counts) {
+                counts.setAttribute('data-copy-hold', '1');
+                counts.textContent = 'Скопировано в буфер';
+                setTimeout(function () {
+                    counts.removeAttribute('data-copy-hold');
+                    updateResultCounts(block);
+                }, 1600);
+            }
+        }
+        function fallbackExec() {
+            try {
+                var ro = ta.readOnly;
+                var dis = ta.disabled;
+                ta.readOnly = false;
+                ta.disabled = false;
+                ta.focus();
+                ta.select();
+                var ok = document.execCommand('copy');
+                ta.readOnly = ro;
+                ta.disabled = dis;
+                if (ok) showCopied();
+                else alert('Не удалось скопировать');
+            } catch (e) {
+                alert('Не удалось скопировать');
+            }
+        }
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(raw).then(showCopied).catch(fallbackExec);
+        } else {
+            fallbackExec();
+        }
     }
 
     function resetStageRunUi(block) {
@@ -921,6 +1012,10 @@
         resTextarea.classList.add('rewrite-stage-result--busy');
         updateResultCounts(block);
         syncStageRunButtons();
+        if (pipelineStatusForward) {
+            var sk = block && block.getAttribute('data-stage-key');
+            pipelineStatusForward((sk ? '[' + sk + '] ' : '') + msg);
+        }
     }
 
     function showStageError(block, text) {
@@ -931,6 +1026,10 @@
         resTextarea.classList.add('rewrite-stage-result--error');
         updateResultCounts(block);
         syncStageRunButtons();
+        if (pipelineStatusForward) {
+            var sk = block && block.getAttribute('data-stage-key');
+            pipelineStatusForward((sk ? '[' + sk + '] ' : '') + 'ОШИБКА: ' + text);
+        }
     }
 
     function syncPromptBadge(block) {
@@ -995,13 +1094,19 @@
         updateResultCounts(block);
     });
 
-    async function runStage(stageKey, block) {
+    async function runStage(stageKey, block, options) {
+        options = options || {};
+        var manageBusy = options.manageBusy !== false;
+        var signal = options.signal;
+        var stageSuccess = false;
+        var gotFinalResult = false;
+        var streamError = false;
+        var reader = null;
         resetStageRunUi(block);
         const resTextarea = block.querySelector('.rewrite-stage-result');
         const resultBadge = block.querySelector('.rewrite-stage-result-badge');
         const savedBeforeRun = resTextarea ? resTextarea.value : '';
-        let streamError = false;
-        setBusy(true);
+        if (manageBusy) setBusy(true);
         if (resTextarea) {
             resTextarea.value = 'Генерация…';
             resTextarea.classList.add('rewrite-stage-result--busy');
@@ -1010,25 +1115,41 @@
         }
         syncStageRunButtons();
         try {
+            if (pipelineStatusForward) {
+                pipelineStatusForward('[' + stageKey + '] запрос: сбор снимка формы и POST к серверу…');
+            }
             const snap = collectSnapshot();
             const res = await fetch(runUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
-                body: JSON.stringify(Object.assign({ stage: stageKey }, snap))
+                body: JSON.stringify(Object.assign({ stage: stageKey }, snap)),
+                signal: signal
             });
-            const reader = res.body && res.body.getReader();
+            if (pipelineStatusForward) {
+                pipelineStatusForward('[' + stageKey + '] ответ HTTP ' + res.status + ' ' + res.statusText + ', чтение NDJSON-потока…');
+            }
+            reader = res.body && res.body.getReader();
             if (!reader) {
                 showStageError(block, 'Браузер не поддерживает потоковое чтение ответа.');
                 streamError = true;
-                return;
+                return false;
             }
             const dec = new TextDecoder();
             let buf = '';
-            let gotFinalResult = false;
             const useOpenAIStreamUi = (stageKey === 'draft1');
             let streamBuf = '';
+            var lastDeltaLog = 0;
             while (true) {
-                const chunk = await reader.read();
+                var chunk;
+                try {
+                    chunk = await reader.read();
+                } catch (readErr) {
+                    if (readErr && readErr.name === 'AbortError') {
+                        streamError = true;
+                        break;
+                    }
+                    throw readErr;
+                }
                 if (chunk.done) break;
                 buf += dec.decode(chunk.value, { stream: true });
                 let i;
@@ -1042,12 +1163,16 @@
                     } catch (e) {
                         if (!useOpenAIStreamUi || streamBuf.length === 0) {
                             pushStageStatus(block, 'Строка JSON не разобрана: ' + line.slice(0, 80));
+                        } else if (pipelineStatusForward) {
+                            pipelineStatusForward('[' + stageKey + '] строка не JSON в потоке: ' + line.slice(0, 80));
                         }
                         continue;
                     }
                     if (ev.type === 'status' && ev.message) {
                         if (!useOpenAIStreamUi || streamBuf.length === 0) {
                             pushStageStatus(block, ev.message);
+                        } else if (pipelineStatusForward) {
+                            pipelineStatusForward('[' + stageKey + '] ' + ev.message);
                         }
                     } else if (ev.type === 'delta' && typeof ev.content === 'string') {
                         streamBuf += ev.content;
@@ -1057,8 +1182,18 @@
                             resTextarea.scrollTop = resTextarea.scrollHeight;
                         }
                         updateResultCounts(block);
+                        if (pipelineStatusForward && useOpenAIStreamUi) {
+                            var now = Date.now();
+                            if (now - lastDeltaLog > 1500) {
+                                lastDeltaLog = now;
+                                pipelineStatusForward('[' + stageKey + '] поток токенов: накоплено ' + streamBuf.length + ' симв.…');
+                            }
+                        }
                     } else if (ev.type === 'error' && ev.message) {
                         streamError = true;
+                        if (pipelineStatusForward) {
+                            pipelineStatusForward('[' + stageKey + '] событие error в потоке: ' + ev.message);
+                        }
                         if (streamBuf.length > 0 && resTextarea) {
                             resTextarea.value = streamBuf + '\n\n--- Ошибка ---\n' + ev.message;
                             resTextarea.classList.remove('rewrite-stage-result--busy');
@@ -1075,6 +1210,9 @@
                         }
                     } else if (ev.type === 'result' && typeof ev.content === 'string') {
                         gotFinalResult = true;
+                        if (pipelineStatusForward) {
+                            pipelineStatusForward('[' + stageKey + '] событие result: длина текста ' + ev.content.length + ' симв.');
+                        }
                         if (resTextarea) {
                             resTextarea.value = ev.content;
                             resTextarea.classList.remove('rewrite-stage-result--busy');
@@ -1090,6 +1228,24 @@
                     }
                 }
             }
+            var userAborted = signal && signal.aborted;
+            if (userAborted && pipelineStatusForward) {
+                pipelineStatusForward('[' + stageKey + '] запрос прерван (AbortController).');
+            }
+            if (pipelineStatusForward && !userAborted) {
+                pipelineStatusForward('[' + stageKey + '] поток завершён (reader done), итог: ' + (gotFinalResult ? 'есть result' : 'без result') + (streamError ? ', были ошибки' : ''));
+            }
+            if (userAborted && resTextarea && !gotFinalResult) {
+                if (reader) {
+                    try { await reader.cancel(); } catch (_) {}
+                }
+                resTextarea.value = savedBeforeRun;
+                resTextarea.classList.remove('rewrite-stage-result--busy');
+                resTextarea.classList.remove('rewrite-stage-result--error');
+                updateResultCounts(block);
+                syncStageRunButtons();
+                return false;
+            }
             if (!gotFinalResult && resTextarea && !streamError) {
                 if (useOpenAIStreamUi && streamBuf.length > 0) {
                     resTextarea.classList.remove('rewrite-stage-result--busy');
@@ -1103,12 +1259,97 @@
                 }
             }
             if (gotFinalResult) {
+                if (pipelineStatusForward) pipelineStatusForward('[' + stageKey + '] сохранение проекта на сервер…');
                 await saveToServer();
+                stageSuccess = true;
+                if (pipelineStatusForward) pipelineStatusForward('[' + stageKey + '] сохранение завершено.');
             }
+            return stageSuccess;
         } catch (e) {
+            if (e && e.name === 'AbortError') {
+                if (reader) {
+                    try { reader.cancel(); } catch (_) {}
+                }
+                if (resTextarea && !gotFinalResult) {
+                    resTextarea.value = savedBeforeRun;
+                    resTextarea.classList.remove('rewrite-stage-result--busy');
+                    resTextarea.classList.remove('rewrite-stage-result--error');
+                    updateResultCounts(block);
+                }
+                syncStageRunButtons();
+                if (pipelineStatusForward) {
+                    pipelineStatusForward('[' + stageKey + '] отмена до/во время запроса (AbortError).');
+                }
+                return false;
+            }
             showStageError(block, String(e));
             streamError = true;
+            return false;
         } finally {
+            if (manageBusy) setBusy(false);
+        }
+    }
+
+    async function runAllStagesPipeline() {
+        if (!openaiOk) {
+            alert('Ключ OpenAI не задан — конвейер недоступен.');
+            return;
+        }
+        const cards = Array.from(document.querySelectorAll('.rewrite-stage-card'));
+        const byKey = {};
+        cards.forEach(function (c) {
+            var k = c.getAttribute('data-stage-key');
+            if (k) byKey[k] = c;
+        });
+        if (pipelineLogEl) pipelineLogEl.textContent = '';
+        pipelineAbortController = new AbortController();
+        var signal = pipelineAbortController.signal;
+        pipelineStatusForward = function (msg) { appendPipelineRunnerLog(msg); };
+        pipelineRunActive = true;
+        syncPipelineStopButton();
+        setBusy(true);
+        try {
+            appendPipelineRunnerLog('══ Конвейер: ' + STAGE_KEYS_ORDER.length + ' этапов по порядку ══');
+            var allOk = true;
+            for (var i = 0; i < STAGE_KEYS_ORDER.length; i++) {
+                if (signal.aborted) {
+                    appendPipelineRunnerLog('✖ Конвейер остановлен (кнопка «Остановить»).');
+                    allOk = false;
+                    break;
+                }
+                var sk = STAGE_KEYS_ORDER[i];
+                var block = byKey[sk];
+                var label = STAGE_LABELS[sk] || sk;
+                appendPipelineRunnerLog('────────────────────────────────────────');
+                appendPipelineRunnerLog('▶ Шаг ' + (i + 1) + '/' + STAGE_KEYS_ORDER.length + ': «' + label + '» (' + sk + ')');
+                if (!block) {
+                    appendPipelineRunnerLog('✖ Карточка этапа не найдена в DOM.');
+                    allOk = false;
+                    break;
+                }
+                var ok = await runStage(sk, block, { manageBusy: false, signal: signal });
+                if (signal.aborted) {
+                    appendPipelineRunnerLog('✖ Конвейер остановлен (кнопка «Остановить»).');
+                    allOk = false;
+                    break;
+                }
+                if (!ok) {
+                    appendPipelineRunnerLog('✖ Этап не завершён успешно — конвейер остановлен.');
+                    allOk = false;
+                    break;
+                }
+                appendPipelineRunnerLog('✓ Этап «' + label + '» выполнен, данные записаны.');
+            }
+            if (allOk) {
+                appendPipelineRunnerLog('══ Все этапы конвейера завершены успешно ══');
+            }
+        } catch (e) {
+            appendPipelineRunnerLog('✖ Исключение: ' + String(e));
+        } finally {
+            pipelineStatusForward = null;
+            pipelineAbortController = null;
+            pipelineRunActive = false;
+            syncPipelineStopButton();
             setBusy(false);
         }
     }
@@ -1149,6 +1390,19 @@
         }
     }
 
+    if (pipelineRunBtn) {
+        pipelineRunBtn.addEventListener('click', function () {
+            if (!openaiOk || pipelineRunBtn.disabled) return;
+            runAllStagesPipeline();
+        });
+    }
+    if (pipelineStopBtn) {
+        pipelineStopBtn.addEventListener('click', function () {
+            if (!pipelineAbortController || pipelineStopBtn.disabled) return;
+            pipelineAbortController.abort();
+        });
+    }
+
     document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
         const key = block.getAttribute('data-stage-key');
         const runBtn = block.querySelector('.rewrite-stage-run');
@@ -1161,6 +1415,12 @@
         if (apiBtn && key) {
             apiBtn.addEventListener('click', function () {
                 downloadStageApiPayload(key, block);
+            });
+        }
+        const copyBtn = block.querySelector('.rewrite-stage-copy-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', function () {
+                copyStageResult(block);
             });
         }
     });
