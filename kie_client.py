@@ -8,6 +8,7 @@ Docs:
 import json
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -19,12 +20,38 @@ CREATE_VIDEO_TASK = f"{API_BASE}/api/v1/veo/generate"
 GET_VIDEO_TASK = f"{API_BASE}/api/v1/veo/record-info"
 GET_VIDEO_1080P = f"{API_BASE}/api/v1/veo/get-1080p-video"
 
+_ENV_PATH = Path(__file__).resolve().parent / ".env"
+_DOTENV_LOADED = False
+
+
+def _load_dotenv_once() -> None:
+    """Подхватить .env из каталога приложения (рядом с kie_client.py), если ключ ещё не в os.environ."""
+    global _DOTENV_LOADED
+    if _DOTENV_LOADED:
+        return
+    _DOTENV_LOADED = True
+    if not _ENV_PATH.is_file():
+        return
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(_ENV_PATH, override=True)
+    except OSError:
+        return
+
 
 def _get_api_key() -> str:
-    key = os.getenv("KEYAI_API_KEY") or os.getenv("KIE_API_KEY")
+    key = (os.getenv("KEYAI_API_KEY") or os.getenv("KIE_API_KEY") or "").strip()
     if not key:
-        raise ValueError("KEYAI_API_KEY or KIE_API_KEY not set in .env")
-    return key.strip()
+        _load_dotenv_once()
+        key = (os.getenv("KEYAI_API_KEY") or os.getenv("KIE_API_KEY") or "").strip()
+    if not key:
+        raise ValueError(
+            "KEYAI_API_KEY or KIE_API_KEY not set in .env — "
+            f"expected non-empty value in {_ENV_PATH}; then run: systemctl restart json-video. "
+            "If the key is already there, click ↻ again: an old error may still show until a new request."
+        )
+    return key
 
 
 def create_image_task(

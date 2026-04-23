@@ -1,5 +1,6 @@
 """
-ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → Hook Audit → Voiceover Check.
+ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → редакторы
+(Continuity → Retention → Hook → Flow → Persona → Voiceover).
 """
 
 from __future__ import annotations
@@ -165,268 +166,6 @@ def build_draft1_rewriter_user_message(
     )
 
 
-def build_hook_audit_system_prompt(
-    hook_audit_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап draft2: в system только Hook Audit System Promt."""
-    return (hook_audit_prompt or "").strip()
-
-
-def build_hook_audit_user_message(
-    hook_audit_user_prompt: str,
-    all_blocks_json_text: str = "",
-) -> str:
-    """User для draft2: JSON с Hook Audit User Promt + all_blocks.json."""
-    up = (hook_audit_user_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-            else:
-                all_blocks_payload = {"blocks": []}
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-    payload: dict[str, Any] = {
-        "hook_audit_user_promt": up or "",
-        "all_blocks.json": all_blocks_payload,
-    }
-    return _json_user_message(payload)
-
-
-def build_flow_audit_system_prompt(
-    flow_audit_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап flow_audit: в system только Flow Audit System Promt."""
-    return (flow_audit_prompt or "").strip()
-
-
-def build_flow_audit_user_message(
-    flow_audit_user_prompt: str,
-    all_blocks_json_text: str = "",
-) -> str:
-    """User для flow_audit: JSON с Flow Audit User Promt + all_blocks.json."""
-    up = (flow_audit_user_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-            else:
-                all_blocks_payload = {"blocks": []}
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-    payload: dict[str, Any] = {
-        "flow_audit_user_promt": up or "",
-        "all_blocks.json": all_blocks_payload,
-    }
-    return _json_user_message(payload)
-
-
-def build_continuity_guard_system_prompt(
-    continuity_guard_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап continuity_guard: в system только Continuity Guard System Promt."""
-    return (continuity_guard_prompt or "").strip()
-
-
-def build_continuity_guard_user_message(
-    continuity_guard_user_prompt: str,
-    all_blocks_json_text: str = "",
-) -> str:
-    """User для continuity_guard: JSON с Continuity Guard User Promt + all_blocks.json."""
-    up = (continuity_guard_user_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-            else:
-                all_blocks_payload = {"blocks": []}
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-    payload: dict[str, Any] = {
-        "continuity_guard_user_promt": up or "",
-        "all_blocks.json": all_blocks_payload,
-    }
-    return _json_user_message(payload)
-
-
-def build_retention_check_system_prompt(
-    retention_check_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап retention_check: в system только Retention Check System Promt."""
-    return (retention_check_prompt or "").strip()
-
-
-def build_retention_check_user_message(
-    retention_check_user_prompt: str,
-    all_blocks_json_text: str = "",
-) -> str:
-    """User для retention_check: JSON с Retention Check User Promt + all_blocks.json."""
-    up = (retention_check_user_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-            else:
-                all_blocks_payload = {"blocks": []}
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-    payload: dict[str, Any] = {
-        "retention_check_user_promt": up or "",
-        "all_blocks.json": all_blocks_payload,
-    }
-    return _json_user_message(payload)
-
-
-def build_persona_style_guard_system_prompt(
-    persona_style_guard_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап persona_style_guard: в system только Persona Style Guard System Promt."""
-    return (persona_style_guard_prompt or "").strip()
-
-
-def build_persona_style_guard_user_message(
-    persona_style_guard_user_prompt: str,
-    hero_prompt: str,
-    all_blocks_json_text: str = "",
-) -> str:
-    """User для persona_style_guard: User Promt + Hero Prompt + all_blocks.json."""
-    up = (persona_style_guard_user_prompt or "").strip()
-    hp = (hero_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-            else:
-                all_blocks_payload = {"blocks": []}
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-    payload: dict[str, Any] = {
-        "persona_style_guard_user_promt": up or "",
-        "hero_prompt": hp or "",
-        "all_blocks.json": all_blocks_payload,
-    }
-    return _json_user_message(payload)
-
-
-def build_voiceover_check_system_prompt(
-    voiceover_check_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап voiceover_check: в system только Voiceover Check System Promt."""
-    return (voiceover_check_prompt or "").strip()
-
-
-def build_voiceover_check_user_message(
-    voiceover_check_user_prompt: str,
-    all_blocks_json_text: str = "",
-) -> str:
-    """User для voiceover_check: JSON с Voiceover Check User Promt + all_blocks.json."""
-    up = (voiceover_check_user_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-            else:
-                all_blocks_payload = {"blocks": []}
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-    payload: dict[str, Any] = {
-        "voiceover_check_user_promt": up or "",
-        "all_blocks.json": all_blocks_payload,
-    }
-    return _json_user_message(payload)
-
-
-def build_location_normalizer_system_prompt(
-    location_normalizer_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
-) -> str:
-    """Этап location_normalizer: в system только Location Normalizer System Promt."""
-    return (location_normalizer_prompt or "").strip()
-
-
-def build_location_normalizer_user_message(
-    location_normalizer_user_prompt: str,
-    all_blocks_json_text: str = "",
-    patches_json_by_stage: dict[str, str] | None = None,
-) -> str:
-    """User для location_normalizer: User Promt + all_blocks.json + patches из audit-этапов."""
-    up = (location_normalizer_user_prompt or "").strip()
-    all_blocks_raw = str(all_blocks_json_text or "").strip()
-    all_blocks_payload: Any = {"blocks": []}
-    if all_blocks_raw:
-        try:
-            parsed = json.loads(all_blocks_raw)
-            if isinstance(parsed, (dict, list)):
-                all_blocks_payload = parsed
-        except json.JSONDecodeError:
-            all_blocks_payload = {"blocks": []}
-
-    def _extract_patches(raw: str) -> Any:
-        t = str(raw or "").strip()
-        if not t:
-            return []
-        try:
-            obj = json.loads(t)
-        except json.JSONDecodeError:
-            return []
-        if isinstance(obj, dict):
-            patches = obj.get("patches")
-            if isinstance(patches, list):
-                return patches
-        return []
-
-    by_stage = patches_json_by_stage or {}
-    payload: dict[str, Any] = {
-        "location_normalizer_user_promt": up or "",
-        "all_blocks.json": all_blocks_payload,
-        "draft2.patches": _extract_patches(by_stage.get("draft2") or ""),
-        "flow_audit.patches": _extract_patches(by_stage.get("flow_audit") or ""),
-        "continuity_guard.patches": _extract_patches(by_stage.get("continuity_guard") or ""),
-        "retention_check.patches": _extract_patches(by_stage.get("retention_check") or ""),
-        "persona_style_guard.patches": _extract_patches(by_stage.get("persona_style_guard") or ""),
-        "voiceover_check.patches": _extract_patches(by_stage.get("voiceover_check") or ""),
-    }
-    return _json_user_message(payload)
-
-
 def build_continuity_editor_system_prompt(
     continuity_editor_prompt: str,
     *,
@@ -582,23 +321,49 @@ def build_persona_editor_user_message(
     return _json_user_message(payload)
 
 
+def build_voiceover_editor_system_prompt(
+    voiceover_editor_prompt: str,
+    *,
+    duration_minutes: int | None = None,
+    chars_per_minute: int | None = None,
+) -> str:
+    """Этап voiceover_editor: в system только Voiceover Editor System Promt."""
+    return (voiceover_editor_prompt or "").strip()
+
+
+def build_voiceover_editor_user_message(
+    voiceover_editor_user_prompt: str,
+    edited_text: str = "",
+) -> str:
+    """User для voiceover_editor: User Promt + edited_text (без Hero Prompt)."""
+    up = (voiceover_editor_user_prompt or "").strip()
+    raw = str(edited_text or "").strip()
+    et = ""
+    if raw:
+        try:
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                et = str(obj.get("edited_text") or "").strip()
+        except json.JSONDecodeError:
+            et = raw
+    payload: dict[str, Any] = {
+        "voiceover_editor_user_promt": up or "",
+        "edited_text": et,
+    }
+    return _json_user_message(payload)
+
+
 # (ключ в JSON, заголовок в UI)
 REWRITE_STAGES: list[tuple[str, str]] = [
     ("analysis", "Analysis"),
     ("structure", "Architect"),
     ("draft1", "Block Writer"),
-    ("draft2", "Hook Audit"),
-    ("flow_audit", "Flow Audit"),
-    ("continuity_guard", "Continuity Guard"),
-    ("retention_check", "Retention Check"),
-    ("persona_style_guard", "Persona Style Guard"),
-    ("voiceover_check", "Voiceover Check"),
-    ("location_normalizer", "Location Normalizer"),
     ("continuity_editor", "Сontinuity Editor"),
     ("retention_editor", "Retention Editor"),
     ("hook_editor", "Hook Editor"),
     ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
+    ("voiceover_editor", "Voiceover Editor"),
 ]
 
 REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
@@ -621,36 +386,6 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из architect.json "
         "и только после accept запускается следующий."
     ),
-    "draft2": (
-        "Отправляем. В System: Hook Audit System Promt. "
-        "В User (по порядку): Hook Audit User Promt, all_blocks.json."
-    ),
-    "flow_audit": (
-        "Отправляем. В System: Flow Audit System Promt. "
-        "В User (по порядку): Flow Audit User Promt, all_blocks.json."
-    ),
-    "continuity_guard": (
-        "Отправляем. В System: Continuity Guard System Promt. "
-        "В User (по порядку): Continuity Guard User Promt, all_blocks.json."
-    ),
-    "retention_check": (
-        "Отправляем. В System: Retention Check System Promt. "
-        "В User (по порядку): Retention Check User Promt, all_blocks.json."
-    ),
-    "persona_style_guard": (
-        "Отправляем. В System: Persona Style Guard System Promt. "
-        "В User (по порядку): Persona Style Guard User Promt, Hero Prompt, all_blocks.json."
-    ),
-    "voiceover_check": (
-        "Отправляем. В System: Voiceover Check System Promt. "
-        "В User (по порядку): Voiceover Check User Promt, all_blocks.json."
-    ),
-    "location_normalizer": (
-        "Отправляем. В System: Location Normalizer System Promt. "
-        "В User (по порядку): Location Normalizer User Promt, all_blocks.json, "
-        "draft2.patches, flow_audit.patches, continuity_guard.patches, retention_check.patches, "
-        "persona_style_guard.patches, voiceover_check.patches."
-    ),
     "continuity_editor": (
         "Отправляем. В System: Сontinuity Editor System Promt. "
         "В User (по порядку): Сontinuity Editor User Promt, full_text.txt."
@@ -671,6 +406,10 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем. В System: Persona Editor System Promt. "
         "В User (по порядку): Persona Editor User Promt, Hero Prompt, edited_text."
     ),
+    "voiceover_editor": (
+        "Отправляем. В System: Voiceover Editor System Promt. "
+        "В User (по порядку): Voiceover Editor User Promt, edited_text."
+    ),
 }
 
 REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
@@ -687,18 +426,12 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
         "Именно он превращает сырой анализ в будущий каркас сценария."
     ),
     "draft1": "Это главный агент, который уже пишет сам текст блоков.",
-    "draft2": "Проверяет: где есть хуки, где они слабые, где их не хватает, где нужен re-hook.",
-    "flow_audit": "Проверяет: переходы между блоками, резкие скачки, локальные повторы, слабые мосты.",
-    "continuity_guard": "Проверяет: переходы между блоками, резкие скачки, локальные повторы, слабые мосты.",
-    "retention_check": "Проверяет: переходы между блоками, резкие скачки, локальные повторы, слабые мосты.",
-    "persona_style_guard": "Проверяет: переходы между блоками, резкие скачки, локальные повторы, слабые мосты.",
-    "voiceover_check": "Проверяет: переходы между блоками, резкие скачки, локальные повторы, слабые мосты.",
-    "location_normalizer": "Нормализует локации и правит location-specific конфликтующие места по patches.",
     "continuity_editor": "Редактирует связность целого текста на основе полного full_text.txt.",
     "retention_editor": "Усиливает удержание на основе уже отредактированного edited_text.",
     "hook_editor": "Дорабатывает hooks на основе уже отредактированного edited_text.",
     "flow_editor": "Правит поток и переходы на основе уже отредактированного edited_text.",
     "persona_editor": "Уточняет персонализацию и тон героя на основе edited_text и Hero Prompt.",
+    "voiceover_editor": "Правит текст под озвучку на основе edited_text после Persona Editor.",
 }
 
 
@@ -744,6 +477,10 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
         e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
+
+    for dead in list(stages.keys()):
+        if dead not in REWRITE_STAGE_KEYS:
+            del stages[dead]
 
     # Старый формат: один промпт и один ответ → первый этап и последний этап
     if not any(str((stages[k].get("last_result") or "")).strip() for k in REWRITE_STAGE_KEYS):
@@ -852,31 +589,24 @@ def compose_rewrite_openai_request_body(
     hero_prompt: str,
     duration_minutes: int,
     chars_per_minute: int,
-    block_writer_all_blocks_json: str = "",
-    patches_json_by_stage: dict[str, str] | None = None,
     block_writer_full_text: str = "",
     continuity_editor_text: str = "",
     retention_editor_text: str = "",
     hook_editor_text: str = "",
     flow_editor_text: str = "",
+    persona_editor_text: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
         return None, "Неизвестный этап."
     if stage_key not in (
         "structure",
-        "draft2",
-        "flow_audit",
-        "continuity_guard",
-        "retention_check",
-        "persona_style_guard",
-        "voiceover_check",
-        "location_normalizer",
         "continuity_editor",
         "retention_editor",
         "hook_editor",
         "flow_editor",
         "persona_editor",
+        "voiceover_editor",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
     pre_err = validate_prerequisites(stage_key, stages_snap)
@@ -920,78 +650,6 @@ def compose_rewrite_openai_request_body(
             structure_res,
             str(cell.get("user_prompt") or ""),
             hero_prompt,
-        )
-    elif stage_key == "draft2":
-        prompt = build_hook_audit_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_hook_audit_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_all_blocks_json,
-        )
-    elif stage_key == "flow_audit":
-        prompt = build_flow_audit_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_flow_audit_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_all_blocks_json,
-        )
-    elif stage_key == "continuity_guard":
-        prompt = build_continuity_guard_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_continuity_guard_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_all_blocks_json,
-        )
-    elif stage_key == "retention_check":
-        prompt = build_retention_check_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_retention_check_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_all_blocks_json,
-        )
-    elif stage_key == "persona_style_guard":
-        prompt = build_persona_style_guard_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_persona_style_guard_user_message(
-            str(cell.get("user_prompt") or ""),
-            hero_prompt,
-            block_writer_all_blocks_json,
-        )
-    elif stage_key == "voiceover_check":
-        prompt = build_voiceover_check_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_voiceover_check_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_all_blocks_json,
-        )
-    elif stage_key == "location_normalizer":
-        prompt = build_location_normalizer_system_prompt(
-            str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
-        )
-        user_text = build_location_normalizer_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_all_blocks_json,
-            patches_json_by_stage=patches_json_by_stage,
         )
     elif stage_key == "continuity_editor":
         prompt = build_continuity_editor_system_prompt(
@@ -1044,6 +702,16 @@ def compose_rewrite_openai_request_body(
             hero_prompt,
             flow_editor_text,
         )
+    elif stage_key == "voiceover_editor":
+        prompt = build_voiceover_editor_system_prompt(
+            str(cell.get("prompt") or ""),
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_voiceover_editor_user_message(
+            str(cell.get("user_prompt") or ""),
+            persona_editor_text,
+        )
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -1061,18 +729,12 @@ def compose_rewrite_openai_request_body(
     prompt = (prompt or "").strip()
     user_text = (user_text or "").strip()
     if stage_key not in (
-        "draft2",
-        "flow_audit",
-        "continuity_guard",
-        "retention_check",
-        "persona_style_guard",
-        "voiceover_check",
-        "location_normalizer",
         "continuity_editor",
         "retention_editor",
         "hook_editor",
         "flow_editor",
         "persona_editor",
+        "voiceover_editor",
     ):
         dur_payload = build_duration_length_spec_payload(
             duration_minutes=duration_minutes,
