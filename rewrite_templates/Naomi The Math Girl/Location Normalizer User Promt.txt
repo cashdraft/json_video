@@ -1,0 +1,8 @@
+Нормализуй location у patch'ей.
+
+Используй indexed_script как источник истины для block_id и paragraph_id.
+
+Нужно:
+— сопоставить свободные location с точными paragraph_id
+— не менять смысл patch'ей
+— вернуть normalized_patches

@@ -1209,12 +1209,82 @@ def rewrite_project_run(rewrite_id: str):
                 ensure_ascii=False,
             ) + "\n"
             return
-        if stage_key not in ("structure", "draft2") and not (source_text or "").strip():
+        if stage_key not in (
+            "structure",
+            "draft2",
+            "flow_audit",
+            "continuity_guard",
+            "retention_check",
+            "persona_style_guard",
+            "voiceover_check",
+            "location_normalizer",
+            "continuity_editor",
+            "retention_editor",
+            "hook_editor",
+            "flow_editor",
+            "persona_editor",
+        ) and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
                 ensure_ascii=False,
             ) + "\n"
             return
+        block_writer_all_blocks_json = ""
+        if stage_key in ("draft2", "flow_audit", "continuity_guard", "retention_check", "persona_style_guard", "voiceover_check", "location_normalizer"):
+            all_blocks_path = _rewrite_block_writer_dir(rewrite_id) / "all_blocks.json"
+            if all_blocks_path.exists():
+                try:
+                    block_writer_all_blocks_json = all_blocks_path.read_text(encoding="utf-8")
+                except OSError:
+                    block_writer_all_blocks_json = ""
+        block_writer_full_text = ""
+        if stage_key == "continuity_editor":
+            full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
+            if full_text_path.exists():
+                try:
+                    block_writer_full_text = full_text_path.read_text(encoding="utf-8")
+                except OSError:
+                    block_writer_full_text = ""
+        continuity_editor_text = ""
+        if stage_key == "retention_editor":
+            p = _rewrite_stage_result_path(rewrite_id, "continuity_editor")
+            if p.exists():
+                try:
+                    continuity_editor_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    continuity_editor_text = ""
+        retention_editor_text = ""
+        if stage_key == "hook_editor":
+            p = _rewrite_stage_result_path(rewrite_id, "retention_editor")
+            if p.exists():
+                try:
+                    retention_editor_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    retention_editor_text = ""
+        hook_editor_text = ""
+        if stage_key == "flow_editor":
+            p = _rewrite_stage_result_path(rewrite_id, "hook_editor")
+            if p.exists():
+                try:
+                    hook_editor_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    hook_editor_text = ""
+        flow_editor_text = ""
+        if stage_key == "persona_editor":
+            p = _rewrite_stage_result_path(rewrite_id, "flow_editor")
+            if p.exists():
+                try:
+                    flow_editor_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    flow_editor_text = ""
+        patches_json_by_stage: dict[str, str] = {}
+        if stage_key == "location_normalizer":
+            for psk in ("draft2", "flow_audit", "continuity_guard", "retention_check", "persona_style_guard", "voiceover_check"):
+                p = _rewrite_stage_result_path(rewrite_id, psk)
+                try:
+                    patches_json_by_stage[psk] = p.read_text(encoding="utf-8") if p.exists() else ""
+                except OSError:
+                    patches_json_by_stage[psk] = ""
         payload, compose_err = compose_rewrite_openai_request_body(
             stage_key,
             source_text=source_text,
@@ -1223,6 +1293,13 @@ def rewrite_project_run(rewrite_id: str):
             hero_prompt=hero_prompt,
             duration_minutes=duration_minutes,
             chars_per_minute=chars_per_minute,
+            block_writer_all_blocks_json=block_writer_all_blocks_json,
+            patches_json_by_stage=patches_json_by_stage,
+            block_writer_full_text=block_writer_full_text,
+            continuity_editor_text=continuity_editor_text,
+            retention_editor_text=retention_editor_text,
+            hook_editor_text=hook_editor_text,
+            flow_editor_text=flow_editor_text,
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -1293,6 +1370,62 @@ def rewrite_project_api_payload(rewrite_id: str):
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
     hero_prompt, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    block_writer_all_blocks_json = ""
+    if stage_key in ("draft2", "flow_audit", "continuity_guard", "retention_check", "persona_style_guard", "voiceover_check", "location_normalizer"):
+        all_blocks_path = _rewrite_block_writer_dir(rewrite_id) / "all_blocks.json"
+        if all_blocks_path.exists():
+            try:
+                block_writer_all_blocks_json = all_blocks_path.read_text(encoding="utf-8")
+            except OSError:
+                block_writer_all_blocks_json = ""
+    block_writer_full_text = ""
+    if stage_key == "continuity_editor":
+        full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
+        if full_text_path.exists():
+            try:
+                block_writer_full_text = full_text_path.read_text(encoding="utf-8")
+            except OSError:
+                block_writer_full_text = ""
+    continuity_editor_text = ""
+    if stage_key == "retention_editor":
+        p = _rewrite_stage_result_path(rewrite_id, "continuity_editor")
+        if p.exists():
+            try:
+                continuity_editor_text = p.read_text(encoding="utf-8")
+            except OSError:
+                continuity_editor_text = ""
+    retention_editor_text = ""
+    if stage_key == "hook_editor":
+        p = _rewrite_stage_result_path(rewrite_id, "retention_editor")
+        if p.exists():
+            try:
+                retention_editor_text = p.read_text(encoding="utf-8")
+            except OSError:
+                retention_editor_text = ""
+    hook_editor_text = ""
+    if stage_key == "flow_editor":
+        p = _rewrite_stage_result_path(rewrite_id, "hook_editor")
+        if p.exists():
+            try:
+                hook_editor_text = p.read_text(encoding="utf-8")
+            except OSError:
+                hook_editor_text = ""
+    flow_editor_text = ""
+    if stage_key == "persona_editor":
+        p = _rewrite_stage_result_path(rewrite_id, "flow_editor")
+        if p.exists():
+            try:
+                flow_editor_text = p.read_text(encoding="utf-8")
+            except OSError:
+                flow_editor_text = ""
+    patches_json_by_stage: dict[str, str] = {}
+    if stage_key == "location_normalizer":
+        for psk in ("draft2", "flow_audit", "continuity_guard", "retention_check", "persona_style_guard", "voiceover_check"):
+            p = _rewrite_stage_result_path(rewrite_id, psk)
+            try:
+                patches_json_by_stage[psk] = p.read_text(encoding="utf-8") if p.exists() else ""
+            except OSError:
+                patches_json_by_stage[psk] = ""
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -1301,6 +1434,13 @@ def rewrite_project_api_payload(rewrite_id: str):
         hero_prompt=hero_prompt,
         duration_minutes=duration_minutes,
         chars_per_minute=chars_per_minute,
+        block_writer_all_blocks_json=block_writer_all_blocks_json,
+        patches_json_by_stage=patches_json_by_stage,
+        block_writer_full_text=block_writer_full_text,
+        continuity_editor_text=continuity_editor_text,
+        retention_editor_text=retention_editor_text,
+        hook_editor_text=hook_editor_text,
+        flow_editor_text=flow_editor_text,
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
@@ -1401,7 +1541,33 @@ def rewrite_project_api_payload(rewrite_id: str):
             "per_block_payload_previews": previews,
         }
     txt = json.dumps(export_payload, ensure_ascii=False, indent=2) + "\n"
-    fname = f"{rewrite_id}_{stage_key}_openai_request.txt"
+    if stage_key == "draft2":
+        stage_export_name = "hook_audit"
+    elif stage_key == "flow_audit":
+        stage_export_name = "flow_audit"
+    elif stage_key == "continuity_guard":
+        stage_export_name = "continuity_guard"
+    elif stage_key == "retention_check":
+        stage_export_name = "retention_check"
+    elif stage_key == "persona_style_guard":
+        stage_export_name = "persona_style_guard"
+    elif stage_key == "voiceover_check":
+        stage_export_name = "voiceover_check"
+    elif stage_key == "location_normalizer":
+        stage_export_name = "location_normalizer"
+    elif stage_key == "continuity_editor":
+        stage_export_name = "continuity_editor"
+    elif stage_key == "retention_editor":
+        stage_export_name = "retention_editor"
+    elif stage_key == "hook_editor":
+        stage_export_name = "hook_editor"
+    elif stage_key == "flow_editor":
+        stage_export_name = "flow_editor"
+    elif stage_key == "persona_editor":
+        stage_export_name = "persona_editor"
+    else:
+        stage_export_name = stage_key
+    fname = f"{rewrite_id}_{stage_export_name}_openai_request.txt"
     resp = make_response(txt)
     resp.headers["Content-Type"] = "text/plain; charset=utf-8"
     resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
