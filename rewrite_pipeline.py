@@ -1,5 +1,5 @@
 """
-ReWrite Master — цепочка этапов: Analysis → Structure → Draft1 Rewriter → Draft2 Retention Editor → Draft3 → Final.
+ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → Draft2 Retention Editor → Draft3 → Final.
 """
 
 from __future__ import annotations
@@ -33,16 +33,40 @@ def format_duration_length_spec_block(
     }
     lines = [
         "--- Ориентир объёма озвучки (шаблон проекта) ---",
-        (
-            f"Целевая длительность: {dm} мин. Ориентир: ~{target} символов "
-            f"({cpm} симв./мин)."
-        ),
+        f"Целевой объём текста: ~{target} символов.",
         "Применяй следующие правила длины итогового текста (JSON):",
         "```json",
         json.dumps(length_spec, ensure_ascii=False, indent=2),
         "```",
     ]
     return "\n".join(lines)
+
+
+def build_duration_length_spec_payload(
+    *,
+    duration_minutes: int | None = None,
+    chars_per_minute: int | None = None,
+) -> dict[str, Any]:
+    """JSON payload для блока Duration (для user-сообщения)."""
+    if duration_minutes is None or chars_per_minute is None:
+        return {}
+    dm = max(1, min(30, int(duration_minutes)))
+    cpm = max(1, min(2000, int(chars_per_minute)))
+    target = dm * cpm
+    target_min = max(1, target - 1000)
+    target_max = target + 1000
+    return {
+        "length_spec": {
+            "target_chars_min": target_min,
+            "target_chars_ideal": target,
+            "target_chars_max": target_max,
+            "hard_limit": True,
+        }
+    }
+
+
+def _json_user_message(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def build_rewrite_system_prompt(
@@ -53,27 +77,38 @@ def build_rewrite_system_prompt(
     duration_minutes: int | None = None,
     chars_per_minute: int | None = None,
 ) -> str:
-    """System-сообщение для этапа: строго Master → Duration → промпт этапа (через \\n\\n)."""
+    """System-сообщение для этапа: Master → промпт этапа (Duration уходит в user)."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
         parts.append(m)
-    dur = format_duration_length_spec_block(
-        duration_minutes=duration_minutes,
-        chars_per_minute=chars_per_minute,
-    ).strip()
-    if dur:
-        parts.append(dur)
     p = (stage_prompt or "").strip()
     if p:
         parts.append(p)
     return "\n\n".join(parts)
 
 
-def build_structure_user_message(analysis_last_result: str) -> str:
-    """User для этапа Structure: только Analysis Result."""
+def build_structure_user_message(analysis_last_result: str, structure_user_prompt: str) -> str:
+    """User для этапа Architect: JSON с analysis.json + User Promt."""
     ar = (analysis_last_result or "").strip()
-    return "--- Analysis Result ---\n" + (ar or "(пусто)")
+    up = (structure_user_prompt or "").strip()
+    return _json_user_message(
+        {
+            "architect_user_promt": up or "",
+            "analysis.json": ar or "(пусто)",
+        }
+    )
+
+
+def build_analysis_user_message(source_text: str, analysis_user_prompt: str) -> str:
+    """User для этапа Analysis: JSON с User Promt + Input text."""
+    up = (analysis_user_prompt or "").strip()
+    return _json_user_message(
+        {
+            "analysis_user_promt": up or "",
+            "input_text": (source_text or "").strip() or "(пусто)",
+        }
+    )
 
 
 def build_structure_system_prompt(
@@ -83,17 +118,11 @@ def build_structure_system_prompt(
     duration_minutes: int | None = None,
     chars_per_minute: int | None = None,
 ) -> str:
-    """Только этап Structure: в system строго Master → Duration → Structure."""
+    """Только этап Architect: в system строго Master → Architect (Duration уходит в user)."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
         parts.append(m)
-    dur = format_duration_length_spec_block(
-        duration_minutes=duration_minutes,
-        chars_per_minute=chars_per_minute,
-    ).strip()
-    if dur:
-        parts.append(dur)
     sp = (structure_prompt or "").strip()
     if sp:
         parts.append(sp)
@@ -103,25 +132,12 @@ def build_structure_system_prompt(
 def build_draft1_rewriter_system_prompt(
     master_prompt: str,
     draft1_rewriter_prompt: str,
-    hero_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
-    """Этап draft1: в system строго Master → Duration → Hero → Draft1 Rewriter Prompt."""
+    """Этап draft1: в system строго Master → Block Writer Prompt (без Duration)."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
         parts.append(m)
-    dur = format_duration_length_spec_block(
-        duration_minutes=duration_minutes,
-        chars_per_minute=chars_per_minute,
-    ).strip()
-    if dur:
-        parts.append(dur)
-    h = (hero_prompt or "").strip()
-    if h:
-        parts.append("--- Hero Prompt ---\n" + h)
     dr = (draft1_rewriter_prompt or "").strip()
     if dr:
         parts.append(dr)
@@ -131,57 +147,59 @@ def build_draft1_rewriter_system_prompt(
 def build_draft1_rewriter_user_message(
     analysis_last_result: str,
     structure_last_result: str,
+    draft1_user_prompt: str,
+    hero_prompt: str,
 ) -> str:
-    """User для draft1: Analysis Result, затем Structure Result."""
+    """User для draft1: JSON с Hero + User Promt + analysis.json + architect.json."""
     ar = (analysis_last_result or "").strip() or "(пусто)"
     sr = (structure_last_result or "").strip() or "(пусто)"
-    return (
-        "--- Analysis Result ---\n"
-        + ar
-        + "\n\n--- Structure Result ---\n"
-        + sr
+    up = (draft1_user_prompt or "").strip()
+    hp = (hero_prompt or "").strip()
+    return _json_user_message(
+        {
+            "hero_prompt": hp or "",
+            "block_writer_user_promt": up or "",
+            "analysis.json": ar,
+            "architect.json": sr,
+        }
     )
 
 
 def build_draft2_retention_editor_system_prompt(
     master_prompt: str,
     draft2_retention_editor_prompt: str,
-    hero_prompt: str,
     *,
     duration_minutes: int | None = None,
     chars_per_minute: int | None = None,
 ) -> str:
-    """Этап draft2: в system строго Master → Duration → Hero → Draft2 Retention Editor Prompt."""
+    """Этап draft2: в system строго Master → Draft2 Retention Editor Prompt (Duration/Hero в user)."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
         parts.append(m)
-    dur = format_duration_length_spec_block(
-        duration_minutes=duration_minutes,
-        chars_per_minute=chars_per_minute,
-    ).strip()
-    if dur:
-        parts.append(dur)
-    h = (hero_prompt or "").strip()
-    if h:
-        parts.append("--- Hero Prompt ---\n" + h)
     p = (draft2_retention_editor_prompt or "").strip()
     if p:
         parts.append(p)
     return "\n\n".join(parts)
 
 
-def build_draft2_retention_editor_user_message(draft1_last_result: str) -> str:
-    """User для draft2: только Draft1 Rewriter Result."""
+def build_draft2_retention_editor_user_message(draft1_last_result: str, hero_prompt: str) -> str:
+    """User для draft2: JSON с Hero + Block Writer Result."""
     body = (draft1_last_result or "").strip() or "(пусто)"
-    return "--- Draft1 Rewriter Result ---\n" + body
+    hp = (hero_prompt or "").strip()
+    return _json_user_message(
+        {
+            "hero_prompt": hp or "",
+            "block_writer_result": body,
+        }
+    )
 
 
 # (ключ в JSON, заголовок в UI)
 REWRITE_STAGES: list[tuple[str, str]] = [
     ("analysis", "Analysis"),
-    ("structure", "Structure"),
-    ("draft1", "Draft1 Rewriter"),
+    ("structure", "Architect"),
+    ("draft1", "Block Writer"),
     ("draft2", "Draft2 Retention Editor"),
     ("draft3", "Draft3"),
     ("final", "Final"),
@@ -193,38 +211,64 @@ _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_ST
 
 # Подписи под заголовком этапа в UI.
 REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
-    "analysis": "Отправляем: Master Prompt, Analysis Prompt, Duration , Input text.",
+    "analysis": (
+        "Отправляем. В System (по порядку): Master Prompt, Analysis Prompt. "
+        "В User (по порядку): Duration, Analysis User Promt, Input text."
+    ),
     "structure": (
-        "Отправляем: Master Prompt, Structure Prompt, Duration , Analysis Result. "
-        "Analysis Result уходит в user, остальные блоки в system."
+        "Отправляем. В System (по порядку): Master Prompt, Architect Prompt. "
+        "В User (по порядку): Duration, Architect User Promt, analysis.json."
     ),
     "draft1": (
-        "Отправляем. В system (по порядку): Master Prompt, Duration, Hero Prompt, Draft1 Rewriter Prompt. "
-        "В user (по порядку): Analysis Result, Structure Result. "
-        "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из Structure Result "
+        "Отправляем. В System (по порядку): Master Prompt, Block Writer Prompt. "
+        "В User (по порядку): Duration, Hero Prompt, Block Writer User Promt, analysis.json, architect.json. "
+        "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из architect.json "
         "и только после accept запускается следующий."
     ),
     "draft2": (
-        "Отправляем. В system (по порядку): Master Prompt, Duration, Hero Prompt, "
-        "Draft2 Retention Editor Prompt. В user (по порядку): Draft1 Rewriter Result."
+        "Отправляем. В System (по порядку): Master Prompt, Draft2 Retention Editor Prompt. "
+        "В User (по порядку): Duration, Hero Prompt, Block Writer Result."
     ),
     "draft3": (
-        "Отправляем: Master Prompt, Draft3 Prompt, Duration , результаты Analysis, Structure, "
-        "Draft1 Rewriter и Draft2 Retention Editor"
+        "Отправляем. В System (по порядку): Master Prompt, Draft3 Prompt. "
+        "В User (по порядку): Duration, analysis.json, architect.json, "
+        "Block Writer Result, Draft2 Retention Editor Result."
     ),
     "final": (
-        "Отправляем: Master Prompt, Final Prompt, Duration , результаты Analysis, Structure, "
-        "Draft1 Rewriter, Draft2 Retention Editor и Draft3"
+        "Отправляем. В System (по порядку): Master Prompt, Final Prompt. "
+        "В User (по порядку): Duration, analysis.json, architect.json, "
+        "Block Writer Result, Draft2 Retention Editor Result, Draft3 Result."
     ),
+}
+
+REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
+    "analysis": (
+        "Этот агент не пишет сценарий. Он делает только одно: разбирает исходный текст "
+        "на смысловые компоненты, чтобы дальше Architect и Block Writer могли нормально работать. "
+        "Он должен понять: о чём текст на самом деле; какие там главные идеи; какие факты и цифры "
+        "нельзя терять; что в тексте слабое; что можно адаптировать; что нужно переписать заново; "
+        "какая логика движения у исходника."
+    ),
+    "structure": (
+        "Да. Второй агент — это Architect, то есть агент, который не пишет текст, "
+        "а разбивает материал на блоки и строит структуру ролика на основе analysis.json. "
+        "Именно он превращает сырой анализ в будущий каркас сценария."
+    ),
+    "draft1": "Это главный агент, который уже пишет сам текст блоков.",
+    "draft2": "Редактирует Draft1 для удержания внимания: усиливает подачу, ритм и переходы без потери смысла.",
+    "draft3": "Полирует текст после Draft2: улучшает читаемость, связность и формулировки перед финалом.",
+    "final": "Формирует финальную версию сценария: итоговая вычитка и сборка готового текста.",
 }
 
 
 def default_stage_entry() -> dict[str, Any]:
     return {
         "prompt": "",
+        "user_prompt": "",
         "model": REWRITE_DEFAULT_MODEL,
         "last_result": "",
         "prompt_locked": False,
+        "user_prompt_locked": False,
     }
 
 
@@ -251,11 +295,14 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             continue
         e = stages[key]
         e.setdefault("prompt", "")
+        e.setdefault("user_prompt", "")
         e.setdefault("last_result", "")
         e.setdefault("model", REWRITE_DEFAULT_MODEL)
         e.setdefault("prompt_locked", False)
+        e.setdefault("user_prompt_locked", False)
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
+        e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
 
     # Старый формат: один промпт и один ответ → первый этап и Final
     if not any(str((stages[k].get("last_result") or "")).strip() for k in REWRITE_STAGE_KEYS):
@@ -321,8 +368,13 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         # Иначе «Применить шаблон» и правки в заблокированных полях не попадают в JSON проекта.
         if "prompt" in sv:
             e["prompt"] = str(sv.get("prompt") or "")
+        if "user_prompt" in sv:
+            e["user_prompt"] = str(sv.get("user_prompt") or "")
         if locked_in_body is not None:
             e["prompt_locked"] = bool(locked_in_body)
+        user_locked_in_body = sv.get("user_prompt_locked") if "user_prompt_locked" in sv else None
+        if user_locked_in_body is not None:
+            e["user_prompt_locked"] = bool(user_locked_in_body)
         if "model" in sv:
             e["model"] = normalize_rewrite_model(str(sv.get("model") or ""))
         if "last_result" in sv:
@@ -377,28 +429,44 @@ def compose_rewrite_openai_request_body(
             duration_minutes=duration_minutes,
             chars_per_minute=chars_per_minute,
         )
-        user_text = build_structure_user_message(analysis_res)
+        user_text = build_structure_user_message(
+            analysis_res,
+            str(cell.get("user_prompt") or ""),
+        )
+    elif stage_key == "analysis":
+        prompt = build_rewrite_system_prompt(
+            master_prompt,
+            str(cell.get("prompt") or ""),
+            source_text,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_analysis_user_message(
+            source_text,
+            str(cell.get("user_prompt") or ""),
+        )
     elif stage_key == "draft1":
         analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
         structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
         prompt = build_draft1_rewriter_system_prompt(
             master_prompt,
             str(cell.get("prompt") or ""),
-            hero_prompt,
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
-        user_text = build_draft1_rewriter_user_message(analysis_res, structure_res)
+        user_text = build_draft1_rewriter_user_message(
+            analysis_res,
+            structure_res,
+            str(cell.get("user_prompt") or ""),
+            hero_prompt,
+        )
     elif stage_key == "draft2":
         draft1_res = str((stages_snap.get("draft1") or {}).get("last_result") or "")
         prompt = build_draft2_retention_editor_system_prompt(
             master_prompt,
             str(cell.get("prompt") or ""),
-            hero_prompt,
             duration_minutes=duration_minutes,
             chars_per_minute=chars_per_minute,
         )
-        user_text = build_draft2_retention_editor_user_message(draft1_res)
+        user_text = build_draft2_retention_editor_user_message(draft1_res, hero_prompt)
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -415,6 +483,19 @@ def compose_rewrite_openai_request_body(
         )
     prompt = (prompt or "").strip()
     user_text = (user_text or "").strip()
+    dur_payload = build_duration_length_spec_payload(
+        duration_minutes=duration_minutes,
+        chars_per_minute=chars_per_minute,
+    )
+    if dur_payload:
+        try:
+            user_obj = json.loads(user_text) if user_text else {}
+        except json.JSONDecodeError:
+            user_obj = {"input": user_text}
+        if isinstance(user_obj, dict):
+            merged = {"duration": dur_payload}
+            merged.update(user_obj)
+            user_text = _json_user_message(merged)
     if not prompt:
         return None, "Введите промпт (инструкцию для модели)."
     if not user_text:
@@ -437,29 +518,29 @@ def build_stage_user_message(
     *,
     hero_prompt: str = "",
 ) -> str:
-    """User-сообщение: Hero (кроме analysis), исходный текст, результаты предыдущих этапов.
+    """User-сообщение: JSON с Hero (кроме analysis), исходником и результатами предыдущих этапов.
 
-    Duration и length_spec только в system (см. build_rewrite_system_prompt).
+    Duration и length_spec добавляется в user на этапе compose.
     """
-    lines: list[str] = [
-        "Данные для текущего этапа конвейера ReWrite (исходник и результаты предыдущих шагов).",
-        "",
-    ]
+    payload: dict[str, Any] = {}
     h = (hero_prompt or "").strip()
     if h and stage_key != "analysis":
-        lines.append("--- Описание героя (шаблон проекта) ---")
-        lines.append(h)
-        lines.append("")
-    lines.append("--- Исходный текст пользователя ---")
-    lines.append((source_text or "").strip() or "(пусто)")
+        payload["hero_promt"] = h
+    payload["input_text"] = (source_text or "").strip() or "(пусто)"
+    prev_results: dict[str, str] = {}
     idx = _STAGE_ORDER_INDEX[stage_key]
     for i in range(idx):
         pk, plabel = REWRITE_STAGES[i]
         block = (stages.get(pk) or {}).get("last_result") or ""
-        lines.append("")
-        lines.append(f"--- Результат этапа «{plabel}» ({pk}) ---")
-        lines.append(block.strip() or "(пусто)")
-    return "\n".join(lines)
+        if pk == "analysis":
+            prev_results["analysis.json"] = block.strip() or "(пусто)"
+        elif pk == "structure":
+            prev_results["architect.json"] = block.strip() or "(пусто)"
+        else:
+            prev_results[f"{pk}_result"] = block.strip() or "(пусто)"
+    if prev_results:
+        payload["previous_stage_results"] = prev_results
+    return _json_user_message(payload)
 
 
 def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict[str, str]]]:
@@ -475,6 +556,7 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             cell = {}
         stages[key] = {
             "prompt": str(cell.get("prompt") or ""),
+            "user_prompt": str(cell.get("user_prompt") or ""),
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
         }

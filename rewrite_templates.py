@@ -15,7 +15,7 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — симв./мин и длительность (см. parse_template_config)
   Hero Prompt, Master Prompt
-  Analysis … Final Prompt (draft1: «Draft1 Rewriter Prompt.txt», draft2: «Draft2 Retention Editor Prompt.txt»)
+  Analysis … Final Prompt (draft1: «Block Writer Prompt.txt», draft2: «Draft2 Retention Editor Prompt.txt»)
 """
 
 from __future__ import annotations
@@ -37,13 +37,45 @@ _STEM_TO_TARGET: dict[str, str] = {
     "hero prompt": "hero_prompt",
     "master prompt": "master_prompt",
     "analysis prompt": "stage:analysis",
+    "analysis system promt": "stage:analysis",
+    "analysis system prompt": "stage:analysis",
+    "analysis user promt": "stage_user:analysis",
+    "analysis user prompt": "stage_user:analysis",
     "structure prompt": "stage:structure",
+    "structure system promt": "stage:structure",
+    "structure system prompt": "stage:structure",
+    "architect prompt": "stage:structure",
+    "architect system promt": "stage:structure",
+    "architect system prompt": "stage:structure",
+    "architect user promt": "stage_user:structure",
+    "architect user prompt": "stage_user:structure",
     "draft1 prompt": "stage:draft1",
     "draft1 rewriter prompt": "stage:draft1",
+    "draft1 rewriter system promt": "stage:draft1",
+    "draft1 rewriter system prompt": "stage:draft1",
+    "draft1 rewriter user promt": "stage_user:draft1",
+    "draft1 rewriter user prompt": "stage_user:draft1",
+    "block writer prompt": "stage:draft1",
+    "block writer system promt": "stage:draft1",
+    "block writer system prompt": "stage:draft1",
+    "block writer user promt": "stage_user:draft1",
+    "block writer user prompt": "stage_user:draft1",
     "draft2 prompt": "stage:draft2",
     "draft2 retention editor prompt": "stage:draft2",
+    "draft2 retention editor system promt": "stage:draft2",
+    "draft2 retention editor system prompt": "stage:draft2",
+    "draft2 retention editor user promt": "stage_user:draft2",
+    "draft2 retention editor user prompt": "stage_user:draft2",
     "draft3 prompt": "stage:draft3",
+    "draft3 system promt": "stage:draft3",
+    "draft3 system prompt": "stage:draft3",
+    "draft3 user promt": "stage_user:draft3",
+    "draft3 user prompt": "stage_user:draft3",
     "final prompt": "stage:final",
+    "final system promt": "stage:final",
+    "final system prompt": "stage:final",
+    "final user promt": "stage_user:final",
+    "final user prompt": "stage_user:final",
 }
 
 # Обратно к имени файла при записи на диск (как при чтении).
@@ -51,12 +83,27 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "template_config": "Config.txt",
     "hero_prompt": "Hero Prompt.txt",
     "master_prompt": "Master Prompt.txt",
-    "stage:analysis": "Analysis Prompt.txt",
-    "stage:structure": "Structure Prompt.txt",
-    "stage:draft1": "Draft1 Rewriter Prompt.txt",
-    "stage:draft2": "Draft2 Retention Editor Prompt.txt",
-    "stage:draft3": "Draft3 Prompt.txt",
-    "stage:final": "Final Prompt.txt",
+    "stage:analysis": "Analysis System Promt.txt",
+    "stage_user:analysis": "Analysis User Promt.txt",
+    "stage:structure": "Architect System Promt.txt",
+    "stage_user:structure": "Architect User Promt.txt",
+    "stage:draft1": "Block Writer System Promt.txt",
+    "stage_user:draft1": "Block Writer User Promt.txt",
+    "stage:draft2": "Draft2 Retention Editor System Promt.txt",
+    "stage_user:draft2": "Draft2 Retention Editor User Promt.txt",
+    "stage:draft3": "Draft3 System Promt.txt",
+    "stage_user:draft3": "Draft3 User Promt.txt",
+    "stage:final": "Final System Promt.txt",
+    "stage_user:final": "Final User Promt.txt",
+}
+
+_STAGE_TARGETS: dict[str, str] = {
+    "analysis": "Analysis",
+    "structure": "Architect",
+    "draft1": "Block Writer",
+    "draft2": "Draft2 Retention Editor",
+    "draft3": "Draft3",
+    "final": "Final",
 }
 
 
@@ -178,7 +225,7 @@ def load_rewrite_template(name: str) -> dict | None:
         "hero_prompt": "",
         "chars_per_minute": 344,
         "master_prompt": "",
-        "stages": {k: {"prompt": ""} for k in REWRITE_STAGE_KEYS},
+        "stages": {k: {"prompt": "", "user_prompt": ""} for k in REWRITE_STAGE_KEYS},
     }
     config_raw: str | None = None
     for f in sorted(d.glob("*.txt"), key=lambda p: p.name.lower()):
@@ -203,6 +250,10 @@ def load_rewrite_template(name: str) -> dict | None:
             sk = target.split(":", 1)[1]
             if sk in REWRITE_STAGE_KEYS:
                 out["stages"][sk]["prompt"] = raw.strip()
+        elif target.startswith("stage_user:"):
+            sk = target.split(":", 1)[1]
+            if sk in REWRITE_STAGE_KEYS:
+                out["stages"][sk]["user_prompt"] = raw.strip()
 
     if config_raw is not None:
         cfg = parse_template_config(config_raw)
@@ -246,9 +297,21 @@ def save_rewrite_template_to_disk(
     for sk in REWRITE_STAGE_KEYS:
         cell = stages.get(sk) if isinstance(stages, dict) else None
         prompt = ""
+        user_prompt = ""
         if isinstance(cell, dict):
             prompt = str(cell.get("prompt") or "")
+            user_prompt = str(cell.get("user_prompt") or "")
+
+        # New naming: explicit System Promt / User Promt files.
         fn = _TARGET_TO_FILENAME.get(f"stage:{sk}")
         if fn:
             (d / fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
+        ufn = _TARGET_TO_FILENAME.get(f"stage_user:{sk}")
+        if ufn:
+            (d / ufn).write_text(user_prompt.rstrip() + "\n", encoding="utf-8")
+
+        # Backward-compatible legacy file names.
+        legacy_title = _STAGE_TARGETS.get(sk, sk.capitalize())
+        legacy_system_fn = f"{legacy_title} Prompt.txt"
+        (d / legacy_system_fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
     return True, ""

@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -65,6 +68,7 @@ from rewrite_openai import (
     normalize_rewrite_model,
 )
 from rewrite_pipeline import (
+    REWRITE_STAGE_HELP_HINTS,
     REWRITE_STAGE_KEYS,
     REWRITE_STAGE_SEND_HINTS,
     REWRITE_STAGES,
@@ -101,6 +105,9 @@ def _safe_job_audio_filename(name: str) -> bool:
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 GENERATION_TASKS: dict[str, dict] = {}
 
 
@@ -386,8 +393,24 @@ def rewrite_id_ok(rid: str) -> bool:
     return bool(_REWRITE_ID_RE.match(rid or ""))
 
 
-def _rewrite_filepath(rewrite_id: str) -> Path:
+def _rewrite_project_dir(rewrite_id: str) -> Path:
+    return REWRITE_JOBS_DIR / rewrite_id
+
+
+def _rewrite_project_json_path(rewrite_id: str) -> Path:
+    return _rewrite_project_dir(rewrite_id) / "project.json"
+
+
+def _rewrite_legacy_filepath(rewrite_id: str) -> Path:
     return REWRITE_JOBS_DIR / f"{rewrite_id}.json"
+
+
+def _rewrite_stage_result_path(rewrite_id: str, stage_key: str) -> Path:
+    return _rewrite_project_dir(rewrite_id) / f"{stage_key}.result.txt"
+
+
+def _rewrite_block_writer_dir(rewrite_id: str) -> Path:
+    return _rewrite_project_dir(rewrite_id) / "block_writer"
 
 
 def _rewrite_media_dir(rewrite_id: str) -> Path:
@@ -407,6 +430,16 @@ def _youtube_url_is_valid(url: str) -> bool:
             re.IGNORECASE,
         )
     )
+
+
+# yt-dlp по умолчанию socket_timeout=20 с; загрузка с googlevideo.com часто падает Read timed out.
+_YOUTUBE_YDL_BASE = {
+    "noplaylist": True,
+    "quiet": True,
+    "socket_timeout": 180,
+    "retries": 15,
+    "fragment_retries": 15,
+}
 
 
 def _safe_rewrite_basename(name: str) -> str:
@@ -569,21 +602,34 @@ def create_rewrite_job(project_name: str) -> str:
     REWRITE_JOBS_DIR.mkdir(parents=True, exist_ok=True)
     rewrite_id = f"rewrite_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     payload = new_rewrite_payload(rewrite_id, project_name)
-    with open(_rewrite_filepath(rewrite_id), "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    save_rewrite_job(rewrite_id, payload)
     return rewrite_id
 
 
 def load_rewrite_job(rewrite_id: str) -> dict | None:
     if not rewrite_id_ok(rewrite_id):
         return None
-    fp = _rewrite_filepath(rewrite_id)
-    if not fp.is_file():
+    fp = _rewrite_project_json_path(rewrite_id)
+    legacy_fp = _rewrite_legacy_filepath(rewrite_id)
+    if not fp.is_file() and not legacy_fp.is_file():
         return None
     try:
-        with open(fp, "r", encoding="utf-8") as f:
+        target_fp = fp if fp.is_file() else legacy_fp
+        with open(target_fp, "r", encoding="utf-8") as f:
             data = json.load(f)
         normalize_rewrite_job_data(data)
+        # Source of truth for stage results: separate files per stage in project folder.
+        for sk in REWRITE_STAGE_KEYS:
+            rf = _rewrite_stage_result_path(rewrite_id, sk)
+            if not rf.is_file():
+                continue
+            try:
+                txt = rf.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            data.setdefault("stages", {})
+            data["stages"].setdefault(sk, {})
+            data["stages"][sk]["last_result"] = txt
         data.setdefault("youtube_url", "")
         data["youtube_url"] = str(data.get("youtube_url") or "")
         data.setdefault("youtube_verified", False)
@@ -603,24 +649,68 @@ def save_rewrite_job(rewrite_id: str, data: dict) -> None:
     if not rewrite_id_ok(rewrite_id):
         raise ValueError("bad rewrite_id")
     REWRITE_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    proj_dir.mkdir(parents=True, exist_ok=True)
     data = dict(data)
     data["rewrite_id"] = rewrite_id
     data["updated_at"] = datetime.now().isoformat(timespec="seconds")
-    with open(_rewrite_filepath(rewrite_id), "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    stages = data.get("stages")
+    if isinstance(stages, dict):
+        for sk in REWRITE_STAGE_KEYS:
+            cell = stages.get(sk) if isinstance(stages.get(sk), dict) else {}
+            res_text = str((cell or {}).get("last_result") or "")
+            _rewrite_stage_result_path(rewrite_id, sk).write_text(res_text, encoding="utf-8")
+
+    # Keep project JSON lean: stage results are persisted in separate files.
+    project_data = json.loads(json.dumps(data, ensure_ascii=False))
+    p_stages = project_data.get("stages")
+    if isinstance(p_stages, dict):
+        for sk in REWRITE_STAGE_KEYS:
+            if isinstance(p_stages.get(sk), dict):
+                p_stages[sk]["last_result"] = ""
+    project_data["last_result"] = ""
+
+    with open(_rewrite_project_json_path(rewrite_id), "w", encoding="utf-8") as f:
+        json.dump(project_data, f, ensure_ascii=False, indent=2)
+
+    # One-time migration cleanup: old single-file format is no longer used.
+    legacy_fp = _rewrite_legacy_filepath(rewrite_id)
+    if legacy_fp.is_file():
+        legacy_fp.unlink(missing_ok=True)
 
 
 def list_rewrite_jobs() -> list[dict]:
     rows = []
     if not REWRITE_JOBS_DIR.is_dir():
         return rows
-    for f in sorted(REWRITE_JOBS_DIR.glob("rewrite_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-        rid = f.stem
+    ids: set[str] = set()
+    for d in REWRITE_JOBS_DIR.glob("rewrite_*"):
+        if d.is_dir() and rewrite_id_ok(d.name):
+            ids.add(d.name)
+    for f in REWRITE_JOBS_DIR.glob("rewrite_*.json"):
+        if rewrite_id_ok(f.stem):
+            ids.add(f.stem)
+
+    def _rid_mtime(rid: str) -> float:
+        p = _rewrite_project_json_path(rid)
+        if p.is_file():
+            return p.stat().st_mtime
+        lf = _rewrite_legacy_filepath(rid)
+        if lf.is_file():
+            return lf.stat().st_mtime
+        d = _rewrite_project_dir(rid)
+        if d.is_dir():
+            return d.stat().st_mtime
+        return 0.0
+
+    for rid in sorted(ids, key=_rid_mtime, reverse=True):
         if not rewrite_id_ok(rid):
             continue
         try:
-            data = json.load(open(f, "r", encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            data = load_rewrite_job(rid)
+        except Exception:
+            continue
+        if not isinstance(data, dict):
             continue
         normalize_rewrite_job_data(data)
         rows.append(
@@ -722,6 +812,7 @@ def rewrite_project_page(rewrite_id: str):
             rw=rw,
             rewrite_stages=REWRITE_STAGES,
             rewrite_stage_send_hints=REWRITE_STAGE_SEND_HINTS,
+            rewrite_stage_help_hints=REWRITE_STAGE_HELP_HINTS,
             rewrite_stage_run_ok=rewrite_stage_run_ok,
             rewrite_stage_key_order=rewrite_stage_key_order,
             rewrite_models=REWRITE_MODELS,
@@ -793,9 +884,14 @@ def rewrite_project_rename(rewrite_id: str):
 
 @app.route("/rewrite/<rewrite_id>/delete", methods=["POST"])
 def rewrite_project_delete(rewrite_id: str):
-    fp = _rewrite_filepath(rewrite_id)
-    if rewrite_id_ok(rewrite_id) and fp.is_file():
-        fp.unlink()
+    fp = _rewrite_project_json_path(rewrite_id)
+    legacy_fp = _rewrite_legacy_filepath(rewrite_id)
+    d = _rewrite_project_dir(rewrite_id)
+    if rewrite_id_ok(rewrite_id) and (fp.is_file() or legacy_fp.is_file() or d.is_dir()):
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+        if legacy_fp.is_file():
+            legacy_fp.unlink(missing_ok=True)
         flash("Проект ReWrite удалён.", "success")
     else:
         flash("Проект не найден.", "error")
@@ -871,7 +967,7 @@ def rewrite_youtube_verify(rewrite_id: str):
         return jsonify({"ok": False, "message": "Некорректная ссылка YouTube."}), 400
     title = ""
     try:
-        with YoutubeDL({"quiet": True, "skip_download": True, "noplaylist": True}) as ydl:
+        with YoutubeDL({**_YOUTUBE_YDL_BASE, "skip_download": True}) as ydl:
             info = ydl.extract_info(url, download=False)
             title = str((info or {}).get("title") or "").strip()
     except Exception as e:
@@ -887,25 +983,30 @@ def rewrite_youtube_verify(rewrite_id: str):
     return jsonify({"ok": True, "youtube_title": title})
 
 
-@app.route("/rewrite/<rewrite_id>/youtube/download", methods=["POST"])
-def rewrite_youtube_download(rewrite_id: str):
-    rw = load_rewrite_job(rewrite_id)
-    if rw is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
+def _rewrite_youtube_perform_download(
+    rewrite_id: str,
+    rw: dict,
+    *,
+    progress_hooks: list | None = None,
+    postprocessor_hooks: list | None = None,
+) -> tuple[str, str]:
+    """
+    Скачивает лучший аудиопоток через yt-dlp (запросы идут на CDN YouTube, чаще всего *.googlevideo.com).
+    Возвращает (относительный путь к mp3 от BASE_DIR, заголовок).
+    """
     url = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
     if not rw.get("youtube_verified") or not _youtube_url_is_valid(url):
-        return jsonify({"ok": False, "message": "Сначала проверьте ссылку YouTube."}), 400
+        raise ValueError("Сначала проверьте ссылку YouTube.")
     media_dir = _rewrite_media_dir(rewrite_id)
     media_dir.mkdir(parents=True, exist_ok=True)
     for old in media_dir.glob("youtube_audio_*"):
         if old.is_file():
             old.unlink(missing_ok=True)
     outtmpl = str(media_dir / "youtube_audio_%(id)s.%(ext)s")
-    ydl_opts = {
+    ydl_opts: dict = {
+        **_YOUTUBE_YDL_BASE,
         "format": "bestaudio/best",
         "outtmpl": outtmpl,
-        "noplaylist": True,
-        "quiet": True,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -914,27 +1015,146 @@ def rewrite_youtube_download(rewrite_id: str):
             }
         ],
     }
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            video_id = str((info or {}).get("id") or "").strip()
-            title = str((info or {}).get("title") or "").strip()
-    except Exception as e:
-        return jsonify({"ok": False, "message": f"Не удалось скачать аудио: {e}"}), 400
+    if progress_hooks:
+        ydl_opts["progress_hooks"] = list(progress_hooks)
+    if postprocessor_hooks:
+        ydl_opts["postprocessor_hooks"] = list(postprocessor_hooks)
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+    video_id = str((info or {}).get("id") or "").strip()
+    title = str((info or {}).get("title") or "").strip()
     if not video_id:
-        return jsonify({"ok": False, "message": "Не удалось определить id видео."}), 400
+        raise RuntimeError("Не удалось определить id видео.")
     mp3_path = media_dir / f"youtube_audio_{video_id}.mp3"
     if not mp3_path.is_file():
         files = sorted(media_dir.glob("youtube_audio_*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
         if files:
             mp3_path = files[0]
         else:
-            return jsonify({"ok": False, "message": "MP3 не найден после скачивания."}), 500
+            raise RuntimeError("MP3 не найден после скачивания.")
     rw["youtube_audio_file"] = str(mp3_path.relative_to(BASE_DIR))
     if title:
         rw["youtube_title"] = title
     save_rewrite_job(rewrite_id, rw)
-    return jsonify({"ok": True, "audio_file": rw["youtube_audio_file"], "youtube_title": rw.get("youtube_title", "")})
+    return rw["youtube_audio_file"], rw.get("youtube_title", "")
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/download", methods=["POST"])
+def rewrite_youtube_download(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    try:
+        rel, title = _rewrite_youtube_perform_download(rewrite_id, rw)
+    except ValueError as e:
+        return jsonify({"ok": False, "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Не удалось скачать аудио: {e}"}), 400
+    return jsonify({"ok": True, "audio_file": rel, "youtube_title": title})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/download_stream", methods=["POST"])
+def rewrite_youtube_download_stream(rewrite_id: str):
+    """Тот же скачиватель yt-dlp, но NDJSON-стрим с прогрессом (байты для UI в КиБ)."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    url = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
+    if not rw.get("youtube_verified") or not _youtube_url_is_valid(url):
+        return jsonify({"ok": False, "message": "Сначала проверьте ссылку YouTube."}), 400
+
+    event_q: queue.Queue[str | None] = queue.Queue()
+    result_holder: dict[str, str | None] = {}
+    last_progress_mono = [0.0]
+
+    def emit(obj: dict) -> None:
+        event_q.put(json.dumps(obj, ensure_ascii=False))
+
+    def progress_hook(d: dict) -> None:
+        st = d.get("status")
+        if st == "downloading":
+            now = time.monotonic()
+            if now - last_progress_mono[0] < 0.22:
+                return
+            last_progress_mono[0] = now
+            emit(
+                {
+                    "type": "progress",
+                    "phase": "download",
+                    "downloaded_bytes": d.get("downloaded_bytes"),
+                    "total_bytes": d.get("total_bytes"),
+                    "total_bytes_estimate": d.get("total_bytes_estimate"),
+                    "speed": d.get("speed"),
+                }
+            )
+        elif st == "finished":
+            emit(
+                {
+                    "type": "progress",
+                    "phase": "fragment_done",
+                    "filename": d.get("filename") or "",
+                }
+            )
+
+    def postprocessor_hook(d: dict) -> None:
+        if d.get("status") != "started":
+            return
+        emit(
+            {
+                "type": "progress",
+                "phase": "postprocess",
+                "postprocessor": d.get("postprocessor") or "",
+                "status": d.get("status") or "",
+            }
+        )
+
+    def worker() -> None:
+        try:
+            rel, title = _rewrite_youtube_perform_download(
+                rewrite_id,
+                rw,
+                progress_hooks=[progress_hook],
+                postprocessor_hooks=[postprocessor_hook],
+            )
+            result_holder["rel"] = rel
+            result_holder["title"] = title
+        except Exception as e:
+            result_holder["error"] = str(e)
+        finally:
+            event_q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def generate():
+        while True:
+            line = event_q.get()
+            if line is None:
+                break
+            yield line + "\n"
+        err = result_holder.get("error")
+        if err:
+            yield json.dumps({"type": "error", "message": err}, ensure_ascii=False) + "\n"
+        elif result_holder.get("rel"):
+            yield (
+                json.dumps(
+                    {
+                        "type": "done",
+                        "ok": True,
+                        "audio_file": result_holder["rel"],
+                        "youtube_title": result_holder.get("title") or "",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+        else:
+            yield json.dumps({"type": "error", "message": "Скачивание завершилось без результата."}, ensure_ascii=False) + "\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/rewrite/<rewrite_id>/youtube/transcribe", methods=["POST"])
@@ -1014,12 +1234,42 @@ def rewrite_project_run(rewrite_id: str):
         if stage_key == "draft1":
             analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
             structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
+            block_writer_user_prompt = str((stages_snap.get("draft1") or {}).get("user_prompt") or "")
+            bw_dir = _rewrite_block_writer_dir(rewrite_id)
+            bw_dir.mkdir(parents=True, exist_ok=True)
+            for old in bw_dir.glob("block_*.json"):
+                old.unlink(missing_ok=True)
+            (bw_dir / "all_blocks.json").unlink(missing_ok=True)
+            (bw_dir / "full_text.txt").unlink(missing_ok=True)
+
+            completed_blocks: list[dict] = []
+
+            def on_block_completed(block_data: dict) -> None:
+                idx = int(block_data.get("block_index") or 0)
+                p = bw_dir / f"block_{idx:03d}.json"
+                p.write_text(json.dumps(block_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                completed_blocks.append(dict(block_data))
+
+            def on_all_completed(all_data: dict) -> None:
+                blocks = all_data.get("blocks") if isinstance(all_data, dict) else []
+                full_text = str((all_data or {}).get("full_text") or "")
+                if isinstance(blocks, list):
+                    (bw_dir / "all_blocks.json").write_text(
+                        json.dumps({"blocks": blocks}, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                (bw_dir / "full_text.txt").write_text(full_text, encoding="utf-8")
+
             for item in iter_draft1_blockwise_completion(
                 api_key,
                 model,
                 prompt,
                 analysis_res,
                 structure_res,
+                hero_prompt=hero_prompt,
+                block_writer_user_prompt=block_writer_user_prompt,
+                on_block_completed=on_block_completed,
+                on_all_completed=on_all_completed,
             ):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
         else:
@@ -1056,10 +1306,100 @@ def rewrite_project_api_payload(rewrite_id: str):
         return jsonify({"ok": False, "message": err}), 400
     export_payload = dict(payload)
     if stage_key == "draft1":
-        export_payload["note"] = (
-            "Draft1 runs in block-by-block loop: backend sends one block request, "
-            "checks target_chars_min/max from Structure Result, then asks next/rewrite."
-        )
+        # Для Block Writer реальная отправка идет в loop (1 API call на 1 architect block).
+        # Экспортируем не "один payload", а схему loop и превью payload по блокам.
+        structure_raw = str((stages_snap.get("structure") or {}).get("last_result") or "").strip()
+        block_writer_user_prompt = str((stages_snap.get("draft1") or {}).get("user_prompt") or "")
+        blocks: list[dict] = []
+        try:
+            s_obj = json.loads(structure_raw)
+            raw_blocks = s_obj.get("blocks") if isinstance(s_obj, dict) else None
+            if isinstance(raw_blocks, list):
+                for i, b in enumerate(raw_blocks, start=1):
+                    if not isinstance(b, dict):
+                        continue
+                    name = str(b.get("block_name") or "").strip()
+                    if not name:
+                        continue
+                    try:
+                        tmin = int(b.get("target_chars_min"))
+                        tideal = int(b.get("target_chars_ideal"))
+                        tmax = int(b.get("target_chars_max"))
+                    except (TypeError, ValueError):
+                        continue
+                    blocks.append(
+                        {
+                            "index": i,
+                            "block_name": name,
+                            "target_chars_min": tmin,
+                            "target_chars_ideal": tideal,
+                            "target_chars_max": tmax,
+                            "must_cover": b.get("must_cover") if isinstance(b.get("must_cover"), list) else [],
+                            "must_not_cover": b.get("must_not_cover") if isinstance(b.get("must_not_cover"), list) else [],
+                        }
+                    )
+        except (json.JSONDecodeError, TypeError, ValueError):
+            blocks = []
+
+        previews: list[dict] = []
+        for b in blocks:
+            idx = int(b["index"])
+            context_depth = min(3, idx - 1)
+            previews.append(
+                {
+                    "for_block_index": idx,
+                    "summary_context_rule": "up to 3 previous short_summary values",
+                    "short_summary_context_expected_from_blocks": [idx - k for k in range(1, context_depth + 1)],
+                    "messages": [
+                        {"role": "system", "content": str(payload["messages"][0].get("content") or "")},
+                        {
+                            "role": "user",
+                            "content": json.dumps(
+                                {
+                                    "hero_prompt": hero_prompt,
+                                    "block_writer_user_promt": block_writer_user_prompt,
+                                    "architect_block": {
+                                        "index": idx,
+                                        "block_name": b["block_name"],
+                                        "target_chars_min": b["target_chars_min"],
+                                        "target_chars_ideal": b["target_chars_ideal"],
+                                        "target_chars_max": b["target_chars_max"],
+                                        "must_cover": b.get("must_cover") or [],
+                                        "must_not_cover": b.get("must_not_cover") or [],
+                                    },
+                                    "short_summary_context": [
+                                        f"<short_summary_from_block_{idx - k}>"
+                                        for k in range(1, context_depth + 1)
+                                    ],
+                                    "output_format": {
+                                        "required_json_fields": ["block_text", "short_summary"],
+                                        "notes": "Return valid JSON only.",
+                                    },
+                                },
+                                ensure_ascii=False,
+                                indent=2,
+                            ),
+                        },
+                    ],
+                }
+            )
+
+        export_payload = {
+            "mode": "block_writer_loop",
+            "model": payload.get("model"),
+            "temperature": payload.get("temperature"),
+            "total_blocks_from_architect": len(blocks),
+            "loop_rules": {
+                "one_api_call_per_block": True,
+                "short_summary_context_window": 3,
+                "request_order": "1..N",
+            },
+            "notes": [
+                "This stage does NOT send one single request for all blocks.",
+                "Each block gets its own OpenAI request with its own architect_block and rolling short summaries.",
+            ],
+            "per_block_payload_previews": previews,
+        }
     txt = json.dumps(export_payload, ensure_ascii=False, indent=2) + "\n"
     fname = f"{rewrite_id}_{stage_key}_openai_request.txt"
     resp = make_response(txt)

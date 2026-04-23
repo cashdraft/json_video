@@ -210,16 +210,23 @@
             {% for stage_key, stage_label in rewrite_stages %}
             {% set cell = rw.stages[stage_key] %}
             {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
+            {% set has_user_prompt = ((cell.user_prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
             {% set prompt_locked = cell.prompt_locked|default(false) %}
+            {% set user_prompt_locked = cell.user_prompt_locked|default(false) %}
+            {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}">
+                <article class="scene-card rewrite-stage-card" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}">
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-heading">
                                 <span class="rewrite-stage-index" aria-label="Этап {{ loop.index }}">{{ loop.index }}</span>
                                 <div class="rewrite-stage-heading__body">
                                     <div class="scene-id">{{ stage_label }}</div>
+                                </div>
+                                <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
+                                    <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
+                                    <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
                                 </div>
                             </div>
                             <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>txt</button>
@@ -240,7 +247,7 @@
                             </div>
                             <div class="rewrite-stage-prompt-cell">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">Prompt: {{ 'YES' if has_prompt else 'NO' }}</span>
+                                    <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">System Promt: {{ 'YES' if has_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-prompt-toggle{% if prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                         <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                         <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -250,19 +257,37 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge badge-{{ 'yes' if has_user_prompt else 'no' }} rewrite-stage-user-prompt-badge">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-user-prompt-toggle{% if user_prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                    </button>
+                                </div>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt">
+                                    <textarea id="rewrite-stage-{{ stage_key }}-user-prompt" class="rewrite-stage-user-prompt rewrite-slot-textarea{% if user_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Дополнительная инструкция для user-сообщения этапа…" {% if not openai_key_set %}disabled{% elif user_prompt_locked %}readonly{% endif %}>{{ cell.user_prompt or '' }}</textarea>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                         <div class="rewrite-stage-row rewrite-stage-row--result">
                             <div class="slot-header rewrite-stage-result-toolbar">
                                 <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
                                 <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
                                 <span class="rewrite-stage-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-result-toggle{% if result_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
                                 <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" title="Копировать результат в буфер обмена" aria-label="Копировать результат">
                                     <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                                 </button>
                                 <span class="rewrite-stage-result-counts" aria-live="polite"></span>
                             </div>
                             <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result">
-                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result" rows="3" readonly placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
+                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="3" {% if result_locked %}readonly{% endif %} placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
                         </div>
                     </div>
@@ -279,6 +304,7 @@
     const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
     const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytDownloadStreamUrl = {{ url_for('rewrite_youtube_download_stream', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscribeUrl = {{ url_for('rewrite_youtube_transcribe', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
     const busy = document.getElementById('rewrite-busy');
@@ -501,7 +527,11 @@
         applyAudioLockUI();
         applyMasterLockUI();
         applySourceLockUI();
-        document.querySelectorAll('.rewrite-stage-card').forEach(applyPromptLockUI);
+        document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+            applyPromptLockUI(block);
+            applyAnalysisUserPromptLockUI(block);
+            applyResultLockUI(block);
+        });
         syncStageRunButtons();
         applyYoutubeToolbar();
     }
@@ -596,7 +626,17 @@
                             syncPromptBadge(block);
                         }
                     }
+                    if ((key === 'analysis' || key === 'structure' || key === 'draft1') && cell && typeof cell.user_prompt === 'string') {
+                        var uta = block.querySelector('.rewrite-stage-user-prompt');
+                        if (uta) {
+                            uta.value = cell.user_prompt;
+                            syncAnalysisUserPromptBadge(block);
+                        }
+                    }
                     block.setAttribute('data-prompt-locked', '1');
+                    if (key === 'analysis' || key === 'structure' || key === 'draft1') {
+                        block.setAttribute('data-user-prompt-locked', '1');
+                    }
                 });
                 templateSelectEl.value = name;
                 sourceLocked = true;
@@ -675,6 +715,89 @@
         }
     }
 
+    function ytFormatKiB(n) {
+        if (n == null || n === undefined || (typeof n === 'number' && (isNaN(n) || n < 0))) return '—';
+        return (Number(n) / 1024).toFixed(1) + ' КиБ';
+    }
+    function ytFormatSpeedBps(bps) {
+        if (bps == null || bps === undefined || isNaN(bps) || bps <= 0) return '';
+        return ' · ' + ytFormatKiB(bps) + '/с';
+    }
+
+    async function ytConsumeDownloadStream() {
+        const r2 = await fetch(ytDownloadStreamUrl, {
+            method: 'POST',
+            headers: { Accept: 'application/x-ndjson' }
+        });
+        if (!r2.ok) {
+            const errBody = await r2.json().catch(function () { return {}; });
+            throw new Error(errBody.message || 'Не удалось скачать аудио (HTTP ' + r2.status + ').');
+        }
+        const reader = r2.body && r2.body.getReader();
+        if (!reader) throw new Error('Браузер не поддерживает поток ответа.');
+        const dec = new TextDecoder();
+        var buf = '';
+        function handleYoutubeStreamEvent(ev) {
+            if (ev.type === 'progress' && ev.phase === 'download') {
+                var got = ev.downloaded_bytes;
+                var tot = ev.total_bytes != null ? ev.total_bytes : ev.total_bytes_estimate;
+                var msg = 'Скачивание (CDN YouTube): ' + ytFormatKiB(got);
+                if (tot != null) {
+                    msg += ' / ' + ytFormatKiB(tot);
+                }
+                msg += ytFormatSpeedBps(ev.speed);
+                setYtStatus(msg, false);
+            } else if (ev.type === 'progress' && ev.phase === 'postprocess') {
+                var pp = (ev.postprocessor || '').replace(/ExtractAudio/i, 'MP3');
+                setYtStatus('После скачивания: ' + (pp || 'обработка') + '…', false);
+            } else if (ev.type === 'progress' && ev.phase === 'fragment_done') {
+                setYtStatus('Фрагмент записан, продолжаем…', false);
+            } else if (ev.type === 'error' && ev.message) {
+                throw new Error(ev.message);
+            } else if (ev.type === 'done' && ev.ok) {
+                return ev;
+            }
+            return null;
+        }
+        function drainBufLines() {
+            var i;
+            while ((i = buf.indexOf('\n')) >= 0) {
+                var line = buf.slice(0, i).trim();
+                buf = buf.slice(i + 1);
+                if (!line) continue;
+                var ev;
+                try {
+                    ev = JSON.parse(line);
+                } catch (e) {
+                    continue;
+                }
+                var doneEv = handleYoutubeStreamEvent(ev);
+                if (doneEv) return doneEv;
+            }
+            return null;
+        }
+        while (true) {
+            const chunk = await reader.read();
+            if (chunk.done) {
+                buf += dec.decode();
+                break;
+            }
+            buf += dec.decode(chunk.value, { stream: true });
+            var doneEarly = drainBufLines();
+            if (doneEarly) return doneEarly;
+        }
+        var tailDone = drainBufLines();
+        if (tailDone) return tailDone;
+        if (buf.trim()) {
+            try {
+                var evLast = JSON.parse(buf.trim());
+                var d0 = handleYoutubeStreamEvent(evLast);
+                if (d0) return d0;
+            } catch (e) { /* ignore */ }
+        }
+        throw new Error('Поток скачивания оборвался без результата.');
+    }
+
     async function ytFullDecode() {
         if (!ytUrlEl || !openaiOk || ytWorking) return;
         var u = (ytUrlEl.value || '').trim();
@@ -700,13 +823,8 @@
                 return;
             }
 
-            setYtStatus('Скачиваем и конвертируем в mp3…', false);
-            const r2 = await fetch(ytDownloadUrl, { method: 'POST' });
-            const d2 = await r2.json().catch(function () { return {}; });
-            if (!r2.ok || !d2.ok) {
-                setYtStatus(d2.message || 'Не удалось скачать аудио.', true);
-                return;
-            }
+            setYtStatus('Скачивание аудио (yt-dlp)…', false);
+            await ytConsumeDownloadStream();
 
             setYtStatus('Отправляем аудио на расшифровку (OpenAI)…', false);
             const r3 = await fetch(ytTranscribeUrl, { method: 'POST' });
@@ -771,8 +889,11 @@
             stages[key] = {
                 model: globalModel,
                 prompt: promptEl ? promptEl.value : '',
+                user_prompt: ((block.querySelector('.rewrite-stage-user-prompt') || {}).value || ''),
                 last_result: resEl ? (resEl.value || '') : '',
-                prompt_locked: block.getAttribute('data-prompt-locked') === '1'
+                prompt_locked: block.getAttribute('data-prompt-locked') === '1',
+                user_prompt_locked: (block.getAttribute('data-user-prompt-locked') === '1'),
+                result_locked: (block.getAttribute('data-result-locked') === '1')
             };
         });
         return {
@@ -897,6 +1018,57 @@
         }
     }
 
+    function applyAnalysisUserPromptLockUI(block) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key');
+        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1') return;
+        const locked = block.getAttribute('data-user-prompt-locked') === '1';
+        const ta = block.querySelector('.rewrite-stage-user-prompt');
+        const toggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
+        const promptWrap = block.querySelector('.rewrite-slot--stage-user-prompt');
+        if (!openaiOk) {
+            if (ta) ta.disabled = true;
+            if (toggle) toggle.disabled = true;
+            block.classList.add('rewrite-stage-card--stage-user-prompt-collapsed');
+            if (promptWrap) promptWrap.style.display = 'none';
+            return;
+        }
+        if (ta) {
+            ta.disabled = false;
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+        }
+        block.classList.toggle('rewrite-stage-card--stage-user-prompt-collapsed', locked);
+        if (promptWrap) {
+            promptWrap.style.display = locked ? 'none' : '';
+        }
+        if (toggle) {
+            toggle.disabled = false;
+            styleToggleBtn(toggle, locked);
+        }
+    }
+
+    function applyResultLockUI(block) {
+        if (!block) return;
+        const locked = block.getAttribute('data-result-locked') !== '0';
+        const ta = block.querySelector('.rewrite-stage-result');
+        const toggle = block.querySelector('.rewrite-stage-result-toggle');
+        if (!openaiOk) {
+            if (ta) ta.disabled = true;
+            if (toggle) toggle.disabled = true;
+            return;
+        }
+        if (ta) {
+            ta.disabled = false;
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+        }
+        if (toggle) {
+            toggle.disabled = false;
+            styleToggleBtn(toggle, locked);
+        }
+    }
+
     function setBusy(on) {
         rewriteStageBusy = !!on;
         const dis = on || !openaiOk;
@@ -932,6 +1104,20 @@
             if (ta) {
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
+            }
+            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1') {
+                const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
+                const uTa = block.querySelector('.rewrite-stage-user-prompt');
+                if (uTa) {
+                    uTa.disabled = !openaiOk;
+                    uTa.readOnly = dis || uLocked;
+                }
+            }
+            const rLocked = block.getAttribute('data-result-locked') !== '0';
+            const rTa = block.querySelector('.rewrite-stage-result');
+            if (rTa) {
+                rTa.disabled = !openaiOk;
+                rTa.readOnly = dis || rLocked;
             }
         });
         busy.classList.toggle('hidden', !on);
@@ -1037,7 +1223,17 @@
         const promptBadge = block.querySelector('.rewrite-stage-prompt-badge');
         if (!promptEl || !promptBadge) return;
         var hasP = (promptEl.value || '').trim().length > 0;
-        promptBadge.textContent = hasP ? 'Prompt: YES' : 'Prompt: NO';
+        promptBadge.textContent = hasP ? 'System Promt: YES' : 'System Promt: NO';
+        promptBadge.classList.toggle('badge-yes', hasP);
+        promptBadge.classList.toggle('badge-no', !hasP);
+    }
+
+    function syncAnalysisUserPromptBadge(block) {
+        const promptEl = block.querySelector('.rewrite-stage-user-prompt');
+        const promptBadge = block.querySelector('.rewrite-stage-user-prompt-badge');
+        if (!promptEl || !promptBadge) return;
+        var hasP = (promptEl.value || '').trim().length > 0;
+        promptBadge.textContent = hasP ? 'User Promt: YES' : 'User Promt: NO';
         promptBadge.classList.toggle('badge-yes', hasP);
         promptBadge.classList.toggle('badge-no', !hasP);
     }
@@ -1048,6 +1244,8 @@
             pe.addEventListener('input', function () { syncPromptBadge(block); });
         }
         applyPromptLockUI(block);
+        applyAnalysisUserPromptLockUI(block);
+        applyResultLockUI(block);
         var stToggle = block.querySelector('.rewrite-stage-prompt-toggle');
         if (stToggle) {
             stToggle.addEventListener('click', async function () {
@@ -1086,6 +1284,92 @@
                     } catch (e2) {
                         block.setAttribute('data-prompt-locked', '0');
                         applyPromptLockUI(block);
+                        alert(String(e2));
+                    }
+                }
+            });
+        }
+        var ue = block.querySelector('.rewrite-stage-user-prompt');
+        if (ue) {
+            ue.addEventListener('input', function () { syncAnalysisUserPromptBadge(block); });
+            syncAnalysisUserPromptBadge(block);
+        }
+        var userToggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
+        if (userToggle) {
+            userToggle.addEventListener('click', async function () {
+                if (!openaiOk || userToggle.disabled) return;
+                var locked = block.getAttribute('data-user-prompt-locked') === '1';
+                if (locked) {
+                    block.setAttribute('data-user-prompt-locked', '0');
+                    applyAnalysisUserPromptLockUI(block);
+                    try {
+                        var ok = await saveToServer();
+                        if (!ok) {
+                            block.setAttribute('data-user-prompt-locked', '1');
+                            applyAnalysisUserPromptLockUI(block);
+                            alert('Не удалось переключить режим');
+                            return;
+                        }
+                        if (ue) ue.focus();
+                    } catch (e) {
+                        block.setAttribute('data-user-prompt-locked', '1');
+                        applyAnalysisUserPromptLockUI(block);
+                        alert(String(e));
+                    }
+                } else {
+                    block.setAttribute('data-user-prompt-locked', '1');
+                    applyAnalysisUserPromptLockUI(block);
+                    try {
+                        var ok2 = await saveToServer();
+                        if (!ok2) {
+                            block.setAttribute('data-user-prompt-locked', '0');
+                            applyAnalysisUserPromptLockUI(block);
+                            alert('Не удалось сохранить');
+                        }
+                    } catch (e2) {
+                        block.setAttribute('data-user-prompt-locked', '0');
+                        applyAnalysisUserPromptLockUI(block);
+                        alert(String(e2));
+                    }
+                }
+            });
+        }
+        var resultToggle = block.querySelector('.rewrite-stage-result-toggle');
+        var resultTa = block.querySelector('.rewrite-stage-result');
+        if (resultToggle) {
+            resultToggle.addEventListener('click', async function () {
+                if (!openaiOk || resultToggle.disabled) return;
+                var locked = block.getAttribute('data-result-locked') !== '0';
+                if (locked) {
+                    block.setAttribute('data-result-locked', '0');
+                    applyResultLockUI(block);
+                    try {
+                        var ok = await saveToServer();
+                        if (!ok) {
+                            block.setAttribute('data-result-locked', '1');
+                            applyResultLockUI(block);
+                            alert('Не удалось переключить режим');
+                            return;
+                        }
+                        if (resultTa) resultTa.focus();
+                    } catch (e) {
+                        block.setAttribute('data-result-locked', '1');
+                        applyResultLockUI(block);
+                        alert(String(e));
+                    }
+                } else {
+                    block.setAttribute('data-result-locked', '1');
+                    applyResultLockUI(block);
+                    try {
+                        var ok2 = await saveToServer();
+                        if (!ok2) {
+                            block.setAttribute('data-result-locked', '0');
+                            applyResultLockUI(block);
+                            alert('Не удалось сохранить');
+                        }
+                    } catch (e2) {
+                        block.setAttribute('data-result-locked', '0');
+                        applyResultLockUI(block);
                         alert(String(e2));
                     }
                 }

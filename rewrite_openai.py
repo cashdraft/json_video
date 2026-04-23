@@ -9,7 +9,7 @@ import os
 import queue
 import re
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import requests
@@ -24,7 +24,7 @@ REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}
 
 REWRITE_DEFAULT_MODEL = "gpt-4.1"
 
-REWRITE_CHAT_TEMPERATURE = 0.3
+REWRITE_CHAT_TEMPERATURE = 0.1
 
 
 def normalize_rewrite_model(model: str) -> str:
@@ -389,7 +389,241 @@ def _parse_single_block(raw: str, expected_idx: int, expected_name: str) -> tupl
     return body, None
 
 
+def _parse_block_writer_json_response(raw: str) -> tuple[dict[str, Any] | None, str | None]:
+    txt = (raw or "").strip()
+    if not txt:
+        return None, "Пустой ответ модели."
+    try:
+        obj = json.loads(txt)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None, "Block Writer должен вернуть JSON."
+    if not isinstance(obj, dict):
+        return None, "Block Writer должен вернуть JSON-объект."
+    block_text = str(obj.get("text") or obj.get("block_text") or "").strip()
+    short_summary_raw = obj.get("short_summary")
+    short_summary_items: list[str] = []
+    if isinstance(short_summary_raw, list):
+        for it in short_summary_raw:
+            s = str(it or "").strip()
+            if s:
+                short_summary_items.append(s)
+    elif short_summary_raw is not None:
+        s = str(short_summary_raw or "").strip()
+        if s:
+            short_summary_items.append(s)
+    if not block_text:
+        return None, "В ответе нет text."
+    if not short_summary_items:
+        # Fallback: если модель не вернула summary, берём начало текста.
+        short_summary_items = [(block_text[:220] + "...") if len(block_text) > 220 else block_text]
+    try:
+        chars_val = int(obj.get("chars"))
+        if chars_val < 0:
+            chars_val = len(block_text)
+    except (TypeError, ValueError):
+        chars_val = len(block_text)
+    obj["text"] = block_text
+    obj["block_text"] = block_text
+    obj["chars"] = chars_val
+    obj["short_summary"] = short_summary_items
+    return obj, None
+
+
 def iter_draft1_blockwise_completion(
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    analysis_result: str,
+    structure_result: str,
+    *,
+    hero_prompt: str = "",
+    block_writer_user_prompt: str = "",
+    on_block_completed: Callable[[dict[str, Any]], None] | None = None,
+    on_all_completed: Callable[[dict[str, Any]], None] | None = None,
+    timeout: int | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Block Writer: один API вызов на каждый блок из architect.json."""
+    model = normalize_rewrite_model(model)
+    system_prompt = _sanitize_for_openai_json((system_prompt or "").strip())
+    structure_result = _sanitize_for_openai_json((structure_result or "").strip())
+    hero_prompt = _sanitize_for_openai_json((hero_prompt or "").strip())
+    block_writer_user_prompt = _sanitize_for_openai_json((block_writer_user_prompt or "").strip())
+    if timeout is None:
+        timeout = _chat_timeout_seconds()
+    if not api_key.strip():
+        yield {"type": "error", "message": "Не задан OPENAI_API_KEY в .env"}
+        return
+    if not system_prompt:
+        yield {"type": "error", "message": "Введите промпт (инструкцию для модели)."}
+        return
+
+    blocks = _extract_structure_blocks(structure_result)
+    if not blocks:
+        yield {"type": "error", "message": "Architect Result должен быть JSON с массивом blocks и target_chars_*."}
+        return
+
+    yield {"type": "status", "message": f"Block Writer loop: блоков {len(blocks)}."}
+
+    completed_blocks: list[dict[str, Any]] = []
+    short_summaries: list[list[str]] = []
+    all_block_texts: list[str] = []
+
+    for b in blocks:
+        idx = int(b["index"])
+        name = str(b["block_name"])
+        tmin = int(b["target_chars_min"])
+        tideal = int(b["target_chars_ideal"])
+        tmax = int(b["target_chars_max"])
+
+        prev_short = short_summaries[-3:]
+        prev_short_meta = [
+            {
+                "offset_from_current": i + 1,
+                "items": len(s),
+                "chars_total": sum(len(x) for x in s),
+            }
+            for i, s in enumerate(reversed(prev_short))
+        ]
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] Блок {idx}/{len(blocks)} «{name}»: подготовка запроса. "
+                f"Цель длины min/ideal/max = {tmin}/{tideal}/{tmax}."
+            ),
+        }
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] short_summary_context: {len(prev_short)} шт. "
+                + (
+                    "Мета: "
+                    + ", ".join(
+                        f"-{m['offset_from_current']} (items={m['items']}, chars={m['chars_total']})"
+                        for m in prev_short_meta
+                    )
+                    if prev_short_meta
+                    else "Для первого блока контекст пуст."
+                )
+            ),
+        }
+        user_payload = {
+            "hero_prompt": hero_prompt,
+            "block_writer_user_promt": block_writer_user_prompt,
+            "architect_block": {
+                "index": idx,
+                "block_name": name,
+                "target_chars_min": tmin,
+                "target_chars_ideal": tideal,
+                "target_chars_max": tmax,
+                "must_cover": b["must_cover"],
+                "must_not_cover": b["must_not_cover"],
+            },
+            "short_summary_context": [
+                {
+                    "from_block_offset": i + 1,
+                    "short_summary": s,
+                }
+                for i, s in enumerate(reversed(prev_short))
+            ],
+        }
+        architect_block_json = json.dumps(user_payload["architect_block"], ensure_ascii=False)
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] payload: hero_prompt chars={len(hero_prompt)}, "
+                f"user_promt chars={len(block_writer_user_prompt)}, "
+                f"architect_block chars={len(architect_block_json)}."
+            ),
+        }
+        user_msg = _sanitize_for_openai_json(json.dumps(user_payload, ensure_ascii=False, indent=2))
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            "temperature": REWRITE_CHAT_TEMPERATURE,
+        }
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] Блок {idx}/{len(blocks)}: отправка POST в OpenAI "
+                f"(user JSON chars={len(user_msg)})."
+            ),
+        }
+        content, err = _post_chat_completion_sync(api_key, payload, timeout)
+        if err:
+            yield {"type": "error", "message": f"Блок {idx}: {err}"}
+            return
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] Блок {idx}: ответ получен, raw chars={len(content or '')}. "
+                "Пробуем распарсить JSON."
+            ),
+        }
+        parsed, perr = _parse_block_writer_json_response(content or "")
+        if perr:
+            yield {"type": "error", "message": f"Блок {idx}: {perr}"}
+            return
+        block_text = str(parsed.get("text") or parsed.get("block_text") or "")
+        short_summary = parsed.get("short_summary") if isinstance(parsed.get("short_summary"), list) else []
+        short_summary = [str(x or "").strip() for x in short_summary if str(x or "").strip()]
+        try:
+            chars = int(parsed.get("chars"))
+        except (TypeError, ValueError):
+            chars = len(block_text)
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] Блок {idx}: JSON валиден. "
+                f"text chars={chars}, short_summary items={len(short_summary)}."
+            ),
+        }
+        block_record = {
+            "block_index": idx,
+            "block_name": name,
+            "target_chars_min": tmin,
+            "target_chars_ideal": tideal,
+            "target_chars_max": tmax,
+            "actual_chars": chars,
+            "short_summary": short_summary,
+            "block_text": block_text,
+        }
+        completed_blocks.append(block_record)
+        short_summaries.append(short_summary)
+        all_block_texts.append(block_text)
+        if on_block_completed:
+            try:
+                on_block_completed(block_record)
+            except Exception:
+                pass
+        within = tmin <= chars <= tmax
+        yield {
+            "type": "status",
+            "message": (
+                f"[Block Writer] Блок {idx} сохранён в файл block_{idx:03d}.json. "
+                f"Длина {chars} симв. (диапазон {tmin}–{tmax}: {'OK' if within else 'OUT'})."
+            ),
+        }
+
+    final_text = "\n\n".join(all_block_texts).strip()
+    yield {
+        "type": "status",
+        "message": (
+            f"[Block Writer] Все блоки готовы: {len(completed_blocks)} шт. "
+            f"Склейка full_text chars={len(final_text)} и сохранение all_blocks.json/full_text.txt."
+        ),
+    }
+    if on_all_completed:
+        try:
+            on_all_completed({"blocks": completed_blocks, "full_text": final_text})
+        except Exception:
+            pass
+    yield {"type": "result", "content": final_text}
+
+
+def iter_draft1_blockwise_completion_legacy(
     api_key: str,
     model: str,
     system_prompt: str,
@@ -419,7 +653,7 @@ def iter_draft1_blockwise_completion(
 
     blocks = _extract_structure_blocks(structure_result)
     if not blocks:
-        yield {"type": "error", "message": "Structure Result должен быть JSON с массивом blocks и target_chars_*."}
+        yield {"type": "error", "message": "Architect Result должен быть JSON с массивом blocks и target_chars_*."}
         return
 
     analysis_compact = analysis_result
@@ -451,14 +685,11 @@ def iter_draft1_blockwise_completion(
         parsed_candidates: list[tuple[str, int]] = []
         for attempt in range(1, max_attempts_per_block + 1):
             yield {"type": "status", "message": f"Блок {idx}/{len(blocks)}: попытка {attempt}…"}
-            user_msg = (
-                "--- Analysis Result ---\n"
-                + (analysis_compact or "(пусто)")
-                + "\n\n--- Blocks overview ---\n"
-                + blocks_overview
-                + "\n\n--- Current block spec ---\n"
-                + json.dumps(
-                    {
+            user_msg = json.dumps(
+                {
+                    "analysis.json": analysis_compact or "(пусто)",
+                    "blocks_overview": blocks_overview,
+                    "current_block_spec": {
                         "index": idx,
                         "block_name": name,
                         "target_chars_min": tmin,
@@ -467,29 +698,36 @@ def iter_draft1_blockwise_completion(
                         "must_cover": b["must_cover"],
                         "must_not_cover": b["must_not_cover"],
                     },
+                    "already_accepted_block_indexes": accepted_overview,
+                    "task": {
+                        "instruction": f"Write ONLY block {idx} in exact BLOCK_START/BLOCK_NAME/BLOCK_END format.",
+                        "format": [
+                            f"BLOCK_START: {idx}",
+                            f"BLOCK_NAME: {name}",
+                            "<block_text>",
+                            f"BLOCK_END: {idx}",
+                        ],
+                        "rules": [
+                            f"target_chars_min={tmin}",
+                            f"target_chars_ideal={tideal}",
+                            f"target_chars_max={tmax}",
+                            "Do not output SCRIPT_END.",
+                            "Do not output other blocks.",
+                            "Do not include any text before BLOCK_START or after BLOCK_END.",
+                        ],
+                        "must_cover": b["must_cover"],
+                        "must_not_cover": b["must_not_cover"],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            if feedback:
+                user_msg += "\n\n" + json.dumps(
+                    {"rewrite_request": feedback},
                     ensure_ascii=False,
                     indent=2,
                 )
-                + "\n\n--- Already accepted block indexes (DO NOT REWRITE THEM) ---\n"
-                + accepted_overview
-                + "\n\n--- Task ---\n"
-                + f"Write ONLY block {idx} in this exact format:\n"
-                + f"BLOCK_START: {idx}\n"
-                + f"BLOCK_NAME: {name}\n"
-                + "<block_text>\n"
-                + f"BLOCK_END: {idx}\n\n"
-                + "Rules:\n"
-                + f"- target_chars_min={tmin}\n- target_chars_ideal={tideal}\n- target_chars_max={tmax}\n"
-                + "- Do not output SCRIPT_END.\n"
-                + "- Do not output other blocks.\n"
-                + "- Do not include any text before BLOCK_START or after BLOCK_END.\n"
-                + "must_cover:\n"
-                + must_cover
-                + "\nmust_not_cover:\n"
-                + must_not_cover
-            )
-            if feedback:
-                user_msg += "\n\nRewrite request:\n" + feedback
             user_msg = _sanitize_for_openai_json(user_msg)
             payload = {
                 "model": model,

@@ -1033,6 +1033,59 @@ textarea::placeholder {
     min-width: 0;
 }
 
+.rewrite-stage-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: 0.1rem;
+}
+
+.rewrite-stage-help__icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: help;
+    user-select: none;
+}
+
+.rewrite-stage-help__tip {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 260px;
+    max-width: 360px;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.74rem;
+    line-height: 1.4;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-2px);
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
+    z-index: 20;
+}
+
+.rewrite-stage-help:hover .rewrite-stage-help__tip,
+.rewrite-stage-help:focus-within .rewrite-stage-help__tip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
 .rewrite-stage-index {
     flex-shrink: 0;
     width: 1.2rem;
@@ -1161,6 +1214,10 @@ textarea::placeholder {
 
 .rewrite-stage-card--prompt-collapsed .rewrite-slot--prompt-inline {
     display: none;
+}
+
+.rewrite-stage-card--stage-user-prompt-collapsed .rewrite-slot--stage-user-prompt {
+    display: none !important;
 }
 
 .rewrite-stage-card--prompt-collapsed .rewrite-stage-row--controls {
