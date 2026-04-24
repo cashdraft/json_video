@@ -6,6 +6,7 @@ ReWrite Master — цепочка этапов: Analysis → Architect → Block
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from rewrite_openai import REWRITE_CHAT_TEMPERATURE, REWRITE_DEFAULT_MODEL, normalize_rewrite_model
@@ -514,6 +515,11 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     job["chars_per_minute"] = max(1, min(2000, cpm))
     job.setdefault("rewrite_template", "")
     job["rewrite_template"] = str(job.get("rewrite_template") or "")
+    # Папка дефолтного шаблона переименована: baseline → Base Template
+    if job["rewrite_template"] == "baseline":
+        base_tpl = Path(__file__).resolve().parent / "rewrite_templates" / "Base Template"
+        if base_tpl.is_dir():
+            job["rewrite_template"] = "Base Template"
 
     job.setdefault("hero_prompt_locked", False)
     job["hero_prompt_locked"] = bool(job.get("hero_prompt_locked"))

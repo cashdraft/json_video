@@ -2,7 +2,7 @@
 Шаблоны ReWrite — одна подпапка на шаблон (как data/image_templates).
 
   rewrite_templates/
-    <имя_шаблона>/          ← имя папки попадает в список в UI (baseline, my_project, …)
+    <имя_шаблона>/          ← имя папки попадает в список в UI (Base Template, my_project, …)
       Config.txt
       Hero Prompt.txt
       Master Prompt.txt

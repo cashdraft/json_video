@@ -6,7 +6,7 @@
     <title>{{ rw.project_name or rw.rewrite_id }} — ReWrite</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body data-openai-key="{{ '1' if openai_key_set else '0' }}">
+<body class="rewrite-project-page" data-openai-key="{{ '1' if openai_key_set else '0' }}">
     <div class="container">
         <header>
             <a href="{{ url_for('rewrite_index') }}" class="back-link">← Все проекты ReWrite</a>
@@ -76,7 +76,7 @@
                     <option value="{{ m.id }}" {% if cur_model == m.id %}selected{% endif %}>{{ m.label }}</option>
                     {% endfor %}
                 </select>
-                <span class="rewrite-template-bar__hint">Создайте подпапку в <code>rewrite_templates/</code> (как <code>baseline</code>) — её имя = шаблон. Внутрь положите <code>.txt</code>: <code>Config</code>, Hero, Master, Analysis … Файлы не в подпапке не подхватываются.</span>
+                <span class="rewrite-template-bar__hint">Создайте подпапку в <code>rewrite_templates/</code> (как <code>Base Template</code>) — её имя = шаблон. Внутрь положите <code>.txt</code>: <code>Config</code>, Hero, Master, Analysis … Файлы не в подпапке не подхватываются.</span>
             </div>
 
             <div class="scene-card rewrite-source-card">
