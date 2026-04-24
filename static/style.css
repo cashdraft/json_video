@@ -1294,9 +1294,10 @@ textarea::placeholder {
 }
 
 .rewrite-stage-status-row {
-    margin: 0.35rem 0.35rem 0.15rem;
-    width: calc(100% - 0.7rem);
-    max-width: none;
+    box-sizing: border-box;
+    margin: 0.35rem 0 0.15rem;
+    width: 100%;
+    max-width: 100%;
 }
 
 .rewrite-stage-status-row .rewrite-stage-status-text {
@@ -1312,6 +1313,14 @@ textarea::placeholder {
 
 .rewrite-stage-card--running .rewrite-stage-result {
     display: none;
+}
+
+/* Пока идёт запуск этапа — в плейсхолдере один блок статуса; без calc()+margin, иначе колонка flex
+   оставляет лишний зазор вправо и «окно» визуально съезжает. */
+.rewrite-stage-card--running .rewrite-slot--stage-result {
+    align-items: center;
+    justify-content: center;
+    min-height: 4.5rem;
 }
 
 .slot-placeholder.rewrite-slot-placeholder {
