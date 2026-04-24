@@ -1431,6 +1431,7 @@ textarea::placeholder {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
+    position: relative;
 }
 
 .video-parse-panel .input-section,
@@ -1483,6 +1484,28 @@ textarea::placeholder {
 
 .video-parse-panel .buttons-section {
     margin-top: 0.1rem;
+}
+
+.video-parse-lock-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: rgba(12, 14, 20, 0.66);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
+.video-parse-panel--locked .video-parse-lock-overlay {
+    display: flex;
+}
+
+.video-parse-panel--locked #json_input,
+.video-parse-panel--locked .settings-section,
+.video-parse-panel--locked .buttons-section,
+.video-parse-panel--locked .input-actions {
+    pointer-events: none;
 }
 
 .job-page .video-panel .summary {

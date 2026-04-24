@@ -183,11 +183,12 @@
             method="post"
             action="{{ url_for('parse_for_job', job_id=job_id) }}"
             id="job-parse-form"
-            class="video-panel video-parse-panel"
+            class="video-panel video-parse-panel {{ 'video-parse-panel--locked' if (scenes|length) > 0 else '' }}"
             data-existing-scenes-count="{{ scenes|length }}"
             data-existing-start-count="{{ summary.with_start_prompt }}"
             data-existing-end-count="{{ summary.with_end_prompt }}"
             data-existing-video-count="{{ summary.with_video_prompt }}"
+            data-parse-locked="{{ '1' if (scenes|length) > 0 else '0' }}"
         >
             <section class="input-section">
                 <div class="input-header">
@@ -288,6 +289,9 @@
             <section class="buttons-section">
                 <button type="submit" class="btn btn-primary btn-sm">Добавить сцены</button>
             </section>
+            <div class="video-parse-lock-overlay {{ '' if (scenes|length) > 0 else 'hidden' }}" id="video-parse-lock-overlay">
+                <button type="button" class="btn btn-secondary btn-sm" id="video-parse-unlock-btn">Редактировать блок</button>
+            </div>
         </form>
 
         <section class="generation-section scene-card rewrite-pipeline-runner video-panel" aria-label="Пакетная генерация изображений и видео">
@@ -518,6 +522,19 @@
             </div>
         </div>
     </div>
+    <div class="confirm-modal hidden" id="json-edit-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-json-edit-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="json-edit-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="json-edit-confirm-title">Редактирование сцен</h3>
+            </div>
+            <p class="confirm-modal__lead">У вас уже есть сцены в проекте. Точно хотите редактировать блок JSON-код сцен?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="json-edit-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="json-edit-confirm-ok">Да, редактировать</button>
+            </div>
+        </div>
+    </div>
 
     <div class="lightbox" id="lightbox" aria-hidden="true">
         <div class="lightbox-meta" id="lightbox-meta">
@@ -595,7 +612,13 @@
     const jsonConfirmText = document.getElementById('json-confirm-text');
     const jsonConfirmCancelBtn = document.getElementById('json-confirm-cancel');
     const jsonConfirmOkBtn = document.getElementById('json-confirm-ok');
+    const jsonEditConfirmModal = document.getElementById('json-edit-confirm-modal');
+    const jsonEditConfirmCancelBtn = document.getElementById('json-edit-confirm-cancel');
+    const jsonEditConfirmOkBtn = document.getElementById('json-edit-confirm-ok');
+    const parseLockOverlay = document.getElementById('video-parse-lock-overlay');
+    const parseUnlockBtn = document.getElementById('video-parse-unlock-btn');
     let jsonConfirmResolver = null;
+    let jsonEditConfirmResolver = null;
 
     if (loadExampleBtn && jsonInputEl) {
         loadExampleBtn.addEventListener('click', () => {
@@ -689,6 +712,50 @@
         if (e.target && e.target.hasAttribute('data-json-confirm-close')) {
             closeJsonConfirm(false);
         }
+    });
+
+    const openJsonEditConfirm = () => {
+        if (!jsonEditConfirmModal || !jsonEditConfirmCancelBtn || !jsonEditConfirmOkBtn) {
+            return Promise.resolve(window.confirm('У вас уже есть сцены в проекте. Точно хотите редактировать блок JSON-код сцен?'));
+        }
+        jsonEditConfirmModal.classList.remove('hidden');
+        jsonEditConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise((resolve) => {
+            jsonEditConfirmResolver = resolve;
+        });
+    };
+
+    const closeJsonEditConfirm = (accepted) => {
+        if (!jsonEditConfirmModal) return;
+        jsonEditConfirmModal.classList.add('hidden');
+        jsonEditConfirmModal.setAttribute('aria-hidden', 'true');
+        if (jsonEditConfirmResolver) {
+            const resolve = jsonEditConfirmResolver;
+            jsonEditConfirmResolver = null;
+            resolve(Boolean(accepted));
+        }
+    };
+
+    jsonEditConfirmCancelBtn?.addEventListener('click', () => closeJsonEditConfirm(false));
+    jsonEditConfirmOkBtn?.addEventListener('click', () => closeJsonEditConfirm(true));
+    jsonEditConfirmModal?.addEventListener('click', (e) => {
+        if (e.target && e.target.hasAttribute('data-json-edit-confirm-close')) {
+            closeJsonEditConfirm(false);
+        }
+    });
+
+    const setParsePanelLocked = (locked) => {
+        if (!jsonParseForm) return;
+        jsonParseForm.dataset.parseLocked = locked ? '1' : '0';
+        jsonParseForm.classList.toggle('video-parse-panel--locked', locked);
+        if (parseLockOverlay) parseLockOverlay.classList.toggle('hidden', !locked);
+    };
+
+    parseUnlockBtn?.addEventListener('click', async () => {
+        const ok = await openJsonEditConfirm();
+        if (!ok) return;
+        setParsePanelLocked(false);
+        jsonInputEl?.focus();
     });
 
     if (jsonParseForm) {
