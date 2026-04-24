@@ -96,7 +96,10 @@ header h1 {
     margin-bottom: 0.5rem;
 }
 
-.job-page .flash {
+/* Как на /job: компактные flash; те же правила на всех страницах ReWrite */
+.job-page .flash,
+.rewrite-project-page .flash,
+.rewrite-index-page .flash {
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     font-size: 0.85rem;
