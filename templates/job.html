@@ -6,7 +6,7 @@
     <title>Проект {{ job_id }} — Генерация</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="job-page">
     {% macro job_template_placeholder_inner() %}
     <div class="job-template-ph" aria-hidden="true">
         <svg class="job-template-ph-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" focusable="false">
@@ -20,18 +20,29 @@
     <div class="container">
         <header>
             <a href="{{ url_for('index') }}" class="back-link">← На главную</a>
-            <form method="post" action="{{ url_for('rename_job', job_id=job_id) }}" class="project-name-form">
-                <label for="project_name" class="sr-only">Название проекта</label>
-                <input
-                    type="text"
-                    id="project_name"
-                    name="project_name"
-                    class="project-name-input"
-                    placeholder="{{ job_id }}"
-                    value="{{ job.project_name or '' }}"
+            <a href="{{ url_for('video_index') }}" class="back-link">← К разделу Video</a>
+            <div class="rewrite-project-header-bar">
+                <form method="post" action="{{ url_for('rename_job', job_id=job_id) }}" class="project-name-form">
+                    <label for="project_name" class="sr-only">Название проекта</label>
+                    <input
+                        type="text"
+                        id="project_name"
+                        name="project_name"
+                        class="project-name-input"
+                        placeholder="{{ job_id }}"
+                        value="{{ job.project_name or '' }}"
+                    >
+                    <button type="submit" class="btn btn-secondary btn-sm">Изменить</button>
+                </form>
+                <form
+                    method="post"
+                    action="{{ url_for('delete_job', job_id=job_id) }}"
+                    class="rewrite-project-delete-form"
+                    onsubmit="return confirm('Удалить проект {{ job_id }}?');"
                 >
-                <button type="submit" class="btn btn-secondary btn-sm">Изменить</button>
-            </form>
+                    <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
+                </form>
+            </div>
             <p class="subtitle">Генерация изображений и видео по сценам · {{ job_id }}</p>
         </header>
 
@@ -88,10 +99,6 @@
                     </div>
                     {% endif %}
                 </div>
-                <div class="setting">
-                    <span class="setting-label">Output</span>
-                    <span class="setting-value">{{ job.job_meta.output_format or 'jpg' }}</span>
-                </div>
             </div>
         </section>
 
@@ -105,17 +112,32 @@
         </section>
 
         <section class="tts-section" id="elevenlabs-tts">
-            <h2>Озвучка (ElevenLabs)</h2>
+            <h2 class="scene-id rewrite-pipeline-runner__title">Озвучка ElevenLabs</h2>
             {% if not elevenlabs_key_set %}
             <p class="tts-warning">
                 Укажите <code>ELEVENLABS_API_KEY</code> в <code>.env</code> и перезапустите сервис (<code>systemctl restart json-video</code>).
             </p>
             {% else %}
-            <p class="tts-hint">
+            <p class="scene-text rewrite-pipeline-runner__lead">
                 Число справа — лимит <strong>одного</strong> запроса к API (зависит от модели). Если текст длиннее, он автоматически делится по символу <strong>точки</strong> на предложения,
                 пакуется в куски ≤ лимита, для каждого куска уходит отдельный запрос, затем фрагменты <strong>склеиваются в один MP3</strong> (на сервере нужен <code>ffmpeg</code>).
                 С баланса списываются все символы. Точки в «Dr.» и числах 3.14 тоже режут текст — при необходимости временно замените их.
             </p>
+            <div class="rewrite-template-bar">
+                <label for="tts-template-select" class="rewrite-template-bar__label">Шаблон озвучки</label>
+                <select id="tts-template-select" class="tts-select rewrite-template-select">
+                    {% set cur_tts_tpl = (tts_template or 'Naomi')|trim %}
+                    {% for t in tts_template_names %}
+                    <option value="{{ t }}" {{ 'selected' if t == cur_tts_tpl else '' }}>{{ t }}</option>
+                    {% endfor %}
+                    {% if cur_tts_tpl and cur_tts_tpl not in tts_template_names %}
+                    <option value="{{ cur_tts_tpl }}" selected>{{ cur_tts_tpl }}</option>
+                    {% endif %}
+                </select>
+                <button type="button" class="btn btn-secondary btn-sm" id="tts-template-apply">Применить</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="tts-template-save-disk">Обновить шаблон</button>
+                <span id="tts-template-status" class="tts-template-status hidden" aria-live="polite"></span>
+            </div>
             <div class="tts-form">
                 <label class="tts-label" for="tts-text">Текст</label>
                 <textarea id="tts-text" class="tts-textarea" rows="7" placeholder="Вставьте текст для озвучки…"></textarea>
@@ -166,7 +188,7 @@
                     Speaker boost (сильнее похоже на оригинальный голос, чуть выше задержка)
                 </label>
                 <div class="tts-actions">
-                    <button type="button" class="btn btn-primary" id="tts-generate">Сгенерировать озвучку</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="tts-generate">Сгенерировать озвучку</button>
                     <span id="tts-busy" class="tts-busy hidden">Запрос к ElevenLabs…</span>
                 </div>
                 <p id="tts-error" class="tts-error hidden" role="alert"></p>
@@ -201,16 +223,25 @@
             {% endif %}
         </section>
 
-        <section class="generation-section">
-            <h2>Генерация</h2>
-            <p class="generation-hint">Kie.ai: Nano Banana Pro (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
+        <section class="generation-section scene-card rewrite-pipeline-runner" aria-label="Пакетная генерация изображений и видео">
+            <div class="rewrite-pipeline-runner__head">
+                <div>
+                    <div class="scene-id rewrite-pipeline-runner__title">Генерация</div>
+                    <p class="scene-text rewrite-pipeline-runner__lead">Kie.ai: Nano Banana Pro (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
+                </div>
+                <div class="rewrite-pipeline-runner__actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-image">Сгенерировать Image</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-video">Сгенерировать Video</button>
+                    <button type="button" class="btn btn-danger btn-sm" id="bulk-generate-stop" disabled>Остановить</button>
+                </div>
+            </div>
+            <pre class="rewrite-pipeline-runner__log" id="generation-bulk-log" aria-live="polite">Журнал пуст. Нажмите «Сгенерировать Image» или «Сгенерировать Video».</pre>
         </section>
 
         <section
             class="scenes-section"
             style="--slot-aspect-ratio: {{ (job.job_meta.aspect_ratio or '16:9')|replace(':', '/') }};"
         >
-            <h2>Сцены</h2>
             <div class="scenes-grid {{ 'portrait-layout' if (job.job_meta.aspect_ratio or '16:9') == '9:16' else '' }}">
                 {% for scene in scenes %}
                 {% set has_start_prompt = scene.start.prompt|default('', true) %}
@@ -227,18 +258,37 @@
                 >
                     <div class="scene-header">
                         <div class="scene-id">{{ scene.scene_id }}</div>
-                        <div class="scene-text" title="{{ scene.text }}">{{ scene.text[:80] }}{% if scene.text|length > 80 %}...{% endif %}</div>
+                        <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
                     </div>
                     <div class="scene-slots">
                         <div class="scene-slot" data-slot="start">
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
                                     <span class="slot-badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
-                                    <span class="slot-prompt-tooltip">{{ scene.start.prompt or '—' }}</span>
+                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.start.prompt or '—' }}</span>
                                 </span>
-                                {% if scene.start.prompt %}
-                                <button type="button" class="btn-regenerate btn-generate" data-scene-index="{{ loop.index0 }}" data-slot="start" title="Generate">↻</button>
-                                {% endif %}
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
+                                    title="Редактировать"
+                                    aria-label="Редактировать"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="start"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="btn-regenerate btn-generate {{ '' if scene.start.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="start" title="Generate" {{ '' if scene.start.prompt else 'disabled' }}>↻</button>
+                            </div>
+                            <div class="slot-prompt-editor-wrap">
+                                <textarea
+                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
+                                    rows="4"
+                                    readonly
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="start"
+                                    placeholder="Start prompt…"
+                                >{{ scene.start.prompt or '' }}</textarea>
                             </div>
                             {% set start_gen = scene.start.generation if scene.start and scene.start.generation else none %}
                             {% set start_active = start_gen and start_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not start_gen.canceled %}
@@ -265,11 +315,30 @@
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
                                     <span class="slot-badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">End: {{ 'YES' if scene.end.prompt else 'NO' }}</span>
-                                    <span class="slot-prompt-tooltip">{{ scene.end.prompt or '—' }}</span>
+                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.end.prompt or '—' }}</span>
                                 </span>
-                                {% if scene.end.prompt %}
-                                <button type="button" class="btn-regenerate btn-generate" data-scene-index="{{ loop.index0 }}" data-slot="end" title="Generate">↻</button>
-                                {% endif %}
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
+                                    title="Редактировать"
+                                    aria-label="Редактировать"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="end"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="btn-regenerate btn-generate {{ '' if scene.end.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="end" title="Generate" {{ '' if scene.end.prompt else 'disabled' }}>↻</button>
+                            </div>
+                            <div class="slot-prompt-editor-wrap">
+                                <textarea
+                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
+                                    rows="4"
+                                    readonly
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="end"
+                                    placeholder="End prompt…"
+                                >{{ scene.end.prompt or '' }}</textarea>
                             </div>
                             {% set end_gen = scene.end.generation if scene.end and scene.end.generation else none %}
                             {% set end_active = end_gen and end_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not end_gen.canceled %}
@@ -301,16 +370,26 @@
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
                                     <span class="slot-badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
-                                    <span class="slot-prompt-tooltip">{{ scene.video.prompt or '—' }}</span>
+                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.video.prompt or '—' }}</span>
                                 </span>
-                                {% if has_video_prompt %}
                                 <button
                                     type="button"
-                                    class="btn-regenerate btn-generate {{ '' if video_ready else 'btn-video-locked' }}"
+                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
+                                    title="Редактировать"
+                                    aria-label="Редактировать"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="video"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn-regenerate btn-generate {{ '' if scene.video.prompt else 'is-hidden' }} {{ '' if video_ready else 'btn-video-locked' }}"
                                     data-scene-index="{{ loop.index0 }}"
                                     data-slot="video"
                                     title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
-                                    {{ '' if video_ready else 'disabled' }}
+                                    {{ '' if (has_video_prompt and video_ready) else 'disabled' }}
                                 ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
                                 <span class="video-hd-status {{ 'active' if show_hd_done or show_hd_wait else '' }}" data-video-hd-status>
                                     {% if show_hd_done %}
@@ -321,7 +400,16 @@
                                     720p
                                     {% endif %}
                                 </span>
-                                {% endif %}
+                            </div>
+                            <div class="slot-prompt-editor-wrap">
+                                <textarea
+                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
+                                    rows="4"
+                                    readonly
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="video"
+                                    placeholder="Video prompt…"
+                                >{{ scene.video.prompt or '' }}</textarea>
                             </div>
                             <div
                                 class="slot-placeholder"
@@ -366,6 +454,21 @@
         <div class="lightbox-counter" id="lightbox-counter"></div>
     </div>
 
+    <div class="confirm-modal hidden" id="bulk-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="bulk-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="bulk-confirm-title">Конвейер запуска</h3>
+            </div>
+            <p class="confirm-modal__lead">Проверьте количество задач перед стартом:</p>
+            <div class="confirm-modal__preview" id="bulk-confirm-text"></div>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="bulk-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="bulk-confirm-ok">Запустить</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     let galleryImages = [];
     let currentImageIndex = 0;
@@ -378,6 +481,56 @@
     const lightboxSceneText = document.getElementById('lightbox-scene-text');
     const lightboxRegenCurrent = document.getElementById('lightbox-regen-current');
     const lightboxVideo = document.getElementById('lightbox-video');
+    const bulkGenerateImageBtn = document.getElementById('bulk-generate-image');
+    const bulkGenerateVideoBtn = document.getElementById('bulk-generate-video');
+    const bulkGenerateStopBtn = document.getElementById('bulk-generate-stop');
+    const generationBulkLogEl = document.getElementById('generation-bulk-log');
+    const bulkConfirmModal = document.getElementById('bulk-confirm-modal');
+    const bulkConfirmText = document.getElementById('bulk-confirm-text');
+    const bulkConfirmCancelBtn = document.getElementById('bulk-confirm-cancel');
+    const bulkConfirmOkBtn = document.getElementById('bulk-confirm-ok');
+
+    let bulkConfirmResolver = null;
+    let bulkRunActive = false;
+    let bulkStopRequested = false;
+    const bulkStartedTaskIds = new Set();
+
+    const appendBulkLog = (msg) => {
+        if (!generationBulkLogEl) return;
+        const ts = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        if (generationBulkLogEl.textContent.startsWith('Журнал пуст.')) generationBulkLogEl.textContent = '';
+        generationBulkLogEl.textContent += `[${ts}] ${msg}\n`;
+        generationBulkLogEl.scrollTop = generationBulkLogEl.scrollHeight;
+    };
+
+    const syncBulkRunUi = () => {
+        if (bulkGenerateImageBtn) bulkGenerateImageBtn.disabled = bulkRunActive;
+        if (bulkGenerateVideoBtn) bulkGenerateVideoBtn.disabled = bulkRunActive;
+        if (bulkGenerateStopBtn) bulkGenerateStopBtn.disabled = !bulkRunActive;
+    };
+
+    const openBulkConfirm = (text) => {
+        if (!bulkConfirmModal || !bulkConfirmText || !bulkConfirmCancelBtn || !bulkConfirmOkBtn) {
+            return Promise.resolve(window.confirm(text));
+        }
+        bulkConfirmText.textContent = text;
+        bulkConfirmModal.classList.remove('hidden');
+        bulkConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise((resolve) => {
+            bulkConfirmResolver = resolve;
+        });
+    };
+
+    const closeBulkConfirm = (accepted) => {
+        if (!bulkConfirmModal) return;
+        bulkConfirmModal.classList.add('hidden');
+        bulkConfirmModal.setAttribute('aria-hidden', 'true');
+        if (bulkConfirmResolver) {
+            const resolve = bulkConfirmResolver;
+            bulkConfirmResolver = null;
+            resolve(Boolean(accepted));
+        }
+    };
 
     const refreshGallery = () => {
         galleryImages = Array.from(document.querySelectorAll('.slot-image')).map(mediaEl => {
@@ -476,6 +629,10 @@
     });
 
     document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && bulkConfirmModal && !bulkConfirmModal.classList.contains('hidden')) {
+            closeBulkConfirm(false);
+            return;
+        }
         if (!lightbox.classList.contains('open')) return;
         if (e.key === 'Escape') closeLightbox();
         if (e.key === 'ArrowLeft') stepLightbox(-1);
@@ -493,6 +650,14 @@
         const sceneIndex = lightboxRegenCurrent.dataset.sceneIndex;
         const slot = lightboxRegenCurrent.dataset.slot;
         if (sceneIndex !== undefined && slot) triggerRegenerate(sceneIndex, slot);
+    });
+
+    bulkConfirmCancelBtn?.addEventListener('click', () => closeBulkConfirm(false));
+    bulkConfirmOkBtn?.addEventListener('click', () => closeBulkConfirm(true));
+    bulkConfirmModal?.addEventListener('click', (e) => {
+        if (e.target && e.target.hasAttribute('data-confirm-close')) {
+            closeBulkConfirm(false);
+        }
     });
 
     const jobId = '{{ job_id }}';
@@ -527,6 +692,87 @@
         placeholder.appendChild(span);
     };
 
+    const updateSlotPromptUi = (sceneCard, slot, promptText) => {
+        if (!sceneCard || !slot) return;
+        const slotEl = sceneCard.querySelector(`.scene-slot[data-slot="${slot}"]`);
+        if (!slotEl) return;
+        const prompt = (promptText || '').trim();
+        const hasPrompt = Boolean(prompt);
+
+        const badge = slotEl.querySelector('.slot-badge');
+        if (badge) {
+            const slotLabel = slot.charAt(0).toUpperCase() + slot.slice(1);
+            badge.classList.toggle('badge-yes', hasPrompt);
+            badge.classList.toggle('badge-no', !hasPrompt);
+            badge.textContent = `${slotLabel}: ${hasPrompt ? 'YES' : 'NO'}`;
+        }
+        const tooltip = slotEl.querySelector('[data-slot-prompt-tooltip]');
+        if (tooltip) {
+            tooltip.textContent = prompt || '—';
+        }
+
+        // Track prompt dependencies for video button lock.
+        if (slot === 'start') sceneCard.dataset.hasStartPrompt = hasPrompt ? '1' : '0';
+        if (slot === 'end') sceneCard.dataset.hasEndPrompt = hasPrompt ? '1' : '0';
+
+        const regenBtn = slotEl.querySelector(`.btn-generate[data-slot="${slot}"]`);
+        if (regenBtn && slot !== 'video') {
+            regenBtn.classList.toggle('is-hidden', !hasPrompt);
+            regenBtn.disabled = !hasPrompt;
+        }
+    };
+
+    document.querySelectorAll('.slot-prompt-toggle').forEach((toggleBtn) => {
+        toggleBtn.addEventListener('click', async () => {
+            const sceneIndex = toggleBtn.dataset.sceneIndex;
+            const slot = toggleBtn.dataset.slot;
+            const sceneCard = toggleBtn.closest('.scene-card');
+            const textarea = sceneCard?.querySelector(`.slot-prompt-editor[data-scene-index="${sceneIndex}"][data-slot="${slot}"]`);
+            if (!sceneCard || !textarea) return;
+
+            const locked = toggleBtn.classList.contains('rewrite-lock-toggle--locked');
+            if (locked) {
+                sceneCard.querySelectorAll('.scene-slot').forEach((el) => el.classList.remove('scene-slot--editing'));
+                const slotEl = toggleBtn.closest('.scene-slot');
+                if (slotEl) slotEl.classList.add('scene-slot--editing');
+                toggleBtn.classList.remove('rewrite-lock-toggle--locked');
+                toggleBtn.title = 'Сохранить';
+                textarea.removeAttribute('readonly');
+                textarea.classList.remove('rewrite-source-textarea--locked');
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                return;
+            }
+
+            toggleBtn.disabled = true;
+            const newPrompt = textarea.value.trim();
+            try {
+                const resp = await fetch(`/job/${jobId}/prompt/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_index: Number(sceneIndex), slot, prompt: newPrompt }),
+                });
+                const data = await parseJsonOrThrow(resp, 'Prompt update');
+                if (!resp.ok || !data.ok) throw new Error(data.error || 'Не удалось сохранить prompt');
+                textarea.value = data.prompt || '';
+                updateSlotPromptUi(sceneCard, slot, data.prompt || '');
+                updateVideoButtonState(sceneCard);
+            } catch (e) {
+                alert(e.message || 'Не удалось сохранить prompt');
+                return;
+            } finally {
+                toggleBtn.disabled = false;
+            }
+
+            toggleBtn.classList.add('rewrite-lock-toggle--locked');
+            toggleBtn.title = 'Редактировать';
+            textarea.setAttribute('readonly', 'readonly');
+            textarea.classList.add('rewrite-source-textarea--locked');
+            const slotEl = toggleBtn.closest('.scene-slot');
+            if (slotEl) slotEl.classList.remove('scene-slot--editing');
+        });
+    });
+
     const updateVideoButtonState = (sceneCard) => {
         if (!sceneCard) return;
         const videoBtn = sceneCard.querySelector('.btn-generate[data-slot="video"]');
@@ -534,16 +780,26 @@
 
         const hasStartPrompt = sceneCard.dataset.hasStartPrompt === '1';
         const hasEndPrompt = sceneCard.dataset.hasEndPrompt === '1';
+        const videoPromptEl = sceneCard.querySelector('.slot-prompt-editor[data-slot="video"]');
+        const hasVideoPrompt = Boolean((videoPromptEl?.value || '').trim());
         const hasStartImage = !!sceneCard.querySelector('.scene-slot[data-slot="start"] .slot-image');
         const hasEndImage = !!sceneCard.querySelector('.scene-slot[data-slot="end"] .slot-image');
-        const canGenerateVideo = (!hasStartPrompt || hasStartImage) && (!hasEndPrompt || hasEndImage);
+        const depsReady = (!hasStartPrompt || hasStartImage) && (!hasEndPrompt || hasEndImage);
+        const canGenerateVideo = hasVideoPrompt && depsReady;
+
+        videoBtn.classList.toggle('is-hidden', !hasVideoPrompt);
+        if (!hasVideoPrompt) {
+            videoBtn.disabled = true;
+            videoBtn.classList.remove('btn-video-locked');
+            videoBtn.innerHTML = '<span class="btn-icon">↻</span>';
+            videoBtn.title = 'Add video prompt first';
+            return;
+        }
 
         videoBtn.disabled = !canGenerateVideo;
         videoBtn.classList.toggle('btn-video-locked', !canGenerateVideo);
         videoBtn.innerHTML = `<span class="btn-icon">${canGenerateVideo ? '↻' : '×'}</span>`;
-        videoBtn.title = canGenerateVideo
-            ? 'Generate video'
-            : 'Generate required start/end images first';
+        videoBtn.title = canGenerateVideo ? 'Generate video' : (hasVideoPrompt ? 'Generate required start/end images first' : 'Add video prompt first');
     };
 
     const updateVideoHdStatus = (sceneCard, text = '') => {
@@ -614,7 +870,9 @@
                     } else {
                         placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
                     }
-                    updateVideoHdStatus(btn.closest('.scene-card'), statusData.hd_status_text || '1080p - done');
+                    // For Grok (and any non-upscale flow) backend returns success without hd_status_text.
+                    // Do not show stale "1080p - done" from previous Veo runs.
+                    updateVideoHdStatus(btn.closest('.scene-card'), statusData.hd_status_text || '');
                 } else {
                     placeholder.innerHTML = `<img src="${statusData.url}" alt="${slot}" class="slot-image">`;
                     refreshGallery();
@@ -649,10 +907,13 @@
         btn.disabled = false;
     };
 
-    const startGenerationForButton = async (btn) => {
+    const startGenerationForButton = async (btn, options = {}) => {
         const sceneIndex = parseInt(btn.dataset.sceneIndex, 10);
         const slot = btn.dataset.slot;
         const placeholder = btn.closest('.scene-slot').querySelector('.slot-placeholder');
+        const sceneCard = btn.closest('.scene-card');
+        const sceneId = sceneCard?.querySelector('.scene-id')?.textContent?.trim() || `scene#${sceneIndex}`;
+        if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
         btn.disabled = true;
         renderStatus(placeholder, 'Task submitted', 0, true);
         try {
@@ -667,11 +928,17 @@
             }
             const taskId = startData.task_id;
             placeholder.dataset.taskId = taskId;
+            if (options.bulk) {
+                bulkStartedTaskIds.add(taskId);
+                appendBulkLog(`▶ ${sceneId} · ${slot}: задача принята (${taskId.slice(0, 8)}…)`);
+            }
             renderStatus(placeholder, 'Task submitted', 0, true, taskId);
             await pollTask(btn, placeholder, slot, taskId);
+            if (options.bulk) appendBulkLog(`✓ ${sceneId} · ${slot}: завершено.`);
         } catch (e) {
             showPlaceholderError(placeholder, e.message || String(e));
             btn.disabled = false;
+            if (options.bulk) appendBulkLog(`✖ ${sceneId} · ${slot}: ${e.message || String(e)}`);
         }
     };
 
@@ -679,6 +946,72 @@
         btn.addEventListener('click', async function() {
             await startGenerationForButton(this);
         });
+    });
+
+    const collectBulkButtons = (kind) => {
+        const selector = kind === 'video'
+            ? '.btn-generate[data-slot="video"]'
+            : '.btn-generate[data-slot="start"], .btn-generate[data-slot="end"]';
+        return Array.from(document.querySelectorAll(selector)).filter((btn) => {
+            if (!btn || btn.disabled) return false;
+            if (btn.classList.contains('is-hidden')) return false;
+            if (kind === 'video' && btn.classList.contains('btn-video-locked')) return false;
+            return true;
+        });
+    };
+
+    const runBulkGeneration = async (kind) => {
+        const targets = collectBulkButtons(kind);
+        const count = targets.length;
+        const noun = kind === 'video' ? 'Video' : 'Image';
+        if (!count) {
+            alert(`Нет доступных ${noun} задач для запуска.`);
+            return;
+        }
+        const agreed = await openBulkConfirm(`Будет запущено ${count} ${noun} на генерацию. Точно запускаем?`);
+        if (!agreed) return;
+        bulkRunActive = true;
+        bulkStopRequested = false;
+        syncBulkRunUi();
+        appendBulkLog(`══ Пакетный запуск ${noun}: ${count} задач ══`);
+        for (let i = 0; i < targets.length; i += 1) {
+            if (bulkStopRequested) {
+                appendBulkLog('✖ Пакетный запуск остановлен пользователем.');
+                break;
+            }
+            const btn = targets[i];
+            if (btn.disabled || btn.classList.contains('is-hidden')) continue;
+            startGenerationForButton(btn, { bulk: true });
+            await new Promise((resolve) => setTimeout(resolve, 120));
+        }
+        bulkRunActive = false;
+        syncBulkRunUi();
+    };
+
+    bulkGenerateImageBtn?.addEventListener('click', () => {
+        runBulkGeneration('image').catch((e) => alert(String(e)));
+    });
+    bulkGenerateVideoBtn?.addEventListener('click', () => {
+        runBulkGeneration('video').catch((e) => alert(String(e)));
+    });
+    bulkGenerateStopBtn?.addEventListener('click', async () => {
+        if (!bulkRunActive) return;
+        bulkStopRequested = true;
+        appendBulkLog('… Остановка: отправляю cancel для активных задач');
+        const ids = Array.from(bulkStartedTaskIds);
+        for (let i = 0; i < ids.length; i += 1) {
+            const taskId = ids[i];
+            try {
+                await fetch(`/job/${jobId}/generate/cancel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId })
+                });
+            } catch (_) {}
+        }
+        appendBulkLog(`Остановка: отправлено cancel для ${ids.length} задач.`);
+        bulkRunActive = false;
+        syncBulkRunUi();
     });
 
     // Resume polling after page refresh for active tasks.
@@ -714,6 +1047,10 @@
         const btnGen = document.getElementById('tts-generate');
         const busyEl = document.getElementById('tts-busy');
         const errEl = document.getElementById('tts-error');
+        const ttsTemplateSel = document.getElementById('tts-template-select');
+        const ttsTemplateApplyBtn = document.getElementById('tts-template-apply');
+        const ttsTemplateSaveBtn = document.getElementById('tts-template-save-disk');
+        const ttsTemplateStatus = document.getElementById('tts-template-status');
         const playerWrap = document.getElementById('tts-player-wrap');
         const player = document.getElementById('tts-player');
         const playToggle = document.getElementById('tts-play-toggle');
@@ -723,6 +1060,13 @@
         const downloadBtn = document.getElementById('tts-download-btn');
         let ttsDownloadFilename = 'tts.mp3';
         if (!modelSel || !voiceSel) return;
+
+        const sliderIds = {
+            speed_pct: 'tts-speed',
+            stability_pct: 'tts-stability',
+            similarity_pct: 'tts-similarity',
+            style_pct: 'tts-style',
+        };
 
         const fmtTtsTime = (sec) => {
             if (sec == null || !Number.isFinite(sec) || sec < 0) return '0:00';
@@ -872,6 +1216,94 @@
             }
         };
 
+        const setModelIfExists = (modelId) => {
+            if (!modelId) return;
+            for (let i = 0; i < modelSel.options.length; i++) {
+                if (modelSel.options[i].value === modelId) {
+                    modelSel.selectedIndex = i;
+                    break;
+                }
+            }
+            updateCharUi();
+        };
+
+        const setVoiceByTemplate = (voiceId, voiceName) => {
+            if (!voiceSel || voiceSel.disabled) return;
+            if (voiceId) {
+                for (let i = 0; i < voiceSel.options.length; i++) {
+                    if (voiceSel.options[i].value === voiceId) {
+                        voiceSel.selectedIndex = i;
+                        return;
+                    }
+                }
+            }
+            if (voiceName) {
+                const target = voiceName.trim().toLowerCase();
+                for (let i = 0; i < voiceSel.options.length; i++) {
+                    if ((voiceSel.options[i].textContent || '').trim().toLowerCase() === target) {
+                        voiceSel.selectedIndex = i;
+                        return;
+                    }
+                }
+            }
+        };
+
+        const applyTemplateDataToUi = (tpl) => {
+            if (!tpl || typeof tpl !== 'object') return;
+            setModelIfExists(String(tpl.model_id || ''));
+            Object.entries(sliderIds).forEach(([key, id]) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const raw = Number(tpl[key]);
+                const value = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : Number(el.value || 0);
+                el.value = String(value);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            const boost = document.getElementById('tts-speaker-boost');
+            if (boost) boost.checked = Boolean(tpl.use_speaker_boost);
+            setVoiceByTemplate(String(tpl.voice_id || ''), String(tpl.voice_name || ''));
+        };
+
+        const collectCurrentTtsSettings = () => {
+            const voice_id = voiceSel.value || '';
+            const voice_name = voiceSel.options[voiceSel.selectedIndex]?.textContent || '';
+            return {
+                model_id: modelSel.value,
+                voice_id,
+                voice_name,
+                speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
+                stability_pct: parseInt(document.getElementById('tts-stability').value, 10),
+                similarity_pct: parseInt(document.getElementById('tts-similarity').value, 10),
+                style_pct: parseInt(document.getElementById('tts-style').value, 10),
+                use_speaker_boost: document.getElementById('tts-speaker-boost').checked,
+            };
+        };
+
+        let saveDefaultsTimer = null;
+        const persistTtsDefaults = async () => {
+            const payload = {
+                ...collectCurrentTtsSettings(),
+                tts_template: (ttsTemplateSel?.value || '').trim(),
+            };
+            await fetch(`/job/${jobId}/elevenlabs/defaults`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        };
+        const schedulePersistTtsDefaults = () => {
+            if (saveDefaultsTimer) clearTimeout(saveDefaultsTimer);
+            saveDefaultsTimer = setTimeout(() => {
+                persistTtsDefaults().catch(() => {});
+            }, 250);
+        };
+        const showTtsTemplateStatus = (text, isError = false) => {
+            if (!ttsTemplateStatus) return;
+            ttsTemplateStatus.textContent = text || '';
+            ttsTemplateStatus.classList.toggle('hidden', !text);
+            ttsTemplateStatus.classList.toggle('tts-template-status--error', Boolean(isError));
+        };
+
         const bindSlider = (rangeId, valId) => {
             const r = document.getElementById(rangeId);
             const v = document.getElementById(valId);
@@ -884,8 +1316,14 @@
         bindSlider('tts-stability', 'tts-stability-val');
         bindSlider('tts-similarity', 'tts-similarity-val');
         bindSlider('tts-style', 'tts-style-val');
+        ['tts-speed', 'tts-stability', 'tts-similarity', 'tts-style'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', schedulePersistTtsDefaults);
+        });
+        document.getElementById('tts-speaker-boost')?.addEventListener('change', schedulePersistTtsDefaults);
 
         modelSel.addEventListener('change', updateCharUi);
+        modelSel.addEventListener('change', schedulePersistTtsDefaults);
         textEl?.addEventListener('input', updateCharUi);
         if (defaultModelId) {
             for (let i = 0; i < modelSel.options.length; i++) {
@@ -921,10 +1359,60 @@
                         }
                     }
                 }
+                setVoiceByTemplate('', '');
+                voiceSel.addEventListener('change', schedulePersistTtsDefaults);
             })
             .catch(() => {
                 voiceSel.innerHTML = '<option value="">Ошибка загрузки голосов</option>';
             });
+
+        ttsTemplateApplyBtn?.addEventListener('click', async () => {
+            const name = (ttsTemplateSel?.value || '').trim();
+            if (!name) return;
+            showTtsTemplateStatus('');
+            ttsTemplateApplyBtn.disabled = true;
+            try {
+                const r = await fetch(`/job/${jobId}/elevenlabs/templates/${encodeURIComponent(name)}`);
+                const data = await r.json();
+                if (!r.ok || !data.ok || !data.template) throw new Error(data.error || `HTTP ${r.status}`);
+                applyTemplateDataToUi(data.template);
+                schedulePersistTtsDefaults();
+            } catch (e) {
+                errEl.textContent = e.message || String(e);
+                errEl.classList.remove('hidden');
+                showTtsTemplateStatus(`Не удалось применить шаблон "${name}"`, true);
+            } finally {
+                ttsTemplateApplyBtn.disabled = false;
+            }
+        });
+
+        ttsTemplateSaveBtn?.addEventListener('click', async () => {
+            const name = (ttsTemplateSel?.value || '').trim();
+            if (!name) {
+                errEl.textContent = 'Выберите шаблон озвучки.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            showTtsTemplateStatus('');
+            ttsTemplateSaveBtn.disabled = true;
+            try {
+                const payload = collectCurrentTtsSettings();
+                const r = await fetch(`/job/${jobId}/elevenlabs/templates/${encodeURIComponent(name)}/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await r.json();
+                if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                showTtsTemplateStatus(`Шаблон "${name}" успешно обновлен`);
+            } catch (e) {
+                errEl.textContent = e.message || String(e);
+                errEl.classList.remove('hidden');
+                showTtsTemplateStatus(`Не удалось обновить шаблон "${name}"`, true);
+            } finally {
+                ttsTemplateSaveBtn.disabled = false;
+            }
+        });
 
         btnGen?.addEventListener('click', async () => {
             errEl.classList.add('hidden');
@@ -953,6 +1441,7 @@
                         text,
                         voice_id,
                         voice_name,
+                        tts_template: (ttsTemplateSel?.value || '').trim(),
                         model_id: modelSel.value,
                         speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
                         stability_pct: parseInt(document.getElementById('tts-stability').value, 10),

@@ -231,7 +231,6 @@
                             </div>
                             <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>txt</button>
                         </div>
-                        <div class="scene-text rewrite-stage-send-hint">{{ rewrite_stage_send_hints[stage_key] }}</div>
                     </div>
                     <div class="rewrite-stage-stack">
                         <div class="rewrite-stage-row rewrite-stage-row--controls">
@@ -287,6 +286,10 @@
                                 <span class="rewrite-stage-result-counts" aria-live="polite"></span>
                             </div>
                             <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result">
+                                <div class="slot-status-row rewrite-stage-status-row hidden">
+                                    <span class="slot-status slot-status-with-spinner rewrite-stage-status-text"></span>
+                                    <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn">Cancel</button>
+                                </div>
                                 <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="3" {% if result_locked %}readonly{% endif %} placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
                         </div>
@@ -1188,13 +1191,39 @@
         if (ta) ta.classList.remove('rewrite-stage-result--error');
     }
 
-    /** Статус стрима — одна строка прямо в поле результата (вместо отдельного блока). */
+    function setStageStatusUi(block, text, canCancel, onCancel) {
+        const row = block.querySelector('.rewrite-stage-status-row');
+        const label = block.querySelector('.rewrite-stage-status-text');
+        const cancelBtn = block.querySelector('.rewrite-stage-cancel-btn');
+        const resultWrap = block.querySelector('.rewrite-slot--stage-result');
+        if (!row || !label || !cancelBtn) return;
+        if (arguments.length >= 4) {
+            block._rewriteStageCancelHandler = onCancel || null;
+        }
+        var cancelHandler = block._rewriteStageCancelHandler || null;
+        var visible = !!text;
+        label.textContent = text || '';
+        row.classList.toggle('hidden', !visible);
+        cancelBtn.classList.toggle('hidden', !canCancel);
+        cancelBtn.disabled = !canCancel;
+        cancelBtn.onclick = canCancel && typeof cancelHandler === 'function' ? cancelHandler : null;
+        block.classList.toggle('rewrite-stage-card--running', visible);
+        if (resultWrap) {
+            if (visible) resultWrap.setAttribute('data-status', 'generating');
+            else resultWrap.removeAttribute('data-status');
+        }
+    }
+
+    function clearStageStatusUi(block) {
+        setStageStatusUi(block, '', false, null);
+    }
+
     function pushStageStatus(block, msg) {
         const resTextarea = block.querySelector('.rewrite-stage-result');
         if (!resTextarea) return;
-        var t = new Date();
-        var ts = t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        resTextarea.value = '[' + ts + '] ' + msg;
+        var startedAt = Number(block.getAttribute('data-run-started-at') || '0');
+        var elapsedSec = startedAt > 0 ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+        setStageStatusUi(block, (msg || 'Выполнение…') + ' (' + elapsedSec + 's)', true);
         resTextarea.classList.add('rewrite-stage-result--busy');
         updateResultCounts(block);
         syncStageRunButtons();
@@ -1210,6 +1239,7 @@
         resTextarea.value = 'Ошибка: ' + text;
         resTextarea.classList.remove('rewrite-stage-result--busy');
         resTextarea.classList.add('rewrite-stage-result--error');
+        clearStageStatusUi(block);
         updateResultCounts(block);
         syncStageRunButtons();
         if (pipelineStatusForward) {
@@ -1382,17 +1412,34 @@
         options = options || {};
         var manageBusy = options.manageBusy !== false;
         var signal = options.signal;
+        var localAbortController = null;
+        if (!signal) {
+            localAbortController = new AbortController();
+            signal = localAbortController.signal;
+        }
         var stageSuccess = false;
         var gotFinalResult = false;
         var streamError = false;
         var reader = null;
+        block.setAttribute('data-run-started-at', String(Date.now()));
         resetStageRunUi(block);
         const resTextarea = block.querySelector('.rewrite-stage-result');
         const resultBadge = block.querySelector('.rewrite-stage-result-badge');
         const savedBeforeRun = resTextarea ? resTextarea.value : '';
+        setStageStatusUi(
+            block,
+            'В очереди OpenAI… (0s)',
+            true,
+            function () {
+                if (localAbortController) {
+                    localAbortController.abort();
+                } else if (pipelineAbortController) {
+                    pipelineAbortController.abort();
+                }
+            }
+        );
         if (manageBusy) setBusy(true);
         if (resTextarea) {
-            resTextarea.value = 'Генерация…';
             resTextarea.classList.add('rewrite-stage-result--busy');
             resTextarea.classList.remove('rewrite-stage-result--error');
             updateResultCounts(block);
@@ -1482,6 +1529,7 @@
                             resTextarea.value = streamBuf + '\n\n--- Ошибка ---\n' + ev.message;
                             resTextarea.classList.remove('rewrite-stage-result--busy');
                             resTextarea.classList.add('rewrite-stage-result--error');
+                            clearStageStatusUi(block);
                             if (resultBadge) {
                                 resultBadge.textContent = 'Result: Pending';
                                 resultBadge.classList.remove('badge-yes');
@@ -1502,6 +1550,7 @@
                             resTextarea.classList.remove('rewrite-stage-result--busy');
                             resTextarea.classList.remove('rewrite-stage-result--error');
                         }
+                        clearStageStatusUi(block);
                         if (resultBadge) {
                             resultBadge.textContent = 'Result: DONE';
                             resultBadge.classList.remove('badge-no');
@@ -1526,6 +1575,7 @@
                 resTextarea.value = savedBeforeRun;
                 resTextarea.classList.remove('rewrite-stage-result--busy');
                 resTextarea.classList.remove('rewrite-stage-result--error');
+                clearStageStatusUi(block);
                 updateResultCounts(block);
                 syncStageRunButtons();
                 return false;
@@ -1533,11 +1583,13 @@
             if (!gotFinalResult && resTextarea && !streamError) {
                 if (useOpenAIStreamUi && streamBuf.length > 0) {
                     resTextarea.classList.remove('rewrite-stage-result--busy');
+                    clearStageStatusUi(block);
                     updateResultCounts(block);
                     syncStageRunButtons();
                 } else {
                     resTextarea.value = savedBeforeRun;
                     resTextarea.classList.remove('rewrite-stage-result--busy');
+                    clearStageStatusUi(block);
                     updateResultCounts(block);
                     syncStageRunButtons();
                 }
@@ -1558,6 +1610,7 @@
                     resTextarea.value = savedBeforeRun;
                     resTextarea.classList.remove('rewrite-stage-result--busy');
                     resTextarea.classList.remove('rewrite-stage-result--error');
+                    clearStageStatusUi(block);
                     updateResultCounts(block);
                 }
                 syncStageRunButtons();
@@ -1570,6 +1623,11 @@
             streamError = true;
             return false;
         } finally {
+            block.removeAttribute('data-run-started-at');
+            block._rewriteStageCancelHandler = null;
+            if (!stageSuccess) {
+                clearStageStatusUi(block);
+            }
             if (manageBusy) setBusy(false);
         }
     }

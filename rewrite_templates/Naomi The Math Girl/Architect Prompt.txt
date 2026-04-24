@@ -101,7 +101,6 @@
 Верни строго JSON:
 
 {
-  "project_id": "<string>",
   "target_chars_total": <integer>,
   "target_chars_tolerance": <integer>,
   "narrative_arc": {

@@ -18,6 +18,7 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 REWRITE_MODELS: list[dict[str, str]] = [
     {"id": "gpt-4.1", "label": "GPT-4.1"},
+    {"id": "gpt-5.4", "label": "GPT-5.4"},
 ]
 
 REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}

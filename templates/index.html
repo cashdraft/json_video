@@ -98,6 +98,7 @@
                         <select id="video_model" name="video_model">
                             <option value="veo3" {{ 'selected' if video_model == 'veo3' else '' }}>Veo 3.1 Quality</option>
                             <option value="veo3_fast" {{ 'selected' if (video_model or 'veo3_fast') in ['veo3_fast', 'veo3-fast'] else '' }}>Veo 3.1 Fast</option>
+                            <option value="grok-imagine/image-to-video" {{ 'selected' if video_model == 'grok-imagine/image-to-video' else '' }}>Grok Imagine Image to Video</option>
                         </select>
                     </div>
                     <div class="setting setting-wide template-setting">

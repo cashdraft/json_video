@@ -48,7 +48,6 @@
 ФОРМАТ ВЫВОДА (СТРОГО JSON):
 
 {
-  "project_id": "<string>",
   "edited_text": "<полный обновлённый текст>",
   "changes": [
     {

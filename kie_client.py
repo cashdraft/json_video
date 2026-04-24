@@ -19,6 +19,7 @@ GET_TASK = f"{API_BASE}/api/v1/jobs/recordInfo"
 CREATE_VIDEO_TASK = f"{API_BASE}/api/v1/veo/generate"
 GET_VIDEO_TASK = f"{API_BASE}/api/v1/veo/record-info"
 GET_VIDEO_1080P = f"{API_BASE}/api/v1/veo/get-1080p-video"
+CREATE_GROK_VIDEO_TASK = f"{API_BASE}/api/v1/jobs/createTask"
 
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
 _DOTENV_LOADED = False
@@ -54,6 +55,16 @@ def _get_api_key() -> str:
     return key
 
 
+def normalize_aspect_ratio(value: str | None, default: str = "16:9") -> str:
+    """Normalize UI/user values to Kie.ai format (W:H)."""
+    raw = (value or "").strip()
+    if not raw:
+        return default
+    raw = raw.replace("/", ":").replace(" ", "")
+    allowed = {"16:9", "9:16", "1:1", "3:2", "2:3"}
+    return raw if raw in allowed else default
+
+
 def create_image_task(
     prompt: str,
     aspect_ratio: str = "16:9",
@@ -63,9 +74,12 @@ def create_image_task(
 ) -> str:
     """Create image generation task. Returns taskId."""
     api_key = _get_api_key()
+    ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
     inp: dict[str, Any] = {
         "prompt": prompt,
-        "aspect_ratio": aspect_ratio,
+        "aspect_ratio": ratio,
+        # Some Kie endpoints/examples use camelCase; send both for compatibility.
+        "aspectRatio": ratio,
         "resolution": resolution,
         "output_format": output_format,
     }
@@ -151,6 +165,46 @@ def create_video_task(
         payload["imageUrls"] = image_urls
     resp = requests.post(
         CREATE_VIDEO_TASK,
+        json=payload,
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=30,
+    )
+    data = resp.json()
+    if resp.status_code != 200 or data.get("code") != 200:
+        msg = data.get("msg", resp.text)
+        raise RuntimeError(f"Kie.ai API error: {msg}")
+    task_id = data.get("data", {}).get("taskId")
+    if not task_id:
+        raise RuntimeError("No taskId in response")
+    return task_id
+
+
+def create_grok_image_to_video_task(
+    *,
+    prompt: str,
+    image_urls: list[str] | None = None,
+    aspect_ratio: str = "16:9",
+    duration_seconds: int = 6,
+    nsfw_checker: bool = False,
+) -> str:
+    """Create Grok Imagine image-to-video task. Returns taskId."""
+    api_key = _get_api_key()
+    dur = max(6, min(30, int(duration_seconds)))
+    payload: dict[str, Any] = {
+        "model": "grok-imagine/image-to-video",
+        "input": {
+            "prompt": prompt,
+            "mode": "normal",
+            "aspect_ratio": aspect_ratio,
+            "duration": str(dur),
+            "resolution": "720p",
+            "nsfw_checker": bool(nsfw_checker),
+        },
+    }
+    if image_urls:
+        payload["input"]["image_urls"] = image_urls
+    resp = requests.post(
+        CREATE_GROK_VIDEO_TASK,
         json=payload,
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=30,

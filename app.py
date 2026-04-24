@@ -58,12 +58,19 @@ from elevenlabs_client import (
     split_tts_text_into_chunks,
     text_to_speech_bytes,
 )
+from elevenlabs_templates import (
+    list_elevenlabs_template_names,
+    load_elevenlabs_template,
+    save_elevenlabs_template,
+)
 from kie_client import (
+    create_grok_image_to_video_task,
     create_image_task,
     create_video_task,
     get_task_result,
     get_video_task_result,
     get_video_1080p_result,
+    normalize_aspect_ratio,
 )
 from rewrite_openai import (
     REWRITE_DEFAULT_MODEL,
@@ -346,15 +353,43 @@ def load_job(job_id: str) -> dict | None:
     filepath = JOBS_DIR / f"{job_id}.json"
     if not filepath.exists():
         return None
-    with open(filepath, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for _ in range(3):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            time.sleep(0.02)
+            continue
+        except OSError:
+            return None
+    return None
 
 
 def save_job(job_id: str, job: dict) -> None:
     """Persist job JSON to disk."""
     filepath = JOBS_DIR / f"{job_id}.json"
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(job, f, ensure_ascii=False, indent=2)
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=str(filepath.parent),
+            prefix=f"{filepath.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            tmp_name = f.name
+            json.dump(job, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, filepath)
+    finally:
+        if tmp_name and os.path.exists(tmp_name):
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
 
 
 def update_job_field(job_id: str, field: str, value) -> bool:
@@ -364,8 +399,28 @@ def update_job_field(job_id: str, field: str, value) -> bool:
         return False
     job[field] = value
     filepath = JOBS_DIR / f"{job_id}.json"
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(job, f, ensure_ascii=False, indent=2)
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=str(filepath.parent),
+            prefix=f"{filepath.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            tmp_name = f.name
+            json.dump(job, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, filepath)
+    finally:
+        if tmp_name and os.path.exists(tmp_name):
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
     return True
 
 
@@ -746,11 +801,15 @@ def normalize_video_model(value: str | None) -> str:
         return "veo3_fast"
     if normalized in {"veo3", "veo 3.1 quality"}:
         return "veo3"
+    if normalized in {"grok-imagine/image-to-video", "grok imagine image to video", "grok-imagine"}:
+        return "grok-imagine/image-to-video"
     return "veo3_fast"
 
 
 def video_model_label(value: str | None) -> str:
     model_id = normalize_video_model(value)
+    if model_id == "grok-imagine/image-to-video":
+        return "Grok Imagine Image to Video"
     return "Veo 3.1 Fast" if model_id == "veo3_fast" else "Veo 3.1 Quality"
 
 
@@ -769,6 +828,14 @@ def render_index(**kwargs):
 
 @app.route("/")
 def index():
+    resp = make_response(render_template("home.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
+@app.route("/video")
+def video_index():
     return render_index()
 
 
@@ -1543,7 +1610,7 @@ def rewrite_reright_legacy_redirect():
 def parse():
     raw_text = request.form.get("json_input", "")
     project_name = request.form.get("project_name", "")
-    aspect_ratio = request.form.get("aspect_ratio", "16:9")
+    aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
     resolution = request.form.get("resolution", "2K")
     video_duration = 10
     image_model = request.form.get("image_model", "nano-banana-pro")
@@ -1585,7 +1652,7 @@ def parse():
 def save():
     raw_text = request.form.get("json_input", "")
     project_name = request.form.get("project_name", "")
-    aspect_ratio = request.form.get("aspect_ratio", "16:9")
+    aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
     resolution = request.form.get("resolution", "2K")
     video_duration = 10
     image_model = request.form.get("image_model", "nano-banana-pro")
@@ -1635,10 +1702,11 @@ def generate_slot_start(job_id: str):
 
     scene = scenes[scene_idx]
     meta = job.get("job_meta", {})
-    aspect_ratio = meta.get("aspect_ratio", "16:9")
+    aspect_ratio = normalize_aspect_ratio(meta.get("aspect_ratio", "16:9"), "16:9")
     resolution = meta.get("resolution", "2K")
     output_format = meta.get("output_format", "jpg")
     video_model = normalize_video_model(meta.get("video_model", "veo3_fast"))
+    video_duration = int(meta.get("video_duration", 10) or 10)
 
     prompt = None
     if slot == "start":
@@ -1674,13 +1742,22 @@ def generate_slot_start(job_id: str):
 
     try:
         if slot == "video":
-            task_id = create_video_task(
-                prompt=prompt,
-                model=video_model,
-                aspect_ratio=aspect_ratio,
-                image_urls=video_image_urls,
-                generation_type=video_generation_type,
-            )
+            if video_model == "grok-imagine/image-to-video":
+                task_id = create_grok_image_to_video_task(
+                    prompt=prompt,
+                    image_urls=video_image_urls or None,
+                    aspect_ratio=aspect_ratio,
+                    duration_seconds=video_duration,
+                    nsfw_checker=False,
+                )
+            else:
+                task_id = create_video_task(
+                    prompt=prompt,
+                    model=video_model,
+                    aspect_ratio=aspect_ratio,
+                    image_urls=video_image_urls,
+                    generation_type=video_generation_type,
+                )
         else:
             image_input_urls: list[str] = []
             tid = (meta.get("image_template") or "").strip()
@@ -1719,6 +1796,7 @@ def generate_slot_start(job_id: str):
         "scene_idx": scene_idx,
         "slot": slot,
         "started_at": datetime.now().timestamp(),
+        "video_model": video_model if slot == "video" else "",
     }
 
     # Persist in job file to survive page reload/restart.
@@ -1779,7 +1857,19 @@ def generate_slot_status(job_id: str):
     try:
         slot_name = task_meta.get("slot", "start")
         if slot_name == "video":
-            result = get_video_task_result(task_id)
+            job_for_model = load_job(job_id) or {}
+            vm = normalize_video_model(
+                task_meta.get("video_model")
+                or ((job_for_model.get("job_meta") or {}).get("video_model") or "veo3_fast")
+            )
+            if vm == "grok-imagine/image-to-video":
+                result = get_task_result(task_id)
+                task_meta["video_model"] = vm
+                GENERATION_TASKS[task_id] = task_meta
+            else:
+                result = get_video_task_result(task_id)
+                task_meta["video_model"] = vm
+                GENERATION_TASKS[task_id] = task_meta
         else:
             result = get_task_result(task_id)
     except ValueError as e:
@@ -1817,71 +1907,95 @@ def generate_slot_status(job_id: str):
         slot = task_meta["slot"]
 
         if slot == "video":
-            # Show base video immediately, then keep polling until 1080p is ready.
-            hd_started_at = task_meta.get("hd_started_at")
-            if not hd_started_at:
-                hd_started_at = datetime.now().timestamp()
-                task_meta["hd_started_at"] = hd_started_at
-                GENERATION_TASKS[task_id] = task_meta
+            vm = normalize_video_model(task_meta.get("video_model") or "veo3_fast")
+            if vm == "grok-imagine/image-to-video":
+                response["url"] = url
+                if url:
+                    job = load_job(job_id)
+                    if job is not None:
+                        scene_idx = task_meta["scene_idx"]
+                        scenes = job.get("scenes", [])
+                        if 0 <= scene_idx < len(scenes):
+                            scene = scenes[scene_idx]
+                            scene[slot] = scene.get(slot) or {"prompt": None}
+                            scene[slot]["video_url"] = url
+                            scene[slot]["video_quality"] = "720p"
+                            scene[slot]["generation"] = {
+                                "task_id": task_id,
+                                "state": "success",
+                                "started_at": task_meta["started_at"],
+                                "completed_at": datetime.now().timestamp(),
+                                "canceled": False,
+                            }
+                            job["scenes"] = scenes
+                            save_job(job_id, job)
+                GENERATION_TASKS.pop(task_id, None)
+            else:
+                # Show base video immediately, then keep polling until 1080p is ready.
+                hd_started_at = task_meta.get("hd_started_at")
+                if not hd_started_at:
+                    hd_started_at = datetime.now().timestamp()
+                    task_meta["hd_started_at"] = hd_started_at
+                    GENERATION_TASKS[task_id] = task_meta
 
-            response["url"] = url
-            response["state"] = "upgrading_1080"
-            response["state_text"] = "720p waiting 1080p"
-            response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
-            response["hd_status_text"] = f"720p waiting 1080p ({response['hd_elapsed_seconds']} sec)"
+                response["url"] = url
+                response["state"] = "upgrading_1080"
+                response["state_text"] = "720p waiting 1080p"
+                response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
+                response["hd_status_text"] = f"720p waiting 1080p ({response['hd_elapsed_seconds']} sec)"
 
-            hd_done = False
-            hd_url = ""
-            hd_error = ""
-            try:
-                hd_result = get_video_1080p_result(task_id=task_id, index=0)
-                hd_done = bool(hd_result.get("ready") and hd_result.get("url"))
-                hd_url = hd_result.get("url", "")
-            except RuntimeError as e:
-                hd_error = str(e)
+                hd_done = False
+                hd_url = ""
+                hd_error = ""
+                try:
+                    hd_result = get_video_1080p_result(task_id=task_id, index=0)
+                    hd_done = bool(hd_result.get("ready") and hd_result.get("url"))
+                    hd_url = hd_result.get("url", "")
+                except RuntimeError as e:
+                    hd_error = str(e)
 
-            job = load_job(job_id)
-            if job is not None:
-                scene_idx = task_meta["scene_idx"]
-                scenes = job.get("scenes", [])
-                if 0 <= scene_idx < len(scenes):
-                    scene = scenes[scene_idx]
-                    scene[slot] = scene.get(slot) or {"prompt": None}
-                    if url:
-                        scene[slot]["video_url"] = url
-                        scene[slot]["video_quality"] = "720p"
+                job = load_job(job_id)
+                if job is not None:
+                    scene_idx = task_meta["scene_idx"]
+                    scenes = job.get("scenes", [])
+                    if 0 <= scene_idx < len(scenes):
+                        scene = scenes[scene_idx]
+                        scene[slot] = scene.get(slot) or {"prompt": None}
+                        if url:
+                            scene[slot]["video_url"] = url
+                            scene[slot]["video_quality"] = "720p"
 
-                    if hd_done and hd_url:
-                        scene[slot]["video_url"] = hd_url
-                        scene[slot]["video_quality"] = "1080p"
-                        scene[slot]["generation"] = {
-                            "task_id": task_id,
-                            "state": "success",
-                            "started_at": task_meta["started_at"],
-                            "completed_at": datetime.now().timestamp(),
-                            "hd_state": "done",
-                            "hd_started_at": hd_started_at,
-                            "canceled": False,
-                        }
-                        response["state"] = "success"
-                        response["state_text"] = "Generation complete"
-                        response["url"] = hd_url
-                        response["hd_status_text"] = "1080p - done"
-                        response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
-                        GENERATION_TASKS.pop(task_id, None)
-                    else:
-                        scene[slot]["video_quality"] = "720p"
-                        scene[slot]["generation"] = {
-                            "task_id": task_id,
-                            "state": "upgrading_1080",
-                            "started_at": task_meta["started_at"],
-                            "hd_state": "waiting",
-                            "hd_started_at": hd_started_at,
-                            "hd_error": hd_error,
-                            "canceled": False,
-                        }
-                    job["scenes"] = scenes
-                    save_job(job_id, job)
+                        if hd_done and hd_url:
+                            scene[slot]["video_url"] = hd_url
+                            scene[slot]["video_quality"] = "1080p"
+                            scene[slot]["generation"] = {
+                                "task_id": task_id,
+                                "state": "success",
+                                "started_at": task_meta["started_at"],
+                                "completed_at": datetime.now().timestamp(),
+                                "hd_state": "done",
+                                "hd_started_at": hd_started_at,
+                                "canceled": False,
+                            }
+                            response["state"] = "success"
+                            response["state_text"] = "Generation complete"
+                            response["url"] = hd_url
+                            response["hd_status_text"] = "1080p - done"
+                            response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
+                            GENERATION_TASKS.pop(task_id, None)
+                        else:
+                            scene[slot]["video_quality"] = "720p"
+                            scene[slot]["generation"] = {
+                                "task_id": task_id,
+                                "state": "upgrading_1080",
+                                "started_at": task_meta["started_at"],
+                                "hd_state": "waiting",
+                                "hd_started_at": hd_started_at,
+                                "hd_error": hd_error,
+                                "canceled": False,
+                            }
+                        job["scenes"] = scenes
+                        save_job(job_id, job)
         else:
             response["url"] = url
             if url:
@@ -1993,6 +2107,42 @@ def rename_job(job_id: str):
     return redirect(url_for("job_page", job_id=job_id))
 
 
+@app.route("/job/<job_id>/prompt/update", methods=["POST"])
+def update_job_scene_prompt(job_id: str):
+    """Обновляет prompt у конкретной сцены/слота (start|end|video)."""
+    job = load_job(job_id)
+    if job is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+
+    body = request.get_json(silent=True) or {}
+    slot = str(body.get("slot") or "").strip().lower()
+    if slot not in ("start", "end", "video"):
+        return jsonify({"ok": False, "error": "Bad slot"}), 400
+
+    try:
+        scene_index = int(body.get("scene_index"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Bad scene_index"}), 400
+
+    scenes = job.get("scenes")
+    if not isinstance(scenes, list) or scene_index < 0 or scene_index >= len(scenes):
+        return jsonify({"ok": False, "error": "Scene index out of range"}), 400
+
+    scene = scenes[scene_index]
+    if not isinstance(scene, dict):
+        return jsonify({"ok": False, "error": "Scene is invalid"}), 400
+
+    slot_obj = scene.get(slot)
+    if not isinstance(slot_obj, dict):
+        slot_obj = {"prompt": ""}
+        scene[slot] = slot_obj
+
+    prompt = str(body.get("prompt") or "").strip()
+    slot_obj["prompt"] = prompt
+    save_job(job_id, job)
+    return jsonify({"ok": True, "prompt": prompt})
+
+
 @app.route("/job/<job_id>/delete", methods=["POST"])
 def delete_job(job_id: str):
     """Удаляет проект."""
@@ -2005,7 +2155,7 @@ def delete_job(job_id: str):
         flash("Проект удалён.", "success")
     else:
         flash("Проект не найден.", "error")
-    return redirect(url_for("index"))
+    return redirect(url_for("video_index"))
 
 
 @app.route("/job/<job_id>/elevenlabs/voices", methods=["GET"])
@@ -2019,6 +2169,85 @@ def job_elevenlabs_voices(job_id: str):
         return jsonify({"error": str(e)}), 500
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
+
+
+@app.route("/job/<job_id>/elevenlabs/templates", methods=["GET"])
+def job_elevenlabs_templates(job_id: str):
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    return jsonify({"ok": True, "templates": list_elevenlabs_template_names()})
+
+
+@app.route("/job/<job_id>/elevenlabs/templates/<name>", methods=["GET"])
+def job_elevenlabs_template_get(job_id: str, name: str):
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    data = load_elevenlabs_template(name)
+    if data is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "template": data})
+
+
+@app.route("/job/<job_id>/elevenlabs/templates/<name>/save", methods=["POST"])
+def job_elevenlabs_template_save(job_id: str, name: str):
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    body = request.get_json(silent=True) or {}
+    ok, err = save_elevenlabs_template(
+        name,
+        {
+            "model_id": body.get("model_id"),
+            "voice_id": body.get("voice_id"),
+            "voice_name": body.get("voice_name"),
+            "speed_pct": body.get("speed_pct"),
+            "stability_pct": body.get("stability_pct"),
+            "similarity_pct": body.get("similarity_pct"),
+            "style_pct": body.get("style_pct"),
+            "use_speaker_boost": body.get("use_speaker_boost"),
+        },
+    )
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/job/<job_id>/elevenlabs/defaults", methods=["POST"])
+def job_elevenlabs_defaults_save(job_id: str):
+    job = load_job(job_id)
+    if job is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    body = request.get_json(silent=True) or {}
+
+    def _pct(key: str, default: int) -> int:
+        try:
+            return max(0, min(100, int(body.get(key, default))))
+        except (TypeError, ValueError):
+            return default
+
+    voice_id = str(body.get("voice_id") or "").strip()
+    model_id = str(body.get("model_id") or "eleven_v3").strip() or "eleven_v3"
+    voice_name = str(body.get("voice_name") or "").strip()
+    tts_template = str(body.get("tts_template") or "").strip()
+    raw_boost = body.get("use_speaker_boost", True)
+    if isinstance(raw_boost, str):
+        use_speaker_boost = raw_boost.lower() in ("true", "1", "yes", "on")
+    else:
+        use_speaker_boost = bool(raw_boost)
+
+    job["tts_defaults"] = {
+        "voice_id": voice_id,
+        "voice_name": voice_name,
+        "model_id": model_id,
+        "stability_pct": _pct("stability_pct", 50),
+        "similarity_pct": _pct("similarity_pct", 75),
+        "style_pct": _pct("style_pct", 0),
+        "speed_pct": _pct("speed_pct", 50),
+        "use_speaker_boost": use_speaker_boost,
+    }
+    if tts_template:
+        job["tts_template"] = tts_template
+    save_job(job_id, job)
+    return jsonify({"ok": True})
 
 
 @app.route("/job/<job_id>/elevenlabs/tts", methods=["POST"])
@@ -2117,6 +2346,9 @@ def job_elevenlabs_tts(job_id: str):
         },
     }
     job.pop("tts_outputs", None)
+    tts_template = str(data.get("tts_template") or "").strip()
+    if tts_template:
+        job["tts_template"] = tts_template
     job["tts_defaults"] = {
         "voice_id": voice_id,
         "model_id": model_id,
@@ -2192,6 +2424,8 @@ def job_page(job_id: str):
         tts_models=TTS_MODELS,
         elevenlabs_key_set=elevenlabs_key_set,
         tts_defaults=job.get("tts_defaults") or {},
+        tts_template_names=list_elevenlabs_template_names(),
+        tts_template=(job.get("tts_template") or "Naomi"),
     )
 
 

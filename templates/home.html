@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Video — Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>JSON Video</h1>
+            <p class="subtitle">Выберите раздел</p>
+        </header>
+
+        <section class="scene-card">
+            <h2>Разделы</h2>
+            <p><a href="{{ url_for('video_index') }}">Video</a> — генерация изображений и видео по JSON.</p>
+            <p><a href="{{ url_for('rewrite_index') }}">ReWrite</a> — конвейер редакторов и переписывание текста.</p>
+        </section>
+    </div>
+</body>
+</html>
