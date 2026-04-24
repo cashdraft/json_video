@@ -164,6 +164,7 @@
                         >
                         <div class="rewrite-youtube-block__actions">
                             <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set %}disabled{% endif %}>Расшифровать</button>
+                            <button type="button" class="btn btn-danger btn-sm" id="rewrite-youtube-stop" disabled title="Прервать проверку ссылки, скачивание или расшифровку" aria-label="Остановить">Остановить</button>
                             <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert" disabled>Вставить</button>
                         </div>
                     </div>
@@ -336,10 +337,12 @@
     const templateSaveDiskBtn = document.getElementById('rewrite-template-save-disk');
     const ytUrlEl = document.getElementById('rewrite-youtube-url');
     const ytDecodeBtn = document.getElementById('rewrite-youtube-decode');
+    const ytStopBtn = document.getElementById('rewrite-youtube-stop');
     const ytInsertBtn = document.getElementById('rewrite-youtube-insert');
     const ytStatusEl = document.getElementById('rewrite-youtube-status');
     var ytTranscriptReady = false;
     var ytWorking = false;
+    var ytAbortController = null;
     var rewriteStageBusy = false;
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
@@ -386,6 +389,7 @@
         if (!openaiOk) {
             if (ytUrlEl) ytUrlEl.disabled = true;
             if (ytDecodeBtn) ytDecodeBtn.disabled = true;
+            if (ytStopBtn) ytStopBtn.disabled = true;
             if (ytInsertBtn) ytInsertBtn.disabled = true;
             return;
         }
@@ -393,10 +397,12 @@
             if (ytUrlEl) ytUrlEl.disabled = true;
             if (ytDecodeBtn) ytDecodeBtn.disabled = true;
             if (ytInsertBtn) ytInsertBtn.disabled = true;
+            if (ytStopBtn) ytStopBtn.disabled = !ytWorking;
             return;
         }
         if (ytUrlEl) ytUrlEl.disabled = ytWorking;
         if (ytDecodeBtn) ytDecodeBtn.disabled = ytWorking;
+        if (ytStopBtn) ytStopBtn.disabled = !ytWorking;
         if (ytInsertBtn) ytInsertBtn.disabled = ytWorking || !ytTranscriptReady;
     }
 
@@ -727,10 +733,11 @@
         return ' · ' + ytFormatKiB(bps) + '/с';
     }
 
-    async function ytConsumeDownloadStream() {
+    async function ytConsumeDownloadStream(signal) {
         const r2 = await fetch(ytDownloadStreamUrl, {
             method: 'POST',
-            headers: { Accept: 'application/x-ndjson' }
+            headers: { Accept: 'application/x-ndjson' },
+            signal: signal
         });
         if (!r2.ok) {
             const errBody = await r2.json().catch(function () { return {}; });
@@ -780,6 +787,10 @@
             return null;
         }
         while (true) {
+            if (signal && signal.aborted) {
+                try { reader.cancel(); } catch (_) {}
+                throw new DOMException('Aborted', 'AbortError');
+            }
             const chunk = await reader.read();
             if (chunk.done) {
                 buf += dec.decode();
@@ -812,13 +823,16 @@
         }
         ytWorking = true;
         ytTranscriptReady = false;
+        ytAbortController = new AbortController();
+        var signal = ytAbortController.signal;
         applyYoutubeToolbar();
         try {
             setYtStatus('Проверяем ссылку…', false);
             const r1 = await fetch(ytVerifyUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ youtube_url: u })
+                body: JSON.stringify({ youtube_url: u }),
+                signal: signal
             });
             const d1 = await r1.json().catch(function () { return {}; });
             if (!r1.ok || !d1.ok) {
@@ -827,10 +841,10 @@
             }
 
             setYtStatus('Скачивание аудио (yt-dlp)…', false);
-            await ytConsumeDownloadStream();
+            await ytConsumeDownloadStream(signal);
 
             setYtStatus('Отправляем аудио на расшифровку (OpenAI)…', false);
-            const r3 = await fetch(ytTranscribeUrl, { method: 'POST' });
+            const r3 = await fetch(ytTranscribeUrl, { method: 'POST', signal: signal });
             const d3 = await r3.json().catch(function () { return {}; });
             if (!r3.ok || !d3.ok) {
                 setYtStatus(d3.message || 'Не удалось расшифровать.', true);
@@ -841,9 +855,14 @@
             setYtStatus('Готово текст ' + ch + ' символов · ' + wd + ' слов', false);
             ytTranscriptReady = true;
         } catch (e) {
-            setYtStatus(String(e), true);
+            if (e && e.name === 'AbortError') {
+                setYtStatus('Остановлено (кнопка «Остановить»).', false);
+            } else {
+                setYtStatus(String(e), true);
+            }
             ytTranscriptReady = false;
         } finally {
+            ytAbortController = null;
             ytWorking = false;
             applyYoutubeToolbar();
         }
@@ -1768,6 +1787,12 @@
     });
 
     if (ytDecodeBtn) ytDecodeBtn.addEventListener('click', ytFullDecode);
+    if (ytStopBtn) {
+        ytStopBtn.addEventListener('click', function () {
+            if (!ytAbortController || ytStopBtn.disabled) return;
+            ytAbortController.abort();
+        });
+    }
     if (ytInsertBtn) ytInsertBtn.addEventListener('click', ytInsertToSource);
     if (ytUrlEl) {
         ytUrlEl.addEventListener('input', function () {
