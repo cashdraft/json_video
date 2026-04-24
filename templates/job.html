@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="job-page">
+    {% macro template_no_image_visual() %}
+    <span class="template-option-visual template-option-visual--placeholder" aria-hidden="true">
+        <svg class="template-placeholder-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <rect width="120" height="120" rx="8" fill="var(--bg)"/>
+            <rect x="10" y="10" width="100" height="100" rx="6" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="7 5"/>
+            <circle cx="44" cy="48" r="11" fill="var(--text-muted)" opacity="0.28"/>
+            <path d="M22 86 L50 56 L68 72 L98 44" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" fill="none"/>
+            <path d="M22 92 L98 92" stroke="var(--border)" stroke-width="1.5" opacity="0.6"/>
+        </svg>
+    </span>
+    {% endmacro %}
     {% macro job_template_placeholder_inner() %}
     <div class="job-template-ph" aria-hidden="true">
         <svg class="job-template-ph-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" focusable="false">
@@ -56,62 +67,7 @@
             {% endif %}
         {% endwith %}
 
-        <section class="job-settings">
-            <h2>Настройки проекта</h2>
-            <div class="settings-grid">
-                <div class="setting">
-                    <span class="setting-label">Aspect Ratio</span>
-                    <span class="setting-value">{{ job.job_meta.aspect_ratio }}</span>
-                </div>
-                <div class="setting">
-                    <span class="setting-label">Image Model</span>
-                    <span class="setting-value">{{ 'Nano Banana Pro' if (job.job_meta.image_model or 'nano-banana-pro') == 'nano-banana-pro' else job.job_meta.image_model }}</span>
-                </div>
-                <div class="setting">
-                    <span class="setting-label">Video Model</span>
-                    <span class="setting-value">{{ job.job_meta.video_model_label or job.job_meta.video_model }}</span>
-                </div>
-                <div class="setting">
-                    <span class="setting-label">Resolution</span>
-                    <span class="setting-value">{{ job.job_meta.resolution or '2K' }}</span>
-                </div>
-                <div class="setting setting-job-template">
-                    <span class="setting-label">Шаблон изображений</span>
-                    {% if template_display.kind == 'none' %}
-                    <div class="job-template-preview" aria-label="Без шаблона">
-                        <div class="job-template-frame">
-                            {{ job_template_placeholder_inner() }}
-                        </div>
-                        <span class="job-template-name">Без шаблона</span>
-                    </div>
-                    {% elif template_display.kind == 'missing' %}
-                    <span class="setting-value job-template-missing">{{ template_display.folder_name }} <span class="job-template-missing-note">(папка не найдена на сервере)</span></span>
-                    {% else %}
-                    <div class="job-template-preview" aria-label="Шаблон: {{ template_display.folder_name }}">
-                        <div class="job-template-frame">
-                            {% if template_display.logo_url %}
-                            <img src="{{ template_display.logo_url }}" alt="" class="job-template-logo" loading="lazy" width="72" height="72">
-                            {% else %}
-                            {{ job_template_placeholder_inner() }}
-                            {% endif %}
-                        </div>
-                        <span class="job-template-name">{{ template_display.folder_name }}</span>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </section>
-
-        <section class="job-summary">
-            <div class="summary">
-                <span>Всего сцен: <strong>{{ summary.total }}</strong></span>
-                <span>Start prompt: <strong>{{ summary.with_start_prompt }}</strong></span>
-                <span>End prompt: <strong>{{ summary.with_end_prompt }}</strong></span>
-                <span>Video prompt: <strong>{{ summary.with_video_prompt }}</strong></span>
-            </div>
-        </section>
-
-        <section class="tts-section" id="elevenlabs-tts">
+        <section class="tts-section video-panel" id="elevenlabs-tts">
             <h2 class="scene-id rewrite-pipeline-runner__title">Озвучка ElevenLabs</h2>
             {% if not elevenlabs_key_set %}
             <p class="tts-warning">
@@ -223,7 +179,118 @@
             {% endif %}
         </section>
 
-        <section class="generation-section scene-card rewrite-pipeline-runner" aria-label="Пакетная генерация изображений и видео">
+        <form
+            method="post"
+            action="{{ url_for('parse_for_job', job_id=job_id) }}"
+            id="job-parse-form"
+            class="video-panel video-parse-panel"
+            data-existing-scenes-count="{{ scenes|length }}"
+            data-existing-start-count="{{ summary.with_start_prompt }}"
+            data-existing-end-count="{{ summary.with_end_prompt }}"
+            data-existing-video-count="{{ summary.with_video_prompt }}"
+        >
+            <section class="input-section">
+                <div class="input-header">
+                    <label for="json_input" class="scene-id rewrite-pipeline-runner__title video-json-title">JSON-код сцен</label>
+                    <div class="input-actions">
+                        <button type="button" id="load-example" class="btn btn-secondary btn-sm">Load Example</button>
+                        <button type="button" id="clear-btn" class="btn btn-secondary btn-sm">Clear</button>
+                    </div>
+                </div>
+                <textarea
+                    id="json_input"
+                    name="json_input"
+                    rows="7"
+                    placeholder="Вставьте JSON-сценарий..."
+                >{{ job.raw_input or '' }}</textarea>
+                <div class="tts-char-row video-json-stats-row" id="json-stats-row">
+                    Всего сцен: <strong id="json-scenes-total">0</strong>
+                    · Start prompt: <strong id="json-scenes-start">0</strong>
+                    · End prompt: <strong id="json-scenes-end">0</strong>
+                    · Video prompt: <strong id="json-scenes-video">0</strong>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-grid">
+                    <div class="setting">
+                        <label for="aspect_ratio">Aspect Ratio</label>
+                        <select id="aspect_ratio" name="aspect_ratio">
+                            <option value="16:9" {{ 'selected' if (job.job_meta.aspect_ratio or '16:9') == '16:9' else '' }}>16:9</option>
+                            <option value="9:16" {{ 'selected' if (job.job_meta.aspect_ratio or '') == '9:16' else '' }}>9:16</option>
+                        </select>
+                    </div>
+                    <div class="setting">
+                        <label>Resolution</label>
+                        {% set _res = job.job_meta.resolution or '2K' %}
+                        <div class="resolution-toggle">
+                            <input type="radio" id="res_1k" name="resolution" value="1K" {{ 'checked' if _res == '1K' else '' }}>
+                            <label for="res_1k">1K</label>
+                            <input type="radio" id="res_2k" name="resolution" value="2K" {{ 'checked' if _res == '2K' else '' }}>
+                            <label for="res_2k">2K</label>
+                            <input type="radio" id="res_4k" name="resolution" value="4K" {{ 'checked' if _res == '4K' else '' }}>
+                            <label for="res_4k">4K</label>
+                        </div>
+                    </div>
+                    <div class="setting">
+                        <label for="image_model">Image Model</label>
+                        <select id="image_model" name="image_model">
+                            <option value="nano-banana-pro" selected>Nano Banana Pro</option>
+                        </select>
+                    </div>
+                    <div class="setting">
+                        <label for="video_model">Video Model</label>
+                        {% set _vm = job.job_meta.video_model or 'veo3_fast' %}
+                        <select id="video_model" name="video_model">
+                            <option value="veo3" {{ 'selected' if _vm == 'veo3' else '' }}>Veo 3.1 Quality</option>
+                            <option value="veo3_fast" {{ 'selected' if _vm == 'veo3_fast' else '' }}>Veo 3.1 Fast</option>
+                            <option value="grok-imagine/image-to-video" {{ 'selected' if _vm == 'grok-imagine/image-to-video' else '' }}>Grok Imagine Image to Video</option>
+                        </select>
+                    </div>
+                    <div class="setting setting-wide template-setting">
+                        <label>Шаблон изображений (Nano Banana Pro)</label>
+                        {% set _tpl = job.job_meta.image_template or '' %}
+                        {% if image_templates %}
+                        <div class="template-picker" role="radiogroup" aria-label="Шаблон">
+                            <label class="template-option">
+                                <input class="template-option-input" type="radio" name="image_template" value="" {{ 'checked' if not _tpl else '' }}>
+                                <span class="template-option-inner">
+                                    <span class="template-option-frame">{{ template_no_image_visual() }}</span>
+                                    <span class="template-option-name">Без шаблона</span>
+                                </span>
+                            </label>
+                            {% for t in image_templates %}
+                            <label class="template-option">
+                                <input class="template-option-input" type="radio" name="image_template" value="{{ t.folder_name }}" {{ 'checked' if _tpl == t.folder_name else '' }}>
+                                <span class="template-option-inner">
+                                    <span class="template-option-frame">
+                                        {% if t.logo_url %}
+                                        <span class="template-option-visual">
+                                            <img src="{{ t.logo_url }}" alt="" class="template-logo-preview" loading="lazy">
+                                        </span>
+                                        {% else %}
+                                        {{ template_no_image_visual() }}
+                                        {% endif %}
+                                    </span>
+                                    <span class="template-option-name">{{ t.folder_name }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <input type="hidden" name="image_template" value="">
+                        <p class="template-setting-empty">Шаблонов пока нет — создай подпапки в <code>data/image_templates/</code>.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            <section class="buttons-section">
+                <button type="submit" class="btn btn-primary btn-sm">Добавить сцены</button>
+            </section>
+        </form>
+
+        <section class="generation-section scene-card rewrite-pipeline-runner video-panel" aria-label="Пакетная генерация изображений и видео">
             <div class="rewrite-pipeline-runner__head">
                 <div>
                     <div class="scene-id rewrite-pipeline-runner__title">Генерация</div>
@@ -437,6 +504,21 @@
         </section>
     </div>
 
+    <div class="confirm-modal hidden" id="json-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-json-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="json-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="json-confirm-title">Добавить сцены в проект</h3>
+            </div>
+            <p class="confirm-modal__lead">В проекте пока нет сцен. Будет добавлено:</p>
+            <div class="confirm-modal__preview" id="json-confirm-text"></div>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="json-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="json-confirm-ok">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
     <div class="lightbox" id="lightbox" aria-hidden="true">
         <div class="lightbox-meta" id="lightbox-meta">
             <div class="lightbox-meta-main">
@@ -489,11 +571,170 @@
     const bulkConfirmText = document.getElementById('bulk-confirm-text');
     const bulkConfirmCancelBtn = document.getElementById('bulk-confirm-cancel');
     const bulkConfirmOkBtn = document.getElementById('bulk-confirm-ok');
+    const jsonStats = {
+        total: document.getElementById('json-scenes-total'),
+        start: document.getElementById('json-scenes-start'),
+        end: document.getElementById('json-scenes-end'),
+        video: document.getElementById('json-scenes-video'),
+    };
 
     let bulkConfirmResolver = null;
     let bulkRunActive = false;
     let bulkStopRequested = false;
     const bulkStartedTaskIds = new Set();
+    const jsonInputEl = document.getElementById('json_input');
+    const loadExampleBtn = document.getElementById('load-example');
+    const clearBtn = document.getElementById('clear-btn');
+    const EXAMPLE_JSON = `{"scene_id":"scene_001"}
+{"text":"Intentional money habits build long-term stability."}
+{"start":{"prompt":"Naomi at a desk organizing bills into clear categories, modern finance style."}}
+{"end":{"prompt":"Naomi smiling with clear savings and investment boards behind her."}}
+{"video":{"prompt":"Camera slowly pushes in as icons move from chaos to organized budget lanes."}}`;
+    const jsonParseForm = document.getElementById('job-parse-form');
+    const jsonConfirmModal = document.getElementById('json-confirm-modal');
+    const jsonConfirmText = document.getElementById('json-confirm-text');
+    const jsonConfirmCancelBtn = document.getElementById('json-confirm-cancel');
+    const jsonConfirmOkBtn = document.getElementById('json-confirm-ok');
+    let jsonConfirmResolver = null;
+
+    if (loadExampleBtn && jsonInputEl) {
+        loadExampleBtn.addEventListener('click', () => {
+            jsonInputEl.value = EXAMPLE_JSON;
+            jsonInputEl.focus();
+            updateJsonStats();
+        });
+    }
+    if (clearBtn && jsonInputEl) {
+        clearBtn.addEventListener('click', () => {
+            jsonInputEl.value = '';
+            jsonInputEl.focus();
+            updateJsonStats();
+        });
+    }
+
+    const computeJsonPromptStats = (rawText) => {
+        const text = String(rawText || '');
+        const lines = text.split('\n');
+        let currentScene = null;
+        const scenes = [];
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            let obj = null;
+            try {
+                obj = JSON.parse(line);
+            } catch (_) {
+                continue;
+            }
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) continue;
+            if (Object.prototype.hasOwnProperty.call(obj, 'scene_id')) {
+                if (currentScene) scenes.push(currentScene);
+                currentScene = { start: false, end: false, video: false };
+                continue;
+            }
+            if (!currentScene) continue;
+            const hasPrompt = (v) => Boolean(v && typeof v === 'object' && String(v.prompt || '').trim());
+            if (Object.prototype.hasOwnProperty.call(obj, 'start')) currentScene.start = hasPrompt(obj.start);
+            if (Object.prototype.hasOwnProperty.call(obj, 'end')) currentScene.end = hasPrompt(obj.end);
+            if (Object.prototype.hasOwnProperty.call(obj, 'video')) currentScene.video = hasPrompt(obj.video);
+        }
+        if (currentScene) scenes.push(currentScene);
+        const total = scenes.length;
+        const start = scenes.filter((s) => s.start).length;
+        const end = scenes.filter((s) => s.end).length;
+        const video = scenes.filter((s) => s.video).length;
+        return { total, start, end, video };
+    };
+
+    const updateJsonStats = () => {
+        if (!jsonInputEl) return;
+        const raw = jsonInputEl.value || '';
+        const s = computeJsonPromptStats(raw);
+        if (jsonStats.total) jsonStats.total.textContent = String(s.total);
+        if (jsonStats.start) jsonStats.start.textContent = String(s.start);
+        if (jsonStats.end) jsonStats.end.textContent = String(s.end);
+        if (jsonStats.video) jsonStats.video.textContent = String(s.video);
+    };
+    if (jsonInputEl) {
+        jsonInputEl.addEventListener('input', updateJsonStats);
+    }
+    updateJsonStats();
+
+    const openJsonConfirm = (text) => {
+        if (!jsonConfirmModal || !jsonConfirmText || !jsonConfirmCancelBtn || !jsonConfirmOkBtn) {
+            return Promise.resolve(window.confirm(text));
+        }
+        jsonConfirmText.textContent = text;
+        jsonConfirmModal.classList.remove('hidden');
+        jsonConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise((resolve) => {
+            jsonConfirmResolver = resolve;
+        });
+    };
+
+    const closeJsonConfirm = (accepted) => {
+        if (!jsonConfirmModal) return;
+        jsonConfirmModal.classList.add('hidden');
+        jsonConfirmModal.setAttribute('aria-hidden', 'true');
+        if (jsonConfirmResolver) {
+            const resolve = jsonConfirmResolver;
+            jsonConfirmResolver = null;
+            resolve(Boolean(accepted));
+        }
+    };
+
+    jsonConfirmCancelBtn?.addEventListener('click', () => closeJsonConfirm(false));
+    jsonConfirmOkBtn?.addEventListener('click', () => closeJsonConfirm(true));
+    jsonConfirmModal?.addEventListener('click', (e) => {
+        if (e.target && e.target.hasAttribute('data-json-confirm-close')) {
+            closeJsonConfirm(false);
+        }
+    });
+
+    if (jsonParseForm) {
+        jsonParseForm.addEventListener('submit', async (e) => {
+            const existingScenesCount = parseInt(jsonParseForm.dataset.existingScenesCount || '0', 10) || 0;
+            if (jsonParseForm.dataset.confirmed === '1') {
+                jsonParseForm.dataset.confirmed = '';
+                return;
+            }
+            e.preventDefault();
+            const stats = computeJsonPromptStats(jsonInputEl?.value || '');
+            const existingStart = parseInt(jsonParseForm.dataset.existingStartCount || '0', 10) || 0;
+            const existingEnd = parseInt(jsonParseForm.dataset.existingEndCount || '0', 10) || 0;
+            const existingVideo = parseInt(jsonParseForm.dataset.existingVideoCount || '0', 10) || 0;
+            const msg = existingScenesCount > 0
+                ? [
+                    'В проекте уже есть сцены. При добавлении новые данные заменят текущие сцены и их промпты.',
+                    '',
+                    'Сейчас в проекте:',
+                    `• Всего сцен: ${existingScenesCount}`,
+                    `• Start prompt: ${existingStart}`,
+                    `• End prompt: ${existingEnd}`,
+                    `• Video prompt: ${existingVideo}`,
+                    '',
+                    'Будет добавлено из JSON:',
+                    `• Всего сцен: ${stats.total}`,
+                    `• Start prompt: ${stats.start}`,
+                    `• End prompt: ${stats.end}`,
+                    `• Video prompt: ${stats.video}`,
+                    '',
+                    'Продолжить и перезаписать сцены проекта?',
+                ].join('\n')
+                : [
+                    'В проекте пока нет сцен. Будет добавлено:',
+                    '',
+                    `• Всего сцен: ${stats.total}`,
+                    `• Start prompt: ${stats.start}`,
+                    `• End prompt: ${stats.end}`,
+                    `• Video prompt: ${stats.video}`,
+                ].join('\n');
+            const ok = await openJsonConfirm(msg);
+            if (!ok) return;
+            jsonParseForm.dataset.confirmed = '1';
+            jsonParseForm.submit();
+        });
+    }
 
     const appendBulkLog = (msg) => {
         if (!generationBulkLogEl) return;

@@ -1418,6 +1418,79 @@ textarea::placeholder {
     background: var(--bg-card);
 }
 
+/* Unified panel look on /job page (same visual family as ElevenLabs) */
+.video-panel {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-card);
+}
+
+.video-parse-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.video-parse-panel .input-section,
+.video-parse-panel .settings-section,
+.video-parse-panel .buttons-section {
+    margin-bottom: 0;
+}
+
+.video-parse-panel .video-json-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    font-family: monospace;
+    color: var(--accent);
+}
+
+.video-parse-panel .input-header {
+    margin-bottom: 0.5rem;
+}
+
+.video-parse-panel #json_input {
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 400;
+    line-height: 1.45;
+    padding: 0.55rem 0.65rem;
+    border-radius: 4px;
+    border: 1px dashed var(--border);
+    background: var(--bg-input);
+    min-height: 0;
+}
+
+.video-parse-panel .video-json-stats-row {
+    margin-top: 0.1rem;
+}
+
+.video-parse-panel .settings-section {
+    padding: 0;
+}
+
+.video-parse-panel .setting label {
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+}
+
+.video-parse-panel .setting select {
+    font-size: 0.88rem;
+}
+
+.video-parse-panel .buttons-section {
+    margin-top: 0.1rem;
+}
+
+.job-page .video-panel .summary {
+    margin-bottom: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+}
+
 .tts-section h2 {
     font-size: 1.1rem;
     font-weight: 600;

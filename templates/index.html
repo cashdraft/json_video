@@ -3,30 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON Video — Scene Parser</title>
+    <title>JSON Video — Projects</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    {% macro template_no_image_visual() %}
-    <span class="template-option-visual template-option-visual--placeholder" aria-hidden="true">
-        <svg class="template-placeholder-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-            <rect width="120" height="120" rx="8" fill="var(--bg)"/>
-            <rect x="10" y="10" width="100" height="100" rx="6" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="7 5"/>
-            <circle cx="44" cy="48" r="11" fill="var(--text-muted)" opacity="0.28"/>
-            <path d="M22 86 L50 56 L68 72 L98 44" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" fill="none"/>
-            <path d="M22 92 L98 92" stroke="var(--border)" stroke-width="1.5" opacity="0.6"/>
-        </svg>
-    </span>
-    {% endmacro %}
     <div class="container">
         <header>
-            <h1>JSON Video Generator</h1>
-            <p class="subtitle">Парсинг сцен для генерации изображений и видео</p>
+            <a href="{{ url_for('index') }}" class="back-link">← На главную</a>
+            <h1>Video Projects</h1>
+            <p class="subtitle">Сначала создайте проект, затем на его странице заполните JSON и настройки генерации</p>
         </header>
 
         <p class="home-cross-link">
             <a href="{{ url_for('rewrite_index') }}">ReWrite Master</a>
-            <span class="home-cross-link-hint"> — отдельная страница с проектами (OpenAI)</span>
         </p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -39,176 +28,29 @@
             {% endif %}
         {% endwith %}
 
-        <form method="post" action="{{ url_for('parse') }}" id="main-form">
-            <section class="project-name-section">
-                <label for="project_name">Название проекта</label>
+        <section class="scene-card">
+            <h2>Новый проект</h2>
+            <form method="post" action="{{ url_for('video_create') }}" class="project-name-form">
                 <input
                     type="text"
                     id="project_name"
                     name="project_name"
-                    placeholder="Например: Finance Explainer Episode 1"
-                    value="{{ project_name or '' }}"
+                    class="project-name-input"
+                    placeholder="Например: Статья для блога — правки"
                 >
-            </section>
-            <section class="input-section">
-                <div class="input-header">
-                    <label for="json_input">JSON-код сцен</label>
-                    <div class="input-actions">
-                        <button type="button" id="load-example" class="btn btn-secondary">Load Example</button>
-                        <button type="button" id="clear-btn" class="btn btn-secondary">Clear</button>
-                    </div>
-                </div>
-                <textarea
-                    id="json_input"
-                    name="json_input"
-                    rows="16"
-                    placeholder="Вставьте JSON-сценарий..."
-                >{{ json_input or '' }}</textarea>
-            </section>
-
-            <section class="settings-section">
-                <h2>Настройки генерации</h2>
-                <div class="settings-grid">
-                    <div class="setting">
-                        <label for="aspect_ratio">Aspect Ratio</label>
-                        <select id="aspect_ratio" name="aspect_ratio">
-                            <option value="16:9" {{ 'selected' if (aspect_ratio or '16:9') == '16:9' else '' }}>16:9</option>
-                            <option value="9:16" {{ 'selected' if aspect_ratio == '9:16' else '' }}>9:16</option>
-                        </select>
-                    </div>
-                    <div class="setting">
-                        <label>Resolution</label>
-                        <div class="resolution-toggle">
-                            <input type="radio" id="res_1k" name="resolution" value="1K" {{ 'checked' if (resolution or '2K') == '1K' else '' }}>
-                            <label for="res_1k">1K</label>
-                            <input type="radio" id="res_2k" name="resolution" value="2K" {{ 'checked' if (resolution or '2K') == '2K' else '' }}>
-                            <label for="res_2k">2K</label>
-                            <input type="radio" id="res_4k" name="resolution" value="4K" {{ 'checked' if resolution == '4K' else '' }}>
-                            <label for="res_4k">4K</label>
-                        </div>
-                    </div>
-                    <div class="setting">
-                        <label for="image_model">Image Model</label>
-                        <select id="image_model" name="image_model">
-                            <option value="nano-banana-pro" {{ 'selected' if (image_model or 'nano-banana-pro') == 'nano-banana-pro' else '' }}>Nano Banana Pro</option>
-                        </select>
-                    </div>
-                    <div class="setting">
-                        <label for="video_model">Video Model</label>
-                        <select id="video_model" name="video_model">
-                            <option value="veo3" {{ 'selected' if video_model == 'veo3' else '' }}>Veo 3.1 Quality</option>
-                            <option value="veo3_fast" {{ 'selected' if (video_model or 'veo3_fast') in ['veo3_fast', 'veo3-fast'] else '' }}>Veo 3.1 Fast</option>
-                            <option value="grok-imagine/image-to-video" {{ 'selected' if video_model == 'grok-imagine/image-to-video' else '' }}>Grok Imagine Image to Video</option>
-                        </select>
-                    </div>
-                    <div class="setting setting-wide template-setting">
-                        <label>Шаблон изображений (Nano Banana Pro)</label>
-                        <p class="template-setting-hint">
-                            Папки на сервере: <code>data/image_templates/</code> — имя подпапки = имя шаблона.
-                            Внутри: <strong>1–5</strong> референсов (.jpg / .png / .webp) и опционально <code>logo.png</code> или <code>logo.jpg</code> для превью.
-                        </p>
-                        {% if image_templates %}
-                        <div class="template-picker" role="radiogroup" aria-label="Шаблон">
-                            <label class="template-option">
-                                <input class="template-option-input" type="radio" name="image_template" value="" {{ 'checked' if not (image_template or '') else '' }}>
-                                <span class="template-option-inner">
-                                    <span class="template-option-frame">
-                                        {{ template_no_image_visual() }}
-                                    </span>
-                                    <span class="template-option-name">Без шаблона</span>
-                                </span>
-                            </label>
-                            {% for t in image_templates %}
-                            <label class="template-option">
-                                <input
-                                    class="template-option-input"
-                                    type="radio"
-                                    name="image_template"
-                                    value="{{ t.folder_name }}"
-                                    {{ 'checked' if (image_template or '') == t.folder_name else '' }}
-                                >
-                                <span class="template-option-inner">
-                                    <span class="template-option-frame">
-                                        {% if t.logo_url %}
-                                        <span class="template-option-visual">
-                                            <img src="{{ t.logo_url }}" alt="" class="template-logo-preview" loading="lazy">
-                                        </span>
-                                        {% else %}
-                                        {{ template_no_image_visual() }}
-                                        {% endif %}
-                                    </span>
-                                    <span class="template-option-name">{{ t.folder_name }}</span>
-                                </span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <input type="hidden" name="image_template" value="">
-                        <p class="template-setting-empty">Шаблонов пока нет — создай подпапки в <code>data/image_templates/</code>.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </section>
-
-            <section class="buttons-section">
-                <button type="submit" class="btn btn-primary">Parse Scenes</button>
-                {% if scenes %}
-                <button type="submit" formaction="{{ url_for('save') }}" class="btn btn-success">Save Job</button>
-                {% endif %}
-            </section>
-        </form>
-
-        {% if errors %}
-        <section class="errors-section">
-            <h2 class="errors-title">Ошибки парсинга</h2>
-            <ul class="error-list">
-                {% for err in errors %}
-                <li>{{ err }}</li>
-                {% endfor %}
-            </ul>
+                <button type="submit" class="btn btn-primary">Создать</button>
+            </form>
         </section>
-        {% endif %}
-
-        {% if scenes and not errors %}
-        <section class="preview-section">
-            <h2>Preview</h2>
-            <div class="summary">
-                <span>Всего сцен: <strong>{{ summary.total }}</strong></span>
-                <span>Start prompt: <strong>{{ summary.with_start_prompt }}</strong></span>
-                <span>End prompt: <strong>{{ summary.with_end_prompt }}</strong></span>
-                <span>Video prompt: <strong>{{ summary.with_video_prompt }}</strong></span>
-            </div>
-            <div class="scenes-grid">
-                {% for scene in scenes %}
-                <div class="scene-card">
-                    <div class="scene-id">{{ scene.scene_id }}</div>
-                    <div class="scene-text" title="{{ scene.text }}">{{ scene.text[:80] }}{% if scene.text|length > 80 %}...{% endif %}</div>
-                    <div class="scene-badges">
-                        <span class="badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">
-                            Start: {{ 'YES' if scene.start.prompt else 'NO' }}
-                        </span>
-                        <span class="badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">
-                            End: {{ 'YES' if scene.end.prompt else 'NO' }}
-                        </span>
-                        <span class="badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">
-                            Video: {{ 'YES' if scene.video.prompt else 'NO' }}
-                        </span>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
-        {% endif %}
 
         <section class="projects-section">
-            <h2>Проекты</h2>
+            <h2>Проекты Video</h2>
             {% if jobs %}
             <div class="projects-list">
                 {% for job in jobs %}
                 <div class="project-card">
                     <div class="project-main">
                         <a href="{{ url_for('job_page', job_id=job.job_id) }}" class="project-name">{{ job.project_name or job.job_id }}</a>
-                        <span class="project-meta">{{ job.scenes_count }} сцен · {{ job.status }}</span>
+                        <span class="project-meta">{{ job.job_id }} · {{ job.scenes_count }} сцен · {{ job.status }} · {{ job.created_at }}</span>
                     </div>
                     <form method="post" action="{{ url_for('delete_job', job_id=job.job_id) }}" class="project-delete-form" onsubmit="return confirm('Удалить проект {{ job.job_id }}?');">
                         <button type="submit" class="btn btn-danger btn-sm" title="Удалить">✕</button>
@@ -221,7 +63,5 @@
             {% endif %}
         </section>
     </div>
-
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

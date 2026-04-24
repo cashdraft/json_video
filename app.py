@@ -337,6 +337,38 @@ def build_job_payload(
     }
 
 
+def new_video_job_payload(project_name: str) -> dict:
+    """Создает пустой video-проект (настройки и JSON редактируются на странице проекта)."""
+    aspect_ratio = "16:9"
+    resolution = "2K"
+    image_model = "nano-banana-pro"
+    video_model = "veo3_fast"
+    image_template = ""
+    return {
+        "project_name": (project_name or "").strip(),
+        "raw_input": "",
+        "parsed_scenes": [],
+        "selected_aspect_ratio": aspect_ratio,
+        "selected_video_duration": 10,
+        "selected_image_model": image_model,
+        "selected_video_model": video_model,
+        "selected_resolution": resolution,
+        "selected_image_template": image_template,
+        "created_at": datetime.now().isoformat(),
+        "status": "draft",
+        "job_meta": {
+            "aspect_ratio": aspect_ratio,
+            "video_duration": 10,
+            "image_model": image_model,
+            "video_model": video_model,
+            "resolution": resolution,
+            "output_format": "jpg",
+            "image_template": image_template,
+        },
+        "scenes": [],
+    }
+
+
 def save_job_file(payload: dict) -> tuple[str, str]:
     """Сохраняет job в JSON-файл. Возвращает (путь к файлу, job_id)."""
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -837,6 +869,15 @@ def index():
 @app.route("/video")
 def video_index():
     return render_index()
+
+
+@app.route("/video", methods=["POST"])
+def video_create():
+    project_name = request.form.get("project_name", "").strip()
+    payload = new_video_job_payload(project_name)
+    _filepath, job_id = save_job_file(payload)
+    flash("Video-проект создан.", "success")
+    return redirect(url_for("job_page", job_id=job_id))
 
 
 @app.route("/rewrite", methods=["GET", "POST"])
@@ -1608,80 +1649,91 @@ def rewrite_reright_legacy_redirect():
 
 @app.route("/parse", methods=["POST"])
 def parse():
-    raw_text = request.form.get("json_input", "")
-    project_name = request.form.get("project_name", "")
-    aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
-    resolution = request.form.get("resolution", "2K")
-    video_duration = 10
-    image_model = request.form.get("image_model", "nano-banana-pro")
-    video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
-    image_template = request.form.get("image_template", "").strip()
-
-    scenes, errors = parse_scene_blocks(raw_text)
-
-    if errors:
-        return render_index(
-            json_input=raw_text,
-            project_name=project_name,
-            aspect_ratio=aspect_ratio,
-            resolution=resolution,
-            video_duration=video_duration,
-            image_model=image_model,
-            video_model=video_model,
-            image_template=image_template,
-            errors=errors,
-        )
-
-    summary = compute_summary(scenes)
-
-    return render_index(
-        json_input=raw_text,
-        project_name=project_name,
-        aspect_ratio=aspect_ratio,
-        resolution=resolution,
-        video_duration=video_duration,
-        image_model=image_model,
-        video_model=video_model,
-        image_template=image_template,
-        scenes=scenes,
-        summary=summary,
-    )
+    # Legacy endpoint: parsing moved to /job/<id>/parse.
+    flash("Парсинг сцен перенесен в страницу проекта.", "error")
+    return redirect(url_for("video_index"))
 
 
 @app.route("/save", methods=["POST"])
 def save():
+    # Legacy endpoint: save-on-create replaced by dedicated project creation on /video.
+    flash("Создание проекта перенесено в верхний блок страницы Video.", "error")
+    return redirect(url_for("video_index"))
+
+
+@app.route("/job/<job_id>/parse", methods=["POST"])
+def parse_for_job(job_id: str):
+    job = load_job(job_id)
+    if job is None:
+        flash("Проект не найден.", "error")
+        return redirect(url_for("video_index"))
+
     raw_text = request.form.get("json_input", "")
-    project_name = request.form.get("project_name", "")
     aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
     resolution = request.form.get("resolution", "2K")
-    video_duration = 10
     image_model = request.form.get("image_model", "nano-banana-pro")
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
     image_template = request.form.get("image_template", "").strip()
     if image_template and not safe_template_dir(IMAGE_TEMPLATES_DIR, image_template):
         flash("Выбранный шаблон не найден в data/image_templates/.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("job_page", job_id=job_id))
 
     scenes, errors = parse_scene_blocks(raw_text)
-
     if errors:
-        flash("Не удалось сохранить: есть ошибки парсинга.", "error")
-        return redirect(url_for("index"))
+        for err in errors:
+            flash(err, "error")
+        return redirect(url_for("job_page", job_id=job_id))
 
-    payload = build_job_payload(
-        raw_input=raw_text,
-        parsed_scenes=scenes,
-        aspect_ratio=aspect_ratio,
-        video_duration=video_duration,
-        image_model=image_model,
-        video_model=video_model,
-        resolution=resolution,
-        project_name=project_name,
-        image_template=image_template,
-    )
+    # Keep existing generated media for same scene_id+slot when prompt hasn't changed.
+    old_scenes = job.get("scenes", [])
+    old_map: dict[tuple[str, str], dict] = {}
+    if isinstance(old_scenes, list):
+        for old in old_scenes:
+            if not isinstance(old, dict):
+                continue
+            sid = str(old.get("scene_id") or "")
+            for slot in ("start", "end", "video"):
+                slot_obj = old.get(slot)
+                if isinstance(slot_obj, dict):
+                    old_map[(sid, slot)] = slot_obj
 
-    filepath, job_id = save_job_file(payload)
-    flash("Проект сохранён. Переход к генерации.", "success")
+    for scene in scenes:
+        sid = str(scene.get("scene_id") or "")
+        for slot in ("start", "end", "video"):
+            new_slot = scene.get(slot) if isinstance(scene.get(slot), dict) else {"prompt": None}
+            old_slot = old_map.get((sid, slot))
+            if not isinstance(old_slot, dict):
+                continue
+            if (new_slot.get("prompt") or "") != (old_slot.get("prompt") or ""):
+                continue
+            for k in ("image_url", "video_url", "video_quality", "generation"):
+                if k in old_slot:
+                    new_slot[k] = old_slot[k]
+            scene[slot] = new_slot
+
+    meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+    meta["aspect_ratio"] = aspect_ratio
+    meta["video_duration"] = 10
+    meta["image_model"] = image_model
+    meta["video_model"] = video_model
+    meta["resolution"] = resolution
+    meta["output_format"] = "jpg"
+    meta["image_template"] = image_template
+
+    job["raw_input"] = raw_text
+    job["parsed_scenes"] = scenes
+    job["scenes"] = scenes
+    job["selected_aspect_ratio"] = aspect_ratio
+    job["selected_video_duration"] = 10
+    job["selected_image_model"] = image_model
+    job["selected_video_model"] = video_model
+    job["selected_resolution"] = resolution
+    job["selected_image_template"] = image_template
+    job["job_meta"] = meta
+    job["status"] = "ready" if scenes else "draft"
+    save_job(job_id, job)
+
+    flash(f"Сцены обновлены: {len(scenes)}.", "success")
     return redirect(url_for("job_page", job_id=job_id))
 
 
@@ -2387,7 +2439,7 @@ def job_page(job_id: str):
     job = load_job(job_id)
     if job is None:
         flash("Проект не найден.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("video_index"))
 
     # Совместимость со старыми job без project_name, job_meta
     job.setdefault("project_name", "")
@@ -2421,6 +2473,7 @@ def job_page(job_id: str):
         scenes=job.get("scenes", []),
         summary=summary,
         template_display=template_display,
+        image_templates=templates_ui_rows(),
         tts_models=TTS_MODELS,
         elevenlabs_key_set=elevenlabs_key_set,
         tts_defaults=job.get("tts_defaults") or {},
