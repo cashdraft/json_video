@@ -512,9 +512,10 @@ def _youtube_url_normalize(url: str) -> str:
 
 def _youtube_url_is_valid(url: str) -> bool:
     u = _youtube_url_normalize(url)
+    # Shorts — тот же id и аудио, что у обычного ролика; yt-dlp понимает URL как есть.
     return bool(
         re.match(
-            r"^(https?://)?(www\.)?(youtube\.com/watch\?v=[A-Za-z0-9_-]{6,}|youtu\.be/[A-Za-z0-9_-]{6,}).*$",
+            r"^(https?://)?((www\.|m\.)?youtube\.com/(watch\?v=[A-Za-z0-9_-]{6,}|shorts/[A-Za-z0-9_-]{6,})|youtu\.be/[A-Za-z0-9_-]{6,}).*$",
             u,
             re.IGNORECASE,
         )
