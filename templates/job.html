@@ -18,6 +18,19 @@
         </svg>
     </span>
     {% endmacro %}
+    {% macro slot_fail_block(err) %}
+    <div class="slot-error-stack">
+        <span class="slot-status slot-status-error">{{ err or 'Generation failed' }}</span>
+        {% set el = (err or '')|lower %}
+        {% if 'policy' in el or 'prohibited' in el or 'filtered' in el or 'violated' in el %}
+        <p class="slot-status-error-hint">Провайдер (Google через Kie.ai) не вернул картинку: запрос или референсы нарушают правила безопасности. Смягчите промпт или шаблон изображений.</p>
+        {% elif 'no images' in el %}
+        <p class="slot-status-error-hint">В ответе нет изображения — чаще фильтр контента или сбой модели. Повторите генерацию или измените формулировки.</p>
+        {% else %}
+        <p class="slot-status-error-hint">Текст выше — ответ Kie.ai. Повторите позже или измените параметры генерации.</p>
+        {% endif %}
+    </div>
+    {% endmacro %}
     {% macro job_template_placeholder_inner() %}
     <div class="job-template-ph" aria-hidden="true">
         <svg class="job-template-ph-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" focusable="false">
@@ -290,23 +303,23 @@
                 <button type="submit" class="btn btn-primary btn-sm">Добавить сцены</button>
             </section>
             <div class="video-parse-lock-overlay {{ '' if (scenes|length) > 0 else 'hidden' }}" id="video-parse-lock-overlay">
-                <button type="button" class="btn btn-secondary btn-sm" id="video-parse-unlock-btn">Редактировать блок</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="video-parse-unlock-btn">Редактировать</button>
             </div>
         </form>
 
         <section class="generation-section scene-card rewrite-pipeline-runner video-panel" aria-label="Пакетная генерация изображений и видео">
-            <div class="rewrite-pipeline-runner__head">
-                <div>
+            <div class="rewrite-pipeline-runner__head generation-runner__head">
+                <div class="generation-runner__head-top">
                     <div class="scene-id rewrite-pipeline-runner__title">Генерация</div>
-                    <p class="scene-text rewrite-pipeline-runner__lead">Kie.ai: Nano Banana Pro (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
+                    <div class="rewrite-pipeline-runner__actions generation-runner__actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-image" title="Сгенерировать Image — только слоты без готовой картинки" aria-label="Сгенерировать Image — только слоты без готовой картинки">↻ Image</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-video" title="Сгенерировать Video" aria-label="Сгенерировать Video">↻ Video</button>
+                        <button type="button" class="btn btn-danger btn-sm" id="bulk-generate-stop" disabled title="Остановить пакетную генерацию" aria-label="Остановить">Остановить</button>
+                    </div>
                 </div>
-                <div class="rewrite-pipeline-runner__actions">
-                    <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-image">Сгенерировать Image</button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-video">Сгенерировать Video</button>
-                    <button type="button" class="btn btn-danger btn-sm" id="bulk-generate-stop" disabled>Остановить</button>
-                </div>
+                <p class="scene-text rewrite-pipeline-runner__lead generation-runner__lead">Kie.ai: Nano Banana Pro (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
             </div>
-            <pre class="rewrite-pipeline-runner__log" id="generation-bulk-log" aria-live="polite">Журнал пуст. Нажмите «Сгенерировать Image» или «Сгенерировать Video».</pre>
+            <pre class="rewrite-pipeline-runner__log" id="generation-bulk-log" aria-live="polite">Журнал пуст. Нажмите «↻ Image» или «↻ Video».</pre>
         </section>
 
         <section
@@ -350,6 +363,7 @@
                                     <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                                 </button>
                                 <button type="button" class="btn-regenerate btn-generate {{ '' if scene.start.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="start" title="Generate" {{ '' if scene.start.prompt else 'disabled' }}>↻</button>
+                                <span class="slot-header-trailing"><span class="slot-header-meta" title="{{ scene_slot_image_header_meta }}">{{ scene_slot_image_header_meta }}</span></span>
                             </div>
                             <div class="slot-prompt-editor-wrap">
                                 <textarea
@@ -374,7 +388,7 @@
                                 {% elif start_gen and start_gen.state == 'canceled' %}
                                 <span class="slot-status">Canceled</span>
                                 {% elif start_gen and start_gen.state == 'fail' %}
-                                <span class="slot-status slot-status-error">{{ start_gen.error or 'Generation failed' }}</span>
+                                {{ slot_fail_block(start_gen.error) }}
                                 {% elif scene.start.image_url %}
                                 <img src="{{ scene.start.image_url }}" alt="Start" class="slot-image">
                                 {% else %}
@@ -400,6 +414,7 @@
                                     <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                                 </button>
                                 <button type="button" class="btn-regenerate btn-generate {{ '' if scene.end.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="end" title="Generate" {{ '' if scene.end.prompt else 'disabled' }}>↻</button>
+                                <span class="slot-header-trailing"><span class="slot-header-meta" title="{{ scene_slot_image_header_meta }}">{{ scene_slot_image_header_meta }}</span></span>
                             </div>
                             <div class="slot-prompt-editor-wrap">
                                 <textarea
@@ -424,7 +439,7 @@
                                 {% elif end_gen and end_gen.state == 'canceled' %}
                                 <span class="slot-status">Canceled</span>
                                 {% elif end_gen and end_gen.state == 'fail' %}
-                                <span class="slot-status slot-status-error">{{ end_gen.error or 'Generation failed' }}</span>
+                                {{ slot_fail_block(end_gen.error) }}
                                 {% elif scene.end.image_url %}
                                 <img src="{{ scene.end.image_url }}" alt="End" class="slot-image">
                                 {% else %}
@@ -462,6 +477,7 @@
                                     title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
                                     {{ '' if (has_video_prompt and video_ready) else 'disabled' }}
                                 ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
+                                <span class="slot-header-trailing">
                                 <span class="video-hd-status {{ 'active' if show_hd_done or show_hd_wait else '' }}" data-video-hd-status>
                                     {% if show_hd_done %}
                                     1080p - done
@@ -470,6 +486,8 @@
                                     {% elif video_quality == '720p' and scene.video and scene.video.video_url %}
                                     720p
                                     {% endif %}
+                                </span>
+                                <span class="slot-header-meta" title="{{ scene_slot_video_header_meta }}">{{ scene_slot_video_header_meta }}</span>
                                 </span>
                             </div>
                             <div class="slot-prompt-editor-wrap">
@@ -493,7 +511,7 @@
                                 {% elif video_gen and video_gen.state == 'canceled' %}
                                 <span class="slot-status">Canceled</span>
                                 {% elif video_gen and video_gen.state == 'fail' %}
-                                <span class="slot-status slot-status-error">{{ video_gen.error or 'Generation failed' }}</span>
+                                {{ slot_fail_block(video_gen.error) }}
                                 {% elif scene.video.video_url %}
                                 <video src="{{ scene.video.video_url }}" class="slot-image" controls playsinline preload="metadata"></video>
                                 {% else %}
@@ -568,6 +586,20 @@
         </div>
     </div>
 
+    <div class="confirm-modal confirm-modal--error hidden" id="job-error-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-job-error-close></div>
+        <div class="confirm-modal__card" role="alertdialog" aria-modal="true" aria-labelledby="job-error-title" aria-describedby="job-error-text">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="job-error-title">Ошибка</h3>
+            </div>
+            <p class="confirm-modal__lead">Не удалось выполнить действие:</p>
+            <div class="confirm-modal__preview" id="job-error-text"></div>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-danger btn-sm" id="job-error-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     let galleryImages = [];
     let currentImageIndex = 0;
@@ -588,6 +620,31 @@
     const bulkConfirmText = document.getElementById('bulk-confirm-text');
     const bulkConfirmCancelBtn = document.getElementById('bulk-confirm-cancel');
     const bulkConfirmOkBtn = document.getElementById('bulk-confirm-ok');
+    const jobErrorModal = document.getElementById('job-error-modal');
+    const jobErrorText = document.getElementById('job-error-text');
+    const jobErrorOkBtn = document.getElementById('job-error-ok');
+
+    const closeJobErrorModal = () => {
+        if (!jobErrorModal) return;
+        jobErrorModal.classList.add('hidden');
+        jobErrorModal.setAttribute('aria-hidden', 'true');
+    };
+
+    const openJobErrorModal = (message) => {
+        const text = String(message == null ? '' : message).trim() || 'Неизвестная ошибка';
+        if (!jobErrorModal || !jobErrorText) {
+            window.alert(text);
+            return;
+        }
+        jobErrorText.textContent = text;
+        jobErrorModal.classList.remove('hidden');
+        jobErrorModal.setAttribute('aria-hidden', 'false');
+    };
+
+    jobErrorOkBtn?.addEventListener('click', closeJobErrorModal);
+    jobErrorModal?.addEventListener('click', (e) => {
+        if (e.target && e.target.hasAttribute('data-job-error-close')) closeJobErrorModal();
+    });
     const jsonStats = {
         total: document.getElementById('json-scenes-total'),
         start: document.getElementById('json-scenes-start'),
@@ -598,6 +655,8 @@
     let bulkConfirmResolver = null;
     let bulkRunActive = false;
     let bulkStopRequested = false;
+    /** Игнорировать «Остановить» сразу после старта пакета — иначе клик «Запустить» в модалке может «протечь» на кнопку Stop под ней. */
+    let bulkStopReadyUntil = 0;
     const bulkStartedTaskIds = new Set();
     const jsonInputEl = document.getElementById('json_input');
     const loadExampleBtn = document.getElementById('load-example');
@@ -814,7 +873,13 @@
     const syncBulkRunUi = () => {
         if (bulkGenerateImageBtn) bulkGenerateImageBtn.disabled = bulkRunActive;
         if (bulkGenerateVideoBtn) bulkGenerateVideoBtn.disabled = bulkRunActive;
-        if (bulkGenerateStopBtn) bulkGenerateStopBtn.disabled = !bulkRunActive;
+        const stopArmed =
+            bulkRunActive &&
+            typeof performance !== 'undefined' &&
+            performance.now() < bulkStopReadyUntil;
+        if (bulkGenerateStopBtn) {
+            bulkGenerateStopBtn.disabled = !bulkRunActive || stopArmed;
+        }
     };
 
     const openBulkConfirm = (text) => {
@@ -941,6 +1006,10 @@
             closeBulkConfirm(false);
             return;
         }
+        if (e.key === 'Escape' && jobErrorModal && !jobErrorModal.classList.contains('hidden')) {
+            closeJobErrorModal();
+            return;
+        }
         if (!lightbox.classList.contains('open')) return;
         if (e.key === 'Escape') closeLightbox();
         if (e.key === 'ArrowLeft') stepLightbox(-1);
@@ -991,13 +1060,35 @@
         }
     };
 
+    const slotErrorUserHint = (raw) => {
+        const s = String(raw || '').toLowerCase();
+        if (/prohibited use|filtered out|violated|generative ai prohibited|abuse policy|safety policy|prohibited use policy/.test(s)) {
+            return 'Провайдер (Google через Kie.ai) заблокировал результат: промпт или референсы попадают под правила безопасности. Смягчите описание, уберите спорные детали или смените шаблон изображений.';
+        }
+        if (/no images found|unable to show the generated image/.test(s)) {
+            return 'Картинка в ответе не найдена — обычно фильтр контента или сбой на стороне модели. Измените промпт и запустите снова.';
+        }
+        if (/nsfw|adult content|not allowed|blocked/.test(s)) {
+            return 'Контент отклонён моделью как неподходящий. Перефразируйте промпт.';
+        }
+        return 'Сообщение выше — от Kie.ai. Повторите позже или измените промпт и параметры.';
+    };
+
     const showPlaceholderError = (placeholder, message) => {
         placeholder.setAttribute('data-status', 'pending');
         placeholder.replaceChildren();
+        const wrap = document.createElement('div');
+        wrap.className = 'slot-error-stack';
         const span = document.createElement('span');
         span.className = 'slot-status slot-status-error';
         span.textContent = message;
-        placeholder.appendChild(span);
+        wrap.appendChild(span);
+        const hintText = slotErrorUserHint(message);
+        const hint = document.createElement('p');
+        hint.className = 'slot-status-error-hint';
+        hint.textContent = hintText;
+        wrap.appendChild(hint);
+        placeholder.appendChild(wrap);
     };
 
     const updateSlotPromptUi = (sceneCard, slot, promptText) => {
@@ -1066,7 +1157,7 @@
                 updateSlotPromptUi(sceneCard, slot, data.prompt || '');
                 updateVideoButtonState(sceneCard);
             } catch (e) {
-                alert(e.message || 'Не удалось сохранить prompt');
+                openJobErrorModal(e.message || 'Не удалось сохранить prompt');
                 return;
             } finally {
                 toggleBtn.disabled = false;
@@ -1118,7 +1209,7 @@
         statusEl.classList.toggle('active', Boolean(text));
     };
 
-    document.querySelectorAll('.scene-card').forEach(updateVideoButtonState);
+    document.querySelectorAll('.scenes-section .scene-card').forEach(updateVideoButtonState);
 
     const renderStatus = (placeholder, text, elapsed, withSpinner = false, taskId = '') => {
         const safe = `${text} (${elapsed}s)`;
@@ -1205,21 +1296,30 @@
                 );
             } else if (state === 'fail') {
                 placeholder.setAttribute('data-status', 'pending');
-                placeholder.innerHTML = `<span class="slot-status slot-status-error">${statusData.error || 'Generation failed'} (${elapsed}s)</span>`;
+                showPlaceholderError(placeholder, `${statusData.error || 'Generation failed'} (${elapsed}s)`);
                 if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
                 done = true;
             } else {
                 renderStatus(placeholder, stateText, elapsed, true, taskId);
             }
         }
+        if (canceledTasks.has(taskId)) {
+            placeholder.setAttribute('data-status', 'pending');
+            placeholder.innerHTML = '<span class="slot-status">Canceled</span>';
+            if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
+        }
         btn.disabled = false;
     };
 
     const startGenerationForButton = async (btn, options = {}) => {
-        const sceneIndex = parseInt(btn.dataset.sceneIndex, 10);
+        const sceneCard = btn.closest('.scenes-section .scene-card') || btn.closest('.scene-card');
+        const rawIdx = sceneCard?.dataset?.sceneIndex ?? btn.dataset.sceneIndex;
+        const sceneIndex = Number.parseInt(String(rawIdx ?? ''), 10);
+        if (!Number.isFinite(sceneIndex) || sceneIndex < 0) {
+            throw new Error('Invalid scene index');
+        }
         const slot = btn.dataset.slot;
         const placeholder = btn.closest('.scene-slot').querySelector('.slot-placeholder');
-        const sceneCard = btn.closest('.scene-card');
         const sceneId = sceneCard?.querySelector('.scene-id')?.textContent?.trim() || `scene#${sceneIndex}`;
         if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
         btn.disabled = true;
@@ -1240,6 +1340,21 @@
                 bulkStartedTaskIds.add(taskId);
                 appendBulkLog(`▶ ${sceneId} · ${slot}: задача принята (${taskId.slice(0, 8)}…)`);
             }
+            if (options.bulk && bulkStopRequested) {
+                canceledTasks.add(taskId);
+                try {
+                    await fetch(`/job/${jobId}/generate/cancel`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task_id: taskId }),
+                    });
+                } catch (_) {}
+                placeholder.setAttribute('data-status', 'pending');
+                placeholder.innerHTML = '<span class="slot-status">Canceled</span>';
+                appendBulkLog(`✖ ${sceneId} · ${slot}: остановка — опрос не запущен.`);
+                btn.disabled = false;
+                return;
+            }
             renderStatus(placeholder, 'Task submitted', 0, true, taskId);
             await pollTask(btn, placeholder, slot, taskId);
             if (options.bulk) appendBulkLog(`✓ ${sceneId} · ${slot}: завершено.`);
@@ -1256,57 +1371,127 @@
         });
     });
 
+    const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
+
+    const imageSlotHasFinishedPicture = (placeholder) => {
+        if (!placeholder) return false;
+        const img = placeholder.querySelector('img.slot-image');
+        const src = (img && img.getAttribute('src')) ? String(img.getAttribute('src')).trim() : '';
+        return Boolean(src);
+    };
+
+    /** Слот Start/End: нужна генерация для кнопки «Сгенерировать Image» — нет готовой картинки и сейчас не идёт активный опрос. */
+    const imageSlotNeedsGeneration = (btn) => {
+        const slotEl = btn.closest('.scene-slot');
+        const ph = slotEl ? slotEl.querySelector('.slot-placeholder') : null;
+        if (!ph) return true;
+        if (imageSlotHasFinishedPicture(ph)) return false;
+        const st = String(ph.dataset.status || '').toLowerCase();
+        if (IMAGE_ACTIVE_PLACEHOLDER_STATUSES.has(st)) return false;
+        return true;
+    };
+
     const collectBulkButtons = (kind) => {
+        const root = '.scenes-section ';
         const selector = kind === 'video'
-            ? '.btn-generate[data-slot="video"]'
-            : '.btn-generate[data-slot="start"], .btn-generate[data-slot="end"]';
-        return Array.from(document.querySelectorAll(selector)).filter((btn) => {
-            if (!btn || btn.disabled) return false;
+            ? `${root}.btn-generate[data-slot="video"]`
+            : `${root}.btn-generate[data-slot="start"], ${root}.btn-generate[data-slot="end"]`;
+        let list = Array.from(document.querySelectorAll(selector)).filter((btn) => {
+            if (!btn) return false;
             if (btn.classList.contains('is-hidden')) return false;
             if (kind === 'video' && btn.classList.contains('btn-video-locked')) return false;
             return true;
         });
+        if (kind === 'image') {
+            list = list.filter(imageSlotNeedsGeneration);
+        }
+        return list;
     };
 
     const runBulkGeneration = async (kind) => {
-        const targets = collectBulkButtons(kind);
-        const count = targets.length;
-        const noun = kind === 'video' ? 'Video' : 'Image';
+        const isVideo = kind === 'video';
+        const isImageOnlyMissing = kind === 'image';
+        const noun = isVideo ? 'Video' : 'Image (без готового кадра)';
+        let targets = collectBulkButtons(kind);
+        let count = targets.length;
         if (!count) {
-            alert(`Нет доступных ${noun} задач для запуска.`);
+            if (isImageOnlyMissing) {
+                openJobErrorModal('Нет кадров Start/End без готового изображения (или все ещё в очереди/генерации). Запустите ↻ у нужного слота вручную или измените сцены.');
+            } else {
+                openJobErrorModal(`Нет доступных ${noun} задач для запуска.`);
+            }
             return;
         }
-        const agreed = await openBulkConfirm(`Будет запущено ${count} ${noun} на генерацию. Точно запускаем?`);
+        let confirmText;
+        if (isVideo) {
+            confirmText = `Будет запущено ${count} задач Video на генерацию. Точно запускаем?`;
+        } else {
+            confirmText = `Будет запущена генерация для ${count} кадров Start/End без готовой картинки (ошибка, отмена, пусто — включено; уже идущие задачи пропущены). Точно запускаем?`;
+        }
+        const agreed = await openBulkConfirm(confirmText);
         if (!agreed) return;
+        targets = collectBulkButtons(kind);
+        count = targets.length;
+        if (!count) {
+            openJobErrorModal('Нет доступных задач для запуска (после подтверждения).');
+            return;
+        }
         bulkRunActive = true;
         bulkStopRequested = false;
+        bulkStartedTaskIds.clear();
+        bulkStopReadyUntil = performance.now() + 1100;
         syncBulkRunUi();
+        const armDelayMs = Math.max(0, bulkStopReadyUntil - performance.now()) + 40;
+        setTimeout(() => {
+            if (bulkRunActive) syncBulkRunUi();
+        }, armDelayMs);
+        await new Promise((r) => setTimeout(r, 60));
         appendBulkLog(`══ Пакетный запуск ${noun}: ${count} задач ══`);
-        for (let i = 0; i < targets.length; i += 1) {
-            if (bulkStopRequested) {
-                appendBulkLog('✖ Пакетный запуск остановлен пользователем.');
-                break;
+        try {
+            const runners = [];
+            let started = 0;
+            for (let i = 0; i < targets.length; i += 1) {
+                if (bulkStopRequested) {
+                    appendBulkLog('✖ Пакетный запуск остановлен пользователем.');
+                    break;
+                }
+                const btn = targets[i];
+                if (btn.classList.contains('is-hidden')) continue;
+                if (btn.disabled) {
+                    appendBulkLog(`… пропуск: кнопка disabled (${btn.dataset.slot || '?'}, сцена ${btn.dataset.sceneIndex ?? '?'})`);
+                    continue;
+                }
+                if (started > 0) {
+                    await new Promise((r) => setTimeout(r, 75));
+                }
+                started += 1;
+                runners.push(startGenerationForButton(btn, { bulk: true }));
             }
-            const btn = targets[i];
-            if (btn.disabled || btn.classList.contains('is-hidden')) continue;
-            startGenerationForButton(btn, { bulk: true });
-            await new Promise((resolve) => setTimeout(resolve, 120));
+            if (runners.length) {
+                await Promise.allSettled(runners);
+            }
+        } finally {
+            bulkRunActive = false;
+            syncBulkRunUi();
         }
-        bulkRunActive = false;
-        syncBulkRunUi();
     };
 
     bulkGenerateImageBtn?.addEventListener('click', () => {
-        runBulkGeneration('image').catch((e) => alert(String(e)));
+        runBulkGeneration('image').catch((e) => openJobErrorModal(String(e)));
     });
     bulkGenerateVideoBtn?.addEventListener('click', () => {
-        runBulkGeneration('video').catch((e) => alert(String(e)));
+        runBulkGeneration('video').catch((e) => openJobErrorModal(String(e)));
     });
     bulkGenerateStopBtn?.addEventListener('click', async () => {
         if (!bulkRunActive) return;
+        if (typeof performance !== 'undefined' && performance.now() < bulkStopReadyUntil) {
+            appendBulkLog('… игнор «Остановить» сразу после старта (защита от ложного клика).');
+            return;
+        }
         bulkStopRequested = true;
-        appendBulkLog('… Остановка: отправляю cancel для активных задач');
+        appendBulkLog('… Остановка: прерываю опрос и отправляю cancel для принятых задач');
         const ids = Array.from(bulkStartedTaskIds);
+        ids.forEach((tid) => canceledTasks.add(tid));
         for (let i = 0; i < ids.length; i += 1) {
             const taskId = ids[i];
             try {
@@ -1317,13 +1502,11 @@
                 });
             } catch (_) {}
         }
-        appendBulkLog(`Остановка: отправлено cancel для ${ids.length} задач.`);
-        bulkRunActive = false;
-        syncBulkRunUi();
+        appendBulkLog(`Остановка: cancel для ${ids.length} задач (опрос на клиенте остановлен).`);
     });
 
     // Resume polling after page refresh for active tasks.
-    document.querySelectorAll('.scene-slot[data-slot="start"], .scene-slot[data-slot="end"], .scene-slot[data-slot="video"]').forEach(slotEl => {
+    document.querySelectorAll('.scenes-section .scene-slot[data-slot="start"], .scenes-section .scene-slot[data-slot="end"], .scenes-section .scene-slot[data-slot="video"]').forEach(slotEl => {
         const placeholder = slotEl.querySelector('.slot-placeholder');
         const taskId = placeholder?.dataset?.taskId;
         const slot = slotEl.dataset.slot;

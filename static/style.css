@@ -2195,6 +2195,30 @@ textarea::placeholder {
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+/* Подпись модели / разрешения — мелко, серая, справа (как задумывали для job) */
+.slot-header-trailing {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-left: auto;
+    min-width: 0;
+    max-width: min(100%, 70%);
+}
+
+.slot-header-meta {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    font-weight: 400;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .slot-badge-wrap {
@@ -2295,7 +2319,6 @@ textarea::placeholder {
 .video-hd-status {
     display: inline-flex;
     align-items: center;
-    margin-left: 0.25rem;
     min-height: 24px;
     font-size: 0.68rem;
     line-height: 1.2;
