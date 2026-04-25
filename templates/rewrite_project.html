@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ rw.project_name or rw.rewrite_id }} — ReWrite</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% include '_stylesheet_link.html' %}
 </head>
 <body class="rewrite-project-page" data-openai-key="{{ '1' if openai_key_set else '0' }}">
     <div class="container">

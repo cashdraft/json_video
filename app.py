@@ -117,6 +117,8 @@ app.secret_key = os.urandom(24)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+# Если nginx не отдаёт /static/ с того же хоста: STATIC_STYLE_HREF=https://…/static/style.css
+app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
 GENERATION_TASKS: dict[str, dict] = {}
 
 
@@ -844,6 +846,14 @@ def video_model_label(value: str | None) -> str:
     if model_id == "grok-imagine/image-to-video":
         return "Grok Imagine Image to Video"
     return "Veo 3.1 Fast" if model_id == "veo3_fast" else "Veo 3.1 Quality"
+
+
+def image_model_label(value: str | None) -> str:
+    """Короткая подпись для UI (Nano Banana Pro и т.д.)."""
+    mid = (value or "").strip().lower()
+    if mid in {"nano-banana-pro", "nano banana pro"}:
+        return "Nano Banana Pro"
+    return (value or "").strip() or "Nano Banana Pro"
 
 
 # --- Routes ---
@@ -1716,7 +1726,9 @@ def parse_for_job(job_id: str):
     meta["aspect_ratio"] = aspect_ratio
     meta["video_duration"] = 10
     meta["image_model"] = image_model
+    meta["image_model_label"] = image_model_label(image_model)
     meta["video_model"] = video_model
+    meta["video_model_label"] = video_model_label(video_model)
     meta["resolution"] = resolution
     meta["output_format"] = "jpg"
     meta["image_template"] = image_template
@@ -2450,6 +2462,7 @@ def job_page(job_id: str):
     meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
     meta.setdefault("video_duration", job.get("selected_video_duration", 10))
     meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
+    meta["image_model_label"] = image_model_label(meta.get("image_model"))
     meta.setdefault("video_model", job.get("selected_video_model", "veo3_fast"))
     meta["video_model"] = normalize_video_model(meta.get("video_model"))
     meta["video_model_label"] = video_model_label(meta.get("video_model"))
@@ -2467,12 +2480,19 @@ def job_page(job_id: str):
     summary = compute_summary(job.get("scenes", []))
     template_display = job_template_display(meta.get("image_template", ""))
     elevenlabs_key_set = bool((os.getenv("ELEVENLABS_API_KEY") or "").strip())
+    res_display = meta.get("resolution") or job.get("selected_resolution") or "2K"
+    img_label = meta.get("image_model_label") or image_model_label(meta.get("image_model"))
+    vid_label = meta.get("video_model_label") or video_model_label(meta.get("video_model"))
+    scene_slot_image_header_meta = f"{res_display} · {img_label}"
+    scene_slot_video_header_meta = vid_label
     return render_template(
         "job.html",
         job_id=job_id,
         job=job,
         scenes=job.get("scenes", []),
         summary=summary,
+        scene_slot_image_header_meta=scene_slot_image_header_meta,
+        scene_slot_video_header_meta=scene_slot_video_header_meta,
         template_display=template_display,
         image_templates=templates_ui_rows(),
         tts_models=TTS_MODELS,
