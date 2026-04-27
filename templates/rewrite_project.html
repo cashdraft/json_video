@@ -32,7 +32,7 @@
                     <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
                 </form>
             </div>
-            <p class="subtitle">ReWrite Master · конвейер этапов · {{ rw.rewrite_id }}</p>
+            <p class="subtitle">ReWrite мастер адаптации текстов · {{ rw.rewrite_id }}</p>
         </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -51,12 +51,75 @@
         </p>
         {% endif %}
 
+        {% set rw_yt_transcript_trim = (rw.youtube_transcript_text or '')|trim %}
         <section class="scenes-section rewrite-pipeline">
+            <div class="scene-card rewrite-youtube-card{% if rw_yt_transcript_trim %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_transcript_trim else '0' }}">
+                <div class="rewrite-youtube-block">
+                    <div class="scene-id rewrite-youtube-block__title">YouTube</div>
+                    <p class="scene-text rewrite-youtube-block__lead">
+                        Ссылка на ролик: проверка, загрузка аудио и расшифровка. Готовый текст можно вставить в поле «Исходный текст».
+                    </p>
+                    <div class="rewrite-youtube-block__url-row">
+                        <img
+                            src="{{ url_for('static', filename='img/youtube_logo.png') }}"
+                            alt=""
+                            class="rewrite-youtube-brand"
+                            width="22"
+                            height="22"
+                            decoding="async"
+                        >
+                        <input
+                            type="url"
+                            id="rewrite-youtube-url"
+                            class="rewrite-youtube-url"
+                            placeholder="https://www.youtube.com/watch?v=… или /shorts/…"
+                            value="{{ rw.youtube_url or '' }}"
+                            {% if not openai_key_set %}disabled{% endif %}
+                        >
+                        <div class="rewrite-youtube-block__actions">
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set %}disabled{% endif %}>Расшифровать</button>
+                            <button type="button" class="btn btn-danger btn-sm" id="rewrite-youtube-stop" disabled title="Прервать проверку ссылки, скачивание или расшифровку" aria-label="Остановить">Остановить</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert" disabled>Вставить</button>
+                        </div>
+                    </div>
+                    <div class="rewrite-youtube-block__status-stack">
+                        <p class="rewrite-youtube-video-line{% if not (rw.youtube_title or '')|trim %} rewrite-youtube-video-line--empty{% endif %}" id="rewrite-youtube-video-line">
+                            <span class="rewrite-youtube-video-line__text" id="rewrite-youtube-video-title">{{ (rw.youtube_title or '')|trim }}</span>
+                        </p>
+                        <div class="rewrite-youtube-block__status-row">
+                            <span id="rewrite-youtube-status" class="rewrite-youtube-status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="rewrite-youtube-lock-overlay{% if not rw_yt_transcript_trim %} hidden{% endif %}" id="rewrite-youtube-lock-overlay">
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-unlock-btn">Редактировать</button>
+                </div>
+            </div>
+
+            <div class="scene-card rewrite-source-card rewrite-source-card--body">
+                <div class="rewrite-source-body-header">
+                    <div class="scene-id rewrite-source-body-title">Исходный текст</div>
+                    <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
+                </div>
+                <div class="rewrite-source-toolbar slot-header">
+                    <span class="slot-badge badge-yes">Source</span>
+                    <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.source_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                    </button>
+                    <span id="rewrite-busy" class="tts-busy hidden">Идёт запрос…</span>
+                    <span class="rewrite-source-counts" id="rewrite-source-counts" aria-live="polite"></span>
+                </div>
+                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                    <textarea id="rewrite-source-text" class="rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="9" placeholder="Вставьте текст…" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %}>{{ rw.source_text or rw.last_text or '' }}</textarea>
+                </div>
+            </div>
+
             <div class="rewrite-template-bar">
                 <label for="rewrite-template-select" class="rewrite-template-bar__label">Шаблон проекта</label>
                 <select id="rewrite-template-select" class="tts-select rewrite-template-select" {% if not openai_key_set %}disabled{% endif %}>
-                    <option value="">— не выбран —</option>
-                    {% set cur_tpl = (rw.rewrite_template or '')|trim %}
+                    {% set _rw_saved_tpl = (rw.rewrite_template or '')|trim %}
+                    {% set cur_tpl = _rw_saved_tpl if _rw_saved_tpl else (rewrite_template_names[0] if rewrite_template_names else '') %}
                     {% for t in rewrite_template_names %}
                     <option value="{{ t }}" {% if cur_tpl == t %}selected{% endif %}>{{ t }}</option>
                     {% endfor %}
@@ -65,17 +128,6 @@
                     {% endif %}
                 </select>
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-apply" {% if not openai_key_set %}disabled{% endif %}>Применить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-save-disk" {% if not openai_key_set %}disabled{% endif %} title="Перезаписать .txt шаблона на диске из текущих полей">Обновить шаблон</button>
-                <label for="rewrite-global-model" class="rewrite-template-bar__label">Model</label>
-                {% set cur_model = (rw.stages.analysis.model or '')|trim %}
-                {% if not cur_model and rewrite_models %}
-                    {% set cur_model = rewrite_models[0].id %}
-                {% endif %}
-                <select id="rewrite-global-model" class="tts-select rewrite-template-select" {% if not openai_key_set %}disabled{% endif %}>
-                    {% for m in rewrite_models %}
-                    <option value="{{ m.id }}" {% if cur_model == m.id %}selected{% endif %}>{{ m.label }}</option>
-                    {% endfor %}
-                </select>
                 <span class="rewrite-template-bar__hint">Создайте подпапку в <code>rewrite_templates/</code> (как <code>Base Template</code>) — её имя = шаблон. Внутрь положите <code>.txt</code>: <code>Config</code>, Hero, Master, Analysis … Файлы не в подпапке не подхватываются.</span>
             </div>
 
@@ -111,85 +163,39 @@
                             <textarea id="rewrite-hero-prompt" class="rewrite-source-textarea{% if hero_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Герой, тон, контекст…" {% if not openai_key_set %}disabled{% elif hero_locked %}readonly{% endif %}>{{ rw.hero_prompt or '' }}</textarea>
                         </div>
                     </div>
-                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--duration">
-                        <h3 class="rewrite-source-subtitle">Duration</h3>
-                        <p class="rewrite-source-subhint">Ориентир длины озвучки: длительность в минутах и символов в минуту.</p>
-                        <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Duration</span>
-                            <button type="button" class="rewrite-lock-toggle btn-icon{% if audio_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-audio-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                            </button>
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--model-duration">
+                        <div class="rewrite-prompts-duration-row__model-block">
+                            <h3 class="rewrite-source-subtitle">Model</h3>
+                            {% set cur_model = (rw.stages.analysis.model or '')|trim %}
+                            {% if not cur_model and rewrite_models %}
+                                {% set cur_model = rewrite_models[0].id %}
+                            {% endif %}
+                            <select id="rewrite-global-model" class="tts-select rewrite-global-model-select" {% if not openai_key_set %}disabled{% endif %} aria-label="Модель OpenAI для этапов">
+                                {% for m in rewrite_models %}
+                                <option value="{{ m.id }}" {% if cur_model == m.id %}selected{% endif %}>{{ m.label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="tts-slider-block rewrite-source-duration">
-                            <label class="tts-slider-label" for="rewrite-duration-min">Minutes <span class="tts-slider-val" id="rewrite-duration-min-val">{{ rw.duration_minutes|default(5)|int }}</span></label>
-                            <input type="range" id="rewrite-duration-min" name="duration_minutes" min="1" max="30" step="1" value="{{ rw.duration_minutes|default(5)|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="1" aria-valuemax="30">
-                            <div class="tts-slider-ends">
-                                <span>1 мин</span>
-                                <span>30 мин</span>
+                        <div class="rewrite-prompts-duration-row__duration-block">
+                            <h3 class="rewrite-source-subtitle">Duration</h3>
+                            <p class="rewrite-source-subhint">Ориентир длины озвучки в символах (500–40 000, шаг 500).</p>
+                            <div class="rewrite-source-toolbar slot-header">
+                                <span class="slot-badge badge-yes">Duration</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon{% if audio_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-audio-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
                             </div>
-                            <div class="rewrite-cpm-row">
-                                <label class="rewrite-cpm-row__label" for="rewrite-chars-per-min">Симв./мин</label>
-                                <input type="number" id="rewrite-chars-per-min" class="rewrite-cpm-input" min="1" max="2000" step="1" value="{{ rw.chars_per_minute|default(344)|int }}" {% if not openai_key_set or audio_locked %}disabled{% endif %} title="Ориентир озвучки: символов на минуту">
+                            <div class="tts-slider-block rewrite-source-duration">
+                                <label class="tts-slider-label" for="rewrite-target-chars">Символы <span class="tts-slider-val" id="rewrite-target-chars-val">{{ (rw.target_chars|default(1500))|int }}</span></label>
+                                <input type="range" id="rewrite-target-chars" name="target_chars" min="500" max="40000" step="500" value="{{ (rw.target_chars|default(1500))|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="500" aria-valuemax="40000">
+                                <div class="tts-slider-ends">
+                                    <span>500</span>
+                                    <span>40000</span>
+                                </div>
                             </div>
-                            <p class="rewrite-duration-mode-hint" id="rewrite-duration-mode-hint" aria-live="polite"></p>
-                            <p class="rewrite-duration-char-hint" id="rewrite-duration-char-hint" aria-live="polite"></p>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <div class="scene-card rewrite-youtube-card">
-                <div class="rewrite-youtube-block">
-                    <div class="scene-id rewrite-youtube-block__title">YouTube</div>
-                    <p class="scene-text rewrite-youtube-block__lead">
-                        Ссылка на ролик: проверка, загрузка аудио и расшифровка. Готовый текст можно вставить в поле «Исходный текст».
-                    </p>
-                    <div class="rewrite-youtube-block__url-row">
-                        <img
-                            src="{{ url_for('static', filename='img/youtube_logo.png') }}"
-                            alt=""
-                            class="rewrite-youtube-brand"
-                            width="22"
-                            height="22"
-                            decoding="async"
-                        >
-                        <input
-                            type="url"
-                            id="rewrite-youtube-url"
-                            class="rewrite-youtube-url"
-                            placeholder="https://www.youtube.com/watch?v=… или /shorts/…"
-                            value="{{ rw.youtube_url or '' }}"
-                            {% if not openai_key_set %}disabled{% endif %}
-                        >
-                        <div class="rewrite-youtube-block__actions">
-                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set %}disabled{% endif %}>Расшифровать</button>
-                            <button type="button" class="btn btn-danger btn-sm" id="rewrite-youtube-stop" disabled title="Прервать проверку ссылки, скачивание или расшифровку" aria-label="Остановить">Остановить</button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert" disabled>Вставить</button>
-                        </div>
-                    </div>
-                    <div class="rewrite-youtube-block__status-row">
-                        <span id="rewrite-youtube-status" class="rewrite-youtube-status" aria-live="polite"></span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="scene-card rewrite-source-card rewrite-source-card--body">
-                <div class="rewrite-source-body-header">
-                    <div class="scene-id rewrite-source-body-title">Исходный текст</div>
-                    <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
-                </div>
-                <div class="rewrite-source-toolbar slot-header">
-                    <span class="slot-badge badge-yes">Source</span>
-                    <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.source_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                    </button>
-                    <span id="rewrite-busy" class="tts-busy hidden">Идёт запрос…</span>
-                    <span class="rewrite-source-counts" id="rewrite-source-counts" aria-live="polite"></span>
-                </div>
-                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
-                    <textarea id="rewrite-source-text" class="rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="9" placeholder="Вставьте текст…" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %}>{{ rw.source_text or rw.last_text or '' }}</textarea>
                 </div>
             </div>
 
@@ -232,7 +238,7 @@
                                     <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать JSON тела запроса к OpenAI (как при запуске этапа)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>txt</button>
+                            <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
                         </div>
                     </div>
                     <div class="rewrite-stage-stack">
@@ -326,15 +332,31 @@
         </section>
     </div>
 
+    <div class="confirm-modal hidden" id="rewrite-youtube-edit-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-youtube-edit-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-edit-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-youtube-edit-confirm-title">Редактирование YouTube</h3>
+            </div>
+            <p class="confirm-modal__lead">У вас уже есть сохранённая расшифровка ролика. Точно хотите менять ссылку или заново запускать расшифровку?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-edit-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-edit-confirm-ok">Да, редактировать</button>
+            </div>
+        </div>
+    </div>
+
     <script>
 (function () {
     const runUrl = {{ url_for('rewrite_project_run', rewrite_id=rw.rewrite_id) | tojson }};
     const apiPayloadUrl = {{ url_for('rewrite_project_api_payload', rewrite_id=rw.rewrite_id) | tojson }};
+    const openaiExportRewriteId = {{ rw.rewrite_id | tojson }};
     const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
     const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadStreamUrl = {{ url_for('rewrite_youtube_download_stream', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscribeUrl = {{ url_for('rewrite_youtube_transcribe', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytTranscribeStreamUrl = {{ url_for('rewrite_youtube_transcribe_stream', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
@@ -351,20 +373,26 @@
     const openaiOk = document.body.getAttribute('data-openai-key') === '1';
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
-    const durationRangeEl = document.getElementById('rewrite-duration-min');
-    const durationValEl = document.getElementById('rewrite-duration-min-val');
-    const charsPerMinEl = document.getElementById('rewrite-chars-per-min');
-    const durationCharHintEl = document.getElementById('rewrite-duration-char-hint');
-    const durationModeHintEl = document.getElementById('rewrite-duration-mode-hint');
+    const targetCharsRangeEl = document.getElementById('rewrite-target-chars');
+    const targetCharsValEl = document.getElementById('rewrite-target-chars-val');
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
     const templateSelectEl = document.getElementById('rewrite-template-select');
     const templateApplyBtn = document.getElementById('rewrite-template-apply');
-    const templateSaveDiskBtn = document.getElementById('rewrite-template-save-disk');
     const ytUrlEl = document.getElementById('rewrite-youtube-url');
     const ytDecodeBtn = document.getElementById('rewrite-youtube-decode');
     const ytStopBtn = document.getElementById('rewrite-youtube-stop');
     const ytInsertBtn = document.getElementById('rewrite-youtube-insert');
     const ytStatusEl = document.getElementById('rewrite-youtube-status');
+    const ytVideoLineEl = document.getElementById('rewrite-youtube-video-line');
+    const ytVideoTitleTextEl = document.getElementById('rewrite-youtube-video-title');
+    const ytCardEl = document.getElementById('rewrite-youtube-card');
+    const ytLockOverlay = document.getElementById('rewrite-youtube-lock-overlay');
+    const ytUnlockBtn = document.getElementById('rewrite-youtube-unlock-btn');
+    const ytEditConfirmModal = document.getElementById('rewrite-youtube-edit-confirm-modal');
+    const ytEditConfirmCancelBtn = document.getElementById('rewrite-youtube-edit-confirm-cancel');
+    const ytEditConfirmOkBtn = document.getElementById('rewrite-youtube-edit-confirm-ok');
+    let youtubeLocked = {{ (rw_yt_transcript_trim != '')|tojson }};
+    let youtubeEditConfirmResolver = null;
     var ytTranscriptReady = false;
     var ytWorking = false;
     var ytAbortController = null;
@@ -392,16 +420,11 @@
         pipelineLogEl.scrollTop = pipelineLogEl.scrollHeight;
     }
 
-    function clampDurationMinutes(v) {
+    function clampTargetChars(v) {
         var n = parseInt(v, 10);
-        if (isNaN(n)) return 5;
-        return Math.min(30, Math.max(1, n));
-    }
-
-    function clampCharsPerMinute(v) {
-        var n = parseInt(v, 10);
-        if (isNaN(n)) return 344;
-        return Math.min(2000, Math.max(1, n));
+        if (isNaN(n)) return 1500;
+        var stepped = Math.round(n / 500) * 500;
+        return Math.min(40000, Math.max(500, stepped));
     }
 
     function setYtStatus(msg, isError) {
@@ -410,8 +433,62 @@
         ytStatusEl.classList.toggle('rewrite-youtube-status--error', !!isError);
     }
 
+    function setYtVideoTitle(t) {
+        var s = (t == null || t === undefined) ? '' : String(t);
+        s = s.trim();
+        if (ytVideoTitleTextEl) ytVideoTitleTextEl.textContent = s;
+        if (ytVideoLineEl) ytVideoLineEl.classList.toggle('rewrite-youtube-video-line--empty', !s);
+    }
+
+    function setYoutubeLocked(locked) {
+        youtubeLocked = !!locked;
+        if (ytCardEl) {
+            ytCardEl.classList.toggle('rewrite-youtube-card--locked', youtubeLocked);
+            ytCardEl.setAttribute('data-youtube-locked', youtubeLocked ? '1' : '0');
+        }
+        if (ytLockOverlay) ytLockOverlay.classList.toggle('hidden', !youtubeLocked);
+        applyYoutubeToolbar();
+    }
+
+    function openYoutubeEditConfirm() {
+        if (!ytEditConfirmModal || !ytEditConfirmCancelBtn || !ytEditConfirmOkBtn) {
+            return Promise.resolve(window.confirm('У вас уже есть сохранённая расшифровка ролика. Точно хотите менять ссылку или заново запускать расшифровку?'));
+        }
+        ytEditConfirmModal.classList.remove('hidden');
+        ytEditConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) {
+            youtubeEditConfirmResolver = resolve;
+        });
+    }
+
+    function closeYoutubeEditConfirm(accepted) {
+        if (!ytEditConfirmModal) return;
+        ytEditConfirmModal.classList.add('hidden');
+        ytEditConfirmModal.setAttribute('aria-hidden', 'true');
+        if (youtubeEditConfirmResolver) {
+            var fn = youtubeEditConfirmResolver;
+            youtubeEditConfirmResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (ytEditConfirmCancelBtn) ytEditConfirmCancelBtn.addEventListener('click', function () { closeYoutubeEditConfirm(false); });
+    if (ytEditConfirmOkBtn) ytEditConfirmOkBtn.addEventListener('click', function () { closeYoutubeEditConfirm(true); });
+    if (ytEditConfirmModal) {
+        ytEditConfirmModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-youtube-edit-confirm-close')) closeYoutubeEditConfirm(false);
+        });
+    }
+
     function applyYoutubeToolbar() {
         if (!openaiOk) {
+            if (ytUrlEl) ytUrlEl.disabled = true;
+            if (ytDecodeBtn) ytDecodeBtn.disabled = true;
+            if (ytStopBtn) ytStopBtn.disabled = true;
+            if (ytInsertBtn) ytInsertBtn.disabled = true;
+            return;
+        }
+        if (youtubeLocked && !ytWorking) {
             if (ytUrlEl) ytUrlEl.disabled = true;
             if (ytDecodeBtn) ytDecodeBtn.disabled = true;
             if (ytStopBtn) ytStopBtn.disabled = true;
@@ -439,14 +516,31 @@
         return templateListUrl + '/' + encodeURIComponent(name) + '/save';
     }
 
-    function updateTemplateSaveDiskBtn() {
-        if (!templateSaveDiskBtn || !templateSelectEl) return;
-        var n = (templateSelectEl.value || '').trim();
-        var onDisk = REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(n) >= 0;
-        templateSaveDiskBtn.disabled = !openaiOk || !n || !onDisk;
-        templateSaveDiskBtn.title = onDisk
-            ? 'Перезаписать .txt в rewrite_templates/' + n + '/'
-            : 'Выберите шаблон, который есть на диске (подпапка в rewrite_templates/)';
+    async function trySyncRewriteTemplateToDisk() {
+        if (!templateSelectEl || !openaiOk) return true;
+        var name = (templateSelectEl.value || '').trim();
+        if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) return true;
+        try {
+            var snap = collectSnapshot();
+            var r = await fetch(rewriteTemplateSaveDiskUrl(name), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    hero_prompt: snap.hero_prompt,
+                    master_prompt: snap.master_prompt,
+                    target_chars: snap.target_chars,
+                    stages: snap.stages
+                })
+            });
+            var data = await r.json().catch(function () { return {}; });
+            return r.ok && !!data.ok;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function alertTemplateSyncFailed() {
+        alert('Проект сохранён, но не удалось записать файлы шаблона в rewrite_templates/ (сеть, права или папка).');
     }
 
     function renderSceneWriterCheck(block, payload) {
@@ -636,14 +730,10 @@
     }
 
     function applyAudioLockUI() {
-        if (durationRangeEl) {
-            durationRangeEl.disabled = !openaiOk || audioTimingLocked;
-        }
-        if (charsPerMinEl) {
-            charsPerMinEl.disabled = !openaiOk || audioTimingLocked;
+        if (targetCharsRangeEl) {
+            targetCharsRangeEl.disabled = !openaiOk || audioTimingLocked;
         }
         styleToggleBtn(audioToggleBtn, audioTimingLocked);
-        updateDurationCharHint();
     }
 
     function applyMasterLockUI() {
@@ -736,23 +826,6 @@
         applyYoutubeToolbar();
     }
 
-    function updateDurationCharHint() {
-        if (!durationCharHintEl) return;
-        var dm = durationRangeEl ? clampDurationMinutes(durationRangeEl.value) : 5;
-        var cpm = charsPerMinEl ? clampCharsPerMinute(charsPerMinEl.value) : 344;
-        var target = dm * cpm;
-        var targetMin = Math.max(1, target - 1000);
-        var targetMax = target + 1000;
-        var srcLen = sourceEl ? (sourceEl.value || '').trim().length : 0;
-        var mode = 'match';
-        if (srcLen > targetMax) mode = 'compress';
-        else if (srcLen < targetMin) mode = 'expand';
-        durationCharHintEl.textContent = 'Ориентир: ~' + target + ' симв. при ' + dm + ' мин (' + cpm + ' симв./мин).';
-        if (durationModeHintEl) {
-            durationModeHintEl.innerHTML = 'Length mode: <span class="rewrite-duration-mode-value">' + mode + '</span>';
-        }
-    }
-
     function countWords(s) {
         var t = (s || '').trim();
         if (!t) return 0;
@@ -768,22 +841,17 @@
     }
 
     if (sourceEl) {
-        sourceEl.addEventListener('input', function () { updateSourceCounts(); updateDurationCharHint(); });
-        sourceEl.addEventListener('change', function () { updateSourceCounts(); updateDurationCharHint(); });
+        sourceEl.addEventListener('input', updateSourceCounts);
+        sourceEl.addEventListener('change', updateSourceCounts);
     }
     updateSourceCounts();
 
-    if (durationRangeEl && durationValEl) {
-        durationRangeEl.addEventListener('input', function () {
-            durationValEl.textContent = durationRangeEl.value;
-            updateDurationCharHint();
+    if (targetCharsRangeEl && targetCharsValEl) {
+        targetCharsRangeEl.addEventListener('input', function () {
+            var tc = clampTargetChars(targetCharsRangeEl.value);
+            targetCharsValEl.textContent = String(tc);
         });
     }
-    if (charsPerMinEl) {
-        charsPerMinEl.addEventListener('input', updateDurationCharHint);
-        charsPerMinEl.addEventListener('change', updateDurationCharHint);
-    }
-    updateDurationCharHint();
 
     if (templateApplyBtn && templateSelectEl) {
         templateApplyBtn.addEventListener('click', async function () {
@@ -804,15 +872,19 @@
                     return;
                 }
                 if (heroPromptEl) heroPromptEl.value = data.hero_prompt || '';
-                if (charsPerMinEl) {
-                    charsPerMinEl.value = String(clampCharsPerMinute(data.chars_per_minute != null ? data.chars_per_minute : 344));
+                if (targetCharsRangeEl) {
+                    var dt = data.target_chars;
+                    if (dt == null && data.duration_minutes != null && data.chars_per_minute != null) {
+                        dt = clampTargetChars(
+                            (parseInt(String(data.chars_per_minute), 10) || 344) *
+                            (parseInt(String(data.duration_minutes), 10) || 5)
+                        );
+                    } else {
+                        dt = clampTargetChars(dt != null ? dt : 1500);
+                    }
+                    targetCharsRangeEl.value = String(dt);
+                    if (targetCharsValEl) targetCharsValEl.textContent = String(dt);
                 }
-                if (durationRangeEl && data.duration_minutes != null && data.duration_minutes !== '') {
-                    var dmTpl = clampDurationMinutes(data.duration_minutes);
-                    durationRangeEl.value = String(dmTpl);
-                    if (durationValEl) durationValEl.textContent = String(dmTpl);
-                }
-                updateDurationCharHint();
                 if (masterEl) masterEl.value = data.master_prompt || '';
                 var st = data.stages || {};
                 document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
@@ -855,52 +927,17 @@
                 audioTimingLocked = true;
                 applyAllLockUIs();
                 var ok = await saveToServer();
-                if (!ok) alert('Поля обновлены, но не удалось сохранить на сервер.');
-            } catch (e) {
-                alert(String(e));
-            } finally {
-                templateApplyBtn.disabled = !openaiOk;
-                updateTemplateSaveDiskBtn();
-            }
-        });
-    }
-
-    if (templateSaveDiskBtn && templateSelectEl) {
-        templateSaveDiskBtn.addEventListener('click', async function () {
-            var name = (templateSelectEl.value || '').trim();
-            if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) {
-                alert('Выберите шаблон, который есть на диске (подпапка в rewrite_templates/).');
-                return;
-            }
-            if (!confirm('Перезаписать .txt в rewrite_templates/' + name + '/ текущими полями (Hero, Master, Config, промпты этапов)?')) {
-                return;
-            }
-            templateSaveDiskBtn.disabled = true;
-            try {
-                var snap = collectSnapshot();
-                var r = await fetch(rewriteTemplateSaveDiskUrl(name), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        hero_prompt: snap.hero_prompt,
-                        master_prompt: snap.master_prompt,
-                        chars_per_minute: snap.chars_per_minute,
-                        duration_minutes: snap.duration_minutes,
-                        stages: snap.stages
-                    })
-                });
-                var data = await r.json().catch(function () { return {}; });
-                if (!r.ok || !data.ok) {
-                    alert(data.error === 'not_found' ? 'Папка шаблона не найдена.' : 'Не удалось сохранить шаблон на диск.');
-                    return;
+                if (!ok) {
+                    alert('Поля обновлены, но не удалось сохранить на сервер.');
+                } else if (!(await trySyncRewriteTemplateToDisk())) {
+                    alertTemplateSyncFailed();
                 }
             } catch (e) {
                 alert(String(e));
             } finally {
-                updateTemplateSaveDiskBtn();
+                templateApplyBtn.disabled = !openaiOk;
             }
         });
-        templateSelectEl.addEventListener('change', updateTemplateSaveDiskBtn);
     }
 
     async function ytBootstrapFromServer() {
@@ -915,6 +952,7 @@
             var txt = (data.text || '').trim();
             if (!txt) return;
             ytTranscriptReady = true;
+            setYoutubeLocked(true);
             setYtStatus(
                 'Готово текст ' + txt.length + ' символов · ' + countWords(txt) + ' слов',
                 false
@@ -925,13 +963,51 @@
         }
     }
 
-    function ytFormatKiB(n) {
+    function ytFormatBytes(n) {
         if (n == null || n === undefined || (typeof n === 'number' && (isNaN(n) || n < 0))) return '—';
-        return (Number(n) / 1024).toFixed(1) + ' КиБ';
+        var b = Number(n);
+        if (b >= 1048576) return (b / 1048576).toFixed(2) + ' МиБ';
+        if (b >= 1024) return (b / 1024).toFixed(1) + ' КиБ';
+        return String(b) + ' б';
     }
     function ytFormatSpeedBps(bps) {
         if (bps == null || bps === undefined || isNaN(bps) || bps <= 0) return '';
-        return ' · ' + ytFormatKiB(bps) + '/с';
+        return ' · ' + ytFormatBytes(bps) + '/с';
+    }
+    function ytFormatEta(sec) {
+        if (sec == null || sec === undefined || isNaN(sec) || sec < 0) return '';
+        sec = Number(sec);
+        if (sec < 90) return '≈' + Math.max(1, Math.round(sec)) + ' с';
+        var m = Math.floor(sec / 60);
+        var s0 = Math.round(sec % 60);
+        return '≈' + m + ' мин ' + s0 + ' с';
+    }
+    function formatTranscribeProgressLine(ev) {
+        if (ev.phase === 'split') {
+            return ev.message || 'Подготовка аудио…';
+        }
+        if (ev.phase === 'plan') {
+            var p = ev.message || 'План: OpenAI (gpt-4o-mini-transcribe)';
+            if (ev.total_chunks > 1) {
+                p += ' · ' + String(ev.total_chunks) + ' части';
+                if (ev.segment_seconds) {
+                    p += ' (по ~' + String(ev.segment_seconds) + ' с)';
+                }
+            }
+            return p;
+        }
+        if (ev.phase === 'chunk' && ev.action === 'request') {
+            return 'OpenAI, часть ' + String(ev.index) + '/' + String(ev.total) + ': отправка'
+                + (ev.file_bytes != null ? ' ' + ytFormatBytes(ev.file_bytes) : '') + ' — ждём ответ…';
+        }
+        if (ev.phase === 'chunk' && ev.action === 'done') {
+            return 'OpenAI, часть ' + String(ev.index) + '/' + String(ev.total) + ' — готово'
+                + (ev.text_chars != null ? ', ' + String(ev.text_chars) + ' симв. в сегменте' : '') + '…';
+        }
+        if (ev.phase === 'join') {
+            return ev.message || 'Склейка частей в один текст…';
+        }
+        return ev.message || 'Расшифровка…';
     }
 
     async function ytConsumeDownloadStream(signal) {
@@ -949,14 +1025,26 @@
         const dec = new TextDecoder();
         var buf = '';
         function handleYoutubeStreamEvent(ev) {
+            if (ev.type === 'progress' && ev.phase === 'status' && ev.message) {
+                setYtStatus(String(ev.message), false);
+                return null;
+            }
             if (ev.type === 'progress' && ev.phase === 'download') {
                 var got = ev.downloaded_bytes;
                 var tot = ev.total_bytes != null ? ev.total_bytes : ev.total_bytes_estimate;
-                var msg = 'Скачивание (CDN YouTube): ' + ytFormatKiB(got);
-                if (tot != null) {
-                    msg += ' / ' + ytFormatKiB(tot);
+                var msg = 'Скачивание: ' + ytFormatBytes(got);
+                if (tot != null && tot > 0) {
+                    var gotN = Number(got) || 0;
+                    var pct = Math.min(100, Math.max(0, Math.round(100 * gotN / tot)));
+                    msg += ' из ' + ytFormatBytes(tot) + ' — ' + String(pct) + '%';
+                } else {
+                    msg += (tot == null && ev.total_bytes_estimate == null) ? ' (оценка размера…)' : '';
                 }
                 msg += ytFormatSpeedBps(ev.speed);
+                if (ev.eta != null && !isNaN(ev.eta)) {
+                    var eta0 = ytFormatEta(ev.eta);
+                    if (eta0) msg += ' · осталось ~' + eta0;
+                }
                 setYtStatus(msg, false);
             } else if (ev.type === 'progress' && ev.phase === 'postprocess') {
                 var pp = (ev.postprocessor || '').replace(/ExtractAudio/i, 'MP3');
@@ -1013,6 +1101,72 @@
         throw new Error('Поток скачивания оборвался без результата.');
     }
 
+    async function ytConsumeTranscribeStream(signal) {
+        const r2 = await fetch(ytTranscribeStreamUrl, {
+            method: 'POST',
+            headers: { Accept: 'application/x-ndjson' },
+            signal: signal
+        });
+        if (!r2.ok) {
+            const errBody = await r2.json().catch(function () { return {}; });
+            throw new Error(errBody.message || 'Не удалось запустить расшифровку (HTTP ' + r2.status + ').');
+        }
+        const reader = r2.body && r2.body.getReader();
+        if (!reader) throw new Error('Браузер не поддерживает поток ответа.');
+        const dec = new TextDecoder();
+        var buf = '';
+        function handleTr(ev) {
+            if (ev.type === 'transcribe_progress') {
+                setYtStatus(formatTranscribeProgressLine(ev), false);
+                return null;
+            }
+            if (ev.type === 'error' && ev.message) {
+                throw new Error(ev.message);
+            }
+            if (ev.type === 'done' && ev.ok) {
+                return ev;
+            }
+            return null;
+        }
+        function drainBuf() {
+            var i;
+            while ((i = buf.indexOf('\n')) >= 0) {
+                var line = buf.slice(0, i).trim();
+                buf = buf.slice(i + 1);
+                if (!line) continue;
+                var ev;
+                try { ev = JSON.parse(line); } catch (e0) { continue; }
+                var done0 = handleTr(ev);
+                if (done0) return done0;
+            }
+            return null;
+        }
+        while (true) {
+            if (signal && signal.aborted) {
+                try { reader.cancel(); } catch (_) {}
+                throw new DOMException('Aborted', 'AbortError');
+            }
+            const chunk = await reader.read();
+            if (chunk.done) {
+                buf += dec.decode();
+                break;
+            }
+            buf += dec.decode(chunk.value, { stream: true });
+            var d = drainBuf();
+            if (d) return d;
+        }
+        var tail = drainBuf();
+        if (tail) return tail;
+        if (buf.trim()) {
+            try {
+                var evL = JSON.parse(buf.trim());
+                var d1 = handleTr(evL);
+                if (d1) return d1;
+            } catch (e1) { /* ignore */ }
+        }
+        throw new Error('Поток расшифровки оборвался без результата.');
+    }
+
     async function ytFullDecode() {
         if (!ytUrlEl || !openaiOk || ytWorking) return;
         var u = (ytUrlEl.value || '').trim();
@@ -1040,21 +1194,23 @@
                 setYtStatus(d1.message || 'Не удалось проверить ссылку.', true);
                 return;
             }
-
-            setYtStatus('Скачивание аудио (yt-dlp)…', false);
-            await ytConsumeDownloadStream(signal);
-
-            setYtStatus('Отправляем аудио на расшифровку (OpenAI)…', false);
-            const r3 = await fetch(ytTranscribeUrl, { method: 'POST', signal: signal });
-            const d3 = await r3.json().catch(function () { return {}; });
-            if (!r3.ok || !d3.ok) {
-                setYtStatus(d3.message || 'Не удалось расшифровать.', true);
-                return;
+            if (d1.youtube_title) {
+                setYtVideoTitle(d1.youtube_title);
             }
+            setYtStatus('Скачивание: запрашиваем поток с сервера…', false);
+            const doneDl = await ytConsumeDownloadStream(signal);
+            if (doneDl && doneDl.youtube_title) {
+                setYtVideoTitle(doneDl.youtube_title);
+            }
+
+            setYtStatus('Расшифровка: инициализация (OpenAI)…', false);
+            const d3 = await ytConsumeTranscribeStream(signal);
             var ch = typeof d3.chars === 'number' ? d3.chars : 0;
             var wd = typeof d3.words === 'number' ? d3.words : 0;
             setYtStatus('Готово текст ' + ch + ' символов · ' + wd + ' слов', false);
             ytTranscriptReady = true;
+            // Не затемняем сразу после конвейера: удобно вставить текст, сменить ссылку.
+            // После F5 с сохранённой расшифровкой сервер снова отдаёт locked (как защита).
         } catch (e) {
             if (e && e.name === 'AbortError') {
                 setYtStatus('Остановлено (кнопка «Остановить»).', false);
@@ -1088,7 +1244,6 @@
             }
             sourceEl.value = txt;
             updateSourceCounts();
-            updateDurationCharHint();
             var ok = await saveToServer();
             if (!ok) {
                 setYtStatus('Текст вставлен, но не удалось сохранить.', true);
@@ -1128,10 +1283,9 @@
             source_locked: sourceLocked,
             master_prompt: masterEl ? masterEl.value : '',
             master_prompt_locked: masterLocked,
-            duration_minutes: durationRangeEl ? clampDurationMinutes(durationRangeEl.value) : 5,
+            target_chars: targetCharsRangeEl ? clampTargetChars(targetCharsRangeEl.value) : 1500,
             hero_prompt: heroPromptEl ? heroPromptEl.value : '',
             hero_prompt_locked: heroLocked,
-            chars_per_minute: charsPerMinEl ? clampCharsPerMinute(charsPerMinEl.value) : 344,
             audio_timing_locked: audioTimingLocked,
             rewrite_template: templateSelectEl ? (templateSelectEl.value || '').trim() : '',
             stages: stages
@@ -1181,6 +1335,9 @@
                         alert('Не удалось сохранить');
                     } else {
                         stateRef.apply();
+                        if (!(await trySyncRewriteTemplateToDisk())) {
+                            alertTemplateSyncFailed();
+                        }
                     }
                 } catch (e2) {
                     stateRef.set(false);
@@ -1216,7 +1373,7 @@
         get: function () { return audioTimingLocked; },
         set: function (v) { audioTimingLocked = v; },
         apply: applyAudioLockUI,
-        focusEl: charsPerMinEl
+        focusEl: targetCharsRangeEl
     });
 
     function applyPromptLockUI(block) {
@@ -1342,8 +1499,7 @@
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
         }
-        if (durationRangeEl) durationRangeEl.disabled = dis || audioTimingLocked;
-        if (charsPerMinEl) charsPerMinEl.disabled = dis || audioTimingLocked;
+        if (targetCharsRangeEl) targetCharsRangeEl.disabled = dis || audioTimingLocked;
         if (heroPromptEl) {
             heroPromptEl.disabled = !openaiOk;
             heroPromptEl.readOnly = dis || heroLocked;
@@ -1358,7 +1514,6 @@
         }
         if (templateSelectEl) templateSelectEl.disabled = dis;
         if (templateApplyBtn) templateApplyBtn.disabled = dis;
-        if (templateSaveDiskBtn && dis) templateSaveDiskBtn.disabled = true;
         if (globalModelEl) globalModelEl.disabled = dis;
         applyYoutubeToolbar();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
@@ -1393,7 +1548,6 @@
         busy.classList.toggle('hidden', !on);
         if (!on) {
             applyAllLockUIs();
-            updateTemplateSaveDiskBtn();
         }
     }
 
@@ -1582,6 +1736,9 @@
                             alert('Не удалось сохранить');
                         } else {
                             applyPromptLockUI(block);
+                            if (!(await trySyncRewriteTemplateToDisk())) {
+                                alertTemplateSyncFailed();
+                            }
                         }
                     } catch (e2) {
                         block.setAttribute('data-prompt-locked', '0');
@@ -1627,6 +1784,10 @@
                             block.setAttribute('data-user-prompt-locked', '0');
                             applyAnalysisUserPromptLockUI(block);
                             alert('Не удалось сохранить');
+                        } else {
+                            if (!(await trySyncRewriteTemplateToDisk())) {
+                                alertTemplateSyncFailed();
+                            }
                         }
                     } catch (e2) {
                         block.setAttribute('data-user-prompt-locked', '0');
@@ -1668,6 +1829,10 @@
                             block.setAttribute('data-style-prompt-locked', '0');
                             applyStylePromptLockUI(block);
                             alert('Не удалось сохранить');
+                        } else {
+                            if (!(await trySyncRewriteTemplateToDisk())) {
+                                alertTemplateSyncFailed();
+                            }
                         }
                     } catch (e2) {
                         block.setAttribute('data-style-prompt-locked', '0');
@@ -2026,6 +2191,21 @@
         }
     }
 
+    function parseContentDispositionFilename(cd) {
+        if (!cd) return null;
+        var star = cd.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+        if (star) {
+            try {
+                return decodeURIComponent(star[1].trim().replace(/^["']|["']$/g, ''));
+            } catch (e) { /* ignore */ }
+        }
+        var q = cd.match(/filename="((?:\\.|[^"\\])*)"/);
+        if (q) return q[1].replace(/\\"/g, '"');
+        var u = cd.match(/filename=([^;\s]+)/);
+        if (u) return u[1].trim().replace(/^["']|["']$/g, '');
+        return null;
+    }
+
     async function downloadStageApiPayload(stageKey, block) {
         const btn = block.querySelector('.rewrite-stage-api-export');
         if (btn) btn.disabled = true;
@@ -2035,11 +2215,16 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(Object.assign({ stage: stageKey }, collectSnapshot()))
             });
-            var fname = 'openai_request.txt';
+            var fname = openaiExportRewriteId + '_' + stageKey + '_openai_request.json';
             var cd = r.headers.get('Content-Disposition');
             if (cd) {
-                var m = cd.match(/filename="([^"]+)"/);
-                if (m) fname = m[1];
+                var fromHdr = parseContentDispositionFilename(cd);
+                if (fromHdr) {
+                    fname = fromHdr;
+                }
+            }
+            if (/\.txt$/i.test(fname)) {
+                fname = fname.replace(/\.txt$/i, '.json');
             }
             if (!r.ok) {
                 var errData = await r.json().catch(function () { return {}; });
@@ -2097,6 +2282,14 @@
         }
     });
 
+    if (ytUnlockBtn) {
+        ytUnlockBtn.addEventListener('click', async function () {
+            var ok = await openYoutubeEditConfirm();
+            if (!ok) return;
+            setYoutubeLocked(false);
+            if (ytUrlEl) ytUrlEl.focus();
+        });
+    }
     if (ytDecodeBtn) ytDecodeBtn.addEventListener('click', ytFullDecode);
     if (ytStopBtn) {
         ytStopBtn.addEventListener('click', function () {
@@ -2108,6 +2301,7 @@
     if (ytUrlEl) {
         ytUrlEl.addEventListener('input', function () {
             ytTranscriptReady = false;
+            setYtVideoTitle('');
             applyYoutubeToolbar();
             var t = (ytUrlEl.value || '').trim();
             if (t) {
@@ -2126,7 +2320,6 @@
 
     applyAllLockUIs();
     ytBootstrapFromServer();
-    updateTemplateSaveDiskBtn();
     if (globalModelEl) {
         globalModelEl.addEventListener('change', async function () {
             if (!openaiOk || globalModelEl.disabled) return;

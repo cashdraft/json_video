@@ -184,7 +184,8 @@ header h1 {
     color: var(--text);
 }
 
-.job-page .project-name-input {
+.job-page .project-name-input,
+.rewrite-project-page .project-name-input {
     height: 34px;
     padding: 0 0.75rem;
     font-size: 0.85rem;
@@ -763,6 +764,36 @@ textarea::placeholder {
 
 .rewrite-youtube-card {
     margin-bottom: 1rem;
+    /* Оверлей: padding-box; + overflow, чтобы углы не «рвали» полупрозрачный слой */
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.rewrite-youtube-lock-overlay {
+    position: absolute;
+    /* На 1px шире padding-box, чтобы перекрыть и серую рамку .scene-card (иначе видна «окантовка») */
+    inset: -1px;
+    border-radius: 9px;
+    background: rgba(12, 14, 20, 0.66);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
+.rewrite-youtube-card--locked .rewrite-youtube-url,
+.rewrite-youtube-card--locked .rewrite-youtube-brand,
+.rewrite-youtube-card--locked .rewrite-youtube-block__actions,
+.rewrite-youtube-card--locked .rewrite-youtube-block__status-stack,
+.rewrite-youtube-card--locked .rewrite-youtube-block__status-row,
+.rewrite-youtube-card--locked .rewrite-youtube-block__title,
+.rewrite-youtube-card--locked .rewrite-youtube-block__lead {
+    pointer-events: none;
+}
+
+.rewrite-youtube-card--locked .rewrite-youtube-lock-overlay {
+    pointer-events: auto;
 }
 
 .rewrite-youtube-block__title {
@@ -793,8 +824,31 @@ textarea::placeholder {
     gap: 0.45rem;
 }
 
-.rewrite-youtube-block__status-row {
+.rewrite-youtube-block__status-stack {
     margin-top: 0.45rem;
+    width: 100%;
+}
+
+.rewrite-youtube-video-line {
+    margin: 0 0 0.2rem 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.rewrite-youtube-video-line--empty {
+    display: none;
+}
+
+.rewrite-youtube-video-line__text {
+    color: var(--text-muted);
+    font-weight: 700;
+    display: block;
+    min-width: 0;
+}
+
+.rewrite-youtube-block__status-row {
+    margin-top: 0.15rem;
     min-height: 1.1em;
     width: 100%;
 }
@@ -850,12 +904,24 @@ textarea::placeholder {
 
 .rewrite-prompts-duration-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(11.5rem, 15.5rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(12rem, 18rem);
     gap: 1rem 1.25rem;
     align-items: start;
     margin: 0 0 1rem 0;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--border);
+}
+
+.rewrite-prompts-duration-row__col--model-duration {
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
+}
+
+.rewrite-global-model-select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .rewrite-prompts-duration-row__col {
@@ -973,7 +1039,7 @@ textarea::placeholder {
     max-width: 100%;
 }
 
-.rewrite-prompts-duration-row__col--duration .rewrite-source-duration {
+.rewrite-prompts-duration-row__duration-block .rewrite-source-duration {
     margin-bottom: 0;
 }
 

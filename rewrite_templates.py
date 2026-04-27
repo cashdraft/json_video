@@ -13,7 +13,7 @@
 rewrite_templates/ игнорируются: файлы кладите внутрь нужной подпапки.
 
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
-  Config — симв./мин и длительность (см. parse_template_config)
+  Config — целевой объём в символах 500–40 000, шаг 500 (см. parse_template_config; старые chars/duration тоже читаются)
   Hero Prompt, Master Prompt
   Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt»)
 """
@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from image_templates import safe_template_dir
-from rewrite_pipeline import REWRITE_STAGE_KEYS
+from rewrite_pipeline import REWRITE_STAGE_KEYS, clamp_target_chars
 
 MODULE_DIR = Path(__file__).resolve().parent
 REWRITE_TEMPLATES_DIR = MODULE_DIR / "rewrite_templates"
@@ -174,6 +174,20 @@ def parse_chars_per_minute(text: str, default: int = 344) -> int:
     return default
 
 
+def parse_target_chars(text: str, default: int = 1500) -> int:
+    """500–40 000 симв., шаг 500 (из Config.txt)."""
+    t = (text or "").strip()
+    if not t:
+        return default
+    eq = re.search(r"=\s*(\d{1,6})", t)
+    if eq:
+        return clamp_target_chars(int(eq.group(1)))
+    nums = [int(x) for x in re.findall(r"\d{1,6}", t)]
+    if not nums:
+        return default
+    return clamp_target_chars(nums[0])
+
+
 def _clamp_cpm(n: int, default: int) -> int:
     try:
         v = int(n)
@@ -204,6 +218,7 @@ def parse_template_config(raw: str) -> dict[str, int]:
     Один файл Config.txt: числовые настройки.
 
     Строки вида key: value или key = value (ключ без учёта регистра):
+      target_chars, target characters, целевой объём (символы)
       chars_per_minute, cpm, characters per minute, voice ratio
       duration_minutes, duration, target duration, длительность, minutes
 
@@ -225,7 +240,9 @@ def parse_template_config(raw: str) -> dict[str, int]:
         k, v = line.split(sep, 1)
         kn = _norm_stem(k.replace("_", " "))
         val = v.strip()
-        if kn in ("chars per minute", "cpm", "characters per minute", "voice ratio"):
+        if kn in ("target chars", "target characters", "target length", "длина текста"):
+            result["target_chars"] = parse_target_chars(val)
+        elif kn in ("chars per minute", "cpm", "characters per minute", "voice ratio"):
             result["chars_per_minute"] = parse_chars_per_minute(val)
         elif kn in ("duration minutes", "duration", "target duration", "длительность", "minutes"):
             result["duration_minutes"] = parse_duration_minutes(val)
@@ -256,8 +273,8 @@ def list_rewrite_template_names() -> list[str]:
 def load_rewrite_template(name: str) -> dict | None:
     """
     Читает шаблон с диска. Возвращает dict или None.
-    Ключи: name, hero_prompt, chars_per_minute, master_prompt, stages.
-    Из Config.txt при наличии: chars_per_minute, duration_minutes.
+    Ключи: name, hero_prompt, target_chars, master_prompt, stages.
+    Из Config.txt при наличии: target_chars; иначе (legacy) chars_per_minute, duration_minutes.
     """
     d = safe_template_dir(REWRITE_TEMPLATES_DIR, name)
     if d is None:
@@ -265,6 +282,7 @@ def load_rewrite_template(name: str) -> dict | None:
     out: dict = {
         "name": name,
         "hero_prompt": "",
+        "target_chars": 1500,
         "chars_per_minute": 344,
         "master_prompt": "",
         "stages": {k: {"prompt": "", "user_prompt": "", "style_prompt": ""} for k in REWRITE_STAGE_KEYS},
@@ -303,10 +321,22 @@ def load_rewrite_template(name: str) -> dict | None:
 
     if config_raw is not None:
         cfg = parse_template_config(config_raw)
-        if "chars_per_minute" in cfg:
-            out["chars_per_minute"] = cfg["chars_per_minute"]
-        if "duration_minutes" in cfg:
-            out["duration_minutes"] = cfg["duration_minutes"]
+        if "target_chars" in cfg:
+            out["target_chars"] = clamp_target_chars(int(cfg["target_chars"]))
+        else:
+            if "chars_per_minute" in cfg:
+                out["chars_per_minute"] = int(cfg["chars_per_minute"])
+            if "duration_minutes" in cfg:
+                out["duration_minutes"] = int(cfg["duration_minutes"])
+            try:
+                dm = max(1, min(30, int(out.get("duration_minutes", 5))))
+            except (TypeError, ValueError):
+                dm = 5
+            try:
+                cpm = max(1, min(2000, int(out.get("chars_per_minute", 344))))
+            except (TypeError, ValueError):
+                cpm = 344
+            out["target_chars"] = clamp_target_chars(dm * cpm)
 
     return out
 
@@ -316,8 +346,7 @@ def save_rewrite_template_to_disk(
     *,
     hero_prompt: str,
     master_prompt: str,
-    chars_per_minute: int,
-    duration_minutes: int,
+    target_chars: int,
     stages: dict[str, Any],
 ) -> tuple[bool, str]:
     """
@@ -328,11 +357,10 @@ def save_rewrite_template_to_disk(
     if d is None:
         return False, "not_found"
     try:
-        cpm = max(1, min(2000, int(chars_per_minute)))
-        dm = max(1, min(30, int(duration_minutes)))
+        tc = clamp_target_chars(int(target_chars))
     except (TypeError, ValueError):
-        cpm, dm = 344, 5
-    cfg_text = f"chars_per_minute: {cpm}\nduration_minutes: {dm}\n"
+        tc = 1500
+    cfg_text = f"target_chars: {tc}\n"
     (d / _TARGET_TO_FILENAME["template_config"]).write_text(cfg_text, encoding="utf-8")
     (d / _TARGET_TO_FILENAME["hero_prompt"]).write_text(
         (hero_prompt or "").rstrip() + "\n", encoding="utf-8"

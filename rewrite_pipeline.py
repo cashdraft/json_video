@@ -11,18 +11,29 @@ from typing import Any
 
 from rewrite_openai import REWRITE_CHAT_TEMPERATURE, REWRITE_DEFAULT_MODEL, normalize_rewrite_model
 
+TARGET_CHARS_MIN = 500
+TARGET_CHARS_MAX = 40_000
+TARGET_CHARS_STEP = 500
+
+
+def clamp_target_chars(n: int | None) -> int:
+    """500–40 000 симв., шаг 500."""
+    try:
+        v = int(n)
+    except (TypeError, ValueError):
+        v = 1500
+    stepped = int(round(v / TARGET_CHARS_STEP)) * TARGET_CHARS_STEP
+    return max(TARGET_CHARS_MIN, min(TARGET_CHARS_MAX, stepped))
+
 
 def format_duration_length_spec_block(
     *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
+    target_chars: int | None = None,
 ) -> str:
     """Блок Duration для system: ориентир + JSON length_spec (без поля mode)."""
-    if duration_minutes is None or chars_per_minute is None:
+    if target_chars is None:
         return ""
-    dm = max(1, min(30, int(duration_minutes)))
-    cpm = max(1, min(2000, int(chars_per_minute)))
-    target = dm * cpm
+    target = clamp_target_chars(int(target_chars))
     target_min = max(1, target - 1000)
     target_max = target + 1000
     length_spec = {
@@ -46,15 +57,12 @@ def format_duration_length_spec_block(
 
 def build_duration_length_spec_payload(
     *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
+    target_chars: int | None = None,
 ) -> dict[str, Any]:
     """JSON payload для блока Duration (для user-сообщения)."""
-    if duration_minutes is None or chars_per_minute is None:
+    if target_chars is None:
         return {}
-    dm = max(1, min(30, int(duration_minutes)))
-    cpm = max(1, min(2000, int(chars_per_minute)))
-    target = dm * cpm
+    target = clamp_target_chars(int(target_chars))
     target_min = max(1, target - 1000)
     target_max = target + 1000
     return {
@@ -75,9 +83,6 @@ def build_rewrite_system_prompt(
     master_prompt: str,
     stage_prompt: str,
     source_text: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """System-сообщение для этапа: Master → промпт этапа (Duration уходит в user)."""
     parts: list[str] = []
@@ -116,9 +121,6 @@ def build_analysis_user_message(source_text: str, analysis_user_prompt: str) -> 
 def build_structure_system_prompt(
     master_prompt: str,
     structure_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Только этап Architect: в system строго Master → Architect (Duration уходит в user)."""
     parts: list[str] = []
@@ -169,9 +171,6 @@ def build_draft1_rewriter_user_message(
 
 def build_continuity_editor_system_prompt(
     continuity_editor_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап continuity_editor: в system только Continuity Editor System Promt."""
     return (continuity_editor_prompt or "").strip()
@@ -193,9 +192,6 @@ def build_continuity_editor_user_message(
 
 def build_retention_editor_system_prompt(
     retention_editor_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап retention_editor: в system только Retention Editor System Promt."""
     return (retention_editor_prompt or "").strip()
@@ -225,9 +221,6 @@ def build_retention_editor_user_message(
 
 def build_hook_editor_system_prompt(
     hook_editor_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап hook_editor: в system только Hook Editor System Promt."""
     return (hook_editor_prompt or "").strip()
@@ -257,9 +250,6 @@ def build_hook_editor_user_message(
 
 def build_flow_editor_system_prompt(
     flow_editor_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап flow_editor: в system только Flow Editor System Promt."""
     return (flow_editor_prompt or "").strip()
@@ -289,9 +279,6 @@ def build_flow_editor_user_message(
 
 def build_persona_editor_system_prompt(
     persona_editor_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап persona_editor: в system только Persona Editor System Promt."""
     return (persona_editor_prompt or "").strip()
@@ -324,9 +311,6 @@ def build_persona_editor_user_message(
 
 def build_voiceover_editor_system_prompt(
     voiceover_editor_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап voiceover_editor: в system только Voiceover Editor System Promt."""
     return (voiceover_editor_prompt or "").strip()
@@ -356,9 +340,6 @@ def build_voiceover_editor_user_message(
 
 def build_structure_splitter_system_prompt(
     structure_splitter_prompt: str,
-    *,
-    duration_minutes: int | None = None,
-    chars_per_minute: int | None = None,
 ) -> str:
     """Этап structure_splitter: в system только Structure Splitter System Promt."""
     return (structure_splitter_prompt or "").strip()
@@ -562,6 +543,15 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         cpm = 344
     job["chars_per_minute"] = max(1, min(2000, cpm))
+    if "target_chars" in job and job.get("target_chars") is not None and str(job.get("target_chars", "")).strip() != "":
+        try:
+            job["target_chars"] = clamp_target_chars(int(job["target_chars"]))
+        except (TypeError, ValueError):
+            job["target_chars"] = clamp_target_chars(job["duration_minutes"] * job["chars_per_minute"])
+    else:
+        job["target_chars"] = clamp_target_chars(
+            int(job["duration_minutes"]) * int(job["chars_per_minute"])
+        )
     job.setdefault("rewrite_template", "")
     job["rewrite_template"] = str(job.get("rewrite_template") or "")
     # Папка дефолтного шаблона переименована: baseline → Base Template
@@ -653,8 +643,7 @@ def compose_rewrite_openai_request_body(
     stages_snap: dict[str, Any],
     master_prompt: str,
     hero_prompt: str,
-    duration_minutes: int,
-    chars_per_minute: int,
+    target_chars: int,
     block_writer_full_text: str = "",
     continuity_editor_text: str = "",
     retention_editor_text: str = "",
@@ -689,8 +678,6 @@ def compose_rewrite_openai_request_body(
         prompt = build_structure_system_prompt(
             master_prompt,
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_structure_user_message(
             analysis_res,
@@ -701,8 +688,6 @@ def compose_rewrite_openai_request_body(
             master_prompt,
             str(cell.get("prompt") or ""),
             source_text,
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_analysis_user_message(
             source_text,
@@ -724,8 +709,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "continuity_editor":
         prompt = build_continuity_editor_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_continuity_editor_user_message(
             str(cell.get("user_prompt") or ""),
@@ -734,8 +717,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "retention_editor":
         prompt = build_retention_editor_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_retention_editor_user_message(
             str(cell.get("user_prompt") or ""),
@@ -744,8 +725,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "hook_editor":
         prompt = build_hook_editor_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_hook_editor_user_message(
             str(cell.get("user_prompt") or ""),
@@ -754,8 +733,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "flow_editor":
         prompt = build_flow_editor_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_flow_editor_user_message(
             str(cell.get("user_prompt") or ""),
@@ -764,8 +741,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "persona_editor":
         prompt = build_persona_editor_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_persona_editor_user_message(
             str(cell.get("user_prompt") or ""),
@@ -775,8 +750,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "voiceover_editor":
         prompt = build_voiceover_editor_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_voiceover_editor_user_message(
             str(cell.get("user_prompt") or ""),
@@ -785,8 +758,6 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "structure_splitter":
         prompt = build_structure_splitter_system_prompt(
             str(cell.get("prompt") or ""),
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_structure_splitter_user_message(
             str(cell.get("user_prompt") or ""),
@@ -806,8 +777,6 @@ def compose_rewrite_openai_request_body(
             master_prompt,
             str(cell.get("prompt") or ""),
             source_text,
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
         )
         user_text = build_stage_user_message(
             source_text,
@@ -828,8 +797,7 @@ def compose_rewrite_openai_request_body(
         "scene_writer",
     ):
         dur_payload = build_duration_length_spec_payload(
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
+            target_chars=target_chars,
         )
         if dur_payload:
             try:
@@ -915,17 +883,22 @@ def snapshot_master_prompt_from_body(body: dict[str, Any]) -> str:
     return str(body.get("master_prompt") or "")
 
 
-def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int, int]:
-    """hero_prompt, duration_minutes (1–30), chars_per_minute (1–2000)."""
+def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int]:
+    """hero_prompt, target_chars (500–40 000, шаг 500)."""
     hero = str(body.get("hero_prompt") or "")
+    if "target_chars" in body and body.get("target_chars") is not None and str(body.get("target_chars", "")).strip() != "":
+        try:
+            return hero, clamp_target_chars(int(body["target_chars"]))
+        except (TypeError, ValueError):
+            pass
     try:
-        dm = int(body.get("duration_minutes"))
+        dm = int(body.get("duration_minutes", 5))
         dm = max(1, min(30, dm))
     except (TypeError, ValueError):
         dm = 5
     try:
-        cpm = int(body.get("chars_per_minute"))
+        cpm = int(body.get("chars_per_minute", 344))
         cpm = max(1, min(2000, cpm))
     except (TypeError, ValueError):
         cpm = 344
-    return hero, dm, cpm
+    return hero, clamp_target_chars(dm * cpm)

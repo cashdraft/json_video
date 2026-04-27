@@ -6,6 +6,7 @@ Web interface for parsing scene JSON and preparing for image/video generation.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import queue
@@ -92,6 +93,7 @@ from rewrite_pipeline import (
     REWRITE_STAGE_SEND_HINTS,
     REWRITE_STAGES,
     any_stage_has_result,
+    clamp_target_chars,
     compose_rewrite_openai_request_body,
     merge_stages_from_request,
     new_stages_dict,
@@ -665,24 +667,110 @@ def _rewrite_block_writer_dir(rewrite_id: str) -> Path:
     return _rewrite_project_dir(rewrite_id) / "block_writer"
 
 
+_MAX_OPENAI_EXPORT_JSON_DEPTH = 32
+
+
+def _json_loads_fully(s: str) -> Any | None:
+    """
+    json.loads(s) — только если вся s (c учётом пробелов по краям) — один JSON-значок.
+    Не используем parse «с первой {», иначе теряется префикс (например, пояснение + JSON).
+    """
+    t = (s or "").lstrip("\ufeff")
+    if not t or not t.strip():
+        return None
+    try:
+        return json.loads(s)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
+def _wrap_plaintext_for_export(s: str) -> Any:
+    """
+    Текст без переносов — одна JSON-строка (как в wire), даже если очень длинная.
+    С переносами строк — для читаемости в файле: {\"_export\":\"text_lines\",\"lines\":[...]}.
+    """
+    s = s or ""
+    if "\n" not in s and "\r" not in s and "\u2028" not in s and "\u2029" not in s:
+        return s
+    lines = s.splitlines()
+    return {"_export": "text_lines", "lines": lines if lines else [""]}
+
+
+def _expand_value_for_openai_export(val: Any, depth: int = 0) -> Any:
+    """Рекурсивно: JSON-строки внутри dict/list → объекты; многострочный plain text → text_lines."""
+    if depth > _MAX_OPENAI_EXPORT_JSON_DEPTH:
+        return val
+    if isinstance(val, str):
+        s = val or ""
+        t = s.strip()
+        if not t:
+            return _wrap_plaintext_for_export(s)
+        p = _json_loads_fully(s)
+        if p is not None:
+            return _expand_value_for_openai_export(p, depth + 1)
+        return _wrap_plaintext_for_export(s)
+    if isinstance(val, dict):
+        return {str(k): _expand_value_for_openai_export(v, depth + 1) for k, v in val.items()}
+    if isinstance(val, list):
+        return [_expand_value_for_openai_export(v, depth + 1) for v in val]
+    return val
+
+
+def _message_content_for_openai_export(c: str) -> Any:
+    """Сообщение content: разобранный JSON (с вложенностями), иначе строка или text_lines при переносах."""
+    if not isinstance(c, str):
+        return c
+    p = _json_loads_fully(c)
+    if p is not None:
+        return _expand_value_for_openai_export(p, 0)
+    return _wrap_plaintext_for_export(c)
+
+
+def _body_for_pretty_openai_export(body: dict[str, Any]) -> dict[str, Any]:
+    """
+    Копия тела POST для файла: в HTTP messages[].content — строки;
+    здесь JSON разворачивается рекурсивно; многострочный plain text — в _export.text_lines.
+    """
+    out = copy.deepcopy(body)
+    msgs = out.get("messages")
+    if not isinstance(msgs, list):
+        return out
+    for m in msgs:
+        if not isinstance(m, dict):
+            continue
+        c = m.get("content")
+        if isinstance(c, str):
+            m["content"] = _message_content_for_openai_export(c)
+    return out
+
+
 def _format_openai_wire_payloads_txt(
     bodies: list[dict[str, Any]],
     *,
     header_lines: list[str] | None = None,
 ) -> str:
-    """Текст .txt: по одному JSON-телу POST на запрос, как уходит в OpenAI (indent=2)."""
-    out_lines: list[str] = []
+    """Один валидный JSON (UTF-8): about + requests[]; content развёрнут рекурсивно."""
+    about = (
+        "Логика входов как у кнопки ↻: тот же JSON со страницы (collectSnapshot), на сервере те же "
+        "snapshot_stages_from_body / compose_rewrite_openai_request_body, что и в POST /rewrite/<id>/run. "
+        "Дальше: для одного POST на этап — то же, что перед HTTP, что и в iter_rewrite_completion: "
+        "rewrite_chat_completion_wire_payload (нормализация model, _sanitize на system/user, temperature). "
+        "draft1 и scene_writer шлют несколько POST подряд — в requests[] по одному объекту на каждый такой вызов "
+        "(для draft1 при отсутствии block_*.json контекст short_summary может отличаться от живого прогона — см. notes). "
+        "Файл — читаемый JSON (UTF-8, отступы); реальное тело POST кодируется компактнее (другой вид сериализации JSON). "
+        "Здесь messages[].content может быть развёрнут в объекты и в пометки "
+        "{\"_export\":\"text_lines\",\"lines\":[...]} — это только в этом файле для просмотра; в HTTP к OpenAI такого нет, там всегда строки в content."
+    )
+    pretty = [_body_for_pretty_openai_export(b) for b in bodies]
+    env: dict[str, Any] = {
+        "about": about,
+        "requests": pretty,
+    }
     if header_lines:
-        out_lines.extend(ln for ln in header_lines if ln)
-        out_lines.append("")
-    n = len(bodies)
-    if n == 0:
-        return ("\n".join(out_lines).rstrip() + "\n") if out_lines else "\n"
-    for i, body in enumerate(bodies, start=1):
-        out_lines.append(f"========== OpenAI chat/completions request {i}/{n} ==========")
-        out_lines.append(json.dumps(body, ensure_ascii=False, indent=2))
-        out_lines.append("")
-    return "\n".join(out_lines).rstrip() + "\n"
+        notes = [str(ln) for ln in header_lines if str(ln).strip()]
+        if notes:
+            env["notes"] = notes
+    return json.dumps(env, ensure_ascii=False, indent=2) + "\n"
 
 
 def _load_block_writer_saved_short_summaries(rewrite_id: str) -> list[list[str]] | None:
@@ -733,14 +821,177 @@ def _youtube_url_is_valid(url: str) -> bool:
     )
 
 
+def _youtube_url_rejection_message(url: str) -> str:
+    """Пояснение, если URL не похож на один ролик (не watch / shorts id / youtu.be)."""
+    base = (
+        "Некорректная ссылка YouTube. Нужна ссылка на один ролик: …/watch?v=…, "
+        "…/shorts/VIDEO_ID или youtu.be/…"
+    )
+    u = _youtube_url_normalize(url)
+    if not u:
+        return "Вставьте ссылку на ролик YouTube."
+    try:
+        parsed = urlparse(u)
+    except Exception:
+        return base
+    netloc = (parsed.netloc or "").lower()
+    if "youtube.com" not in netloc and "youtu.be" not in netloc:
+        return base
+    segs = [s for s in (parsed.path or "").split("/") if s]
+    if not segs:
+        return base
+    last = segs[-1].lower()
+    if last == "shorts":
+        if len(segs) == 1:
+            return (
+                "В адресе нет id ролика после /shorts/. Откройте конкретное видео и скопируйте ссылку "
+                "вида …/shorts/XXXXXXXX."
+            )
+        prev = segs[-2]
+        if prev.startswith("@"):
+            return (
+                "Это страница вкладки «Shorts» канала, а не ссылка на ролик. Откройте нужный short "
+                "и скопируйте адрес: …/shorts/VIDEO_ID или …watch?v=VIDEO_ID."
+            )
+        if len(segs) >= 3 and segs[0].lower() == "channel" and segs[2].lower() == "shorts":
+            return (
+                "Это вкладка Shorts канала, а не ссылка на ролик. Откройте конкретное видео и скопируйте "
+                "адрес …/shorts/VIDEO_ID или …watch?v=VIDEO_ID."
+            )
+        if len(segs) >= 3 and segs[0].lower() in ("c", "user") and segs[2].lower() == "shorts":
+            return (
+                "Это вкладка канала, а не ссылка на ролик. Нужна ссылка на один short или обычное видео "
+                "(…/shorts/VIDEO_ID, watch?v=…, youtu.be/…)."
+            )
+        if segs[0].lower() == "shorts" and len(segs) == 2:
+            vid = segs[1]
+            if len(vid) < 6 or not re.match(r"^[A-Za-z0-9_-]+$", vid):
+                return (
+                    "После /shorts/ должен быть id ролика. Скопируйте полную ссылку на короткое видео "
+                    "со страницы ролика на YouTube."
+                )
+    return base
+
+
+def _youtube_info_cache_path(rewrite_id: str) -> Path:
+    return _rewrite_project_dir(rewrite_id) / "youtube_info_cache.json"
+
+
 # yt-dlp по умолчанию socket_timeout=20 с; загрузка с googlevideo.com часто падает Read timed out.
-_YOUTUBE_YDL_BASE = {
+# YouTube нередко throttler'ит трафик (второй ролик подряд, один IP) — throttledratelimit заставляет
+# пересобрать ссылки, если скорость упала ниже порога (см. --throttled-rate в yt-dlp).
+# player_client задаётся **отдельно** на попытку — см. _youtube_player_client_chain и fallback при ошибке.
+_YOUTUBE_YDL_BASE: dict = {
     "noplaylist": True,
     "quiet": True,
     "socket_timeout": 180,
-    "retries": 15,
-    "fragment_retries": 15,
+    "retries": 20,
+    "fragment_retries": 20,
+    # DASH/фрагменты: параллель (меньше = мягче к тому же IP при нескольких роликах подряд)
+    "concurrent_fragment_downloads": 2,
+    # ~100 КиБ/с: при типичном троттлинге YouTube — повтор с новым format URL
+    "throttledratelimit": 100_000,
 }
+
+
+def _ytdl_youtube_extractor_player_client(name: str) -> dict:
+    c = (name or "").strip().lower()
+    return {
+        "extractor_args": {
+            "youtube": {
+                "player_client": [c] if c else ["android"],
+            }
+        }
+    }
+
+
+def _youtube_stall_read_sec() -> int:
+    """Сколько секунд ждать **без данных** по сокету (CDN / youtube) на одной попытке, затем «провал» → следующий player_client."""
+    raw = (os.getenv("YOUTUBE_STALL_READ_SEC") or "20").strip()
+    try:
+        s = int(raw, 10)
+    except ValueError:
+        s = 20
+    return max(5, min(120, s))
+
+
+def _youtube_verify_socket_sec() -> int:
+    """Проверка ссылки: мягче, иначе медленные DNS/HTML отрывают verify до смены клиента."""
+    raw = (os.getenv("YOUTUBE_VERIFY_SOCKET_SEC") or "90").strip()
+    try:
+        s = int(raw, 10)
+    except ValueError:
+        s = 90
+    return max(15, min(300, s))
+
+
+def _youtube_same_client_retries() -> int:
+    """
+    Сколько **внутри** одного player_client ретраев скачивчика, прежде чем yt-dlp выкинет ошибку
+    (тогда срабатывает смена клиента). 0 = одна неудачная сессия чтения с CDN → сразу следующий client.
+    """
+    raw = (os.getenv("YOUTUBE_SAME_CLIENT_RETRIES") or "0").strip()
+    try:
+        n = int(raw, 10)
+    except ValueError:
+        n = 0
+    return max(0, min(12, n))
+
+
+def _youtube_player_client_chain() -> list[str]:
+    """
+    Цепочка клиентов: сначала YOUTUBE_PLAYER_CLIENT (или android), потом YOUTUBE_PLAYER_CLIENT_FALLBACK.
+    Дубликаты убираем. Следующий клиент — по ошибке extract_info/скачивания или таймауту сокета
+    (YOUTUBE_STALL_READ_SEC на скачивании, см. _youtube_stall_read_sec).
+    """
+    head = (os.getenv("YOUTUBE_PLAYER_CLIENT") or "android").strip()
+    head_list = [c.strip().lower() for c in head.split(",") if c.strip()]
+    # Порядок: часто web/ios/mweb дают другой endpoint; tv — лишний раунт плеера (часто дольше), убрали по умолчанию.
+    # Подогнать под ваш IP: YBENCH_URL=... .venv/bin/python3 scripts/benchmark_youtube_clients.py
+    tail = (os.getenv("YOUTUBE_PLAYER_CLIENT_FALLBACK") or "web,ios,mweb").strip()
+    tail_list = [c.strip().lower() for c in tail.split(",") if c.strip()]
+    out: list[str] = []
+    seen: set[str] = set()
+    for c in head_list + tail_list:
+        if c and c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out or ["android", "web"]
+
+
+def _rewrite_youtube_clear_partial_downloads(media_dir: Path) -> None:
+    """Следы неудачной попытки yt-dlp, чтобы не мешать следующему player_client."""
+    for pat in ("youtube_audio_*", "*.part", "*.ytdl", "*.temp"):
+        for p in media_dir.glob(pat):
+            if p.is_file():
+                p.unlink(missing_ok=True)
+
+
+def _rewrite_youtube_progress_hooks_with_stall(stall_sec: int, user_hooks: list | None) -> list:
+    """Сначала вызывает пользовательские progress_hooks; при отсутствии роста скачанных байт N с — RuntimeError (смена client)."""
+    inners: list = list(user_hooks or [])
+    state = {"last_b": None, "at": 0.0}
+
+    def _stall_hook(d: dict) -> None:
+        for h in inners:
+            h(d)
+        if d.get("status") != "downloading":
+            return
+        b = d.get("downloaded_bytes")
+        if b is None:
+            return
+        try:
+            b = int(b)
+        except (TypeError, ValueError):
+            return
+        now = time.monotonic()
+        if state["last_b"] is None or b != state["last_b"]:
+            state["last_b"] = b
+            state["at"] = now
+        elif now - state["at"] > float(stall_sec):
+            raise RuntimeError(f"yt-dlp: {stall_sec} c без роста скачанных байт — смена YouTube client")
+
+    return [_stall_hook]
 
 
 def _safe_rewrite_basename(name: str) -> str:
@@ -819,12 +1070,51 @@ def _split_audio_for_transcription(audio_path: Path, segment_seconds: int = 480)
         return persisted
 
 
-def _rewrite_transcription_text(api_key: str, audio_path: Path) -> tuple[str | None, str | None]:
+def _rewrite_transcription_text(
+    api_key: str,
+    audio_path: Path,
+    *,
+    progress: Callable[[dict], None] | None = None,
+) -> tuple[str | None, str | None]:
+    """Расшифровка; progress — опциональные события для UI (поток NDJSON)."""
+
+    def _p(ev: dict) -> None:
+        if progress:
+            progress(ev)
+
     if not audio_path.is_file():
         return None, "Аудиофайл не найден на сервере."
+    _p(
+        {
+            "phase": "split",
+            "message": "Проверка длительности; длинный ролик нарезается на части (~8 мин каждая)…",
+        }
+    )
     chunks = _split_audio_for_transcription(audio_path, segment_seconds=480)
+    n = len(chunks)
+    _p(
+        {
+            "phase": "plan",
+            "total_chunks": n,
+            "segment_seconds": 480,
+            "message": "Один запрос к API" if n == 1 else f"Будет {n} запросов к API (по одному на часть).",
+        }
+    )
     parts: list[str] = []
     for i, ap in enumerate(chunks, start=1):
+        try:
+            sz = int(ap.stat().st_size) if ap.is_file() else 0
+        except OSError:
+            sz = 0
+        _p(
+            {
+                "phase": "chunk",
+                "action": "request",
+                "index": i,
+                "total": n,
+                "file_bytes": sz,
+            }
+        )
         try:
             with open(ap, "rb") as f:
                 files = {
@@ -842,19 +1132,35 @@ def _rewrite_transcription_text(api_key: str, audio_path: Path) -> tuple[str | N
                     timeout=900,
                 )
         except requests.RequestException as e:
-            return None, f"Сеть / таймаут (chunk {i}/{len(chunks)}): {e}"
+            return None, f"Сеть / таймаут (chunk {i}/{n}): {e}"
         if not r.ok:
             try:
                 err = r.json().get("error", {}).get("message") or ""
             except Exception:
                 err = ""
             msg = err or (r.text or "")[:500] or f"HTTP {r.status_code}"
-            return None, f"{msg} (chunk {i}/{len(chunks)})"
+            return None, f"{msg} (chunk {i}/{n})"
         txt = (r.text or "").strip()
+        _p(
+            {
+                "phase": "chunk",
+                "action": "done",
+                "index": i,
+                "total": n,
+                "text_chars": len(txt),
+            }
+        )
         if txt:
             parts.append(txt)
     if not parts:
         return None, "Пустой ответ транскрибации."
+    if n > 1:
+        _p(
+            {
+                "phase": "join",
+                "message": f"Склейка {n} сегментов в один текст…",
+            }
+        )
     # Убираем временные чанки после успешной склейки
     if len(chunks) > 1:
         for p in chunks:
@@ -885,6 +1191,7 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "source_locked": False,
         "master_prompt": "",
         "master_prompt_locked": False,
+        "target_chars": clamp_target_chars(5 * 344),
         "duration_minutes": 5,
         "hero_prompt": "",
         "chars_per_minute": 344,
@@ -1136,20 +1443,27 @@ def rewrite_project_page(rewrite_id: str):
         sk: stage_run_prerequisites_met(sk, st) for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
-    resp = make_response(
-        render_template(
-            "rewrite_project.html",
-            rw=rw,
-            rewrite_stages=REWRITE_STAGES,
-            rewrite_stage_send_hints=REWRITE_STAGE_SEND_HINTS,
-            rewrite_stage_help_hints=REWRITE_STAGE_HELP_HINTS,
-            rewrite_stage_run_ok=rewrite_stage_run_ok,
-            rewrite_stage_key_order=rewrite_stage_key_order,
-            rewrite_models=REWRITE_MODELS,
-            rewrite_template_names=list_rewrite_template_names(),
-            openai_key_set=key_set,
+    try:
+        resp = make_response(
+            render_template(
+                "rewrite_project.html",
+                rw=rw,
+                rewrite_stages=REWRITE_STAGES,
+                rewrite_stage_send_hints=REWRITE_STAGE_SEND_HINTS,
+                rewrite_stage_help_hints=REWRITE_STAGE_HELP_HINTS,
+                rewrite_stage_run_ok=rewrite_stage_run_ok,
+                rewrite_stage_key_order=rewrite_stage_key_order,
+                rewrite_models=REWRITE_MODELS,
+                rewrite_template_names=list_rewrite_template_names(),
+                openai_key_set=key_set,
+            )
         )
-    )
+    except Exception:
+        app.logger.exception("rewrite_project_page: render failed for %s", rewrite_id)
+        return (
+            "Ошибка отрисовки страницы проекта. Проверьте логи сервиса (например, journalctl -u json-video -n 80).",
+            500,
+        )
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     return resp
@@ -1178,20 +1492,27 @@ def rewrite_api_template_save(name: str):
     stages = body.get("stages")
     if not isinstance(stages, dict):
         stages = {}
-    try:
-        cpm = int(body.get("chars_per_minute", 344))
-    except (TypeError, ValueError):
-        cpm = 344
-    try:
-        dm = int(body.get("duration_minutes", 5))
-    except (TypeError, ValueError):
-        dm = 5
+    tc_raw = body.get("target_chars")
+    if tc_raw is not None and str(tc_raw).strip() != "":
+        try:
+            target_chars = clamp_target_chars(int(tc_raw))
+        except (TypeError, ValueError):
+            target_chars = clamp_target_chars(5 * 344)
+    else:
+        try:
+            cpm = int(body.get("chars_per_minute", 344))
+        except (TypeError, ValueError):
+            cpm = 344
+        try:
+            dm = int(body.get("duration_minutes", 5))
+        except (TypeError, ValueError):
+            dm = 5
+        target_chars = clamp_target_chars(cpm * dm)
     ok, err = save_rewrite_template_to_disk(
         name.strip(),
         hero_prompt=str(body.get("hero_prompt") or ""),
         master_prompt=str(body.get("master_prompt") or ""),
-        chars_per_minute=cpm,
-        duration_minutes=dm,
+        target_chars=target_chars,
         stages=stages,
     )
     if not ok:
@@ -1253,18 +1574,23 @@ def rewrite_project_save(rewrite_id: str):
         rw["hero_prompt_locked"] = bool(h_lock_in)
 
     at_lock_in = body.get("audio_timing_locked") if "audio_timing_locked" in body else None
-    if "duration_minutes" in body:
+    if "target_chars" in body and body.get("target_chars") is not None and str(body.get("target_chars", "")).strip() != "":
         try:
-            dm = int(body.get("duration_minutes"))
+            rw["target_chars"] = clamp_target_chars(int(body.get("target_chars")))
+        except (TypeError, ValueError):
+            pass
+    elif "duration_minutes" in body or "chars_per_minute" in body:
+        try:
+            dm = int(body.get("duration_minutes", rw.get("duration_minutes", 5)))
             rw["duration_minutes"] = max(1, min(30, dm))
         except (TypeError, ValueError):
             pass
-    if "chars_per_minute" in body:
         try:
-            cpm = int(body.get("chars_per_minute"))
+            cpm = int(body.get("chars_per_minute", rw.get("chars_per_minute", 344)))
             rw["chars_per_minute"] = max(1, min(2000, cpm))
         except (TypeError, ValueError):
             pass
+        rw["target_chars"] = clamp_target_chars(int(rw["duration_minutes"]) * int(rw["chars_per_minute"]))
     if at_lock_in is not None:
         rw["audio_timing_locked"] = bool(at_lock_in)
     if "rewrite_template" in body:
@@ -1294,12 +1620,50 @@ def rewrite_youtube_verify(rewrite_id: str):
         rw["youtube_verified"] = False
         rw["youtube_title"] = ""
         save_rewrite_job(rewrite_id, rw)
-        return jsonify({"ok": False, "message": "Некорректная ссылка YouTube."}), 400
+        return jsonify({"ok": False, "message": _youtube_url_rejection_message(url)}), 400
     title = ""
     try:
-        with YoutubeDL({**_YOUTUBE_YDL_BASE, "skip_download": True}) as ydl:
-            info = ydl.extract_info(url, download=False)
-            title = str((info or {}).get("title") or "").strip()
+        info: dict | None = None
+        last_verify_err: Exception | None = None
+        clients = _youtube_player_client_chain()
+        for ci, cname in enumerate(clients):
+            try:
+                v_socket = _youtube_verify_socket_sec()
+                with YoutubeDL(
+                    {
+                        **_YOUTUBE_YDL_BASE,
+                        "socket_timeout": v_socket,
+                        "retries": 1,
+                        "fragment_retries": 1,
+                        **_ytdl_youtube_extractor_player_client(cname),
+                        "skip_download": True,
+                    }
+                ) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not isinstance(info, dict):
+                        raise RuntimeError("yt-dlp: пустой ответ об видео.")
+                    if ci > 0:
+                        app.logger.info("youtube verify ok with player_client=%s (after %d fallback(s))", cname, ci)
+                    try:
+                        pdir = _rewrite_project_dir(rewrite_id)
+                        pdir.mkdir(parents=True, exist_ok=True)
+                        with open(_youtube_info_cache_path(rewrite_id), "w", encoding="utf-8") as f:
+                            f.write(json.dumps(ydl.sanitize_info(info), ensure_ascii=False, indent=2))
+                    except (OSError, TypeError) as e:
+                        app.logger.warning("youtube_info_cache write %s: %s", rewrite_id, e)
+                last_verify_err = None
+                break
+            except Exception as e:
+                last_verify_err = e
+                if ci + 1 < len(clients):
+                    app.logger.warning("youtube verify player_client=%s failed: %s, try next", cname, e)
+                else:
+                    app.logger.warning("youtube verify player_client=%s failed: %s", cname, e)
+                if ci + 1 >= len(clients):
+                    raise last_verify_err from e
+        if not isinstance(info, dict):
+            raise (last_verify_err or RuntimeError("yt-dlp: нет ответа об видео.")) from last_verify_err
+        title = str((info or {}).get("title") or "").strip()
     except Exception as e:
         rw["youtube_url"] = url
         rw["youtube_verified"] = False
@@ -1319,10 +1683,13 @@ def _rewrite_youtube_perform_download(
     *,
     progress_hooks: list | None = None,
     postprocessor_hooks: list | None = None,
+    status_callback: Callable[[str], None] | None = None,
 ) -> tuple[str, str]:
     """
     Скачивает лучший аудиопоток через yt-dlp (запросы идут на CDN YouTube, чаще всего *.googlevideo.com).
     Возвращает (относительный путь к mp3 от BASE_DIR, заголовок).
+    При сбоях (таймаут, SSL, обрыв CDN) перебирает цепочку player_client (YOUTUBE_PLAYER_CLIENT
+    + YOUTUBE_PLAYER_CLIENT_FALLBACK).
     """
     url = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
     if not rw.get("youtube_verified") or not _youtube_url_is_valid(url):
@@ -1333,24 +1700,66 @@ def _rewrite_youtube_perform_download(
         if old.is_file():
             old.unlink(missing_ok=True)
     outtmpl = str(media_dir / "youtube_audio_%(id)s.%(ext)s")
-    ydl_opts: dict = {
-        **_YOUTUBE_YDL_BASE,
-        "format": "bestaudio/best",
-        "outtmpl": outtmpl,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }
-        ],
-    }
-    if progress_hooks:
-        ydl_opts["progress_hooks"] = list(progress_hooks)
-    if postprocessor_hooks:
-        ydl_opts["postprocessor_hooks"] = list(postprocessor_hooks)
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+    stall_read_sec = _youtube_stall_read_sec()
+    clients = _youtube_player_client_chain()
+    n_cli = len(clients)
+    info: dict | None = None
+    last_err: BaseException | None = None
+    for ci, cname in enumerate(clients):
+        if status_callback is not None:
+            status_callback(
+                f"yt-dlp: YouTube client «{cname}» ({ci + 1}/{n_cli}), тайм-аут сокета {stall_read_sec} с; "
+                f"если столько нет ответа по сети — смена клиента. Bestaudio, затем ffmpeg → MP3…"
+            )
+        same_re = _youtube_same_client_retries()
+        ydl_opts: dict = {
+            **_YOUTUBE_YDL_BASE,
+            "socket_timeout": stall_read_sec,
+            "retries": same_re,
+            "fragment_retries": same_re,
+            **_ytdl_youtube_extractor_player_client(cname),
+            "format": "bestaudio/best",
+            "outtmpl": outtmpl,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }
+            ],
+        }
+        ydl_opts["progress_hooks"] = _rewrite_youtube_progress_hooks_with_stall(stall_read_sec, progress_hooks)
+        if postprocessor_hooks:
+            ydl_opts["postprocessor_hooks"] = list(postprocessor_hooks)
+        # bestaudio/best — только аудио; FFmpegExtractAudio — в mp3 192k.
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                out = ydl.extract_info(url, download=True)
+            if not isinstance(out, dict):
+                raise RuntimeError("yt-dlp: не single-video (ожидался один ролик, noplaylist).")
+            info = out
+            if ci > 0:
+                app.logger.info(
+                    "youtube download ok rewrite_id=%s player_client=%s after %d fallback(s)",
+                    rewrite_id,
+                    cname,
+                    ci,
+                )
+            break
+        except BaseException as e:  # noqa: BLE001 — смена client после любой сбойной попытки
+            last_err = e
+            app.logger.warning("youtube download rewrite_id=%s player_client=%s failed: %s", rewrite_id, cname, e)
+            if ci + 1 < n_cli:
+                if status_callback is not None:
+                    short = (str(e) or "")[:220]
+                    status_callback(
+                        f"Ошибка с YouTube client «{cname}» ({short}). Следующий вариант из цепочки…"
+                    )
+                _rewrite_youtube_clear_partial_downloads(media_dir)
+            else:
+                raise
+    if not isinstance(info, dict):
+        raise RuntimeError("yt-dlp не вернул сведения о ролике.") from last_err
     video_id = str((info or {}).get("id") or "").strip()
     title = str((info or {}).get("title") or "").strip()
     if not video_id:
@@ -1415,6 +1824,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
                     "total_bytes": d.get("total_bytes"),
                     "total_bytes_estimate": d.get("total_bytes_estimate"),
                     "speed": d.get("speed"),
+                    "eta": d.get("eta"),
                 }
             )
         elif st == "finished":
@@ -1440,11 +1850,21 @@ def rewrite_youtube_download_stream(rewrite_id: str):
 
     def worker() -> None:
         try:
+            def stream_status(msg: str) -> None:
+                emit(
+                    {
+                        "type": "progress",
+                        "phase": "status",
+                        "message": msg,
+                    }
+                )
+
             rel, title = _rewrite_youtube_perform_download(
                 rewrite_id,
                 rw,
                 progress_hooks=[progress_hook],
                 postprocessor_hooks=[postprocessor_hook],
+                status_callback=stream_status,
             )
             result_holder["rel"] = rel
             result_holder["title"] = title
@@ -1456,6 +1876,17 @@ def rewrite_youtube_download_stream(rewrite_id: str):
     threading.Thread(target=worker, daemon=True).start()
 
     def generate():
+        yield (
+            json.dumps(
+                {
+                    "type": "progress",
+                    "phase": "status",
+                    "message": "Сервер принял задачу: до отображения байт возможна короткая пауза (подключение к CDN)…",
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
         while True:
             line = event_q.get()
             if line is None:
@@ -1511,6 +1942,81 @@ def rewrite_youtube_transcribe(rewrite_id: str):
     return jsonify({"ok": True, "chars": len(rw["youtube_transcript_text"]), "words": len(rw["youtube_transcript_text"].split())})
 
 
+@app.route("/rewrite/<rewrite_id>/youtube/transcribe_stream", methods=["POST"])
+def rewrite_youtube_transcribe_stream(rewrite_id: str):
+    """Та же расшифровка, что POST /transcribe, но NDJSON: прогресс по нарезке и чанкам OpenAI."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "message": "Не задан OPENAI_API_KEY в .env"}), 400
+    rel = str(rw.get("youtube_audio_file") or "").strip()
+    if not rel:
+        return jsonify({"ok": False, "message": "Сначала скачайте аудио."}), 400
+    ap = (BASE_DIR / rel).resolve()
+    try:
+        ap.relative_to(BASE_DIR.resolve())
+    except ValueError:
+        return jsonify({"ok": False, "message": "Некорректный путь к аудио."}), 400
+
+    event_q: queue.Queue[str | None] = queue.Queue()
+    result_holder: dict[str, str | None] = {}
+
+    def put_progress(ev: dict) -> None:
+        event_q.put(json.dumps({"type": "transcribe_progress", **ev}, ensure_ascii=False))
+
+    def worker() -> None:
+        try:
+            txt, err = _rewrite_transcription_text(api_key, ap, progress=put_progress)
+            if err:
+                result_holder["error"] = err
+            else:
+                result_holder["text"] = txt or ""
+                rw2 = load_rewrite_job(rewrite_id)
+                if rw2 is not None:
+                    rw2["youtube_transcript_text"] = result_holder["text"]
+                    save_rewrite_job(rewrite_id, rw2)
+        except Exception as e:
+            result_holder["error"] = str(e)
+        finally:
+            event_q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def generate():
+        while True:
+            line = event_q.get()
+            if line is None:
+                break
+            yield line + "\n"
+        err = result_holder.get("error")
+        if err:
+            yield json.dumps({"type": "error", "message": err}, ensure_ascii=False) + "\n"
+        elif result_holder.get("text") is not None:
+            t = result_holder.get("text") or ""
+            yield (
+                json.dumps(
+                    {
+                        "type": "done",
+                        "ok": True,
+                        "chars": len(t),
+                        "words": len(t.split()),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+        else:
+            yield json.dumps({"type": "error", "message": "Расшифровка завершилась без результата."}, ensure_ascii=False) + "\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.route("/rewrite/<rewrite_id>/youtube/transcript", methods=["GET"])
 def rewrite_youtube_transcript_get(rewrite_id: str):
     rw = load_rewrite_job(rewrite_id)
@@ -1529,7 +2035,7 @@ def rewrite_project_run(rewrite_id: str):
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
-    hero_prompt, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    hero_prompt, target_chars = snapshot_pipeline_extras_from_body(body)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
     def gen():
@@ -1630,8 +2136,7 @@ def rewrite_project_run(rewrite_id: str):
             stages_snap=stages_snap,
             master_prompt=master_prompt,
             hero_prompt=hero_prompt,
-            duration_minutes=duration_minutes,
-            chars_per_minute=chars_per_minute,
+            target_chars=target_chars,
             block_writer_full_text=block_writer_full_text,
             continuity_editor_text=continuity_editor_text,
             retention_editor_text=retention_editor_text,
@@ -1801,7 +2306,7 @@ def rewrite_project_api_payload(rewrite_id: str):
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
-    hero_prompt, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    hero_prompt, target_chars = snapshot_pipeline_extras_from_body(body)
     block_writer_full_text = ""
     if stage_key == "continuity_editor":
         full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
@@ -1877,8 +2382,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         stages_snap=stages_snap,
         master_prompt=master_prompt,
         hero_prompt=hero_prompt,
-        duration_minutes=duration_minutes,
-        chars_per_minute=chars_per_minute,
+        target_chars=target_chars,
         block_writer_full_text=block_writer_full_text,
         continuity_editor_text=continuity_editor_text,
         retention_editor_text=retention_editor_text,
@@ -1955,9 +2459,9 @@ def rewrite_project_api_payload(rewrite_id: str):
     else:
         txt = _format_openai_wire_payloads_txt([rewrite_chat_completion_wire_payload(model_m, sys_c, usr_c)])
     stage_export_name = stage_key
-    fname = f"{rewrite_id}_{stage_export_name}_openai_request.txt"
+    fname = f"{rewrite_id}_{stage_export_name}_openai_request.json"
     resp = make_response(txt)
-    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
     resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
     return resp
 
