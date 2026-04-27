@@ -16,9 +16,12 @@ import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -37,6 +40,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     send_from_directory,
     stream_with_context,
     url_for,
@@ -78,7 +82,9 @@ from rewrite_openai import (
     REWRITE_MODELS,
     iter_draft1_blockwise_completion,
     iter_rewrite_completion,
+    list_draft1_wire_chat_payloads_for_export,
     normalize_rewrite_model,
+    rewrite_chat_completion_wire_payload,
 )
 from rewrite_pipeline import (
     REWRITE_STAGE_HELP_HINTS,
@@ -112,6 +118,69 @@ _REWRITE_ID_RE = re.compile(r"^rewrite_\d{8}_\d{6}$")
 
 def _safe_job_audio_filename(name: str) -> bool:
     return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.mp3$", name))
+
+
+def _safe_zip_archive_basename(name: str, fallback: str) -> str:
+    base = re.sub(r"[^\w\-. ()\[\]]+", "_", (name or "").strip())
+    base = base.strip("._- ")[:120] or fallback
+    return base
+
+
+def _archive_scene_basename(scene: dict[str, Any], idx0: int) -> str:
+    sid = str(scene.get("scene_id") or "").strip()
+    if not sid:
+        sid = f"scene_{idx0 + 1:03d}"
+    sid = re.sub(r"[^\w.\-]+", "_", sid).strip("._") or f"scene_{idx0 + 1:03d}"
+    return sid
+
+
+def _media_ext_from_url(url: str, slot: str) -> str:
+    path = (urlparse(url).path or "").lower()
+    if path.endswith(".png"):
+        return ".png"
+    if path.endswith(".webp"):
+        return ".webp"
+    if path.endswith(".jpg") or path.endswith(".jpeg"):
+        return ".jpg"
+    if path.endswith(".gif"):
+        return ".gif"
+    if path.endswith(".mp4"):
+        return ".mp4"
+    if path.endswith(".webm"):
+        return ".webm"
+    return ".mp4" if slot == "video" else ".png"
+
+
+_MEDIA_FETCH_MAX_BYTES = 120 * 1024 * 1024
+
+
+def _fetch_url_bytes_capped(
+    url: str,
+    on_progress: Callable[[int], None] | None = None,
+    should_abort: Callable[[], bool] | None = None,
+) -> bytes | None:
+    u = (url or "").strip()
+    if not u.startswith(("https://", "http://")):
+        return None
+    try:
+        with requests.get(u, timeout=180, stream=True) as r:
+            r.raise_for_status()
+            total = 0
+            parts: list[bytes] = []
+            for chunk in r.iter_content(chunk_size=256 * 1024):
+                if should_abort is not None and should_abort():
+                    return None
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > _MEDIA_FETCH_MAX_BYTES:
+                    return None
+                parts.append(chunk)
+                if on_progress is not None:
+                    on_progress(total)
+            return b"".join(parts)
+    except (requests.RequestException, OSError):
+        return None
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -594,6 +663,54 @@ def _rewrite_stage_result_path(rewrite_id: str, stage_key: str) -> Path:
 
 def _rewrite_block_writer_dir(rewrite_id: str) -> Path:
     return _rewrite_project_dir(rewrite_id) / "block_writer"
+
+
+def _format_openai_wire_payloads_txt(
+    bodies: list[dict[str, Any]],
+    *,
+    header_lines: list[str] | None = None,
+) -> str:
+    """Текст .txt: по одному JSON-телу POST на запрос, как уходит в OpenAI (indent=2)."""
+    out_lines: list[str] = []
+    if header_lines:
+        out_lines.extend(ln for ln in header_lines if ln)
+        out_lines.append("")
+    n = len(bodies)
+    if n == 0:
+        return ("\n".join(out_lines).rstrip() + "\n") if out_lines else "\n"
+    for i, body in enumerate(bodies, start=1):
+        out_lines.append(f"========== OpenAI chat/completions request {i}/{n} ==========")
+        out_lines.append(json.dumps(body, ensure_ascii=False, indent=2))
+        out_lines.append("")
+    return "\n".join(out_lines).rstrip() + "\n"
+
+
+def _load_block_writer_saved_short_summaries(rewrite_id: str) -> list[list[str]] | None:
+    """short_summary по блокам из block_NNN.json (порядок по block_index)."""
+    bw_dir = _rewrite_block_writer_dir(rewrite_id)
+    if not bw_dir.is_dir():
+        return None
+    pairs: list[tuple[int, list[str]]] = []
+    for p in bw_dir.glob("block_*.json"):
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+        try:
+            idx = int(raw.get("block_index") or 0)
+        except (TypeError, ValueError):
+            continue
+        if idx < 1:
+            continue
+        ss = raw.get("short_summary")
+        items: list[str] = []
+        if isinstance(ss, list):
+            items = [str(x or "").strip() for x in ss if str(x or "").strip()]
+        pairs.append((idx, items))
+    if not pairs:
+        return None
+    pairs.sort(key=lambda x: x[0])
+    return [items for _, items in pairs]
 
 
 def _rewrite_media_dir(rewrite_id: str) -> Path:
@@ -1606,13 +1723,11 @@ def rewrite_project_run(rewrite_id: str):
             acc_parts: list[str] = []
             block_checks: list[dict[str, Any]] = []
             for i, block in enumerate(blocks, start=1):
-                block_json = json.dumps(block, ensure_ascii=False, indent=2)
                 step_user = json.dumps(
                     {
                         "scene_index": i,
                         "scene_count": total,
                         "scene_block": block,
-                        "scene_block_json": block_json,
                         "notes": "Пиши только для этого блока, не пересказывай остальные.",
                     },
                     ensure_ascii=False,
@@ -1775,148 +1890,70 @@ def rewrite_project_api_payload(rewrite_id: str):
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
-    export_payload = dict(payload)
+    msgs = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+    sys_c = str((msgs[0] or {}).get("content") or "") if msgs else ""
+    usr_c = str((msgs[1] or {}).get("content") or "") if len(msgs) > 1 else ""
+    model_m = str(payload.get("model") or "")
+
     if stage_key == "draft1":
-        # Для Block Writer реальная отправка идет в loop (1 API call на 1 architect block).
-        # Экспортируем не "один payload", а схему loop и превью payload по блокам.
         structure_raw = str((stages_snap.get("structure") or {}).get("last_result") or "").strip()
         block_writer_user_prompt = str((stages_snap.get("draft1") or {}).get("user_prompt") or "")
-        blocks: list[dict] = []
-        try:
-            s_obj = json.loads(structure_raw)
-            raw_blocks = s_obj.get("blocks") if isinstance(s_obj, dict) else None
-            if isinstance(raw_blocks, list):
-                for i, b in enumerate(raw_blocks, start=1):
-                    if not isinstance(b, dict):
-                        continue
-                    name = str(b.get("block_name") or "").strip()
-                    if not name:
-                        continue
-                    try:
-                        tmin = int(b.get("target_chars_min"))
-                        tideal = int(b.get("target_chars_ideal"))
-                        tmax = int(b.get("target_chars_max"))
-                    except (TypeError, ValueError):
-                        continue
-                    blocks.append(
-                        {
-                            "index": i,
-                            "block_name": name,
-                            "target_chars_min": tmin,
-                            "target_chars_ideal": tideal,
-                            "target_chars_max": tmax,
-                            "must_cover": b.get("must_cover") if isinstance(b.get("must_cover"), list) else [],
-                            "must_not_cover": b.get("must_not_cover") if isinstance(b.get("must_not_cover"), list) else [],
-                        }
-                    )
-        except (json.JSONDecodeError, TypeError, ValueError):
-            blocks = []
-
-        previews: list[dict] = []
-        for b in blocks:
-            idx = int(b["index"])
-            context_depth = min(3, idx - 1)
-            previews.append(
-                {
-                    "for_block_index": idx,
-                    "summary_context_rule": "up to 3 previous short_summary values",
-                    "short_summary_context_expected_from_blocks": [idx - k for k in range(1, context_depth + 1)],
-                    "messages": [
-                        {"role": "system", "content": str(payload["messages"][0].get("content") or "")},
-                        {
-                            "role": "user",
-                            "content": json.dumps(
-                                {
-                                    "hero_prompt": hero_prompt,
-                                    "block_writer_user_promt": block_writer_user_prompt,
-                                    "architect_block": {
-                                        "index": idx,
-                                        "block_name": b["block_name"],
-                                        "target_chars_min": b["target_chars_min"],
-                                        "target_chars_ideal": b["target_chars_ideal"],
-                                        "target_chars_max": b["target_chars_max"],
-                                        "must_cover": b.get("must_cover") or [],
-                                        "must_not_cover": b.get("must_not_cover") or [],
-                                    },
-                                    "short_summary_context": [
-                                        f"<short_summary_from_block_{idx - k}>"
-                                        for k in range(1, context_depth + 1)
-                                    ],
-                                    "output_format": {
-                                        "required_json_fields": ["block_text", "short_summary"],
-                                        "notes": "Return valid JSON only.",
-                                    },
-                                },
-                                ensure_ascii=False,
-                                indent=2,
-                            ),
-                        },
-                    ],
-                }
+        saved = _load_block_writer_saved_short_summaries(rewrite_id)
+        wire_bodies, ctx_exact = list_draft1_wire_chat_payloads_for_export(
+            model_m,
+            sys_c,
+            structure_raw,
+            hero_prompt,
+            block_writer_user_prompt,
+            saved,
+        )
+        hdr: list[str] = []
+        if not wire_bodies:
+            hdr.append(
+                "[Block Writer] В Architect Result нет валидного списка blocks — тело POST не формируется."
             )
-
-        export_payload = {
-            "mode": "block_writer_loop",
-            "model": payload.get("model"),
-            "temperature": payload.get("temperature"),
-            "total_blocks_from_architect": len(blocks),
-            "loop_rules": {
-                "one_api_call_per_block": True,
-                "short_summary_context_window": 3,
-                "request_order": "1..N",
-            },
-            "notes": [
-                "This stage does NOT send one single request for all blocks.",
-                "Each block gets its own OpenAI request with its own architect_block and rolling short summaries.",
-            ],
-            "per_block_payload_previews": previews,
-        }
+        elif not ctx_exact:
+            hdr.append(
+                "Ниже — те же JSON-тела, что собирает Block Writer перед POST. "
+                "Контекст short_summary для следующих блоков взят из сохранённых block_*.json там, где они есть; "
+                "если файлов нет или не хватает — подставлены пустые списки (так не будет при живом первом прогоне)."
+            )
+        txt = _format_openai_wire_payloads_txt(wire_bodies, header_lines=hdr or None)
     elif stage_key == "scene_writer":
         raw_blocks = str(structure_splitter_text or "").strip()
-        blocks: list[dict] = []
+        blocks_sw: list[dict] = []
         try:
-            parsed = json.loads(raw_blocks) if raw_blocks else []
-            if isinstance(parsed, list):
-                blocks = [b for b in parsed if isinstance(b, dict)]
-            elif isinstance(parsed, dict) and isinstance(parsed.get("blocks"), list):
-                blocks = [b for b in parsed.get("blocks") if isinstance(b, dict)]
+            parsed_sw = json.loads(raw_blocks) if raw_blocks else []
+            if isinstance(parsed_sw, list):
+                blocks_sw = [b for b in parsed_sw if isinstance(b, dict)]
+            elif isinstance(parsed_sw, dict) and isinstance(parsed_sw.get("blocks"), list):
+                blocks_sw = [b for b in parsed_sw.get("blocks") if isinstance(b, dict)]
         except json.JSONDecodeError:
-            blocks = []
-        previews: list[dict[str, Any]] = []
-        for i, block in enumerate(blocks, start=1):
-            block_json = json.dumps(block, ensure_ascii=False, indent=2)
+            blocks_sw = []
+        wire_bodies_sw: list[dict[str, Any]] = []
+        total_sw = len(blocks_sw)
+        for i, block in enumerate(blocks_sw, start=1):
             step_user = json.dumps(
                 {
                     "scene_index": i,
-                    "scene_count": len(blocks),
+                    "scene_count": total_sw,
                     "scene_block": block,
-                    "scene_block_json": block_json,
                     "notes": "Пиши только для этого блока, не пересказывай остальные.",
                 },
                 ensure_ascii=False,
                 indent=2,
             )
-            previews.append(
-                {
-                    "for_scene_index": i,
-                    "messages": [
-                        {"role": "system", "content": str(payload["messages"][0].get("content") or "")},
-                        {"role": "user", "content": f"{str(payload['messages'][1].get('content') or '')}\n\n{step_user}"},
-                    ],
-                }
+            joined_user = f"{usr_c}\n\n{step_user}"
+            wire_bodies_sw.append(rewrite_chat_completion_wire_payload(model_m, sys_c, joined_user))
+        if not wire_bodies_sw:
+            txt = _format_openai_wire_payloads_txt(
+                [],
+                header_lines=["[Scene Writer] Нет блоков из Structure Splitter — POST не формируется."],
             )
-        export_payload = {
-            "mode": "scene_writer_loop",
-            "model": payload.get("model"),
-            "temperature": payload.get("temperature"),
-            "notes": [
-                "Scene Writer делает один реальный chat/completions на каждый блок.",
-                "Количество запросов = количество блоков из Structure Splitter.",
-            ],
-            "blocks_found": len(blocks),
-            "per_block_payload_previews": previews,
-        }
-    txt = json.dumps(export_payload, ensure_ascii=False, indent=2) + "\n"
+        else:
+            txt = _format_openai_wire_payloads_txt(wire_bodies_sw)
+    else:
+        txt = _format_openai_wire_payloads_txt([rewrite_chat_completion_wire_payload(model_m, sys_c, usr_c)])
     stage_export_name = stage_key
     fname = f"{rewrite_id}_{stage_export_name}_openai_request.txt"
     resp = make_response(txt)
@@ -2702,8 +2739,439 @@ def job_elevenlabs_tts(job_id: str):
         "speed_pct": speed_pct,
         "use_speaker_boost": use_speaker_boost,
     }
+    job["tts_last_text"] = text
     save_job(job_id, job)
     return jsonify({"ok": True, **entry})
+
+
+# --- ZIP «скачать всё»: фон + статус (прогресс) и прежний одношаговый GET ---
+_download_all_lock = threading.Lock()
+_download_all_tasks: dict[str, dict[str, Any]] = {}
+_DOWNLOAD_ALL_MAX_TASKS = 48
+
+
+def _archive_plan_steps(job_id: str, job: dict[str, Any]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+    audio_dir = JOB_AUDIO_DIR / job_id
+    if audio_dir.is_dir():
+        mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if mp3s:
+            steps.append({"type": "audio", "path": mp3s[0]})
+    scenes = job.get("scenes") if isinstance(job.get("scenes"), list) else []
+    for idx, scene in enumerate(scenes):
+        if not isinstance(scene, dict):
+            continue
+        stem = _archive_scene_basename(scene, idx)
+        for slot in ("start", "end", "video"):
+            block = scene.get(slot)
+            if not isinstance(block, dict):
+                continue
+            key = "video_url" if slot == "video" else "image_url"
+            url = str(block.get(key) or "").strip()
+            if url:
+                steps.append({"type": "media", "slot": slot, "stem": stem, "url": url})
+    return steps
+
+
+def _archive_step_label(step: dict[str, Any]) -> str:
+    if step["type"] == "audio":
+        return "Озвучка (MP3)"
+    slot = str(step.get("slot") or "")
+    stem = str(step.get("stem") or "")
+    if slot == "start":
+        return f"{stem} — старт (изображение)"
+    if slot == "end":
+        return f"{stem} — финальный кадр (изображение)"
+    return f"{stem} — видео"
+
+
+def _download_all_is_cancelled(task_id: str) -> bool:
+    with _download_all_lock:
+        st = _download_all_tasks.get(task_id)
+        return bool(st and st.get("cancelled"))
+
+
+def _run_archive_into_zipfile(
+    job_id: str,
+    job: dict[str, Any],
+    zf: zipfile.ZipFile,
+    steps: list[dict[str, Any]] | None = None,
+    report: Callable[[dict[str, Any]], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> tuple[int, bool]:
+    steps = list(steps) if steps is not None else _archive_plan_steps(job_id, job)
+    total = len(steps)
+    added = 0
+    images_added = 0
+    videos_added = 0
+    audio_added = 0
+    bytes_images = 0
+    bytes_videos = 0
+    bytes_audio = 0
+
+    def push(**kw: Any) -> None:
+        if report is None:
+            return
+        payload: dict[str, Any] = {
+            "total_steps": total,
+            "steps_done": int(kw.get("steps_done", 0)),
+            "current": str(kw.get("current", "") or ""),
+            "fetch_bytes": int(kw.get("fetch_bytes", 0)),
+            "images_added": images_added,
+            "videos_added": videos_added,
+            "audio_added": audio_added,
+            "bytes_images": bytes_images,
+            "bytes_videos": bytes_videos,
+            "bytes_audio": bytes_audio,
+            "files_added": added,
+        }
+        payload.update(kw)
+        payload["images_added"] = images_added
+        payload["videos_added"] = videos_added
+        payload["audio_added"] = audio_added
+        payload["bytes_images"] = bytes_images
+        payload["bytes_videos"] = bytes_videos
+        payload["bytes_audio"] = bytes_audio
+        payload["files_added"] = added
+        report(payload)
+
+    for i, step in enumerate(steps):
+        if cancel_check is not None and cancel_check():
+            push(steps_done=i, current="Отмена…", fetch_bytes=0)
+            return added, True
+        label = _archive_step_label(step)
+        push(steps_done=i, current=label, fetch_bytes=0)
+        if step["type"] == "audio":
+            p = step["path"]
+            try:
+                sz = int(p.stat().st_size)
+            except OSError:
+                push(steps_done=i + 1, current=f"{label} — файл недоступен", fetch_bytes=0)
+                continue
+            zf.write(p, arcname="voiceover.mp3")
+            added += 1
+            audio_added = 1
+            bytes_audio += sz
+            push(steps_done=i + 1, current=label, fetch_bytes=0)
+            continue
+        slot = str(step.get("slot") or "")
+        url = str(step.get("url") or "")
+        stem = str(step.get("stem") or "")
+
+        def on_prog(n: int) -> None:
+            push(steps_done=i, current=label, fetch_bytes=int(n))
+
+        data = _fetch_url_bytes_capped(url, on_progress=on_prog, should_abort=cancel_check)
+        if cancel_check is not None and cancel_check():
+            push(steps_done=i + 1, current="Отмена во время скачивания", fetch_bytes=0)
+            return added, True
+        if not data:
+            push(steps_done=i + 1, current=f"{label} — не удалось скачать", fetch_bytes=0)
+            continue
+        ext = _media_ext_from_url(url, slot)
+        arc = f"{stem}_{slot}{ext}"
+        zf.writestr(arc, data)
+        added += 1
+        ln = len(data)
+        if slot == "video":
+            videos_added += 1
+            bytes_videos += ln
+        else:
+            images_added += 1
+            bytes_images += ln
+        push(steps_done=i + 1, current=label, fetch_bytes=ln)
+    return added, False
+
+
+def _download_all_prune_locked() -> None:
+    if len(_download_all_tasks) <= _DOWNLOAD_ALL_MAX_TASKS:
+        return
+    completed = [
+        (tid, float(st.get("finished_at") or 0))
+        for tid, st in _download_all_tasks.items()
+        if st.get("done")
+    ]
+    completed.sort(key=lambda x: x[1])
+    drop_n = max(1, len(_download_all_tasks) - _DOWNLOAD_ALL_MAX_TASKS // 2)
+    for tid, _ in completed[:drop_n]:
+        st = _download_all_tasks.pop(tid, None)
+        if st and st.get("zip_path"):
+            try:
+                Path(str(st["zip_path"])).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _download_all_worker(task_id: str, job_id: str) -> None:
+    zip_local: Path | None = None
+    try:
+        job = load_job(job_id)
+        if job is None:
+            with _download_all_lock:
+                st = _download_all_tasks.get(task_id)
+                if st:
+                    st.update(
+                        done=True,
+                        error="not_found",
+                        message="Проект не найден.",
+                        finished_at=time.time(),
+                    )
+            return
+        plan = _archive_plan_steps(job_id, job)
+        if not plan:
+            with _download_all_lock:
+                st = _download_all_tasks.get(task_id)
+                if st:
+                    st.update(
+                        done=True,
+                        error="empty_plan",
+                        message="В архиве нечего собрать.",
+                        finished_at=time.time(),
+                    )
+            return
+
+        fd, tmp = tempfile.mkstemp(suffix=".zip")
+        os.close(fd)
+        zip_local = Path(tmp)
+
+        def report(patch: dict[str, Any]) -> None:
+            with _download_all_lock:
+                st = _download_all_tasks.get(task_id)
+                if not st:
+                    return
+                st.update(patch)
+                st["updated_at"] = time.time()
+
+        with zipfile.ZipFile(zip_local, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            added, cancelled = _run_archive_into_zipfile(
+                job_id,
+                job,
+                zf,
+                steps=plan,
+                report=report,
+                cancel_check=lambda: _download_all_is_cancelled(task_id),
+            )
+
+        if cancelled:
+            with _download_all_lock:
+                st = _download_all_tasks.get(task_id)
+                if st:
+                    st.update(
+                        done=True,
+                        error="cancelled",
+                        message="Сборка архива отменена.",
+                        finished_at=time.time(),
+                        zip_path=None,
+                        fetch_bytes=0,
+                        current="Отменено",
+                    )
+            zip_local.unlink(missing_ok=True)
+            zip_local = None
+            return
+
+        label = str(job.get("project_name") or "").strip()
+        if label:
+            try:
+                label.encode("ascii")
+            except UnicodeEncodeError:
+                label = ""
+        fname_base = _safe_zip_archive_basename(label, job_id)
+        fname = f"{fname_base}.zip" if not fname_base.lower().endswith(".zip") else fname_base
+
+        with _download_all_lock:
+            st = _download_all_tasks.get(task_id)
+            if not st:
+                zip_local.unlink(missing_ok=True)
+                return
+            if added == 0:
+                st.update(
+                    done=True,
+                    error="empty_archive",
+                    message="Не удалось скачать ни один файл по ссылкам.",
+                    finished_at=time.time(),
+                    zip_path=None,
+                )
+                zip_local.unlink(missing_ok=True)
+                zip_local = None
+                return
+            try:
+                zsz = int(zip_local.stat().st_size)
+            except OSError:
+                zsz = 0
+            st.update(
+                done=True,
+                error=None,
+                message=None,
+                zip_path=str(zip_local),
+                download_filename=fname,
+                zip_size=zsz,
+                files_added=added,
+                finished_at=time.time(),
+                current="Архив собран",
+                steps_done=len(plan),
+                fetch_bytes=0,
+            )
+        zip_local = None
+    except Exception as e:
+        if zip_local is not None:
+            zip_local.unlink(missing_ok=True)
+        with _download_all_lock:
+            st = _download_all_tasks.get(task_id)
+            if st:
+                st.update(
+                    done=True,
+                    error="exception",
+                    message=str(e)[:500],
+                    finished_at=time.time(),
+                    zip_path=None,
+                )
+
+
+def _download_all_task_view(st: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "done": bool(st.get("done")),
+        "error": st.get("error"),
+        "message": st.get("message"),
+        "job_id": st.get("job_id"),
+        "total_steps": int(st.get("total_steps") or 0),
+        "steps_done": int(st.get("steps_done") or 0),
+        "current": st.get("current") or "",
+        "fetch_bytes": int(st.get("fetch_bytes") or 0),
+        "images_added": int(st.get("images_added") or 0),
+        "videos_added": int(st.get("videos_added") or 0),
+        "audio_added": int(st.get("audio_added") or 0),
+        "files_added": int(st.get("files_added") or 0),
+        "bytes_images": int(st.get("bytes_images") or 0),
+        "bytes_videos": int(st.get("bytes_videos") or 0),
+        "bytes_audio": int(st.get("bytes_audio") or 0),
+        "planned_audio": int(st.get("planned_audio") or 0),
+        "planned_images": int(st.get("planned_images") or 0),
+        "planned_videos": int(st.get("planned_videos") or 0),
+        "download_filename": st.get("download_filename"),
+        "zip_size": int(st.get("zip_size") or 0),
+    }
+
+
+@app.route("/job/<job_id>/download-all/start", methods=["POST"])
+def job_download_all_start(job_id: str):
+    job = load_job(job_id)
+    if job is None:
+        abort(404)
+    plan = _archive_plan_steps(job_id, job)
+    if not plan:
+        return jsonify(
+            {
+                "error": "empty_plan",
+                "message": "В архиве нечего собрать: нет сохранённой озвучки и нет ссылок start/end/video.",
+            }
+        ), 400
+    planned_audio = 1 if any(s.get("type") == "audio" for s in plan) else 0
+    planned_images = sum(1 for s in plan if s.get("type") == "media" and s.get("slot") != "video")
+    planned_videos = sum(1 for s in plan if s.get("type") == "media" and s.get("slot") == "video")
+    task_id = uuid.uuid4().hex
+    with _download_all_lock:
+        _download_all_prune_locked()
+        _download_all_tasks[task_id] = {
+            "job_id": job_id,
+            "done": False,
+            "error": None,
+            "message": None,
+            "created_at": time.time(),
+            "updated_at": time.time(),
+            "finished_at": None,
+            "total_steps": len(plan),
+            "steps_done": 0,
+            "current": "Старт…",
+            "fetch_bytes": 0,
+            "images_added": 0,
+            "videos_added": 0,
+            "audio_added": 0,
+            "files_added": 0,
+            "bytes_images": 0,
+            "bytes_videos": 0,
+            "bytes_audio": 0,
+            "planned_audio": planned_audio,
+            "planned_images": planned_images,
+            "planned_videos": planned_videos,
+            "zip_path": None,
+            "download_filename": None,
+            "zip_size": 0,
+            "cancelled": False,
+        }
+    threading.Thread(target=_download_all_worker, args=(task_id, job_id), daemon=True).start()
+    return jsonify(
+        {
+            "task_id": task_id,
+            "total_steps": len(plan),
+            "planned_audio": planned_audio,
+            "planned_images": planned_images,
+            "planned_videos": planned_videos,
+        }
+    )
+
+
+@app.route("/job/<job_id>/download-all/cancel", methods=["POST"])
+def job_download_all_cancel(job_id: str):
+    data = request.get_json(silent=True) or {}
+    task_id = str(data.get("task_id") or request.args.get("task_id") or "").strip()
+    if not task_id:
+        return jsonify({"error": "missing_task_id"}), 400
+    with _download_all_lock:
+        st = _download_all_tasks.get(task_id)
+        if not st or st.get("job_id") != job_id:
+            return jsonify({"error": "unknown_task"}), 404
+        if st.get("done"):
+            return jsonify({"ok": True, "already_finished": True})
+        st["cancelled"] = True
+    return jsonify({"ok": True})
+
+
+@app.route("/job/<job_id>/download-all/status")
+def job_download_all_status(job_id: str):
+    task_id = (request.args.get("task_id") or "").strip()
+    if not task_id:
+        return jsonify({"error": "missing_task_id"}), 400
+    with _download_all_lock:
+        st = _download_all_tasks.get(task_id)
+    if not st or st.get("job_id") != job_id:
+        return jsonify({"error": "unknown_task"}), 404
+    return jsonify(_download_all_task_view(st))
+
+
+@app.route("/job/<job_id>/download-all/file")
+def job_download_all_file(job_id: str):
+    task_id = (request.args.get("task_id") or "").strip()
+    if not task_id:
+        return jsonify({"error": "missing_task_id"}), 400
+    with _download_all_lock:
+        st = _download_all_tasks.get(task_id)
+    if not st or st.get("job_id") != job_id:
+        abort(404)
+    if not st.get("done"):
+        return jsonify({"error": "not_ready", "message": "Архив ещё собирается."}), 409
+    if st.get("error"):
+        msg = str(st.get("message") or st.get("error") or "Ошибка")
+        return Response(msg, status=400, mimetype="text/plain; charset=utf-8")
+    zpath = st.get("zip_path")
+    if not zpath:
+        return Response("Архив недоступен.", status=400, mimetype="text/plain; charset=utf-8")
+    path = Path(str(zpath))
+    fname = str(st.get("download_filename") or "project.zip")
+    if not path.is_file():
+        return Response("Временный файл архива удалён. Запустите скачивание снова.", status=410, mimetype="text/plain; charset=utf-8")
+
+    resp = send_file(path, as_attachment=True, download_name=fname, mimetype="application/zip", max_age=0)
+
+    @resp.call_on_close
+    def _cleanup_download_all_file() -> None:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        with _download_all_lock:
+            _download_all_tasks.pop(task_id, None)
+
+    return resp
 
 
 @app.route("/job/<job_id>/audio/<filename>")
@@ -2723,6 +3191,44 @@ def job_audio_file(job_id: str, filename: str):
     if not target.is_file():
         abort(404)
     return send_from_directory(d, filename, mimetype="audio/mpeg", max_age=0)
+
+
+@app.route("/job/<job_id>/download-all")
+def job_download_all(job_id: str):
+    """ZIP: озвучка (если есть) + готовые start/end/video по сценам (имена scene_175_start.ext …). Одним запросом (без прогресса)."""
+    job = load_job(job_id)
+    if job is None:
+        abort(404)
+    plan = _archive_plan_steps(job_id, job)
+    if not plan:
+        return Response(
+            "В архиве нечего собрать: нет сохранённой озвучки и нет доступных по ссылкам start/end/video.",
+            status=400,
+            mimetype="text/plain; charset=utf-8",
+        )
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        added, _cancelled = _run_archive_into_zipfile(job_id, job, zf, steps=plan, report=None)
+    if added == 0:
+        return Response(
+            "В архиве нечего собрать: не удалось скачать ни один файл по ссылкам.",
+            status=400,
+            mimetype="text/plain; charset=utf-8",
+        )
+    buf.seek(0)
+    raw = buf.getvalue()
+    label = str(job.get("project_name") or "").strip()
+    if label:
+        try:
+            label.encode("ascii")
+        except UnicodeEncodeError:
+            label = ""
+    fname_base = _safe_zip_archive_basename(label, job_id)
+    fname = f"{fname_base}.zip" if not fname_base.lower().endswith(".zip") else fname_base
+    resp = make_response(raw)
+    resp.headers["Content-Type"] = "application/zip"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
 
 
 @app.route("/job/<job_id>")
@@ -2751,9 +3257,6 @@ def job_page(job_id: str):
 
     if "tts_outputs" in job:
         job.pop("tts_outputs", None)
-        ad = JOB_AUDIO_DIR / job_id
-        if ad.is_dir():
-            shutil.rmtree(ad, ignore_errors=True)
         save_job(job_id, job)
 
     summary = compute_summary(job.get("scenes", []))
@@ -2764,11 +3267,24 @@ def job_page(job_id: str):
     vid_label = meta.get("video_model_label") or video_model_label(meta.get("video_model"))
     scene_slot_image_header_meta = f"{res_display} · {img_label}"
     scene_slot_video_header_meta = vid_label
+    audio_dir = JOB_AUDIO_DIR / job_id
+    job_has_audio = audio_dir.is_dir() and any(audio_dir.glob("*.mp3"))
+    tts_last_audio_href: str | None = None
+    tts_last_audio_name: str | None = None
+    if job_has_audio and audio_dir.is_dir():
+        mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if mp3s:
+            tts_last_audio_name = mp3s[0].name
+            tts_last_audio_href = url_for("job_audio_file", job_id=job_id, filename=mp3s[0].name)
     return render_template(
         "job.html",
         job_id=job_id,
         job=job,
         scenes=job.get("scenes", []),
+        job_has_audio=job_has_audio,
+        tts_last_text=str(job.get("tts_last_text") or ""),
+        tts_last_audio_href=tts_last_audio_href,
+        tts_last_audio_name=tts_last_audio_name,
         summary=summary,
         scene_slot_image_header_meta=scene_slot_image_header_meta,
         scene_slot_video_header_meta=scene_slot_video_header_meta,

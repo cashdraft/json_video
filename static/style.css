@@ -1969,6 +1969,95 @@ textarea::placeholder {
     margin-bottom: 1rem;
 }
 
+.job-page .container {
+    padding-bottom: 3rem;
+}
+
+.job-download-all-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.75rem;
+}
+
+.job-download-all-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    text-decoration: none;
+}
+
+.job-download-all-link:hover {
+    text-decoration: none;
+}
+
+.job-download-all-ic {
+    flex-shrink: 0;
+    display: block;
+}
+
+button.job-download-all-link {
+    font: inherit;
+}
+
+.download-all-progress-wrap {
+    margin: 0.75rem 0 0.5rem;
+}
+
+.download-all-progress {
+    height: 0.55rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.download-all-progress__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    transition: width 0.25s ease-out;
+}
+
+.download-all-progress-meta {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.download-all-modal-detail {
+    white-space: pre-line;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+    max-height: 11rem;
+    overflow-y: auto;
+}
+
+.download-all-modal-detail:empty {
+    display: none;
+}
+
+.download-all-modal-log:empty {
+    display: none;
+}
+
+.download-all-modal-log:not(:empty) {
+    max-height: 14rem;
+    overflow-y: auto;
+}
+
+.download-all-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.download-all-modal-actions #download-all-cancel {
+    margin-right: auto;
+}
+
 .generation-section h2,
 .scenes-section h2 {
     font-size: 1.1rem;

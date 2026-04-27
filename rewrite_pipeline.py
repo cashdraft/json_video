@@ -799,7 +799,6 @@ def compose_rewrite_openai_request_body(
         payload = {
             "scene_writer_user_promt": up,
             "style_promt": style_prompt,
-            "block_mode": "single_block_per_request",
         }
         user_text = _json_user_message(payload)
     else:

@@ -1,3 +1,2 @@
-# Параметры озвучки (симв./мин и целевая длительность, 1–30)
-chars_per_minute: 344
-duration_minutes: 15
+chars_per_minute: 1000
+duration_minutes: 9

@@ -79,6 +79,107 @@ def _openai_error_message(r: requests.Response) -> str:
     return err_body or (r.reason or str(r.status_code))
 
 
+def rewrite_chat_completion_wire_payload(
+    model: str,
+    system_prompt: str,
+    user_content: str,
+) -> dict[str, Any]:
+    """Тело POST /v1/chat/completions (без stream) — как в iter_rewrite_completion."""
+    model = normalize_rewrite_model(model)
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": _sanitize_for_openai_json((system_prompt or "").strip())},
+            {"role": "user", "content": _sanitize_for_openai_json((user_content or "").strip())},
+        ],
+        "temperature": REWRITE_CHAT_TEMPERATURE,
+    }
+
+
+def _draft1_wire_payload_for_block(
+    model: str,
+    system_prompt_sanitized: str,
+    hero_prompt_sanitized: str,
+    block_writer_user_prompt_sanitized: str,
+    b: dict[str, Any],
+    short_summaries_before: list[list[str]],
+) -> dict[str, Any]:
+    """Один POST Block Writer для блока b; short_summaries_before — уже завершённые блоки (до 3 последних в user)."""
+    model = normalize_rewrite_model(model)
+    idx = int(b["index"])
+    name = str(b["block_name"])
+    tmin = int(b["target_chars_min"])
+    tideal = int(b["target_chars_ideal"])
+    tmax = int(b["target_chars_max"])
+    prev_short = short_summaries_before[-3:]
+    user_payload: dict[str, Any] = {
+        "hero_prompt": hero_prompt_sanitized,
+        "block_writer_user_promt": block_writer_user_prompt_sanitized,
+        "architect_block": {
+            "index": idx,
+            "block_name": name,
+            "target_chars_min": tmin,
+            "target_chars_ideal": tideal,
+            "target_chars_max": tmax,
+            "must_cover": b["must_cover"],
+            "must_not_cover": b["must_not_cover"],
+        },
+        "short_summary_context": [
+            {"from_block_offset": i + 1, "short_summary": s}
+            for i, s in enumerate(reversed(prev_short))
+        ],
+    }
+    user_msg = _sanitize_for_openai_json(json.dumps(user_payload, ensure_ascii=False, indent=2))
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt_sanitized},
+            {"role": "user", "content": user_msg},
+        ],
+        "temperature": REWRITE_CHAT_TEMPERATURE,
+    }
+
+
+def list_draft1_wire_chat_payloads_for_export(
+    model: str,
+    system_prompt: str,
+    structure_result: str,
+    hero_prompt: str,
+    block_writer_user_prompt: str,
+    saved_short_summaries: list[list[str]] | None,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Список тел POST по блокам. bool: True если контекст short_summary для всех блоков совпадает с сохранёнными данными."""
+    model = normalize_rewrite_model(model)
+    system_prompt_sanitized = _sanitize_for_openai_json((system_prompt or "").strip())
+    structure_result_sanitized = _sanitize_for_openai_json((structure_result or "").strip())
+    hero_san = _sanitize_for_openai_json((hero_prompt or "").strip())
+    bw_san = _sanitize_for_openai_json((block_writer_user_prompt or "").strip())
+    blocks = _extract_structure_blocks(structure_result_sanitized)
+    if not blocks:
+        return [], True
+    short_summaries: list[list[str]] = []
+    out: list[dict[str, Any]] = []
+    context_exact = True
+    for bi, b in enumerate(blocks):
+        out.append(
+            _draft1_wire_payload_for_block(
+                model,
+                system_prompt_sanitized,
+                hero_san,
+                bw_san,
+                b,
+                short_summaries,
+            )
+        )
+        if saved_short_summaries is not None and bi < len(saved_short_summaries):
+            short_summaries.append(list(saved_short_summaries[bi]))
+        else:
+            short_summaries.append([])
+            if bi < len(blocks) - 1:
+                context_exact = False
+    return out, context_exact
+
+
 def _post_chat_completion(api_key: str, payload: dict[str, Any], timeout: int, out: queue.Queue) -> None:
     try:
         body = _openai_chat_json_body_bytes(payload)
@@ -107,34 +208,27 @@ def iter_rewrite_completion(
     {"type": "error", "message": "..."} — последнее при ошибке
     {"type": "result", "content": "..."} — успех
     """
-    prompt = _sanitize_for_openai_json((prompt or "").strip())
-    text = _sanitize_for_openai_json((text or "").strip())
     model = normalize_rewrite_model(model)
     if timeout is None:
         timeout = _chat_timeout_seconds()
+    prompt_st = (prompt or "").strip()
+    text_st = (text or "").strip()
 
     yield {"type": "status", "message": "Проверка ввода…"}
     if not api_key.strip():
         yield {"type": "error", "message": "Не задан OPENAI_API_KEY в .env"}
         return
-    if not prompt:
+    if not prompt_st:
         yield {"type": "error", "message": "Введите промпт (инструкцию для модели)."}
         return
-    if not text:
+    if not text_st:
         yield {"type": "error", "message": "Введите текст для обработки."}
         return
 
     yield {"type": "status", "message": f"Модель: {model}"}
     yield {"type": "status", "message": "Формирование запроса к OpenAI (system + user)…"}
 
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": text},
-        ],
-        "temperature": REWRITE_CHAT_TEMPERATURE,
-    }
+    payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st)
 
     yield {"type": "status", "message": "Отправка chat/completions на api.openai.com…"}
     yield {
@@ -220,35 +314,28 @@ def iter_rewrite_completion_stream(
     {"type": "error", "message": "..."}
     {"type": "result", "content": "..."} — полный накопленный ответ в конце
     """
-    prompt = _sanitize_for_openai_json((prompt or "").strip())
-    text = _sanitize_for_openai_json((text or "").strip())
     model = normalize_rewrite_model(model)
     if timeout is None:
         timeout = _chat_timeout_seconds()
+    prompt_st = (prompt or "").strip()
+    text_st = (text or "").strip()
 
     yield {"type": "status", "message": "Проверка ввода…"}
     if not api_key.strip():
         yield {"type": "error", "message": "Не задан OPENAI_API_KEY в .env"}
         return
-    if not prompt:
+    if not prompt_st:
         yield {"type": "error", "message": "Введите промпт (инструкцию для модели)."}
         return
-    if not text:
+    if not text_st:
         yield {"type": "error", "message": "Введите текст для обработки."}
         return
 
     yield {"type": "status", "message": f"Модель: {model}"}
     yield {"type": "status", "message": "Потоковый запрос к OpenAI (stream)…"}
 
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": text},
-        ],
-        "temperature": REWRITE_CHAT_TEMPERATURE,
-        "stream": True,
-    }
+    payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st)
+    payload["stream"] = True
 
     acc = ""
     try:
@@ -507,10 +594,17 @@ def iter_draft1_blockwise_completion(
                 )
             ),
         }
-        user_payload = {
-            "hero_prompt": hero_prompt,
-            "block_writer_user_promt": block_writer_user_prompt,
-            "architect_block": {
+        payload = _draft1_wire_payload_for_block(
+            model,
+            system_prompt,
+            hero_prompt,
+            block_writer_user_prompt,
+            b,
+            short_summaries,
+        )
+        user_msg = str((payload.get("messages") or [{}])[1].get("content") or "")
+        architect_block_json = json.dumps(
+            {
                 "index": idx,
                 "block_name": name,
                 "target_chars_min": tmin,
@@ -519,15 +613,8 @@ def iter_draft1_blockwise_completion(
                 "must_cover": b["must_cover"],
                 "must_not_cover": b["must_not_cover"],
             },
-            "short_summary_context": [
-                {
-                    "from_block_offset": i + 1,
-                    "short_summary": s,
-                }
-                for i, s in enumerate(reversed(prev_short))
-            ],
-        }
-        architect_block_json = json.dumps(user_payload["architect_block"], ensure_ascii=False)
+            ensure_ascii=False,
+        )
         yield {
             "type": "status",
             "message": (
@@ -535,15 +622,6 @@ def iter_draft1_blockwise_completion(
                 f"user_promt chars={len(block_writer_user_prompt)}, "
                 f"architect_block chars={len(architect_block_json)}."
             ),
-        }
-        user_msg = _sanitize_for_openai_json(json.dumps(user_payload, ensure_ascii=False, indent=2))
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            "temperature": REWRITE_CHAT_TEMPERATURE,
         }
         yield {
             "type": "status",
