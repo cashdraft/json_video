@@ -1216,6 +1216,11 @@ textarea::placeholder {
     align-items: start;
 }
 
+/* Scene Writer: System / User / Style в один ряд */
+.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-row--controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .rewrite-stage-row--scene-writer-sliders {
     margin-top: 0.1rem;
 }
@@ -1460,6 +1465,10 @@ textarea::placeholder {
 
 @media (max-width: 42rem) {
     .rewrite-stage-row--controls {
+        grid-template-columns: 1fr;
+    }
+
+    .rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-row--controls {
         grid-template-columns: 1fr;
     }
 
