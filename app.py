@@ -1524,6 +1524,7 @@ def rewrite_project_run(rewrite_id: str):
                 yield json.dumps({"type": "error", "message": "Structure Splitter не вернул список блоков."}, ensure_ascii=False) + "\n"
                 return
             total = len(blocks)
+            yield json.dumps({"type": "status", "message": f"Scene Writer: найдено блоков после Structure Splitter: {total}"}, ensure_ascii=False) + "\n"
             acc_parts: list[str] = []
             for i, block in enumerate(blocks, start=1):
                 block_json = json.dumps(block, ensure_ascii=False, indent=2)
@@ -1764,6 +1765,51 @@ def rewrite_project_api_payload(rewrite_id: str):
                 "This stage does NOT send one single request for all blocks.",
                 "Each block gets its own OpenAI request with its own architect_block and rolling short summaries.",
             ],
+            "per_block_payload_previews": previews,
+        }
+    elif stage_key == "scene_writer":
+        raw_blocks = str(structure_splitter_text or "").strip()
+        blocks: list[dict] = []
+        try:
+            parsed = json.loads(raw_blocks) if raw_blocks else []
+            if isinstance(parsed, list):
+                blocks = [b for b in parsed if isinstance(b, dict)]
+            elif isinstance(parsed, dict) and isinstance(parsed.get("blocks"), list):
+                blocks = [b for b in parsed.get("blocks") if isinstance(b, dict)]
+        except json.JSONDecodeError:
+            blocks = []
+        previews: list[dict[str, Any]] = []
+        for i, block in enumerate(blocks, start=1):
+            block_json = json.dumps(block, ensure_ascii=False, indent=2)
+            step_user = json.dumps(
+                {
+                    "scene_index": i,
+                    "scene_count": len(blocks),
+                    "scene_block": block,
+                    "scene_block_json": block_json,
+                    "notes": "Пиши только для этого блока, не пересказывай остальные.",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            previews.append(
+                {
+                    "for_scene_index": i,
+                    "messages": [
+                        {"role": "system", "content": str(payload["messages"][0].get("content") or "")},
+                        {"role": "user", "content": f"{str(payload['messages'][1].get('content') or '')}\n\n{step_user}"},
+                    ],
+                }
+            )
+        export_payload = {
+            "mode": "scene_writer_loop",
+            "model": payload.get("model"),
+            "temperature": payload.get("temperature"),
+            "notes": [
+                "Scene Writer делает один реальный chat/completions на каждый блок.",
+                "Количество запросов = количество блоков из Structure Splitter.",
+            ],
+            "blocks_found": len(blocks),
             "per_block_payload_previews": previews,
         }
     txt = json.dumps(export_payload, ensure_ascii=False, indent=2) + "\n"
