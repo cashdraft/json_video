@@ -1554,6 +1554,12 @@ def rewrite_project_run(rewrite_id: str):
                         yield json.dumps({"type": "status", "message": f"[{i}/{total}] {str(item.get('message') or '')}"}, ensure_ascii=False) + "\n"
                 acc_parts.append(part)
             full = "\n\n".join([p for p in acc_parts if p]).strip()
+            # Сохраняем переносы между блоками, но scene_id делаем сквозными: scene_001..scene_N.
+            scene_idx = [0]
+            def _renum_scene_id(m: re.Match[str]) -> str:
+                scene_idx[0] += 1
+                return f'{m.group(1)}scene_{scene_idx[0]:03d}{m.group(2)}'
+            full = re.sub(r'("scene_id"\s*:\s*")scene_\d+(")', _renum_scene_id, full)
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
