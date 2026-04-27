@@ -212,12 +212,14 @@
             {% set cell = rw.stages[stage_key] %}
             {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
             {% set has_user_prompt = ((cell.user_prompt or '')|trim|length) > 0 %}
+            {% set has_style_prompt = ((cell.style_prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
             {% set prompt_locked = cell.prompt_locked|default(false) %}
             {% set user_prompt_locked = cell.user_prompt_locked|default(false) %}
+            {% set style_prompt_locked = cell.style_prompt_locked|default(false) %}
             {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}">
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}">
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-heading">
@@ -274,10 +276,14 @@
                             {% if stage_key == 'scene_writer' %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-style-prompt-cell">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge badge-{{ 'yes' if ((cell.style_prompt or '')|trim|length) > 0 else 'no' }}">Style Promt: {{ 'YES' if ((cell.style_prompt or '')|trim|length) > 0 else 'NO' }}</span>
+                                    <span class="slot-badge badge-{{ 'yes' if has_style_prompt else 'no' }} rewrite-stage-style-prompt-badge">Style Promt: {{ 'YES' if has_style_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-style-prompt-toggle{% if style_prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                    </button>
                                 </div>
                                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-style-prompt">
-                                    <textarea id="rewrite-stage-{{ stage_key }}-style-prompt" class="rewrite-stage-style-prompt rewrite-slot-textarea" rows="4" placeholder="Стиль/тон для всех сцен…" {% if not openai_key_set %}disabled{% endif %}>{{ cell.style_prompt or '' }}</textarea>
+                                    <textarea id="rewrite-stage-{{ stage_key }}-style-prompt" class="rewrite-stage-style-prompt rewrite-slot-textarea{% if style_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Стиль/тон для всех сцен…" {% if not openai_key_set %}disabled{% elif style_prompt_locked %}readonly{% endif %}>{{ cell.style_prompt or '' }}</textarea>
                                 </div>
                             </div>
                             {% endif %}
@@ -581,6 +587,7 @@
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             applyPromptLockUI(block);
             applyAnalysisUserPromptLockUI(block);
+            applyStylePromptLockUI(block);
             applyResultLockUI(block);
         });
         syncStageRunButtons();
@@ -686,12 +693,18 @@
                     }
                     if (key === 'scene_writer' && cell && typeof cell.style_prompt === 'string') {
                         var sta = block.querySelector('.rewrite-stage-style-prompt');
-                        if (sta) sta.value = cell.style_prompt;
+                if (sta) {
+                    sta.value = cell.style_prompt;
+                    syncStylePromptBadge(block);
+                }
                     }
                     block.setAttribute('data-prompt-locked', '1');
                     if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'structure_splitter' || key === 'scene_writer') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
+            if (key === 'scene_writer') {
+                block.setAttribute('data-style-prompt-locked', '1');
+            }
                 });
                 templateSelectEl.value = name;
                 sourceLocked = true;
@@ -962,6 +975,7 @@
                 last_result: resEl ? (resEl.value || '') : '',
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
                 user_prompt_locked: (block.getAttribute('data-user-prompt-locked') === '1'),
+                style_prompt_locked: (block.getAttribute('data-style-prompt-locked') === '1'),
                 result_locked: (block.getAttribute('data-result-locked') === '1')
             };
         });
@@ -1119,6 +1133,42 @@
         }
     }
 
+    function syncStylePromptBadge(block) {
+        const promptEl = block.querySelector('.rewrite-stage-style-prompt');
+        const badge = block.querySelector('.rewrite-stage-style-prompt-badge');
+        if (!promptEl || !badge) return;
+        var hasP = (promptEl.value || '').trim().length > 0;
+        badge.textContent = hasP ? 'Style Promt: YES' : 'Style Promt: NO';
+        badge.classList.toggle('badge-yes', hasP);
+        badge.classList.toggle('badge-no', !hasP);
+    }
+
+    function applyStylePromptLockUI(block) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key');
+        if (sk !== 'scene_writer') return;
+        const locked = block.getAttribute('data-style-prompt-locked') === '1';
+        const ta = block.querySelector('.rewrite-stage-style-prompt');
+        const toggle = block.querySelector('.rewrite-stage-style-prompt-toggle');
+        const promptWrap = block.querySelector('.rewrite-slot--stage-style-prompt');
+        if (!openaiOk) {
+            if (ta) ta.disabled = true;
+            if (toggle) toggle.disabled = true;
+            if (promptWrap) promptWrap.style.display = 'none';
+            return;
+        }
+        if (ta) {
+            ta.disabled = false;
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+        }
+        if (promptWrap) promptWrap.style.display = locked ? 'none' : '';
+        if (toggle) {
+            toggle.disabled = false;
+            styleToggleBtn(toggle, locked);
+        }
+    }
+
     function applyResultLockUI(block) {
         if (!block) return;
         const locked = block.getAttribute('data-result-locked') !== '0';
@@ -1186,7 +1236,12 @@
                     uTa.readOnly = dis || uLocked;
                 }
                 const sTa = block.querySelector('.rewrite-stage-style-prompt');
-                if (sTa) sTa.disabled = !openaiOk || dis;
+                if (sTa) {
+                    const sLocked = block.getAttribute('data-style-prompt-locked') === '1';
+                    sTa.disabled = !openaiOk;
+                    sTa.readOnly = dis || sLocked;
+                    sTa.classList.toggle('rewrite-source-textarea--locked', dis || sLocked);
+                }
             }
             const rLocked = block.getAttribute('data-result-locked') !== '0';
             const rTa = block.querySelector('.rewrite-stage-result');
@@ -1345,8 +1400,13 @@
         if (pe) {
             pe.addEventListener('input', function () { syncPromptBadge(block); });
         }
+        var spe = block.querySelector('.rewrite-stage-style-prompt');
+        if (spe) {
+            spe.addEventListener('input', function () { syncStylePromptBadge(block); });
+        }
         applyPromptLockUI(block);
         applyAnalysisUserPromptLockUI(block);
+        applyStylePromptLockUI(block);
         applyResultLockUI(block);
         var stToggle = block.querySelector('.rewrite-stage-prompt-toggle');
         if (stToggle) {
@@ -1431,6 +1491,47 @@
                     } catch (e2) {
                         block.setAttribute('data-user-prompt-locked', '0');
                         applyAnalysisUserPromptLockUI(block);
+                        alert(String(e2));
+                    }
+                }
+            });
+        }
+        var styleToggle = block.querySelector('.rewrite-stage-style-prompt-toggle');
+        if (styleToggle) {
+            styleToggle.addEventListener('click', async function () {
+                if (!openaiOk || styleToggle.disabled) return;
+                var locked = block.getAttribute('data-style-prompt-locked') === '1';
+                if (locked) {
+                    block.setAttribute('data-style-prompt-locked', '0');
+                    applyStylePromptLockUI(block);
+                    try {
+                        var ok = await saveToServer();
+                        if (!ok) {
+                            block.setAttribute('data-style-prompt-locked', '1');
+                            applyStylePromptLockUI(block);
+                            alert('Не удалось переключить режим');
+                            return;
+                        }
+                        var se = block.querySelector('.rewrite-stage-style-prompt');
+                        if (se) se.focus();
+                    } catch (e) {
+                        block.setAttribute('data-style-prompt-locked', '1');
+                        applyStylePromptLockUI(block);
+                        alert(String(e));
+                    }
+                } else {
+                    block.setAttribute('data-style-prompt-locked', '1');
+                    applyStylePromptLockUI(block);
+                    try {
+                        var ok2 = await saveToServer();
+                        if (!ok2) {
+                            block.setAttribute('data-style-prompt-locked', '0');
+                            applyStylePromptLockUI(block);
+                            alert('Не удалось сохранить');
+                        }
+                    } catch (e2) {
+                        block.setAttribute('data-style-prompt-locked', '0');
+                        applyStylePromptLockUI(block);
                         alert(String(e2));
                     }
                 }

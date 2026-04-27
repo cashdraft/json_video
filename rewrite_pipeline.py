@@ -481,6 +481,7 @@ def default_stage_entry() -> dict[str, Any]:
         "last_result": "",
         "prompt_locked": False,
         "user_prompt_locked": False,
+        "style_prompt_locked": False,
     }
 
 
@@ -513,9 +514,11 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("model", REWRITE_DEFAULT_MODEL)
         e.setdefault("prompt_locked", False)
         e.setdefault("user_prompt_locked", False)
+        e.setdefault("style_prompt_locked", False)
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
         e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
+        e["style_prompt_locked"] = bool(e.get("style_prompt_locked"))
 
     for dead in list(stages.keys()):
         if dead not in REWRITE_STAGE_KEYS:
@@ -600,6 +603,9 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         user_locked_in_body = sv.get("user_prompt_locked") if "user_prompt_locked" in sv else None
         if user_locked_in_body is not None:
             e["user_prompt_locked"] = bool(user_locked_in_body)
+        style_locked_in_body = sv.get("style_prompt_locked") if "style_prompt_locked" in sv else None
+        if style_locked_in_body is not None:
+            e["style_prompt_locked"] = bool(style_locked_in_body)
         if "model" in sv:
             e["model"] = normalize_rewrite_model(str(sv.get("model") or ""))
         if "last_result" in sv:
@@ -897,6 +903,7 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "style_prompt": str(cell.get("style_prompt") or ""),
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
+            "style_prompt_locked": bool(cell.get("style_prompt_locked")),
         }
     return source_text, stages
 
