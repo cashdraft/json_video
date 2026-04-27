@@ -477,6 +477,8 @@ def default_stage_entry() -> dict[str, Any]:
         "prompt": "",
         "user_prompt": "",
         "style_prompt": "",
+        "scene_writer_check": None,
+        "structure_splitter_check": None,
         "model": REWRITE_DEFAULT_MODEL,
         "last_result": "",
         "prompt_locked": False,
@@ -510,6 +512,8 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("prompt", "")
         e.setdefault("user_prompt", "")
         e.setdefault("style_prompt", "")
+        e.setdefault("scene_writer_check", None)
+        e.setdefault("structure_splitter_check", None)
         e.setdefault("last_result", "")
         e.setdefault("model", REWRITE_DEFAULT_MODEL)
         e.setdefault("prompt_locked", False)
@@ -519,6 +523,10 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e["prompt_locked"] = bool(e.get("prompt_locked"))
         e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
         e["style_prompt_locked"] = bool(e.get("style_prompt_locked"))
+        if not isinstance(e.get("scene_writer_check"), dict):
+            e["scene_writer_check"] = None
+        if not isinstance(e.get("structure_splitter_check"), dict):
+            e["structure_splitter_check"] = None
 
     for dead in list(stages.keys()):
         if dead not in REWRITE_STAGE_KEYS:
@@ -598,6 +606,12 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["user_prompt"] = str(sv.get("user_prompt") or "")
         if "style_prompt" in sv:
             e["style_prompt"] = str(sv.get("style_prompt") or "")
+        if "scene_writer_check" in sv:
+            v = sv.get("scene_writer_check")
+            e["scene_writer_check"] = v if isinstance(v, dict) else None
+        if "structure_splitter_check" in sv:
+            v = sv.get("structure_splitter_check")
+            e["structure_splitter_check"] = v if isinstance(v, dict) else None
         if locked_in_body is not None:
             e["prompt_locked"] = bool(locked_in_body)
         user_locked_in_body = sv.get("user_prompt_locked") if "user_prompt_locked" in sv else None
@@ -649,8 +663,6 @@ def compose_rewrite_openai_request_body(
     persona_editor_text: str = "",
     voiceover_editor_text: str = "",
     structure_splitter_text: str = "",
-    scene_length_target: int = 90,
-    scene_length_variance: int = 20,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -784,18 +796,9 @@ def compose_rewrite_openai_request_body(
         prompt = (str(cell.get("prompt") or "") or "").strip()
         style_prompt = str(cell.get("style_prompt") or "").strip()
         up = str(cell.get("user_prompt") or "").strip()
-        target = max(30, min(150, int(scene_length_target)))
-        variance = max(0, min(60, int(scene_length_variance)))
-        min_len = max(10, target - variance)
-        max_len = min(300, target + variance)
         payload = {
             "scene_writer_user_promt": up,
             "style_promt": style_prompt,
-            "scene_length": {
-                "target": target,
-                "min": min_len,
-                "max": max_len,
-            },
             "block_mode": "single_block_per_request",
         }
         user_text = _json_user_message(payload)
@@ -885,11 +888,11 @@ def build_stage_user_message(
     return _json_user_message(payload)
 
 
-def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict[str, str]]]:
+def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict[str, Any]]]:
     """Из тела запроса run: source_text и stages с дефолтами."""
     source_text = str(body.get("source_text") or "")
     raw = body.get("stages")
-    stages: dict[str, dict[str, str]] = {}
+    stages: dict[str, dict[str, Any]] = {}
     if not isinstance(raw, dict):
         raw = {}
     for key in REWRITE_STAGE_KEYS:
@@ -900,6 +903,8 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "prompt": str(cell.get("prompt") or ""),
             "user_prompt": str(cell.get("user_prompt") or ""),
             "style_prompt": str(cell.get("style_prompt") or ""),
+            "scene_writer_check": cell.get("scene_writer_check") if isinstance(cell.get("scene_writer_check"), dict) else None,
+            "structure_splitter_check": cell.get("structure_splitter_check") if isinstance(cell.get("structure_splitter_check"), dict) else None,
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
             "style_prompt_locked": bool(cell.get("style_prompt_locked")),
