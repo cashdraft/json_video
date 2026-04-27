@@ -15,7 +15,7 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — симв./мин и длительность (см. parse_template_config)
   Hero Prompt, Master Prompt
-  Analysis … Structure Splitter Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», structure_splitter: «Structure Splitter Prompt.txt»)
+  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt»)
 """
 
 from __future__ import annotations
@@ -95,6 +95,13 @@ _STEM_TO_TARGET: dict[str, str] = {
     "structure splitter system prompt": "stage:structure_splitter",
     "structure splitter user promt": "stage_user:structure_splitter",
     "structure splitter user prompt": "stage_user:structure_splitter",
+    "scene writer prompt": "stage:scene_writer",
+    "scene writer system promt": "stage:scene_writer",
+    "scene writer system prompt": "stage:scene_writer",
+    "scene writer user promt": "stage_user:scene_writer",
+    "scene writer user prompt": "stage_user:scene_writer",
+    "scene writer style promt": "stage_style:scene_writer",
+    "scene writer style prompt": "stage_style:scene_writer",
 }
 
 # Обратно к имени файла при записи на диск (как при чтении).
@@ -122,6 +129,9 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:voiceover_editor": "Voiceover Editor User Promt.txt",
     "stage:structure_splitter": "Structure Splitter System Promt.txt",
     "stage_user:structure_splitter": "Structure Splitter User Promt.txt",
+    "stage:scene_writer": "Scene Writer System Promt.txt",
+    "stage_user:scene_writer": "Scene Writer User Promt.txt",
+    "stage_style:scene_writer": "Scene Writer Style Promt.txt",
 }
 
 _STAGE_TARGETS: dict[str, str] = {
@@ -135,6 +145,7 @@ _STAGE_TARGETS: dict[str, str] = {
     "persona_editor": "Persona Editor",
     "voiceover_editor": "Voiceover Editor",
     "structure_splitter": "Structure Splitter",
+    "scene_writer": "Scene Writer",
 }
 
 
@@ -256,7 +267,7 @@ def load_rewrite_template(name: str) -> dict | None:
         "hero_prompt": "",
         "chars_per_minute": 344,
         "master_prompt": "",
-        "stages": {k: {"prompt": "", "user_prompt": ""} for k in REWRITE_STAGE_KEYS},
+        "stages": {k: {"prompt": "", "user_prompt": "", "style_prompt": ""} for k in REWRITE_STAGE_KEYS},
     }
     config_raw: str | None = None
     for f in sorted(d.glob("*.txt"), key=lambda p: p.name.lower()):
@@ -285,6 +296,10 @@ def load_rewrite_template(name: str) -> dict | None:
             sk = target.split(":", 1)[1]
             if sk in REWRITE_STAGE_KEYS:
                 out["stages"][sk]["user_prompt"] = raw.strip()
+        elif target.startswith("stage_style:"):
+            sk = target.split(":", 1)[1]
+            if sk in REWRITE_STAGE_KEYS:
+                out["stages"][sk]["style_prompt"] = raw.strip()
 
     if config_raw is not None:
         cfg = parse_template_config(config_raw)
@@ -329,9 +344,11 @@ def save_rewrite_template_to_disk(
         cell = stages.get(sk) if isinstance(stages, dict) else None
         prompt = ""
         user_prompt = ""
+        style_prompt = ""
         if isinstance(cell, dict):
             prompt = str(cell.get("prompt") or "")
             user_prompt = str(cell.get("user_prompt") or "")
+            style_prompt = str(cell.get("style_prompt") or "")
 
         # New naming: explicit System Promt / User Promt files.
         fn = _TARGET_TO_FILENAME.get(f"stage:{sk}")
@@ -340,6 +357,9 @@ def save_rewrite_template_to_disk(
         ufn = _TARGET_TO_FILENAME.get(f"stage_user:{sk}")
         if ufn:
             (d / ufn).write_text(user_prompt.rstrip() + "\n", encoding="utf-8")
+        sfn = _TARGET_TO_FILENAME.get(f"stage_style:{sk}")
+        if sfn:
+            (d / sfn).write_text(style_prompt.rstrip() + "\n", encoding="utf-8")
 
         # Backward-compatible legacy file names.
         legacy_title = _STAGE_TARGETS.get(sk, sk.capitalize())

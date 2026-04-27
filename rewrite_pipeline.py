@@ -1,6 +1,6 @@
 """
 ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → редакторы
-(Continuity → Retention → Hook → Flow → Persona → Voiceover → Structure Splitter).
+(Continuity → Retention → Hook → Flow → Persona → Voiceover → Structure Splitter → Scene Writer).
 """
 
 from __future__ import annotations
@@ -390,6 +390,7 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
     ("structure_splitter", "Structure Splitter"),
+    ("scene_writer", "Scene Writer"),
 ]
 
 REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
@@ -440,6 +441,10 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем. В System: Structure Splitter System Promt. "
         "В User (по порядку): Structure Splitter User Promt, full_text.txt из Voiceover Editor."
     ),
+    "scene_writer": (
+        "Отправляем block-by-block. В System: Scene Writer System Promt. "
+        "В User: Scene Writer User Promt, Scene Writer Style Promt, параметры длины сцены и текущий block."
+    ),
 }
 
 REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
@@ -463,6 +468,7 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
     "persona_editor": "Уточняет персонализацию и тон героя на основе edited_text и Hero Prompt.",
     "voiceover_editor": "Правит текст под озвучку на основе edited_text после Persona Editor.",
     "structure_splitter": "Разбивает полный текст после Voiceover Editor на структурные части.",
+    "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
 }
 
 
@@ -470,6 +476,7 @@ def default_stage_entry() -> dict[str, Any]:
     return {
         "prompt": "",
         "user_prompt": "",
+        "style_prompt": "",
         "model": REWRITE_DEFAULT_MODEL,
         "last_result": "",
         "prompt_locked": False,
@@ -501,6 +508,7 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e = stages[key]
         e.setdefault("prompt", "")
         e.setdefault("user_prompt", "")
+        e.setdefault("style_prompt", "")
         e.setdefault("last_result", "")
         e.setdefault("model", REWRITE_DEFAULT_MODEL)
         e.setdefault("prompt_locked", False)
@@ -585,6 +593,8 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["prompt"] = str(sv.get("prompt") or "")
         if "user_prompt" in sv:
             e["user_prompt"] = str(sv.get("user_prompt") or "")
+        if "style_prompt" in sv:
+            e["style_prompt"] = str(sv.get("style_prompt") or "")
         if locked_in_body is not None:
             e["prompt_locked"] = bool(locked_in_body)
         user_locked_in_body = sv.get("user_prompt_locked") if "user_prompt_locked" in sv else None
@@ -632,6 +642,9 @@ def compose_rewrite_openai_request_body(
     flow_editor_text: str = "",
     persona_editor_text: str = "",
     voiceover_editor_text: str = "",
+    structure_splitter_text: str = "",
+    scene_length_target: int = 90,
+    scene_length_variance: int = 20,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -645,6 +658,7 @@ def compose_rewrite_openai_request_body(
         "persona_editor",
         "voiceover_editor",
         "structure_splitter",
+        "scene_writer",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
     pre_err = validate_prerequisites(stage_key, stages_snap)
@@ -760,6 +774,26 @@ def compose_rewrite_openai_request_body(
             str(cell.get("user_prompt") or ""),
             voiceover_editor_text,
         )
+    elif stage_key == "scene_writer":
+        prompt = (str(cell.get("prompt") or "") or "").strip()
+        style_prompt = str(cell.get("style_prompt") or "").strip()
+        up = str(cell.get("user_prompt") or "").strip()
+        txt = str(structure_splitter_text or "").strip()
+        target = max(30, min(150, int(scene_length_target)))
+        variance = max(0, min(60, int(scene_length_variance)))
+        min_len = max(10, target - variance)
+        max_len = min(300, target + variance)
+        payload = {
+            "scene_writer_user_promt": up,
+            "style_promt": style_prompt,
+            "scene_length": {
+                "target": target,
+                "min": min_len,
+                "max": max_len,
+            },
+            "structure_splitter_text": txt or "(пусто)",
+        }
+        user_text = _json_user_message(payload)
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -784,6 +818,7 @@ def compose_rewrite_openai_request_body(
         "persona_editor",
         "voiceover_editor",
         "structure_splitter",
+        "scene_writer",
     ):
         dur_payload = build_duration_length_spec_payload(
             duration_minutes=duration_minutes,
@@ -859,6 +894,7 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
         stages[key] = {
             "prompt": str(cell.get("prompt") or ""),
             "user_prompt": str(cell.get("user_prompt") or ""),
+            "style_prompt": str(cell.get("style_prompt") or ""),
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
         }

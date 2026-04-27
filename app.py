@@ -687,6 +687,8 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "youtube_title": "",
         "youtube_audio_file": "",
         "youtube_transcript_text": "",
+        "scene_writer_length": 90,
+        "scene_writer_variance": 20,
     }
 
 
@@ -732,6 +734,16 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
         data["youtube_audio_file"] = str(data.get("youtube_audio_file") or "")
         data.setdefault("youtube_transcript_text", "")
         data["youtube_transcript_text"] = str(data.get("youtube_transcript_text") or "")
+        try:
+            sl = int(data.get("scene_writer_length", 90))
+        except (TypeError, ValueError):
+            sl = 90
+        try:
+            sv = int(data.get("scene_writer_variance", 20))
+        except (TypeError, ValueError):
+            sv = 20
+        data["scene_writer_length"] = max(30, min(150, sl))
+        data["scene_writer_variance"] = max(0, min(60, sv))
         return data
     except (json.JSONDecodeError, OSError):
         return None
@@ -1060,6 +1072,16 @@ def rewrite_project_save(rewrite_id: str):
         rw["audio_timing_locked"] = bool(at_lock_in)
     if "rewrite_template" in body:
         rw["rewrite_template"] = str(body.get("rewrite_template") or "").strip()
+    if "scene_writer_length" in body:
+        try:
+            rw["scene_writer_length"] = max(30, min(150, int(body.get("scene_writer_length"))))
+        except (TypeError, ValueError):
+            pass
+    if "scene_writer_variance" in body:
+        try:
+            rw["scene_writer_variance"] = max(0, min(60, int(body.get("scene_writer_variance"))))
+        except (TypeError, ValueError):
+            pass
     merge_stages_from_request(rw, body.get("stages"))
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
@@ -1339,6 +1361,7 @@ def rewrite_project_run(rewrite_id: str):
             "persona_editor",
             "voiceover_editor",
             "structure_splitter",
+            "scene_writer",
         ) and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
@@ -1401,6 +1424,24 @@ def rewrite_project_run(rewrite_id: str):
                     voiceover_editor_text = p.read_text(encoding="utf-8")
                 except OSError:
                     voiceover_editor_text = ""
+        structure_splitter_text = ""
+        if stage_key == "scene_writer":
+            p = _rewrite_stage_result_path(rewrite_id, "structure_splitter")
+            if p.exists():
+                try:
+                    structure_splitter_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    structure_splitter_text = ""
+        scene_writer_length = 90
+        scene_writer_variance = 20
+        try:
+            scene_writer_length = max(30, min(150, int(body.get("scene_writer_length", 90))))
+        except (TypeError, ValueError):
+            pass
+        try:
+            scene_writer_variance = max(0, min(60, int(body.get("scene_writer_variance", 20))))
+        except (TypeError, ValueError):
+            pass
         payload, compose_err = compose_rewrite_openai_request_body(
             stage_key,
             source_text=source_text,
@@ -1416,6 +1457,9 @@ def rewrite_project_run(rewrite_id: str):
             flow_editor_text=flow_editor_text,
             persona_editor_text=persona_editor_text,
             voiceover_editor_text=voiceover_editor_text,
+            structure_splitter_text=structure_splitter_text,
+            scene_length_target=scene_writer_length,
+            scene_length_variance=scene_writer_variance,
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -1465,6 +1509,51 @@ def rewrite_project_run(rewrite_id: str):
                 on_all_completed=on_all_completed,
             ):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
+        elif stage_key == "scene_writer":
+            raw_blocks = str(structure_splitter_text or "").strip()
+            blocks: list[dict] = []
+            try:
+                parsed = json.loads(raw_blocks) if raw_blocks else []
+                if isinstance(parsed, list):
+                    blocks = [b for b in parsed if isinstance(b, dict)]
+                elif isinstance(parsed, dict) and isinstance(parsed.get("blocks"), list):
+                    blocks = [b for b in parsed.get("blocks") if isinstance(b, dict)]
+            except json.JSONDecodeError:
+                blocks = []
+            if not blocks:
+                yield json.dumps({"type": "error", "message": "Structure Splitter не вернул список блоков."}, ensure_ascii=False) + "\n"
+                return
+            total = len(blocks)
+            acc_parts: list[str] = []
+            for i, block in enumerate(blocks, start=1):
+                block_json = json.dumps(block, ensure_ascii=False, indent=2)
+                step_user = json.dumps(
+                    {
+                        "scene_index": i,
+                        "scene_count": total,
+                        "scene_block": block,
+                        "scene_block_json": block_json,
+                        "notes": "Пиши только для этого блока, не пересказывай остальные.",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                joined_user = f"{user_text}\n\n{step_user}"
+                yield json.dumps({"type": "status", "message": f"Scene Writer: блок {i}/{total}…"}, ensure_ascii=False) + "\n"
+                part = ""
+                for item in iter_rewrite_completion(api_key, model, prompt, joined_user):
+                    t = str(item.get("type") or "")
+                    if t == "result":
+                        part = str(item.get("content") or "").strip()
+                    elif t == "error":
+                        err = str(item.get("message") or "Ошибка Scene Writer.")
+                        yield json.dumps({"type": "error", "message": f"Блок {i}/{total}: {err}"}, ensure_ascii=False) + "\n"
+                        return
+                    elif t == "status":
+                        yield json.dumps({"type": "status", "message": f"[{i}/{total}] {str(item.get('message') or '')}"}, ensure_ascii=False) + "\n"
+                acc_parts.append(part)
+            full = "\n\n".join([p for p in acc_parts if p]).strip()
+            yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
@@ -1542,6 +1631,24 @@ def rewrite_project_api_payload(rewrite_id: str):
                 voiceover_editor_text = p.read_text(encoding="utf-8")
             except OSError:
                 voiceover_editor_text = ""
+    structure_splitter_text = ""
+    if stage_key == "scene_writer":
+        p = _rewrite_stage_result_path(rewrite_id, "structure_splitter")
+        if p.exists():
+            try:
+                structure_splitter_text = p.read_text(encoding="utf-8")
+            except OSError:
+                structure_splitter_text = ""
+    scene_writer_length = 90
+    scene_writer_variance = 20
+    try:
+        scene_writer_length = max(30, min(150, int(body.get("scene_writer_length", 90))))
+    except (TypeError, ValueError):
+        pass
+    try:
+        scene_writer_variance = max(0, min(60, int(body.get("scene_writer_variance", 20))))
+    except (TypeError, ValueError):
+        pass
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -1557,6 +1664,9 @@ def rewrite_project_api_payload(rewrite_id: str):
         flow_editor_text=flow_editor_text,
         persona_editor_text=persona_editor_text,
         voiceover_editor_text=voiceover_editor_text,
+        structure_splitter_text=structure_splitter_text,
+        scene_length_target=scene_writer_length,
+        scene_length_variance=scene_writer_variance,
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
