@@ -290,6 +290,7 @@
                         </div>
                         {% if stage_key == 'scene_writer' %}
                         <div class="rewrite-stage-row rewrite-stage-row--scene-writer-sliders">
+                            <div class="rewrite-scene-writer-found" id="rewrite-scene-writer-found" aria-live="polite">Найдено блоков: —</div>
                             <div class="rewrite-scene-writer-sliders">
                                 <label class="rewrite-scene-writer-slider" for="rewrite-scene-writer-length">
                                     <span class="rewrite-scene-writer-slider__label">Длина сцены (симв.)</span>
@@ -376,6 +377,7 @@
     const sceneWriterVarianceEl = document.getElementById('rewrite-scene-writer-variance');
     const sceneWriterLengthValEl = document.getElementById('rewrite-scene-writer-length-val');
     const sceneWriterVarianceValEl = document.getElementById('rewrite-scene-writer-variance-val');
+    const sceneWriterFoundEl = document.getElementById('rewrite-scene-writer-found');
     var ytTranscriptReady = false;
     var ytWorking = false;
     var ytAbortController = null;
@@ -425,6 +427,29 @@
         var n = parseInt(v, 10);
         if (isNaN(n)) return 20;
         return Math.min(60, Math.max(0, n));
+    }
+
+    function parseStructureSplitterBlocksCount(raw) {
+        var txt = String(raw || '').trim();
+        if (!txt) return 0;
+        try {
+            var parsed = JSON.parse(txt);
+            if (Array.isArray(parsed)) {
+                return parsed.filter(function (b) { return b && typeof b === 'object'; }).length;
+            }
+            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.blocks)) {
+                return parsed.blocks.filter(function (b) { return b && typeof b === 'object'; }).length;
+            }
+        } catch (e) {}
+        return 0;
+    }
+
+    function updateSceneWriterBlocksInfo() {
+        if (!sceneWriterFoundEl) return;
+        var structureBlock = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
+        var ta = structureBlock ? structureBlock.querySelector('.rewrite-stage-result') : null;
+        var count = parseStructureSplitterBlocksCount(ta ? ta.value : '');
+        sceneWriterFoundEl.innerHTML = 'Найдено блоков: <strong>' + (count > 0 ? String(count) : '—') + '</strong>';
     }
 
     function setYtStatus(msg, isError) {
@@ -1673,6 +1698,12 @@
                         continue;
                     }
                     if (ev.type === 'status' && ev.message) {
+                        if (stageKey === 'scene_writer') {
+                            var mCount = String(ev.message || '').match(/найдено блоков[^0-9]*([0-9]+)/i);
+                            if (mCount && sceneWriterFoundEl) {
+                                sceneWriterFoundEl.innerHTML = 'Найдено блоков: <strong>' + mCount[1] + '</strong>';
+                            }
+                        }
                         if (!useOpenAIStreamUi || streamBuf.length === 0) {
                             pushStageStatus(block, ev.message);
                         } else if (pipelineStatusForward) {
@@ -1940,6 +1971,12 @@
         }
     });
 
+    var structureResultEl = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"] .rewrite-stage-result');
+    if (structureResultEl) {
+        structureResultEl.addEventListener('input', updateSceneWriterBlocksInfo);
+        structureResultEl.addEventListener('change', updateSceneWriterBlocksInfo);
+    }
+
     if (ytDecodeBtn) ytDecodeBtn.addEventListener('click', ytFullDecode);
     if (ytStopBtn) {
         ytStopBtn.addEventListener('click', function () {
@@ -1976,6 +2013,7 @@
             try { await saveToServer(); } catch (e) {}
         });
     }
+    updateSceneWriterBlocksInfo();
     if (sceneWriterLengthEl && sceneWriterLengthValEl) {
         sceneWriterLengthEl.addEventListener('input', function () {
             sceneWriterLengthValEl.textContent = String(clampSceneWriterLength(sceneWriterLengthEl.value));
