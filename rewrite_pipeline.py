@@ -784,7 +784,6 @@ def compose_rewrite_openai_request_body(
         prompt = (str(cell.get("prompt") or "") or "").strip()
         style_prompt = str(cell.get("style_prompt") or "").strip()
         up = str(cell.get("user_prompt") or "").strip()
-        txt = str(structure_splitter_text or "").strip()
         target = max(30, min(150, int(scene_length_target)))
         variance = max(0, min(60, int(scene_length_variance)))
         min_len = max(10, target - variance)
@@ -797,7 +796,7 @@ def compose_rewrite_openai_request_body(
                 "min": min_len,
                 "max": max_len,
             },
-            "structure_splitter_text": txt or "(пусто)",
+            "block_mode": "single_block_per_request",
         }
         user_text = _json_user_message(payload)
     else:
