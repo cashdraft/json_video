@@ -15,7 +15,7 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — симв./мин и длительность (см. parse_template_config)
   Hero Prompt, Master Prompt
-  Analysis … Voiceover Editor Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt»)
+  Analysis … Structure Splitter Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», structure_splitter: «Structure Splitter Prompt.txt»)
 """
 
 from __future__ import annotations
@@ -90,6 +90,11 @@ _STEM_TO_TARGET: dict[str, str] = {
     "voiceover editor system prompt": "stage:voiceover_editor",
     "voiceover editor user promt": "stage_user:voiceover_editor",
     "voiceover editor user prompt": "stage_user:voiceover_editor",
+    "structure splitter prompt": "stage:structure_splitter",
+    "structure splitter system promt": "stage:structure_splitter",
+    "structure splitter system prompt": "stage:structure_splitter",
+    "structure splitter user promt": "stage_user:structure_splitter",
+    "structure splitter user prompt": "stage_user:structure_splitter",
 }
 
 # Обратно к имени файла при записи на диск (как при чтении).
@@ -115,6 +120,8 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:persona_editor": "Persona Editor User Promt.txt",
     "stage:voiceover_editor": "Voiceover Editor System Promt.txt",
     "stage_user:voiceover_editor": "Voiceover Editor User Promt.txt",
+    "stage:structure_splitter": "Structure Splitter System Promt.txt",
+    "stage_user:structure_splitter": "Structure Splitter User Promt.txt",
 }
 
 _STAGE_TARGETS: dict[str, str] = {
@@ -127,6 +134,7 @@ _STAGE_TARGETS: dict[str, str] = {
     "flow_editor": "Flow Editor",
     "persona_editor": "Persona Editor",
     "voiceover_editor": "Voiceover Editor",
+    "structure_splitter": "Structure Splitter",
 }
 
 

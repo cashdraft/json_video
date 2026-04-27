@@ -1338,6 +1338,7 @@ def rewrite_project_run(rewrite_id: str):
             "flow_editor",
             "persona_editor",
             "voiceover_editor",
+            "structure_splitter",
         ) and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
@@ -1392,6 +1393,14 @@ def rewrite_project_run(rewrite_id: str):
                     persona_editor_text = p.read_text(encoding="utf-8")
                 except OSError:
                     persona_editor_text = ""
+        voiceover_editor_text = ""
+        if stage_key == "structure_splitter":
+            p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
+            if p.exists():
+                try:
+                    voiceover_editor_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    voiceover_editor_text = ""
         payload, compose_err = compose_rewrite_openai_request_body(
             stage_key,
             source_text=source_text,
@@ -1406,6 +1415,7 @@ def rewrite_project_run(rewrite_id: str):
             hook_editor_text=hook_editor_text,
             flow_editor_text=flow_editor_text,
             persona_editor_text=persona_editor_text,
+            voiceover_editor_text=voiceover_editor_text,
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -1524,6 +1534,14 @@ def rewrite_project_api_payload(rewrite_id: str):
                 persona_editor_text = p.read_text(encoding="utf-8")
             except OSError:
                 persona_editor_text = ""
+    voiceover_editor_text = ""
+    if stage_key == "structure_splitter":
+        p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
+        if p.exists():
+            try:
+                voiceover_editor_text = p.read_text(encoding="utf-8")
+            except OSError:
+                voiceover_editor_text = ""
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -1538,6 +1556,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         hook_editor_text=hook_editor_text,
         flow_editor_text=flow_editor_text,
         persona_editor_text=persona_editor_text,
+        voiceover_editor_text=voiceover_editor_text,
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400

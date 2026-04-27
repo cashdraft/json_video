@@ -1,6 +1,6 @@
 """
 ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → редакторы
-(Continuity → Retention → Hook → Flow → Persona → Voiceover).
+(Continuity → Retention → Hook → Flow → Persona → Voiceover → Structure Splitter).
 """
 
 from __future__ import annotations
@@ -354,6 +354,30 @@ def build_voiceover_editor_user_message(
     return _json_user_message(payload)
 
 
+def build_structure_splitter_system_prompt(
+    structure_splitter_prompt: str,
+    *,
+    duration_minutes: int | None = None,
+    chars_per_minute: int | None = None,
+) -> str:
+    """Этап structure_splitter: в system только Structure Splitter System Promt."""
+    return (structure_splitter_prompt or "").strip()
+
+
+def build_structure_splitter_user_message(
+    structure_splitter_user_prompt: str,
+    voiceover_full_text: str = "",
+) -> str:
+    """User для structure_splitter: User Promt + full_text.txt из Voiceover Editor."""
+    up = (structure_splitter_user_prompt or "").strip()
+    raw = str(voiceover_full_text or "").strip()
+    payload: dict[str, Any] = {
+        "structure_splitter_user_promt": up or "",
+        "full_text.txt": raw,
+    }
+    return _json_user_message(payload)
+
+
 # (ключ в JSON, заголовок в UI)
 REWRITE_STAGES: list[tuple[str, str]] = [
     ("analysis", "Analysis"),
@@ -365,6 +389,7 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
+    ("structure_splitter", "Structure Splitter"),
 ]
 
 REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
@@ -411,6 +436,10 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем. В System: Voiceover Editor System Promt. "
         "В User (по порядку): Voiceover Editor User Promt, edited_text."
     ),
+    "structure_splitter": (
+        "Отправляем. В System: Structure Splitter System Promt. "
+        "В User (по порядку): Structure Splitter User Promt, full_text.txt из Voiceover Editor."
+    ),
 }
 
 REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
@@ -433,6 +462,7 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
     "flow_editor": "Правит поток и переходы на основе уже отредактированного edited_text.",
     "persona_editor": "Уточняет персонализацию и тон героя на основе edited_text и Hero Prompt.",
     "voiceover_editor": "Правит текст под озвучку на основе edited_text после Persona Editor.",
+    "structure_splitter": "Разбивает полный текст после Voiceover Editor на структурные части.",
 }
 
 
@@ -601,6 +631,7 @@ def compose_rewrite_openai_request_body(
     hook_editor_text: str = "",
     flow_editor_text: str = "",
     persona_editor_text: str = "",
+    voiceover_editor_text: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -613,6 +644,7 @@ def compose_rewrite_openai_request_body(
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
+        "structure_splitter",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
     pre_err = validate_prerequisites(stage_key, stages_snap)
@@ -718,6 +750,16 @@ def compose_rewrite_openai_request_body(
             str(cell.get("user_prompt") or ""),
             persona_editor_text,
         )
+    elif stage_key == "structure_splitter":
+        prompt = build_structure_splitter_system_prompt(
+            str(cell.get("prompt") or ""),
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
+        )
+        user_text = build_structure_splitter_user_message(
+            str(cell.get("user_prompt") or ""),
+            voiceover_editor_text,
+        )
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -741,6 +783,7 @@ def compose_rewrite_openai_request_body(
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
+        "structure_splitter",
     ):
         dur_payload = build_duration_length_spec_payload(
             duration_minutes=duration_minutes,
