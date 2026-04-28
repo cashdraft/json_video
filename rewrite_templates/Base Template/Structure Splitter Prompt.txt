@@ -58,7 +58,7 @@ IMPORTANT:
 
 BLOCK SIZE RULES:
 
-— Prefer blocks between 2000–6000 characters  
+— Prefer blocks between 500–1000 characters  
 — BUT prioritize meaning over size  
 — A block can be shorter or longer if needed  
 

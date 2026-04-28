@@ -12,6 +12,4 @@ Additional requirements:
 — avoid too many small blocks  
 — avoid over-fragmentation  
 
-Expected number of blocks: 6–12  
-
 Return ONLY JSON array.

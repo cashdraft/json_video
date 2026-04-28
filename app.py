@@ -324,7 +324,8 @@ def _build_block_writer_check(completed_blocks: list[dict[str, Any]]) -> dict[st
     for i, b in enumerate(completed_blocks or [], start=1):
         idx = int(b.get("block_index") or i)
         target = int(b.get("target_chars_ideal") or 0)
-        out_chars = int(b.get("actual_chars") or len(str(b.get("block_text") or "")))
+        # Chars OUT считаем только по реальному block_text, чтобы совпадало с итоговым full_text.
+        out_chars = len(str(b.get("block_text") or ""))
         delta = out_chars - target
         short_summary = b.get("short_summary") if isinstance(b.get("short_summary"), list) else []
         sum_ok = len(short_summary) > 0
@@ -2661,6 +2662,7 @@ def rewrite_project_run(rewrite_id: str):
             "flow_editor",
             "persona_editor",
             "voiceover_editor",
+            "voice_flow_editor",
             "structure_splitter",
             "scene_writer",
         ) and not (source_text or "").strip():
@@ -2718,7 +2720,7 @@ def rewrite_project_run(rewrite_id: str):
                 except OSError:
                     persona_editor_text = ""
         voiceover_editor_text = ""
-        if stage_key == "structure_splitter":
+        if stage_key in ("voice_flow_editor", "structure_splitter"):
             voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
             if not voiceover_editor_text.strip():
                 p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
@@ -2974,7 +2976,7 @@ def rewrite_project_api_payload(rewrite_id: str):
             except OSError:
                 persona_editor_text = ""
     voiceover_editor_text = ""
-    if stage_key == "structure_splitter":
+    if stage_key in ("voice_flow_editor", "structure_splitter"):
         voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
         if not voiceover_editor_text.strip():
             p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
@@ -3082,6 +3084,21 @@ def rewrite_project_api_payload(rewrite_id: str):
     resp.headers["Content-Type"] = "application/json; charset=utf-8"
     resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
     return resp
+
+
+@app.route("/rewrite/<rewrite_id>/block-writer-check", methods=["GET"])
+def rewrite_block_writer_check_get(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+    d1 = stages.get("draft1") if isinstance(stages.get("draft1"), dict) else {}
+    check = d1.get("block_writer_check") if isinstance(d1, dict) else None
+    if not isinstance(check, dict):
+        completed_blocks = _load_block_writer_completed_blocks(rewrite_id)
+        if completed_blocks:
+            check = _build_block_writer_check(completed_blocks)
+    return jsonify({"ok": True, "block_writer_check": check if isinstance(check, dict) else None})
 
 
 @app.route("/rewrite-master")

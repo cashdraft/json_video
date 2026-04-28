@@ -330,6 +330,35 @@ def build_voiceover_editor_user_message(
     return _json_user_message(payload)
 
 
+def build_voice_flow_editor_system_prompt(
+    voice_flow_editor_prompt: str,
+) -> str:
+    """Этап voice_flow_editor: в system только Voice Flow Editor System Promt."""
+    return (voice_flow_editor_prompt or "").strip()
+
+
+def build_voice_flow_editor_user_message(
+    voice_flow_editor_user_prompt: str,
+    edited_text: str = "",
+) -> str:
+    """User для voice_flow_editor: User Promt + edited_text из Voiceover Editor."""
+    up = (voice_flow_editor_user_prompt or "").strip()
+    raw = str(edited_text or "").strip()
+    et = ""
+    if raw:
+        try:
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                et = str(obj.get("edited_text") or "").strip()
+        except json.JSONDecodeError:
+            et = raw
+    payload: dict[str, Any] = {
+        "voice_flow_editor_user_promt": up or "",
+        "edited_text": et,
+    }
+    return _json_user_message(payload)
+
+
 def build_structure_splitter_system_prompt(
     structure_splitter_prompt: str,
 ) -> str:
@@ -362,6 +391,7 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
+    ("voice_flow_editor", "Voice Flow Editor"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
 ]
@@ -410,6 +440,10 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем. В System: Voiceover Editor System Promt. "
         "В User (по порядку): Voiceover Editor User Promt, edited_text."
     ),
+    "voice_flow_editor": (
+        "Отправляем. В System: Voice Flow Editor System Promt. "
+        "В User (по порядку): Voice Flow Editor User Promt, edited_text из Voiceover Editor."
+    ),
     "structure_splitter": (
         "Отправляем. В System: Structure Splitter System Promt. "
         "В User (по порядку): Structure Splitter User Promt, full_text.txt из Voiceover Editor."
@@ -440,6 +474,7 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
     "flow_editor": "Правит поток и переходы на основе уже отредактированного edited_text.",
     "persona_editor": "Уточняет персонализацию и тон героя на основе edited_text и Hero Prompt.",
     "voiceover_editor": "Правит текст под озвучку на основе edited_text после Persona Editor.",
+    "voice_flow_editor": "Финально выравнивает voice flow на основе edited_text после Voiceover Editor.",
     "structure_splitter": "Разбивает полный текст после Voiceover Editor на структурные части.",
     "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
 }
@@ -504,6 +539,15 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             e["structure_splitter_check"] = None
         if not isinstance(e.get("block_writer_check"), dict):
             e["block_writer_check"] = None
+
+    # Миграция: новый этап Voice Flow по умолчанию наследует промпты Voiceover для старых проектов.
+    vfe = stages.get("voice_flow_editor") if isinstance(stages.get("voice_flow_editor"), dict) else None
+    voe = stages.get("voiceover_editor") if isinstance(stages.get("voiceover_editor"), dict) else None
+    if isinstance(vfe, dict) and isinstance(voe, dict):
+        if not str(vfe.get("prompt") or "").strip() and str(voe.get("prompt") or "").strip():
+            vfe["prompt"] = str(voe.get("prompt") or "")
+        if not str(vfe.get("user_prompt") or "").strip() and str(voe.get("user_prompt") or "").strip():
+            vfe["user_prompt"] = str(voe.get("user_prompt") or "")
 
     for dead in list(stages.keys()):
         if dead not in REWRITE_STAGE_KEYS:
@@ -624,6 +668,9 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
         return None
     for i in range(idx):
         pk, plabel = REWRITE_STAGES[i]
+        if stage_key in ("structure_splitter", "scene_writer") and pk == "voice_flow_editor":
+            # Voice Flow не должен быть обязательным для downstream-логики.
+            continue
         prev = stages.get(pk) or {}
         if not str(prev.get("last_result") or "").strip():
             return f"Сначала выполните этап «{plabel}» — нет сохранённого результата."
@@ -663,6 +710,7 @@ def compose_rewrite_openai_request_body(
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
+        "voice_flow_editor",
         "structure_splitter",
         "scene_writer",
     ) and not (source_text or "").strip():
@@ -754,6 +802,14 @@ def compose_rewrite_openai_request_body(
             str(cell.get("user_prompt") or ""),
             persona_editor_text,
         )
+    elif stage_key == "voice_flow_editor":
+        prompt = build_voice_flow_editor_system_prompt(
+            str(cell.get("prompt") or ""),
+        )
+        user_text = build_voice_flow_editor_user_message(
+            str(cell.get("user_prompt") or ""),
+            voiceover_editor_text,
+        )
     elif stage_key == "structure_splitter":
         prompt = build_structure_splitter_system_prompt(
             str(cell.get("prompt") or ""),
@@ -792,6 +848,7 @@ def compose_rewrite_openai_request_body(
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
+        "voice_flow_editor",
         "structure_splitter",
         "scene_writer",
     ):

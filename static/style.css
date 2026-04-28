@@ -1348,6 +1348,29 @@ textarea::placeholder {
     justify-items: end;
 }
 
+.rewrite-editor-check-line {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+.rewrite-editor-check-line__left {
+    justify-self: start;
+    text-align: left;
+}
+
+.rewrite-editor-check-line__center {
+    justify-self: center;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.rewrite-editor-check-line__right {
+    justify-self: end;
+    text-align: right;
+}
+
 .rewrite-block-writer-check__total {
     margin-top: 0.45rem;
     padding-top: 0.4rem;
@@ -1361,6 +1384,7 @@ textarea::placeholder {
 .rewrite-block-writer-check__total-left {
     text-align: left;
     justify-self: start;
+    white-space: nowrap;
 }
 
 .rewrite-block-writer-check__total-sep {
