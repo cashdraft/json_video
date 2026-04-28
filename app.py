@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import mimetypes
 import os
 import queue
 import re
@@ -104,6 +105,7 @@ from rewrite_pipeline import (
     stage_run_prerequisites_met,
 )
 from rewrite_templates import (
+    REWRITE_TEMPLATES_DIR,
     list_rewrite_template_names,
     load_rewrite_template,
     save_rewrite_template_to_disk,
@@ -314,6 +316,34 @@ def _build_structure_splitter_check(input_text: str, splitter_result_text: str) 
             "ok": input_chars == output_chars,
             "ok_compact": input_compact_chars == output_compact_chars,
         },
+    }
+
+
+def _build_block_writer_check(completed_blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for i, b in enumerate(completed_blocks or [], start=1):
+        idx = int(b.get("block_index") or i)
+        target = int(b.get("target_chars_ideal") or 0)
+        out_chars = int(b.get("actual_chars") or len(str(b.get("block_text") or "")))
+        delta = out_chars - target
+        short_summary = b.get("short_summary") if isinstance(b.get("short_summary"), list) else []
+        sum_ok = len(short_summary) > 0
+        rows.append(
+            {
+                "index": idx,
+                "sum_ok": bool(sum_ok),
+                "target_chars": target,
+                "out_chars": out_chars,
+                "delta": delta,
+            }
+        )
+    return {
+        "type": "block_writer_check",
+        "summary": {
+            "blocks": len(rows),
+            "ok": len(rows) > 0 and all(bool(r.get("sum_ok")) for r in rows),
+        },
+        "blocks_info": rows,
     }
 
 
@@ -801,6 +831,36 @@ def _load_block_writer_saved_short_summaries(rewrite_id: str) -> list[list[str]]
     return [items for _, items in pairs]
 
 
+def _load_block_writer_completed_blocks(rewrite_id: str) -> list[dict[str, Any]] | None:
+    """Готовые блоки Block Writer из all_blocks.json (fallback: block_*.json)."""
+    bw_dir = _rewrite_block_writer_dir(rewrite_id)
+    if not bw_dir.is_dir():
+        return None
+    all_fp = bw_dir / "all_blocks.json"
+    if all_fp.is_file():
+        try:
+            raw = json.loads(all_fp.read_text(encoding="utf-8"))
+            blocks = raw.get("blocks") if isinstance(raw, dict) else None
+            if isinstance(blocks, list):
+                out = [b for b in blocks if isinstance(b, dict)]
+                if out:
+                    return out
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+    rows: list[dict[str, Any]] = []
+    for p in bw_dir.glob("block_*.json"):
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+        if isinstance(raw, dict):
+            rows.append(raw)
+    if not rows:
+        return None
+    rows.sort(key=lambda x: int(x.get("block_index") or 0))
+    return rows
+
+
 def _rewrite_media_dir(rewrite_id: str) -> Path:
     return REWRITE_MEDIA_DIR / rewrite_id
 
@@ -959,6 +1019,84 @@ def _youtube_player_client_chain() -> list[str]:
     return out or ["android", "web"]
 
 
+def _youtube_format_chain() -> list[str]:
+    """
+    Форматы по убыванию предпочтения.
+    На части роликов/клиентов конкретный selector может быть недоступен
+    (Requested format is not available), поэтому нужен fallback по форматам.
+    """
+    return [
+        "bestaudio[ext=m4a]/bestaudio/best",
+        "bestaudio/best",
+        "best",
+    ]
+
+
+def _youtube_error_is_format_unavailable(err: BaseException) -> bool:
+    msg = str(err or "").lower()
+    return "requested format is not available" in msg
+
+
+def _youtube_pick_audio_format_id(formats: list[dict]) -> str | None:
+    """
+    Выбирает format_id среди реально доступных:
+    1) аудио-only m4a, 2) аудио-only любой, 3) любой с acodec != none.
+    """
+    if not isinstance(formats, list):
+        return None
+
+    def _is_audio_only(f: dict) -> bool:
+        return str(f.get("acodec") or "none") != "none" and str(f.get("vcodec") or "none") == "none"
+
+    def _has_audio(f: dict) -> bool:
+        return str(f.get("acodec") or "none") != "none"
+
+    preferred: list[dict] = []
+    fallback_audio_only: list[dict] = []
+    fallback_any_audio: list[dict] = []
+    for f in formats:
+        if not isinstance(f, dict):
+            continue
+        if _is_audio_only(f):
+            if str(f.get("ext") or "").lower() == "m4a":
+                preferred.append(f)
+            else:
+                fallback_audio_only.append(f)
+        elif _has_audio(f):
+            fallback_any_audio.append(f)
+
+    for bucket in (preferred, fallback_audio_only, fallback_any_audio):
+        if not bucket:
+            continue
+        # выше abr/tbr — выше приоритет
+        sorted_bucket = sorted(
+            bucket,
+            key=lambda x: float(x.get("abr") or x.get("tbr") or 0.0),
+            reverse=True,
+        )
+        for f in sorted_bucket:
+            fid = str(f.get("format_id") or "").strip()
+            if fid:
+                return fid
+    return None
+
+
+def _youtube_probe_audio_format_id(url: str, cname: str, socket_timeout: int) -> str | None:
+    opts: dict[str, Any] = {
+        **_YOUTUBE_YDL_BASE,
+        "socket_timeout": socket_timeout,
+        "retries": 0,
+        "fragment_retries": 0,
+        "skip_download": True,
+        **_ytdl_youtube_extractor_player_client(cname),
+    }
+    with YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if not isinstance(info, dict):
+        return None
+    return _youtube_pick_audio_format_id(info.get("formats") or [])
+
+
 def _rewrite_youtube_clear_partial_downloads(media_dir: Path) -> None:
     """Следы неудачной попытки yt-dlp, чтобы не мешать следующему player_client."""
     for pat in ("youtube_audio_*", "*.part", "*.ytdl", "*.temp"):
@@ -977,16 +1115,50 @@ def _rewrite_youtube_set_runtime_state(rewrite_id: str, *, processing: bool, pha
     save_rewrite_job(rewrite_id, rw)
 
 
-def _rewrite_youtube_audio_exists(rw: dict) -> bool:
+def _rewrite_youtube_resolve_audio_path(rewrite_id: str, rw: dict) -> Path | None:
+    """Нормализует путь к аудио: относительный/абсолютный/legacy, с fallback на newest youtube_audio_* в media."""
+    base = BASE_DIR.resolve()
     rel = str(rw.get("youtube_audio_file") or "").strip()
-    if not rel:
+    candidates: list[Path] = []
+
+    if rel:
+        rp = Path(rel)
+        if rp.is_absolute():
+            candidates.append(rp.resolve())
+            # legacy migration: старый корень проекта /srv/vision_video -> текущий BASE_DIR
+            if rel.startswith('/srv/vision_video/'):
+                tail = rel[len('/srv/vision_video/'):]
+                candidates.append((base / tail).resolve())
+        else:
+            candidates.append((base / rel).resolve())
+
+    media_dir = _rewrite_media_dir(rewrite_id)
+    if media_dir.is_dir():
+        newest_mp3 = sorted(media_dir.glob('youtube_audio_*.mp3'), key=lambda x: x.stat().st_mtime, reverse=True)
+        newest_any = sorted(media_dir.glob('youtube_audio_*'), key=lambda x: x.stat().st_mtime, reverse=True)
+        candidates.extend(newest_mp3)
+        candidates.extend(newest_any)
+
+    seen: set[str] = set()
+    for ap in candidates:
+        k = str(ap)
+        if k in seen:
+            continue
+        seen.add(k)
+        try:
+            ap.relative_to(base)
+        except ValueError:
+            continue
+        if ap.is_file():
+            return ap
+    return None
+
+
+def _rewrite_youtube_audio_exists(rw: dict) -> bool:
+    rewrite_id = str(rw.get("rewrite_id") or "")
+    if not rewrite_id_ok(rewrite_id):
         return False
-    ap = (BASE_DIR / rel).resolve()
-    try:
-        ap.relative_to(BASE_DIR.resolve())
-    except ValueError:
-        return False
-    return ap.is_file()
+    return _rewrite_youtube_resolve_audio_path(rewrite_id, rw) is not None
 
 
 def _rewrite_youtube_progress_hooks_with_stall(stall_sec: int, user_hooks: list | None) -> list:
@@ -1050,46 +1222,195 @@ def _probe_audio_duration_seconds(audio_path: Path) -> float | None:
         return None
 
 
-def _split_audio_for_transcription(audio_path: Path, segment_seconds: int = 480) -> list[Path]:
-    """Нарезает длинный mp3 на части через ffmpeg; если не удалось — возвращает исходный файл."""
+def _split_audio_for_transcription(
+    audio_path: Path,
+    segment_seconds: int = 180,
+    *,
+    progress: Callable[[dict], None] | None = None,
+) -> list[Path]:
+    """Нарезает длинное/тяжелое аудио на части; сначала быстрый copy-segment, fallback — re-encode в mp3."""
+
+    def _emit(ev: dict) -> None:
+        if progress:
+            progress(ev)
+
+    try:
+        file_bytes = int(audio_path.stat().st_size) if audio_path.is_file() else 0
+    except OSError:
+        file_bytes = 0
+
+    max_chunk_bytes = 24 * 1024 * 1024
     duration = _probe_audio_duration_seconds(audio_path)
-    if duration is None or duration <= float(segment_seconds):
+    need_split_by_duration = duration is not None and duration > float(segment_seconds)
+    need_split_by_size = file_bytes > max_chunk_bytes
+
+    _emit(
+        {
+            "phase": "split",
+            "action": "probe",
+            "file_bytes": file_bytes,
+            "duration_seconds": duration,
+            "segment_seconds": segment_seconds,
+            "max_chunk_bytes": max_chunk_bytes,
+            "message": "Анализ аудио перед нарезкой…",
+        }
+    )
+
+    if not need_split_by_duration and not need_split_by_size:
+        _emit({"phase": "split", "action": "skip", "message": "Нарезка не требуется: аудио достаточно короткое/легкое."})
         return [audio_path]
 
-    with tempfile.TemporaryDirectory(prefix="rw_transcribe_") as td:
-        out_pattern = str(Path(td) / "chunk_%03d.mp3")
+    ext = (audio_path.suffix or '.m4a').lower()
+
+    def _run_segment(cmd: list[str], pattern: str, progress_prefix: str) -> list[Path] | None:
         try:
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-i",
-                    str(audio_path),
-                    "-f",
-                    "segment",
-                    "-segment_time",
-                    str(segment_seconds),
-                    "-c",
-                    "copy",
-                    out_pattern,
-                ],
-                check=True,
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return [audio_path]
-        chunks = sorted(Path(td).glob("chunk_*.mp3"))
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            started = time.monotonic()
+            last_emit = started
+            while True:
+                rc = proc.poll()
+                if rc is not None:
+                    if rc != 0:
+                        return None
+                    break
+                now = time.monotonic()
+                if now - last_emit >= 4.0:
+                    last_emit = now
+                    _emit(
+                        {
+                            "phase": "split",
+                            "action": "progress",
+                            "elapsed_seconds": int(now - started),
+                            "message": f"{progress_prefix}… {int(now - started)} с",
+                        }
+                    )
+                time.sleep(0.25)
+        except FileNotFoundError:
+            return None
+        return sorted(Path(pattern).parent.glob(Path(pattern).name.replace('%03d', '*')))
+
+    with tempfile.TemporaryDirectory(prefix="rw_transcribe_") as td:
+        tmp = Path(td)
+
+        # Fast path: segment copy без перекодирования (обычно в разы быстрее)
+        fast_pattern = str(tmp / f"chunk_%03d{ext}")
+        _emit(
+            {
+                "phase": "split",
+                "action": "start",
+                "segment_seconds": segment_seconds,
+                "message": "Нарезка ffmpeg (быстрый режим без перекодирования)…",
+            }
+        )
+        fast_cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(audio_path),
+            "-f",
+            "segment",
+            "-segment_time",
+            str(segment_seconds),
+            "-c",
+            "copy",
+            fast_pattern,
+        ]
+        chunks = _run_segment(fast_cmd, fast_pattern, "Нарезка ffmpeg (copy) в процессе") or []
+
+        # Fallback: re-encode в mp3 только если copy не сработал
         if not chunks:
+            slow_pattern = str(tmp / "chunk_%03d.mp3")
+            _emit(
+                {
+                    "phase": "split",
+                    "action": "fallback",
+                    "message": "Быстрый режим не удался, включаем re-encode в mp3…",
+                }
+            )
+            slow_cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(audio_path),
+                "-f",
+                "segment",
+                "-segment_time",
+                str(segment_seconds),
+                "-acodec",
+                "libmp3lame",
+                "-q:a",
+                "4",
+                slow_pattern,
+            ]
+            chunks = _run_segment(slow_cmd, slow_pattern, "Нарезка ffmpeg (mp3) в процессе") or []
+
+        if not chunks:
+            _emit({"phase": "split", "action": "error", "message": "Нарезка не удалась; продолжаем без нарезки."})
             return [audio_path]
+
         persisted: list[Path] = []
         persist_dir = audio_path.parent / "_transcribe_chunks"
         persist_dir.mkdir(parents=True, exist_ok=True)
         for i, c in enumerate(chunks, start=1):
-            p = persist_dir / f"{audio_path.stem}_chunk_{i:03d}.mp3"
-            shutil.copy2(c, p)
-            persisted.append(p)
+            out_ext = c.suffix or ext
+            pp = persist_dir / f"{audio_path.stem}_chunk_{i:03d}{out_ext}"
+            shutil.copy2(c, pp)
+            persisted.append(pp)
+
+        _emit(
+            {
+                "phase": "split",
+                "action": "done",
+                "chunks": len(persisted),
+                "message": f"Нарезка завершена: частей {len(persisted)}.",
+            }
+        )
         return persisted
+
+
+def _transcribe_error_requires_reencode(err: str) -> bool:
+    t = (err or '').lower()
+    needles = [
+        'audio file might be corrupted or unsupported',
+        'unsupported',
+        'could not decode',
+        'invalid data found when processing input',
+        'failed to read audio',
+        'invalid audio',
+    ]
+    return any(n in t for n in needles)
+
+
+def _transcode_audio_to_mp3_temp(audio_path: Path) -> Path | None:
+    """Пытается перекодировать входное аудио в temp mp3 для fallback-транскрибации."""
+    tmp_dir = audio_path.parent / '_transcribe_fallback'
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    out = tmp_dir / f"{audio_path.stem}_fallback.mp3"
+    try:
+        subprocess.run(
+            [
+                'ffmpeg',
+                '-hide_banner',
+                '-loglevel',
+                'error',
+                '-y',
+                '-i',
+                str(audio_path),
+                '-acodec',
+                'libmp3lame',
+                '-q:a',
+                '3',
+                str(out),
+            ],
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return out if out.is_file() else None
 
 
 def _rewrite_transcription_text(
@@ -1109,16 +1430,16 @@ def _rewrite_transcription_text(
     _p(
         {
             "phase": "split",
-            "message": "Проверка длительности; длинный ролик нарезается на части (~8 мин каждая)…",
+            "message": "Проверка длительности; длинный ролик нарезается на части (~3 мин каждая)…",
         }
     )
-    chunks = _split_audio_for_transcription(audio_path, segment_seconds=480)
+    chunks = _split_audio_for_transcription(audio_path, segment_seconds=180, progress=_p)
     n = len(chunks)
     _p(
         {
             "phase": "plan",
             "total_chunks": n,
-            "segment_seconds": 480,
+            "segment_seconds": 180,
             "message": "Один запрос к API" if n == 1 else f"Будет {n} запросов к API (по одному на часть).",
         }
     )
@@ -1139,8 +1460,9 @@ def _rewrite_transcription_text(
         )
         try:
             with open(ap, "rb") as f:
+                mime = (mimetypes.guess_type(ap.name)[0] or "application/octet-stream")
                 files = {
-                    "file": (ap.name, f, "audio/mpeg"),
+                    "file": (ap.name, f, mime),
                 }
                 data = {
                     "model": "gpt-4o-mini-transcribe",
@@ -1264,6 +1586,14 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
             data.setdefault("stages", {})
             data["stages"].setdefault(sk, {})
             data["stages"][sk]["last_result"] = txt
+        # Block Writer check: если в project.json ещё нет, но есть block_writer/all_blocks.json,
+        # строим проверку на лету, чтобы UI не показывал "ожидание данных" для уже готового draft1.
+        st = data.get("stages") if isinstance(data.get("stages"), dict) else {}
+        d1 = st.get("draft1") if isinstance(st.get("draft1"), dict) else {}
+        if isinstance(d1, dict) and not isinstance(d1.get("block_writer_check"), dict):
+            completed_blocks = _load_block_writer_completed_blocks(rewrite_id)
+            if completed_blocks:
+                d1["block_writer_check"] = _build_block_writer_check(completed_blocks)
         data.setdefault("youtube_url", "")
         data["youtube_url"] = str(data.get("youtube_url") or "")
         data.setdefault("youtube_verified", False)
@@ -1508,6 +1838,78 @@ def rewrite_api_templates_list():
     return jsonify({"ok": True, "templates": list_rewrite_template_names()})
 
 
+@app.route("/rewrite/api/templates", methods=["POST"])
+def rewrite_api_templates_create():
+    """Создать новый rewrite-шаблон из текущих данных формы."""
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "bad_name", "message": "Введите название шаблона."}), 400
+    if any(ch in name for ch in ('/', '\\')) or name.startswith('.'):
+        return jsonify({"ok": False, "error": "bad_name", "message": "Недопустимое имя шаблона."}), 400
+    known = set(list_rewrite_template_names())
+    if name in known:
+        return jsonify({"ok": False, "error": "already_exists", "message": "Шаблон с таким именем уже существует."}), 409
+
+    d = REWRITE_TEMPLATES_DIR / name
+    try:
+        d.mkdir(parents=True, exist_ok=False)
+    except OSError:
+        return jsonify({"ok": False, "error": "mkdir_failed", "message": "Не удалось создать папку шаблона."}), 400
+
+    stages = body.get("stages")
+    if not isinstance(stages, dict):
+        stages = {}
+    tc_raw = body.get("target_chars")
+    if tc_raw is not None and str(tc_raw).strip() != "":
+        try:
+            target_chars = clamp_target_chars(int(tc_raw))
+        except (TypeError, ValueError):
+            target_chars = clamp_target_chars(5 * 344)
+    else:
+        try:
+            cpm = int(body.get("chars_per_minute", 344))
+        except (TypeError, ValueError):
+            cpm = 344
+        try:
+            dm = int(body.get("duration_minutes", 5))
+        except (TypeError, ValueError):
+            dm = 5
+        target_chars = clamp_target_chars(cpm * dm)
+
+    ok, err = save_rewrite_template_to_disk(
+        name,
+        hero_prompt=str(body.get("hero_prompt") or ""),
+        master_prompt=str(body.get("master_prompt") or ""),
+        target_chars=target_chars,
+        stages=stages,
+    )
+    if not ok:
+        shutil.rmtree(d, ignore_errors=True)
+        return jsonify({"ok": False, "error": err or "save_failed", "message": "Не удалось записать файлы шаблона."}), 400
+    return jsonify({"ok": True, "name": name})
+
+
+@app.route("/rewrite/api/templates/<name>", methods=["DELETE"])
+def rewrite_api_template_delete(name: str):
+    nn = str(name or "").strip()
+    if not nn:
+        return jsonify({"ok": False, "error": "bad_name"}), 400
+    if nn.lower() == "base template":
+        return jsonify({"ok": False, "error": "protected", "message": "Base Template нельзя удалить."}), 400
+    known = set(list_rewrite_template_names())
+    if nn not in known:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    d = REWRITE_TEMPLATES_DIR / nn
+    if not d.is_dir():
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    try:
+        shutil.rmtree(d)
+    except OSError:
+        return jsonify({"ok": False, "error": "delete_failed", "message": "Не удалось удалить шаблон."}), 400
+    return jsonify({"ok": True})
+
+
 @app.route("/rewrite/api/templates/<name>", methods=["GET"])
 def rewrite_api_template_get(name: str):
     data = load_rewrite_template(name)
@@ -1747,73 +2149,133 @@ def _rewrite_youtube_perform_download(
     n_cli = len(clients)
     info: dict | None = None
     last_err: BaseException | None = None
+    format_chain = _youtube_format_chain()
+    n_fmt = len(format_chain)
     for ci, cname in enumerate(clients):
-        if status_callback is not None:
-            status_callback(
-                f"yt-dlp: YouTube client «{cname}» ({ci + 1}/{n_cli}), тайм-аут сокета {stall_read_sec} с; "
-                f"если столько нет ответа по сети — смена клиента. Bestaudio, затем ffmpeg → MP3…"
-            )
-        same_re = _youtube_same_client_retries()
-        ydl_opts: dict = {
-            **_YOUTUBE_YDL_BASE,
-            "socket_timeout": stall_read_sec,
-            "retries": same_re,
-            "fragment_retries": same_re,
-            **_ytdl_youtube_extractor_player_client(cname),
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }
-            ],
-        }
-        ydl_opts["progress_hooks"] = _rewrite_youtube_progress_hooks_with_stall(stall_read_sec, progress_hooks)
-        if postprocessor_hooks:
-            ydl_opts["postprocessor_hooks"] = list(postprocessor_hooks)
-        # bestaudio/best — только аудио; FFmpegExtractAudio — в mp3 192k.
-        try:
-            with YoutubeDL(ydl_opts) as ydl:
-                out = ydl.extract_info(url, download=True)
-            if not isinstance(out, dict):
-                raise RuntimeError("yt-dlp: не single-video (ожидался один ролик, noplaylist).")
-            info = out
-            if ci > 0:
-                app.logger.info(
-                    "youtube download ok rewrite_id=%s player_client=%s after %d fallback(s)",
+        for fi, fmt in enumerate(format_chain):
+            if status_callback is not None:
+                status_callback(
+                    f"YT-DLP: YouTube client «{cname}» ({ci + 1}/{n_cli}), формат ({fi + 1}/{n_fmt}), "
+                    f"тайм-аут сокета {stall_read_sec} с; если нет ответа/формата — следующий вариант…"
+                )
+            same_re = _youtube_same_client_retries()
+            ydl_opts: dict = {
+                **_YOUTUBE_YDL_BASE,
+                "socket_timeout": stall_read_sec,
+                "retries": same_re,
+                "fragment_retries": same_re,
+                **_ytdl_youtube_extractor_player_client(cname),
+                # Без принудительной ffmpeg-конвертации в MP3: это место иногда зависало.
+                # OpenAI принимает m4a/webm/mp3, поэтому берем bestaudio и отдаем как есть.
+                "format": fmt,
+                "outtmpl": outtmpl,
+            }
+            ydl_opts["progress_hooks"] = _rewrite_youtube_progress_hooks_with_stall(stall_read_sec, progress_hooks)
+            if postprocessor_hooks:
+                ydl_opts["postprocessor_hooks"] = list(postprocessor_hooks)
+            # bestaudio — только аудио (m4a/webm), без принудительной ffmpeg-конвертации.
+            try:
+                with YoutubeDL(ydl_opts) as ydl:
+                    out = ydl.extract_info(url, download=True)
+                if not isinstance(out, dict):
+                    raise RuntimeError("yt-dlp: не single-video (ожидался один ролик, noplaylist).")
+                info = out
+                if ci > 0 or fi > 0:
+                    app.logger.info(
+                        "youtube download ok rewrite_id=%s player_client=%s format=%s after fallback",
+                        rewrite_id,
+                        cname,
+                        fmt,
+                    )
+                break
+            except BaseException as e:  # noqa: BLE001 — смена format/client после любой сбойной попытки
+                last_err = e
+                app.logger.warning(
+                    "youtube download rewrite_id=%s player_client=%s format=%s failed: %s",
                     rewrite_id,
                     cname,
-                    ci,
+                    fmt,
+                    e,
                 )
-            break
-        except BaseException as e:  # noqa: BLE001 — смена client после любой сбойной попытки
-            last_err = e
-            app.logger.warning("youtube download rewrite_id=%s player_client=%s failed: %s", rewrite_id, cname, e)
-            if ci + 1 < n_cli:
-                if status_callback is not None:
-                    short = (str(e) or "")[:220]
-                    status_callback(
-                        f"Ошибка с YouTube client «{cname}» ({short}). Следующий вариант из цепочки…"
-                    )
+                if _youtube_error_is_format_unavailable(e):
+                    try:
+                        dynamic_format_id = _youtube_probe_audio_format_id(url, cname, stall_read_sec)
+                    except BaseException as probe_err:  # noqa: BLE001
+                        dynamic_format_id = None
+                        app.logger.warning(
+                            "youtube probe formats rewrite_id=%s player_client=%s failed: %s",
+                            rewrite_id,
+                            cname,
+                            probe_err,
+                        )
+                    if dynamic_format_id:
+                        if status_callback is not None:
+                            status_callback(
+                                f"Формат недоступен для client «{cname}». Нашли доступный format_id={dynamic_format_id}, повторяем…"
+                            )
+                        _rewrite_youtube_clear_partial_downloads(media_dir)
+                        try:
+                            ydl_opts_dynamic = dict(ydl_opts)
+                            ydl_opts_dynamic["format"] = dynamic_format_id
+                            with YoutubeDL(ydl_opts_dynamic) as ydl:
+                                out = ydl.extract_info(url, download=True)
+                            if not isinstance(out, dict):
+                                raise RuntimeError("yt-dlp: не single-video (ожидался один ролик, noplaylist).")
+                            info = out
+                            app.logger.info(
+                                "youtube download ok rewrite_id=%s player_client=%s dynamic_format_id=%s",
+                                rewrite_id,
+                                cname,
+                                dynamic_format_id,
+                            )
+                            break
+                        except BaseException as dyn_err:  # noqa: BLE001
+                            last_err = dyn_err
+                            app.logger.warning(
+                                "youtube download rewrite_id=%s player_client=%s dynamic_format_id=%s failed: %s",
+                                rewrite_id,
+                                cname,
+                                dynamic_format_id,
+                                dyn_err,
+                            )
+                has_next_format = fi + 1 < n_fmt
+                has_next_client = ci + 1 < n_cli
+                short = (str(e) or "")[:220]
                 _rewrite_youtube_clear_partial_downloads(media_dir)
-            else:
+                if has_next_format:
+                    if status_callback is not None:
+                        status_callback(
+                            f"Формат недоступен/ошибка для client «{cname}» ({short}). Пробуем другой формат…"
+                        )
+                    continue
+                if has_next_client:
+                    if status_callback is not None:
+                        status_callback(
+                            f"Ошибка с YouTube client «{cname}» ({short}). Следующий client из цепочки…"
+                        )
+                    break
                 raise
+        if isinstance(info, dict):
+            break
     if not isinstance(info, dict):
         raise RuntimeError("yt-dlp не вернул сведения о ролике.") from last_err
     video_id = str((info or {}).get("id") or "").strip()
     title = str((info or {}).get("title") or "").strip()
     if not video_id:
         raise RuntimeError("Не удалось определить id видео.")
-    mp3_path = media_dir / f"youtube_audio_{video_id}.mp3"
-    if not mp3_path.is_file():
-        files = sorted(media_dir.glob("youtube_audio_*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if files:
-            mp3_path = files[0]
-        else:
-            raise RuntimeError("MP3 не найден после скачивания.")
-    rw["youtube_audio_file"] = str(mp3_path.relative_to(BASE_DIR))
+    audio_files = sorted(
+        [
+            p
+            for p in media_dir.glob("youtube_audio_*")
+            if p.is_file() and not p.name.endswith(".part") and not p.name.endswith(".ytdl")
+        ],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not audio_files:
+        raise RuntimeError("Аудиофайл не найден после скачивания.")
+    audio_path = audio_files[0]
+    rw["youtube_audio_file"] = str(audio_path.relative_to(BASE_DIR))
     if title:
         rw["youtube_title"] = title
     save_rewrite_job(rewrite_id, rw)
@@ -1853,7 +2315,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
         rewrite_id,
         processing=True,
         phase="download",
-        status="Скачивание: подготовка серверного потока…",
+        status="YT-DLP скачивание: только аудио (bestaudio), скоро появится прогресс…",
     )
 
     def persist_runtime_status(msg: str, *, force: bool = False) -> None:
@@ -1956,7 +2418,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
                 {
                     "type": "progress",
                     "phase": "status",
-                    "message": "Сервер принял задачу: до отображения байт возможна короткая пауза (подключение к CDN)…",
+                    "message": "YT-DLP скачивание: только аудио (bestaudio), скоро появится прогресс…",
                 },
                 ensure_ascii=False,
             )
@@ -2001,15 +2463,18 @@ def rewrite_youtube_transcribe(rewrite_id: str):
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
         return jsonify({"ok": False, "message": "Не задан OPENAI_API_KEY в .env"}), 400
-    rel = str(rw.get("youtube_audio_file") or "").strip()
-    if not rel:
+    ap = _rewrite_youtube_resolve_audio_path(rewrite_id, rw)
+    if ap is None:
         return jsonify({"ok": False, "message": "Сначала скачайте аудио."}), 400
-    ap = (BASE_DIR / rel).resolve()
     try:
-        ap.relative_to(BASE_DIR.resolve())
+        rw["youtube_audio_file"] = str(ap.relative_to(BASE_DIR.resolve()))
     except ValueError:
-        return jsonify({"ok": False, "message": "Некорректный путь к аудио."}), 400
+        pass
     txt, err = _rewrite_transcription_text(api_key, ap)
+    if err and _transcribe_error_requires_reencode(err):
+        ap2 = _transcode_audio_to_mp3_temp(ap)
+        if ap2 is not None:
+            txt, err = _rewrite_transcription_text(api_key, ap2)
     if err:
         return jsonify({"ok": False, "message": err}), 400
     rw["youtube_transcript_text"] = txt or ""
@@ -2027,14 +2492,13 @@ def rewrite_youtube_transcribe_stream(rewrite_id: str):
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
         return jsonify({"ok": False, "message": "Не задан OPENAI_API_KEY в .env"}), 400
-    rel = str(rw.get("youtube_audio_file") or "").strip()
-    if not rel:
+    ap = _rewrite_youtube_resolve_audio_path(rewrite_id, rw)
+    if ap is None:
         return jsonify({"ok": False, "message": "Сначала скачайте аудио."}), 400
-    ap = (BASE_DIR / rel).resolve()
     try:
-        ap.relative_to(BASE_DIR.resolve())
+        rw["youtube_audio_file"] = str(ap.relative_to(BASE_DIR.resolve()))
     except ValueError:
-        return jsonify({"ok": False, "message": "Некорректный путь к аудио."}), 400
+        pass
 
     event_q: queue.Queue[str | None] = queue.Queue()
     result_holder: dict[str, str | None] = {}
@@ -2065,6 +2529,11 @@ def rewrite_youtube_transcribe_stream(rewrite_id: str):
     def worker() -> None:
         try:
             txt, err = _rewrite_transcription_text(api_key, ap, progress=put_progress)
+            if err and _transcribe_error_requires_reencode(err):
+                put_progress({"phase": "transcode", "message": "Файл не подошёл для API, перекодируем в MP3 и повторяем…"})
+                ap2 = _transcode_audio_to_mp3_temp(ap)
+                if ap2 is not None:
+                    txt, err = _rewrite_transcription_text(api_key, ap2, progress=put_progress)
             if err:
                 result_holder["error"] = err
                 _rewrite_youtube_set_runtime_state(
@@ -2320,6 +2789,16 @@ def rewrite_project_run(rewrite_id: str):
                         encoding="utf-8",
                     )
                 (bw_dir / "full_text.txt").write_text(full_text, encoding="utf-8")
+                if isinstance(blocks, list):
+                    check_payload = _build_block_writer_check([b for b in blocks if isinstance(b, dict)])
+                    rw2 = load_rewrite_job(rewrite_id)
+                    if rw2 is not None:
+                        st = rw2.setdefault("stages", {})
+                        if isinstance(st, dict):
+                            d1 = st.setdefault("draft1", {})
+                            if isinstance(d1, dict):
+                                d1["block_writer_check"] = check_payload
+                        save_rewrite_job(rewrite_id, rw2)
 
             for item in iter_draft1_blockwise_completion(
                 api_key,

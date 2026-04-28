@@ -1,0 +1,17 @@
+Split the following text into logical structural blocks.
+
+INPUT TEXT:
+{{PASTE_FULL_TEXT}}
+
+---
+
+Additional requirements:
+
+— detect natural topic shifts  
+— do NOT split inside a continuous idea  
+— avoid too many small blocks  
+— avoid over-fragmentation  
+
+Expected number of blocks: 6–12  
+
+Return ONLY JSON array.

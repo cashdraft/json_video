@@ -27,7 +27,7 @@
                     method="post"
                     action="{{ url_for('rewrite_project_delete', rewrite_id=rw.rewrite_id) }}"
                     class="rewrite-project-delete-form"
-                    onsubmit="return confirm('Удалить проект {{ rw.rewrite_id }}?');"
+                    data-delete-confirm-form="1"
                 >
                     <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
                 </form>
@@ -127,28 +127,17 @@
                     <option value="{{ cur_tpl }}" selected>{{ cur_tpl }} (нет на диске)</option>
                     {% endif %}
                 </select>
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-create" {% if not openai_key_set %}disabled{% endif %} title="Создать шаблон">＋</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-apply" {% if not openai_key_set %}disabled{% endif %}>Применить</button>
+                <span id="rewrite-template-op-status" class="tts-template-status hidden" aria-live="polite"></span>
                 <span class="rewrite-template-bar__hint">Создайте подпапку в <code>rewrite_templates/</code> (как <code>Base Template</code>) — её имя = шаблон. Внутрь положите <code>.txt</code>: <code>Config</code>, Hero, Master, Analysis … Файлы не в подпапке не подхватываются.</span>
+                <button type="button" class="btn btn-danger btn-sm" id="rewrite-template-delete" {% if not openai_key_set %}disabled{% endif %} title="Удалить выбранный шаблон" aria-label="Удалить выбранный шаблон"><span class="template-trash-icon" aria-hidden="true"></span></button>
             </div>
 
             <div class="scene-card rewrite-source-card">
                 {% set hero_locked = rw.hero_prompt_locked|default(false) %}
                 {% set audio_locked = rw.audio_timing_locked|default(false) %}
                 <div class="rewrite-prompts-duration-row">
-                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--master">
-                        <h3 class="rewrite-source-subtitle">Master Prompt</h3>
-                        <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
-                        <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Master</span>
-                            <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.master_prompt_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-master-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                            </button>
-                        </div>
-                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--master-prompt">
-                            <textarea id="rewrite-master-prompt" class="rewrite-source-textarea{% if rw.master_prompt_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Общие инструкции для всех этапов…" {% if not openai_key_set %}disabled{% elif rw.master_prompt_locked|default(false) %}readonly{% endif %}>{{ rw.master_prompt or '' }}</textarea>
-                        </div>
-                    </div>
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--hero">
                         <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
                         <p class="rewrite-source-subhint">Описание героя озвучки. Добавляется во все этапы (в user-сообщение, вместе с ориентиром по символам).</p>
@@ -161,6 +150,20 @@
                         </div>
                         <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
                             <textarea id="rewrite-hero-prompt" class="rewrite-source-textarea{% if hero_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Герой, тон, контекст…" {% if not openai_key_set %}disabled{% elif hero_locked %}readonly{% endif %}>{{ rw.hero_prompt or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--master">
+                        <h3 class="rewrite-source-subtitle">Master Prompt</h3>
+                        <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
+                        <div class="rewrite-source-toolbar slot-header">
+                            <span class="slot-badge badge-yes">Master</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.master_prompt_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-master-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--master-prompt">
+                            <textarea id="rewrite-master-prompt" class="rewrite-source-textarea{% if rw.master_prompt_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Общие инструкции для всех этапов…" {% if not openai_key_set %}disabled{% elif rw.master_prompt_locked|default(false) %}readonly{% endif %}>{{ rw.master_prompt or '' }}</textarea>
                         </div>
                     </div>
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--model-duration">
@@ -225,7 +228,7 @@
             {% set style_prompt_locked = cell.style_prompt_locked|default(false) %}
             {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-heading">
@@ -321,7 +324,7 @@
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
                             {% endif %}
-                            {% if stage_key in ['continuity_editor', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor'] %}
+                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'continuity_editor', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor'] %}
                             <div class="rewrite-scene-writer-check" data-editor-check></div>
                             {% endif %}
                         </div>
@@ -330,6 +333,50 @@
             {% endfor %}
             </div>
         </section>
+    </div>
+
+
+    <div class="confirm-modal hidden" id="rewrite-template-apply-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-template-apply-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-apply-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-template-apply-confirm-title">Применить шаблон</h3>
+            </div>
+            <p class="confirm-modal__lead">Подставить шаблон и заблокировать все поля для редактирования?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-apply-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-template-apply-confirm-ok">Да, применить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-modal hidden" id="rewrite-template-create-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-template-create-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-create-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-template-create-title">Создать шаблон</h3>
+            </div>
+            <p class="confirm-modal__lead">Введите название нового шаблона.</p>
+            <input type="text" id="rewrite-template-create-name" class="project-name-input" placeholder="Например: My Template" autocomplete="off">
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-create-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-template-create-ok">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-modal hidden" id="rewrite-template-delete-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-template-delete-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-delete-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-template-delete-title">Удалить шаблон</h3>
+            </div>
+            <p class="confirm-modal__lead" id="rewrite-template-delete-lead">Точно удалить шаблон? Он будет удалён безвозвратно.</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-delete-cancel">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-template-delete-ok">Да, удалить</button>
+            </div>
+        </div>
     </div>
 
     <div class="confirm-modal hidden" id="rewrite-youtube-edit-confirm-modal" aria-hidden="true">
@@ -346,6 +393,33 @@
         </div>
     </div>
 
+    <div class="confirm-modal hidden" id="rewrite-youtube-insert-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-youtube-insert-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-insert-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-youtube-insert-confirm-title">Вставка расшифровки</h3>
+            </div>
+            <p class="confirm-modal__lead">В поле «Исходный текст» уже есть текст. Заменить его расшифровкой YouTube?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-insert-confirm-ok">Да, заменить</button>
+            </div>
+        </div>
+    </div>
+    <div class="confirm-modal hidden" id="rewrite-delete-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-rewrite-delete-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-delete-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-delete-confirm-title">Удалить проект</h3>
+            </div>
+            <p class="confirm-modal__lead">Точно удалить проект? Он будет удалён безвозвратно.</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-delete-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-delete-confirm-ok">Да, удалить</button>
+            </div>
+        </div>
+    </div>
+
     <script>
 (function () {
     const runUrl = {{ url_for('rewrite_project_run', rewrite_id=rw.rewrite_id) | tojson }};
@@ -358,7 +432,6 @@
     const ytTranscribeUrl = {{ url_for('rewrite_youtube_transcribe', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscribeStreamUrl = {{ url_for('rewrite_youtube_transcribe_stream', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
-    const ytStateUrl = ('/rewrite/' + encodeURIComponent({{ rw.rewrite_id | tojson }}) + '/youtube/state');
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
     const sourceCountsEl = document.getElementById('rewrite-source-counts');
@@ -378,7 +451,10 @@
     const targetCharsValEl = document.getElementById('rewrite-target-chars-val');
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
     const templateSelectEl = document.getElementById('rewrite-template-select');
+    const templateCreateBtn = document.getElementById('rewrite-template-create');
+    const templateDeleteBtn = document.getElementById('rewrite-template-delete');
     const templateApplyBtn = document.getElementById('rewrite-template-apply');
+    const templateOpStatusEl = document.getElementById('rewrite-template-op-status');
     const ytUrlEl = document.getElementById('rewrite-youtube-url');
     const ytDecodeBtn = document.getElementById('rewrite-youtube-decode');
     const ytStopBtn = document.getElementById('rewrite-youtube-stop');
@@ -392,8 +468,26 @@
     const ytEditConfirmModal = document.getElementById('rewrite-youtube-edit-confirm-modal');
     const ytEditConfirmCancelBtn = document.getElementById('rewrite-youtube-edit-confirm-cancel');
     const ytEditConfirmOkBtn = document.getElementById('rewrite-youtube-edit-confirm-ok');
+    const ytInsertConfirmModal = document.getElementById('rewrite-youtube-insert-confirm-modal');
+    const ytInsertConfirmCancelBtn = document.getElementById('rewrite-youtube-insert-confirm-cancel');
+    const ytInsertConfirmOkBtn = document.getElementById('rewrite-youtube-insert-confirm-ok');
+    const templateApplyConfirmModal = document.getElementById('rewrite-template-apply-confirm-modal');
+    const templateApplyConfirmCancelBtn = document.getElementById('rewrite-template-apply-confirm-cancel');
+    const templateApplyConfirmOkBtn = document.getElementById('rewrite-template-apply-confirm-ok');
+    const templateCreateModal = document.getElementById('rewrite-template-create-modal');
+    const templateCreateNameEl = document.getElementById('rewrite-template-create-name');
+    const templateCreateCancelBtn = document.getElementById('rewrite-template-create-cancel');
+    const templateCreateOkBtn = document.getElementById('rewrite-template-create-ok');
+    const templateDeleteModal = document.getElementById('rewrite-template-delete-modal');
+    const templateDeleteLeadEl = document.getElementById('rewrite-template-delete-lead');
+    const templateDeleteCancelBtn = document.getElementById('rewrite-template-delete-cancel');
+    const templateDeleteOkBtn = document.getElementById('rewrite-template-delete-ok');
     let youtubeLocked = {{ (rw_yt_transcript_trim != '')|tojson }};
     let youtubeEditConfirmResolver = null;
+    let youtubeInsertConfirmResolver = null;
+    let templateApplyConfirmResolver = null;
+    let templateCreateResolver = null;
+    let templateDeleteResolver = null;
     var ytTranscriptReady = false;
     var ytWorking = false;
     var ytAbortController = null;
@@ -408,6 +502,51 @@
     var pipelineStatusForward = null;
     var pipelineAbortController = null;
     var pipelineRunActive = false;
+    const rewriteDeleteConfirmModal = document.getElementById('rewrite-delete-confirm-modal');
+    const rewriteDeleteConfirmCancelBtn = document.getElementById('rewrite-delete-confirm-cancel');
+    const rewriteDeleteConfirmOkBtn = document.getElementById('rewrite-delete-confirm-ok');
+    let rewriteDeleteConfirmResolver = null;
+
+
+    function openRewriteDeleteConfirm() {
+        if (!rewriteDeleteConfirmModal || !rewriteDeleteConfirmCancelBtn || !rewriteDeleteConfirmOkBtn) {
+            return Promise.resolve(window.confirm('Точно удалить проект? Он будет удалён безвозвратно.'));
+        }
+        rewriteDeleteConfirmModal.classList.remove('hidden');
+        rewriteDeleteConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) {
+            rewriteDeleteConfirmResolver = resolve;
+        });
+    }
+
+    function closeRewriteDeleteConfirm(accepted) {
+        if (!rewriteDeleteConfirmModal) return;
+        rewriteDeleteConfirmModal.classList.add('hidden');
+        rewriteDeleteConfirmModal.setAttribute('aria-hidden', 'true');
+        if (rewriteDeleteConfirmResolver) {
+            var fn = rewriteDeleteConfirmResolver;
+            rewriteDeleteConfirmResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (rewriteDeleteConfirmCancelBtn) rewriteDeleteConfirmCancelBtn.addEventListener('click', function () { closeRewriteDeleteConfirm(false); });
+    if (rewriteDeleteConfirmOkBtn) rewriteDeleteConfirmOkBtn.addEventListener('click', function () { closeRewriteDeleteConfirm(true); });
+    if (rewriteDeleteConfirmModal) {
+        rewriteDeleteConfirmModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-rewrite-delete-confirm-close')) closeRewriteDeleteConfirm(false);
+        });
+    }
+
+    var rewriteDeleteForm = document.querySelector('form[data-delete-confirm-form="1"]');
+    if (rewriteDeleteForm) {
+        rewriteDeleteForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            var ok = await openRewriteDeleteConfirm();
+            if (!ok) return;
+            rewriteDeleteForm.submit();
+        });
+    }
 
     function syncPipelineStopButton() {
         if (!pipelineStopBtn) return;
@@ -482,6 +621,221 @@
         });
     }
 
+
+    function openYoutubeInsertConfirm() {
+        if (!ytInsertConfirmModal || !ytInsertConfirmCancelBtn || !ytInsertConfirmOkBtn) {
+            return Promise.resolve(window.confirm('В поле «Исходный текст» уже есть текст. Заменить его расшифровкой YouTube?'));
+        }
+        ytInsertConfirmModal.classList.remove('hidden');
+        ytInsertConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) {
+            youtubeInsertConfirmResolver = resolve;
+        });
+    }
+
+    function closeYoutubeInsertConfirm(accepted) {
+        if (!ytInsertConfirmModal) return;
+        ytInsertConfirmModal.classList.add('hidden');
+        ytInsertConfirmModal.setAttribute('aria-hidden', 'true');
+        if (youtubeInsertConfirmResolver) {
+            var fn = youtubeInsertConfirmResolver;
+            youtubeInsertConfirmResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (ytInsertConfirmCancelBtn) ytInsertConfirmCancelBtn.addEventListener('click', function () { closeYoutubeInsertConfirm(false); });
+    if (ytInsertConfirmOkBtn) ytInsertConfirmOkBtn.addEventListener('click', function () { closeYoutubeInsertConfirm(true); });
+    if (ytInsertConfirmModal) {
+        ytInsertConfirmModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-youtube-insert-confirm-close')) closeYoutubeInsertConfirm(false);
+        });
+    }
+
+
+    function openTemplateApplyConfirm() {
+        if (!templateApplyConfirmModal || !templateApplyConfirmCancelBtn || !templateApplyConfirmOkBtn) {
+            return Promise.resolve(window.confirm('Подставить шаблон и заблокировать все поля для редактирования?'));
+        }
+        templateApplyConfirmModal.classList.remove('hidden');
+        templateApplyConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) {
+            templateApplyConfirmResolver = resolve;
+        });
+    }
+
+    function closeTemplateApplyConfirm(accepted) {
+        if (!templateApplyConfirmModal) return;
+        templateApplyConfirmModal.classList.add('hidden');
+        templateApplyConfirmModal.setAttribute('aria-hidden', 'true');
+        if (templateApplyConfirmResolver) {
+            var fn = templateApplyConfirmResolver;
+            templateApplyConfirmResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (templateApplyConfirmCancelBtn) templateApplyConfirmCancelBtn.addEventListener('click', function () { closeTemplateApplyConfirm(false); });
+    if (templateApplyConfirmOkBtn) templateApplyConfirmOkBtn.addEventListener('click', function () { closeTemplateApplyConfirm(true); });
+    if (templateApplyConfirmModal) {
+        templateApplyConfirmModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-template-apply-confirm-close')) closeTemplateApplyConfirm(false);
+        });
+    }
+
+    function openTemplateCreateModal() {
+        if (!templateCreateModal || !templateCreateNameEl || !templateCreateCancelBtn || !templateCreateOkBtn) {
+            var n0 = window.prompt('Введите название нового шаблона:');
+            return Promise.resolve((n0 || '').trim());
+        }
+        templateCreateNameEl.value = '';
+        templateCreateModal.classList.remove('hidden');
+        templateCreateModal.setAttribute('aria-hidden', 'false');
+        setTimeout(function () { templateCreateNameEl.focus(); }, 0);
+        return new Promise(function (resolve) { templateCreateResolver = resolve; });
+    }
+
+    function closeTemplateCreateModal(nameOrNull) {
+        if (templateCreateModal) {
+            templateCreateModal.classList.add('hidden');
+            templateCreateModal.setAttribute('aria-hidden', 'true');
+        }
+        if (templateCreateResolver) {
+            var fn = templateCreateResolver;
+            templateCreateResolver = null;
+            fn(nameOrNull == null ? '' : String(nameOrNull));
+        }
+    }
+
+    if (templateCreateCancelBtn) templateCreateCancelBtn.addEventListener('click', function () { closeTemplateCreateModal(''); });
+    if (templateCreateOkBtn) templateCreateOkBtn.addEventListener('click', function () {
+        closeTemplateCreateModal((templateCreateNameEl && templateCreateNameEl.value || '').trim());
+    });
+    if (templateCreateNameEl) {
+        templateCreateNameEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                closeTemplateCreateModal((templateCreateNameEl.value || '').trim());
+            }
+        });
+    }
+    if (templateCreateModal) {
+        templateCreateModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-template-create-close')) closeTemplateCreateModal('');
+        });
+    }
+
+    function openTemplateDeleteConfirm(name) {
+        if (!templateDeleteModal || !templateDeleteLeadEl || !templateDeleteCancelBtn || !templateDeleteOkBtn) {
+            return Promise.resolve(window.confirm('Удалить шаблон «' + name + '»? Он будет удалён безвозвратно.'));
+        }
+        templateDeleteLeadEl.textContent = 'Точно удалить шаблон «' + name + '»? Он будет удалён безвозвратно.';
+        templateDeleteModal.classList.remove('hidden');
+        templateDeleteModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) { templateDeleteResolver = resolve; });
+    }
+
+    function closeTemplateDeleteConfirm(accepted) {
+        if (templateDeleteModal) {
+            templateDeleteModal.classList.add('hidden');
+            templateDeleteModal.setAttribute('aria-hidden', 'true');
+        }
+        if (templateDeleteResolver) {
+            var fn = templateDeleteResolver;
+            templateDeleteResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (templateDeleteCancelBtn) templateDeleteCancelBtn.addEventListener('click', function () { closeTemplateDeleteConfirm(false); });
+    if (templateDeleteOkBtn) templateDeleteOkBtn.addEventListener('click', function () { closeTemplateDeleteConfirm(true); });
+    if (templateDeleteModal) {
+        templateDeleteModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-template-delete-close')) closeTemplateDeleteConfirm(false);
+        });
+    }
+
+    if (templateCreateBtn) {
+        templateCreateBtn.addEventListener('click', async function () {
+            if (!openaiOk || !templateSelectEl) return;
+            var name = (await openTemplateCreateModal() || '').trim();
+            if (!name) return;
+            templateCreateBtn.disabled = true;
+            try {
+                var snap = collectSnapshot();
+                const r = await fetch(templateListUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        hero_prompt: snap.hero_prompt,
+                        master_prompt: snap.master_prompt,
+                        target_chars: snap.target_chars,
+                        stages: snap.stages
+                    })
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    setTemplateOpStatus(data.message || 'Не удалось создать шаблон.', true);
+                    return;
+                }
+                await reloadRewriteTemplateOptions(name);
+                setTemplateOpStatus('Шаблон создан: ' + name, false);
+                await saveToServer();
+            } catch (e) {
+                setTemplateOpStatus(String(e), true);
+            } finally {
+                templateCreateBtn.disabled = !openaiOk;
+                if (templateDeleteBtn) {
+                    var sel = templateSelectEl ? (templateSelectEl.value || '').trim() : '';
+                    templateDeleteBtn.disabled = !openaiOk || templateIsProtected(sel);
+                }
+            }
+        });
+    }
+
+    if (templateDeleteBtn) {
+        templateDeleteBtn.addEventListener('click', async function () {
+            if (!openaiOk || !templateSelectEl) return;
+            var name = (templateSelectEl.value || '').trim();
+            if (!name) return;
+            if (templateIsProtected(name)) {
+                setTemplateOpStatus('Base Template нельзя удалить.', true);
+                return;
+            }
+            var okDel = await openTemplateDeleteConfirm(name);
+            if (!okDel) return;
+            templateDeleteBtn.disabled = true;
+            try {
+                const r = await fetch(rewriteTemplateDeleteUrl(name), { method: 'DELETE' });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    setTemplateOpStatus(data.message || 'Не удалось удалить шаблон.', true);
+                    return;
+                }
+                await reloadRewriteTemplateOptions('Base Template');
+                setTemplateOpStatus('Шаблон удалён: ' + name, false);
+                await saveToServer();
+            } catch (e) {
+                setTemplateOpStatus(String(e), true);
+            } finally {
+                if (templateSelectEl) {
+                    var sel2 = (templateSelectEl.value || '').trim();
+                    templateDeleteBtn.disabled = !openaiOk || templateIsProtected(sel2);
+                } else {
+                    templateDeleteBtn.disabled = !openaiOk;
+                }
+            }
+        });
+    }
+
+    if (templateSelectEl) {
+        templateSelectEl.addEventListener('change', function () {
+            var sel = (templateSelectEl.value || '').trim();
+            if (templateDeleteBtn) templateDeleteBtn.disabled = !openaiOk || templateIsProtected(sel);
+        });
+    }
+
     function applyYoutubeToolbar() {
         if (!openaiOk) {
             if (ytUrlEl) ytUrlEl.disabled = true;
@@ -518,6 +872,64 @@
         return templateListUrl + '/' + encodeURIComponent(name) + '/save';
     }
 
+    function rewriteTemplateDeleteUrl(name) {
+        return templateListUrl + '/' + encodeURIComponent(name);
+    }
+
+    function templateIsProtected(name) {
+        return String(name || '').trim().toLowerCase() === 'base template';
+    }
+
+    function setTemplateOpStatus(msg, isError) {
+        var txt = String(msg || '').trim();
+        if (!txt) return;
+        var root = document.querySelector('.container');
+        if (!root) return;
+        var box = root.querySelector('.flash-messages');
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'flash-messages';
+            var header = root.querySelector('header');
+            if (header && header.nextSibling) root.insertBefore(box, header.nextSibling);
+            else root.appendChild(box);
+        }
+        var el = document.createElement('div');
+        el.className = 'flash flash-' + (isError ? 'error' : 'success');
+        el.textContent = txt;
+        box.appendChild(el);
+        setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            if (box && !box.children.length && box.parentNode) box.parentNode.removeChild(box);
+        }, 5000);
+        if (templateOpStatusEl) {
+            templateOpStatusEl.textContent = '';
+            templateOpStatusEl.classList.add('hidden');
+            templateOpStatusEl.classList.remove('rewrite-youtube-status--error');
+        }
+    }
+
+    async function reloadRewriteTemplateOptions(preferredName) {
+        if (!templateSelectEl) return;
+        var current = (preferredName || templateSelectEl.value || '').trim();
+        const r = await fetch(templateListUrl, { cache: 'no-store' });
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok || !Array.isArray(data.templates)) {
+            throw new Error('Не удалось обновить список шаблонов.');
+        }
+        var arr = data.templates.slice();
+        if (arr.indexOf('Base Template') < 0) arr.unshift('Base Template');
+        templateSelectEl.innerHTML = '';
+        arr.forEach(function (n) {
+            var opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            templateSelectEl.appendChild(opt);
+        });
+        var selected = current && arr.indexOf(current) >= 0 ? current : (arr[0] || 'Base Template');
+        templateSelectEl.value = selected;
+        if (templateDeleteBtn) templateDeleteBtn.disabled = !openaiOk || templateIsProtected(selected);
+    }
+
     async function trySyncRewriteTemplateToDisk() {
         if (!templateSelectEl || !openaiOk) return true;
         var name = (templateSelectEl.value || '').trim();
@@ -550,7 +962,7 @@
         var wrap = block.querySelector('[data-scene-writer-check]');
         if (!wrap) return;
         if (!payload || !payload.summary) {
-            wrap.innerHTML = '';
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer</strong> <span class="rewrite-scene-writer-check__wait">ожидание данных</span></div>';
             return;
         }
         var s = payload.summary || {};
@@ -589,7 +1001,7 @@
         var wrap = block.querySelector('[data-structure-splitter-check]');
         if (!wrap) return;
         if (!payload || !payload.summary) {
-            wrap.innerHTML = '';
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Structure Splitter</strong> <span class="rewrite-scene-writer-check__wait">ожидание данных</span></div>';
             return;
         }
         var s = payload.summary || {};
@@ -620,6 +1032,13 @@
     function readStructureSplitterCheckFromBlock(block) {
         if (!block) return null;
         var raw = block.getAttribute('data-structure-splitter-check-json');
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+
+    function readBlockWriterCheckFromBlock(block) {
+        if (!block) return null;
+        var raw = block.getAttribute('data-block-writer-check-json');
         if (!raw) return null;
         try { return JSON.parse(raw); } catch (e) { return null; }
     }
@@ -668,7 +1087,14 @@
         try {
             var obj = JSON.parse(txt);
             if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-                var et = String(obj.edited_text || '');
+                var et = '';
+                if (typeof obj.edited_text === 'string' && obj.edited_text.trim()) {
+                    et = obj.edited_text;
+                } else {
+                    // For stages that return plain JSON payloads (analysis/architect/block writer),
+                    // use the raw serialized text so the check block still has comparable data.
+                    et = txt;
+                }
                 var changes = Array.isArray(obj.changes) ? obj.changes : [];
                 var types = {};
                 for (var i = 0; i < changes.length; i += 1) {
@@ -681,18 +1107,206 @@
         return { editedText: txt, changesCount: 0, uniqueTypesCount: 0 };
     }
 
+    function _analysisCountArrayOrObjectRows(v) {
+        if (Array.isArray(v)) return v.length;
+        if (v && typeof v === 'object') return Object.keys(v).length;
+        return 0;
+    }
+
+    function parseAnalysisCheckPayload(raw) {
+        var txt = String(raw || '').trim();
+        if (!txt) return null;
+        try {
+            var obj = JSON.parse(txt);
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+            var cm = (obj.content_map && typeof obj.content_map === 'object' && !Array.isArray(obj.content_map)) ? obj.content_map : {};
+            return {
+                core_thesis_ok: !!String(obj.core_thesis || '').trim(),
+                core_promise_ok: !!String(obj.core_promise || '').trim(),
+                key_ideas: _analysisCountArrayOrObjectRows(obj.key_ideas),
+                facts_and_numbers: _analysisCountArrayOrObjectRows(obj.facts_and_numbers),
+                argument_flow: _analysisCountArrayOrObjectRows(obj.argument_flow),
+                weak_segments: _analysisCountArrayOrObjectRows(obj.weak_segments),
+                retention_opportunities: _analysisCountArrayOrObjectRows(obj.retention_opportunities),
+                donor_voice_signals: _analysisCountArrayOrObjectRows(obj.donor_voice_signals),
+                recommended_block_logic: _analysisCountArrayOrObjectRows(obj.recommended_block_logic),
+                content_map_a: _analysisCountArrayOrObjectRows(cm.A_preserve_exactly || cm.a_preserve_exactly),
+                content_map_b: _analysisCountArrayOrObjectRows(cm.B_preserve_meaning || cm.b_preserve_meaning),
+                content_map_c: _analysisCountArrayOrObjectRows(cm.C_can_adapt || cm.c_can_adapt),
+                content_map_d: _analysisCountArrayOrObjectRows(cm.D_must_rewrite || cm.d_must_rewrite),
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function parseArchitectCheckPayload(raw) {
+        var txt = String(raw || '').trim();
+        if (!txt) return null;
+        try {
+            var obj = JSON.parse(txt);
+            if (!obj || typeof obj !== 'object') return null;
+            var blocks = [];
+            if (Array.isArray(obj)) blocks = obj;
+            else if (Array.isArray(obj.blocks)) blocks = obj.blocks;
+            blocks = blocks.filter(function (b) { return b && typeof b === 'object'; });
+            var uniqByName = {};
+            for (var i = 0; i < blocks.length; i += 1) {
+                var nm = String((blocks[i] || {}).block_name || '').trim();
+                if (nm) uniqByName[nm] = true;
+            }
+            return {
+                blocks_total: blocks.length,
+                blocks_unique: Object.keys(uniqByName).length,
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function renderArchitectCheck(block) {
+        if (!block) return;
+        var wrap = block.querySelector('[data-editor-check]');
+        if (!wrap) return;
+        var ta = block.querySelector('.rewrite-stage-result');
+        var metrics = parseArchitectCheckPayload(((ta || {}).value || ''));
+        if (!metrics) {
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">ожидание валидного JSON</span></div>';
+            return;
+        }
+        var ok = metrics.blocks_total > 0;
+        var html = '';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="' + (ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (ok ? 'OK' : 'NO') + '</span></div>';
+        html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
+        html += '<div>blocks: <strong>' + String(metrics.blocks_total) + '</strong></div>';
+        html += '</div>';
+        wrap.innerHTML = html;
+    }
+
+    function renderBlockWriterCheck(block) {
+        if (!block) return;
+        var wrap = block.querySelector('[data-editor-check]');
+        if (!wrap) return;
+        var payload = readBlockWriterCheckFromBlock(block);
+        if (!payload || !payload.summary) {
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Block Writer</strong> <span class="rewrite-scene-writer-check__wait">ожидание данных</span></div>';
+            return;
+        }
+        var rows = Array.isArray(payload.blocks_info) ? payload.blocks_info : [];
+        var ok = !!((payload.summary || {}).ok);
+        var totalIn = 0;
+        var totalOut = 0;
+        var html = '';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Block Writer</strong> <span class="' + (ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (ok ? 'OK' : 'NO') + '</span></div>';
+        html += '<div class="rewrite-scene-writer-check__rows">';
+        for (var i = 0; i < rows.length; i += 1) {
+            var r = rows[i] || {};
+            var idx = Number(r.index || (i + 1));
+            var outChars = Number(r.out_chars || 0);
+            var existsOk = outChars > 0;
+            var inChars = Number(r.target_chars || 0);
+            var delta = Number(r.delta || 0);
+            totalIn += inChars;
+            totalOut += outChars;
+            var d = (delta > 0 ? '+' : '') + String(delta);
+            html += '<div class="rewrite-scene-writer-check__row rewrite-block-writer-check__row">';
+            html += '<span class="rewrite-block-writer-check__left">Block ' + String(idx) + ' <span class="' + (existsOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (existsOk ? '✓' : '✕') + '</span></span>';
+            html += '<span class="rewrite-block-writer-check__right">Chars OUT: <strong>' + String(outChars) + '</strong> (' + d + ')</span>';
+            html += '</div>';
+        }
+        var totalDelta = totalOut - totalIn;
+        var totalDeltaStr = (totalDelta > 0 ? '+' : '') + String(totalDelta);
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-block-writer-check__total">';
+        html += '<span class="rewrite-block-writer-check__total-left">Chars IN: <strong>' + String(totalIn) + '</strong></span>';
+        html += '<span class="rewrite-block-writer-check__total-sep">|</span>';
+        html += '<span class="rewrite-block-writer-check__total-right">Chars OUT: <strong>' + String(totalOut) + '</strong> (' + totalDeltaStr + ')</span>';
+        html += '</div>';
+        html += '</div>';
+        wrap.innerHTML = html;
+    }
+
+    function renderAnalysisCheck(block) {
+        if (!block) return;
+        var wrap = block.querySelector('[data-editor-check]');
+        if (!wrap) return;
+        var ta = block.querySelector('.rewrite-stage-result');
+        var metrics = parseAnalysisCheckPayload(((ta || {}).value || ''));
+        if (!metrics) {
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">ожидание валидного JSON</span></div>';
+            return;
+        }
+        function yesNo(ok) {
+            return ok ? '<span class="rewrite-scene-writer-check__ok">✓</span>' : '<span class="rewrite-scene-writer-check__no">✕</span>';
+        }
+        var allRequiredOk = (
+            metrics.core_thesis_ok &&
+            metrics.core_promise_ok &&
+            metrics.key_ideas > 0 &&
+            metrics.facts_and_numbers > 0 &&
+            metrics.argument_flow > 0 &&
+            metrics.weak_segments > 0 &&
+            metrics.retention_opportunities > 0 &&
+            metrics.donor_voice_signals > 0 &&
+            metrics.recommended_block_logic > 0 &&
+            metrics.content_map_a > 0 &&
+            metrics.content_map_b > 0 &&
+            metrics.content_map_c > 0 &&
+            metrics.content_map_d > 0
+        );
+        var html = '';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="' + (allRequiredOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (allRequiredOk ? 'OK' : 'NO') + '</span></div>';
+        html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
+        html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--left">';
+        html += '<div>core_thesis: ' + yesNo(metrics.core_thesis_ok) + '</div>';
+        html += '<div>core_promise: ' + yesNo(metrics.core_promise_ok) + '</div>';
+        html += '<div>key_ideas: <strong>' + String(metrics.key_ideas) + '</strong></div>';
+        html += '<div>facts_and_numbers: <strong>' + String(metrics.facts_and_numbers) + '</strong></div>';
+        html += '<div>argument_flow: <strong>' + String(metrics.argument_flow) + '</strong></div>';
+        html += '<div>weak_segments: <strong>' + String(metrics.weak_segments) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">retention_opportunities: <strong>' + String(metrics.retention_opportunities) + '</strong></div>';
+        html += '<div>donor_voice_signals: <strong>' + String(metrics.donor_voice_signals) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">recommended_block_logic: <strong>' + String(metrics.recommended_block_logic) + '</strong></div>';
+        html += '</div>';
+        html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--right">';
+        html += '<div>content_map A: <strong>' + String(metrics.content_map_a) + '</strong></div>';
+        html += '<div>content_map B: <strong>' + String(metrics.content_map_b) + '</strong></div>';
+        html += '<div>content_map C: <strong>' + String(metrics.content_map_c) + '</strong></div>';
+        html += '<div>content_map D: <strong>' + String(metrics.content_map_d) + '</strong></div>';
+        html += '</div>';
+        html += '</div>';
+        wrap.innerHTML = html;
+    }
+
     function renderEditorCheck(block) {
         if (!block) return;
         var wrap = block.querySelector('[data-editor-check]');
         if (!wrap) return;
         var stageKey = block.getAttribute('data-stage-key') || '';
+        if (stageKey === 'draft1' || stageKey === 'block_writer') {
+            renderBlockWriterCheck(block);
+            return;
+        }
+        if (stageKey === 'structure' || stageKey === 'architect') {
+            renderArchitectCheck(block);
+            return;
+        }
+        if (stageKey === 'analysis') {
+            renderAnalysisCheck(block);
+            return;
+        }
         var stageIdx = STAGE_KEYS_ORDER.indexOf(stageKey);
-        if (stageIdx <= 0) { wrap.innerHTML = ''; return; }
+        if (stageIdx <= 0) {
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка</strong> <span class="rewrite-scene-writer-check__wait">нет предыдущего этапа</span></div>';
+            return;
+        }
         var prevKey = STAGE_KEYS_ORDER[stageIdx - 1];
         var prevBlock = document.querySelector('.rewrite-stage-card[data-stage-key="' + prevKey + '"]');
         var prevParsed = parseEditedPayload(((prevBlock ? prevBlock.querySelector('.rewrite-stage-result') : null) || {}).value || '');
         var currParsed = parseEditedPayload(((block.querySelector('.rewrite-stage-result')) || {}).value || '');
-        if (!currParsed.editedText && !prevParsed.editedText) { wrap.innerHTML = ''; return; }
+        if (!currParsed.editedText && !prevParsed.editedText) {
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка</strong> <span class="rewrite-scene-writer-check__wait">ожидание данных</span></div>';
+            return;
+        }
         var inChars = prevParsed.editedText.length;
         var outChars = currParsed.editedText.length;
         var delta = outChars - inChars;
@@ -862,7 +1476,8 @@
                 alert('Выберите шаблон в списке.');
                 return;
             }
-            if (!confirm('Подставить шаблон и заблокировать все поля для редактирования?')) {
+            var okTemplateApply = await openTemplateApplyConfirm();
+            if (!okTemplateApply) {
                 return;
             }
             templateApplyBtn.disabled = true;
@@ -949,66 +1564,20 @@
         }
     }
 
-    async function ytPollServerStateOnce() {
-        const r = await fetch(ytStateUrl, { cache: 'no-store' });
-        const data = await r.json().catch(function () { return {}; });
-        if (!r.ok || !data.ok) return null;
-        return data;
-    }
-
-    function applyYoutubeServerState(data) {
-        if (!data) return;
-        if (data.youtube_title) {
-            setYtVideoTitle(data.youtube_title);
-        }
-        if (data.youtube_transcript_ready) {
-            ytTranscriptReady = true;
-            setYoutubeLocked(true);
-            setYtStatus(
-                'Готово текст ' + String(data.transcript_chars || 0) + ' символов · ' + String(data.transcript_words || 0) + ' слов',
-                false
-            );
-            ytWorking = false;
-            stopYoutubeStatePoll();
-            return;
-        }
-        if (data.youtube_processing) {
-            ytWorking = true;
-            var st = (data.youtube_status || '').trim() || 'Задача YouTube выполняется на сервере…';
-            setYtStatus(st + ' (можно обновлять страницу)', false);
-            if (!ytStatePollTimer) {
-                ytStatePollTimer = setTimeout(ytKeepPollingState, 1800);
-            }
-            return;
-        }
-        ytWorking = false;
-        if (!ytTranscriptReady && data.youtube_status) {
-            setYtStatus(String(data.youtube_status), false);
-        }
-        stopYoutubeStatePoll();
-    }
-
-    async function ytKeepPollingState() {
-        ytStatePollTimer = null;
-        try {
-            var s = await ytPollServerStateOnce();
-            applyYoutubeServerState(s);
-        } catch (e) {
-            ytStatePollTimer = setTimeout(ytKeepPollingState, 2500);
-        } finally {
-            applyYoutubeToolbar();
-        }
-    }
-
     async function ytBootstrapFromServer() {
         if (!openaiOk) {
             applyYoutubeToolbar();
             return;
         }
         try {
-            const state = await ytPollServerStateOnce();
-            applyYoutubeServerState(state);
-            // Не делаем fallback к /youtube/transcript, иначе можно показать текст от старого URL.
+            const r = await fetch(ytTranscriptUrl);
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok) return;
+            var txt = (data.text || '').trim();
+            if (!txt) return;
+            ytTranscriptReady = true;
+            setYoutubeLocked(true);
+            setYtStatus('Готово текст ' + txt.length + ' символов · ' + countWords(txt) + ' слов', false);
         } catch (e) { /* ignore */ }
         finally {
             applyYoutubeToolbar();
@@ -1018,7 +1587,7 @@
     function ytFormatBytes(n) {
         if (n == null || n === undefined || (typeof n === 'number' && (isNaN(n) || n < 0))) return '—';
         var b = Number(n);
-        if (b >= 1048576) return (b / 1048576).toFixed(2) + ' МиБ';
+        if (b >= 1048576) return (b / 1048576).toFixed(2) + ' МБ';
         if (b >= 1024) return (b / 1024).toFixed(1) + ' КиБ';
         return String(b) + ' б';
     }
@@ -1029,10 +1598,10 @@
     function ytFormatEta(sec) {
         if (sec == null || sec === undefined || isNaN(sec) || sec < 0) return '';
         sec = Number(sec);
-        if (sec < 90) return '≈' + Math.max(1, Math.round(sec)) + ' с';
+        if (sec < 90) return String(Math.max(1, Math.round(sec))) + ' секунд';
         var m = Math.floor(sec / 60);
         var s0 = Math.round(sec % 60);
-        return '≈' + m + ' мин ' + s0 + ' с';
+        return String(m) + ' мин ' + String(s0) + ' сек';
     }
     function formatTranscribeProgressLine(ev) {
         if (ev.phase === 'split') {
@@ -1095,12 +1664,12 @@
                 msg += ytFormatSpeedBps(ev.speed);
                 if (ev.eta != null && !isNaN(ev.eta)) {
                     var eta0 = ytFormatEta(ev.eta);
-                    if (eta0) msg += ' · осталось ~' + eta0;
+                    if (eta0) msg += ' · осталось ' + eta0;
                 }
                 setYtStatus(msg, false);
             } else if (ev.type === 'progress' && ev.phase === 'postprocess') {
-                var pp = (ev.postprocessor || '').replace(/ExtractAudio/i, 'MP3');
-                setYtStatus('После скачивания: ' + (pp || 'обработка') + '…', false);
+                var pp = (ev.postprocessor || '').replace(/ExtractAudio/i, 'аудио-обработка');
+                setYtStatus('После скачивания: ' + (pp || 'обработка') + ' (может занять время)…', false);
             } else if (ev.type === 'progress' && ev.phase === 'fragment_done') {
                 setYtStatus('Фрагмент записан, продолжаем…', false);
             } else if (ev.type === 'error' && ev.message) {
@@ -1228,7 +1797,6 @@
             applyYoutubeToolbar();
             return;
         }
-        stopYoutubeStatePoll();
         ytWorking = true;
         ytTranscriptReady = false;
         ytAbortController = new AbortController();
@@ -1274,16 +1842,16 @@
         } finally {
             ytAbortController = null;
             ytWorking = false;
-            try {
-                var st = await ytPollServerStateOnce();
-                applyYoutubeServerState(st);
-            } catch (e2) { /* ignore */ }
             applyYoutubeToolbar();
         }
     }
 
     async function ytInsertToSource() {
         if (!sourceEl || !ytTranscriptReady || ytWorking) return;
+        if ((sourceEl.value || '').trim()) {
+            var okReplace = await openYoutubeInsertConfirm();
+            if (!okReplace) return;
+        }
         if (ytInsertBtn) ytInsertBtn.disabled = true;
         setYtStatus('Загружаем текст расшифровки…', false);
         try {
@@ -1570,6 +2138,8 @@
             sourceEl.readOnly = dis || sourceLocked;
         }
         if (templateSelectEl) templateSelectEl.disabled = dis;
+        if (templateCreateBtn) templateCreateBtn.disabled = dis;
+        if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
         if (templateApplyBtn) templateApplyBtn.disabled = dis;
         if (globalModelEl) globalModelEl.disabled = dis;
         applyYoutubeToolbar();
@@ -2414,7 +2984,7 @@
             voiceoverResultElInit.addEventListener('change', recheck2);
         }
     }
-    document.querySelectorAll('.rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"]').forEach(function (block) {
+    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"]').forEach(function (block) {
         renderEditorCheck(block);
         var ta = block.querySelector('.rewrite-stage-result');
         if (ta) {

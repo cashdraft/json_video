@@ -34,13 +34,9 @@ def format_duration_length_spec_block(
     if target_chars is None:
         return ""
     target = clamp_target_chars(int(target_chars))
-    target_min = max(1, target - 1000)
-    target_max = target + 1000
     length_spec = {
         "length_spec": {
-            "target_chars_min": target_min,
             "target_chars_ideal": target,
-            "target_chars_max": target_max,
             "hard_limit": True,
         }
     }
@@ -63,13 +59,9 @@ def build_duration_length_spec_payload(
     if target_chars is None:
         return {}
     target = clamp_target_chars(int(target_chars))
-    target_min = max(1, target - 1000)
-    target_max = target + 1000
     return {
         "length_spec": {
-            "target_chars_min": target_min,
             "target_chars_ideal": target,
-            "target_chars_max": target_max,
             "hard_limit": True,
         }
     }
@@ -460,6 +452,7 @@ def default_stage_entry() -> dict[str, Any]:
         "style_prompt": "",
         "scene_writer_check": None,
         "structure_splitter_check": None,
+        "block_writer_check": None,
         "model": REWRITE_DEFAULT_MODEL,
         "last_result": "",
         "prompt_locked": False,
@@ -495,6 +488,7 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("style_prompt", "")
         e.setdefault("scene_writer_check", None)
         e.setdefault("structure_splitter_check", None)
+        e.setdefault("block_writer_check", None)
         e.setdefault("last_result", "")
         e.setdefault("model", REWRITE_DEFAULT_MODEL)
         e.setdefault("prompt_locked", False)
@@ -508,6 +502,8 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             e["scene_writer_check"] = None
         if not isinstance(e.get("structure_splitter_check"), dict):
             e["structure_splitter_check"] = None
+        if not isinstance(e.get("block_writer_check"), dict):
+            e["block_writer_check"] = None
 
     for dead in list(stages.keys()):
         if dead not in REWRITE_STAGE_KEYS:
@@ -602,6 +598,9 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         if "structure_splitter_check" in sv:
             v = sv.get("structure_splitter_check")
             e["structure_splitter_check"] = v if isinstance(v, dict) else None
+        if "block_writer_check" in sv:
+            v = sv.get("block_writer_check")
+            e["block_writer_check"] = v if isinstance(v, dict) else None
         if locked_in_body is not None:
             e["prompt_locked"] = bool(locked_in_body)
         user_locked_in_body = sv.get("user_prompt_locked") if "user_prompt_locked" in sv else None
@@ -872,6 +871,7 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "style_prompt": str(cell.get("style_prompt") or ""),
             "scene_writer_check": cell.get("scene_writer_check") if isinstance(cell.get("scene_writer_check"), dict) else None,
             "structure_splitter_check": cell.get("structure_splitter_check") if isinstance(cell.get("structure_splitter_check"), dict) else None,
+            "block_writer_check": cell.get("block_writer_check") if isinstance(cell.get("block_writer_check"), dict) else None,
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
             "style_prompt_locked": bool(cell.get("style_prompt_locked")),

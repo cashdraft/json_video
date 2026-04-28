@@ -62,7 +62,7 @@
                     method="post"
                     action="{{ url_for('delete_job', job_id=job_id) }}"
                     class="rewrite-project-delete-form"
-                    onsubmit="return confirm('Удалить проект {{ job_id }}?');"
+                    data-delete-confirm-form="1"
                 >
                     <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
                 </form>
@@ -644,6 +644,19 @@
             <div class="confirm-modal__actions download-all-modal-actions">
                 <button type="button" class="btn btn-secondary btn-sm hidden" id="download-all-cancel">Отменить</button>
                 <button type="button" class="btn btn-secondary btn-sm hidden" id="download-all-close">Закрыть</button>
+            </div>
+        </div>
+    </div>
+    <div class="confirm-modal hidden" id="job-delete-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-job-delete-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="job-delete-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="job-delete-confirm-title">Удалить проект</h3>
+            </div>
+            <p class="confirm-modal__lead">Точно удалить проект? Он будет удалён безвозвратно.</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="job-delete-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="job-delete-confirm-ok">Да, удалить</button>
             </div>
         </div>
     </div>
@@ -2344,6 +2357,49 @@
                 busyEl.classList.add('hidden');
             }
         });
+    (function () {
+        const modal = document.getElementById('job-delete-confirm-modal');
+        const cancelBtn = document.getElementById('job-delete-confirm-cancel');
+        const okBtn = document.getElementById('job-delete-confirm-ok');
+        let resolver = null;
+
+        function openJobDeleteConfirm() {
+            if (!modal || !cancelBtn || !okBtn) {
+                return Promise.resolve(window.confirm('Точно удалить проект? Он будет удалён безвозвратно.'));
+            }
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            return new Promise(function (resolve) { resolver = resolve; });
+        }
+
+        function closeJobDeleteConfirm(accepted) {
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            if (resolver) {
+                const fn = resolver;
+                resolver = null;
+                fn(Boolean(accepted));
+            }
+        }
+
+        cancelBtn?.addEventListener('click', function () { closeJobDeleteConfirm(false); });
+        okBtn?.addEventListener('click', function () { closeJobDeleteConfirm(true); });
+        modal?.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-job-delete-confirm-close')) closeJobDeleteConfirm(false);
+        });
+
+        const form = document.querySelector('form[data-delete-confirm-form="1"]');
+        if (form) {
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const ok = await openJobDeleteConfirm();
+                if (!ok) return;
+                form.submit();
+            });
+        }
+    })();
+
     })();
     {% endif %}
     </script>

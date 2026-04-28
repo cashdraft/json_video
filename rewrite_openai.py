@@ -108,22 +108,19 @@ def _draft1_wire_payload_for_block(
     model = normalize_rewrite_model(model)
     idx = int(b["index"])
     name = str(b["block_name"])
-    tmin = int(b["target_chars_min"])
     tideal = int(b["target_chars_ideal"])
-    tmax = int(b["target_chars_max"])
+    raw_block = b.get("raw_block") if isinstance(b.get("raw_block"), dict) else {}
+    architect_block_payload: dict[str, Any] = dict(raw_block)
+    architect_block_payload["index"] = idx
+    architect_block_payload["block_name"] = name
+    architect_block_payload["target_chars"] = tideal
+    architect_block_payload["must_cover"] = b["must_cover"]
+    architect_block_payload["must_not_cover"] = b["must_not_cover"]
     prev_short = short_summaries_before[-3:]
     user_payload: dict[str, Any] = {
         "hero_prompt": hero_prompt_sanitized,
         "block_writer_user_promt": block_writer_user_prompt_sanitized,
-        "architect_block": {
-            "index": idx,
-            "block_name": name,
-            "target_chars_min": tmin,
-            "target_chars_ideal": tideal,
-            "target_chars_max": tmax,
-            "must_cover": b["must_cover"],
-            "must_not_cover": b["must_not_cover"],
-        },
+        "architect_block": architect_block_payload,
         "short_summary_context": [
             {"from_block_offset": i + 1, "short_summary": s}
             for i, s in enumerate(reversed(prev_short))
@@ -437,10 +434,19 @@ def _extract_structure_blocks(structure_result: str) -> list[dict[str, Any]] | N
         name = str(b.get("block_name") or "").strip()
         if not name:
             return None
+        # Поддерживаем оба варианта architect.json:
+        # 1) старый: target_chars_min/ideal/max
+        # 2) новый: target_chars (или target_chars_ideal) без min/max
         try:
-            tmin = int(b.get("target_chars_min"))
-            tideal = int(b.get("target_chars_ideal"))
-            tmax = int(b.get("target_chars_max"))
+            if b.get("target_chars_ideal") is not None:
+                tideal = int(b.get("target_chars_ideal"))
+            else:
+                tideal = int(b.get("target_chars"))
+        except (TypeError, ValueError):
+            return None
+        try:
+            tmin = int(b.get("target_chars_min")) if b.get("target_chars_min") is not None else max(1, int(round(tideal * 0.8)))
+            tmax = int(b.get("target_chars_max")) if b.get("target_chars_max") is not None else max(tideal, int(round(tideal * 1.2)))
         except (TypeError, ValueError):
             return None
         if tmin < 1 or tideal < 1 or tmax < 1 or tmin > tmax:
@@ -454,6 +460,7 @@ def _extract_structure_blocks(structure_result: str) -> list[dict[str, Any]] | N
                 "target_chars_max": tmax,
                 "must_cover": b.get("must_cover") if isinstance(b.get("must_cover"), list) else [],
                 "must_not_cover": b.get("must_not_cover") if isinstance(b.get("must_not_cover"), list) else [],
+                "raw_block": dict(b),
             }
         )
     return out
@@ -547,7 +554,7 @@ def iter_draft1_blockwise_completion(
 
     blocks = _extract_structure_blocks(structure_result)
     if not blocks:
-        yield {"type": "error", "message": "Architect Result должен быть JSON с массивом blocks и target_chars_*."}
+        yield {"type": "error", "message": "Architect Result должен быть JSON с массивом blocks и target_chars (или target_chars_ideal)."}
         return
 
     yield {"type": "status", "message": f"Block Writer loop: блоков {len(blocks)}."}
@@ -732,7 +739,7 @@ def iter_draft1_blockwise_completion_legacy(
 
     blocks = _extract_structure_blocks(structure_result)
     if not blocks:
-        yield {"type": "error", "message": "Architect Result должен быть JSON с массивом blocks и target_chars_*."}
+        yield {"type": "error", "message": "Architect Result должен быть JSON с массивом blocks и target_chars (или target_chars_ideal)."}
         return
 
     analysis_compact = analysis_result
