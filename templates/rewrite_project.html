@@ -358,6 +358,7 @@
     const ytTranscribeUrl = {{ url_for('rewrite_youtube_transcribe', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscribeStreamUrl = {{ url_for('rewrite_youtube_transcribe_stream', rewrite_id=rw.rewrite_id) | tojson }};
     const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
+    const ytStateUrl = ('/rewrite/' + encodeURIComponent({{ rw.rewrite_id | tojson }}) + '/youtube/state');
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
     const sourceCountsEl = document.getElementById('rewrite-source-counts');
@@ -396,6 +397,7 @@
     var ytTranscriptReady = false;
     var ytWorking = false;
     var ytAbortController = null;
+    var ytStatePollTimer = null;
     var rewriteStageBusy = false;
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
@@ -499,12 +501,12 @@
             if (ytUrlEl) ytUrlEl.disabled = true;
             if (ytDecodeBtn) ytDecodeBtn.disabled = true;
             if (ytInsertBtn) ytInsertBtn.disabled = true;
-            if (ytStopBtn) ytStopBtn.disabled = !ytWorking;
+            if (ytStopBtn) ytStopBtn.disabled = !ytWorking || !ytAbortController;
             return;
         }
         if (ytUrlEl) ytUrlEl.disabled = ytWorking;
         if (ytDecodeBtn) ytDecodeBtn.disabled = ytWorking;
-        if (ytStopBtn) ytStopBtn.disabled = !ytWorking;
+        if (ytStopBtn) ytStopBtn.disabled = !ytWorking || !ytAbortController;
         if (ytInsertBtn) ytInsertBtn.disabled = ytWorking || !ytTranscriptReady;
     }
 
@@ -940,23 +942,73 @@
         });
     }
 
+    function stopYoutubeStatePoll() {
+        if (ytStatePollTimer) {
+            clearTimeout(ytStatePollTimer);
+            ytStatePollTimer = null;
+        }
+    }
+
+    async function ytPollServerStateOnce() {
+        const r = await fetch(ytStateUrl, { cache: 'no-store' });
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok) return null;
+        return data;
+    }
+
+    function applyYoutubeServerState(data) {
+        if (!data) return;
+        if (data.youtube_title) {
+            setYtVideoTitle(data.youtube_title);
+        }
+        if (data.youtube_transcript_ready) {
+            ytTranscriptReady = true;
+            setYoutubeLocked(true);
+            setYtStatus(
+                'Готово текст ' + String(data.transcript_chars || 0) + ' символов · ' + String(data.transcript_words || 0) + ' слов',
+                false
+            );
+            ytWorking = false;
+            stopYoutubeStatePoll();
+            return;
+        }
+        if (data.youtube_processing) {
+            ytWorking = true;
+            var st = (data.youtube_status || '').trim() || 'Задача YouTube выполняется на сервере…';
+            setYtStatus(st + ' (можно обновлять страницу)', false);
+            if (!ytStatePollTimer) {
+                ytStatePollTimer = setTimeout(ytKeepPollingState, 1800);
+            }
+            return;
+        }
+        ytWorking = false;
+        if (!ytTranscriptReady && data.youtube_status) {
+            setYtStatus(String(data.youtube_status), false);
+        }
+        stopYoutubeStatePoll();
+    }
+
+    async function ytKeepPollingState() {
+        ytStatePollTimer = null;
+        try {
+            var s = await ytPollServerStateOnce();
+            applyYoutubeServerState(s);
+        } catch (e) {
+            ytStatePollTimer = setTimeout(ytKeepPollingState, 2500);
+        } finally {
+            applyYoutubeToolbar();
+        }
+    }
+
     async function ytBootstrapFromServer() {
         if (!openaiOk) {
             applyYoutubeToolbar();
             return;
         }
         try {
-            const r = await fetch(ytTranscriptUrl);
-            const data = await r.json().catch(function () { return {}; });
-            if (!r.ok || !data.ok) return;
-            var txt = (data.text || '').trim();
-            if (!txt) return;
-            ytTranscriptReady = true;
-            setYoutubeLocked(true);
-            setYtStatus(
-                'Готово текст ' + txt.length + ' символов · ' + countWords(txt) + ' слов',
-                false
-            );
+            const state = await ytPollServerStateOnce();
+            applyYoutubeServerState(state);
+            // Не делаем fallback к /youtube/transcript, иначе можно показать текст от старого URL.
         } catch (e) { /* ignore */ }
         finally {
             applyYoutubeToolbar();
@@ -1176,6 +1228,7 @@
             applyYoutubeToolbar();
             return;
         }
+        stopYoutubeStatePoll();
         ytWorking = true;
         ytTranscriptReady = false;
         ytAbortController = new AbortController();
@@ -1221,6 +1274,10 @@
         } finally {
             ytAbortController = null;
             ytWorking = false;
+            try {
+                var st = await ytPollServerStateOnce();
+                applyYoutubeServerState(st);
+            } catch (e2) { /* ignore */ }
             applyYoutubeToolbar();
         }
     }

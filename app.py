@@ -967,6 +967,28 @@ def _rewrite_youtube_clear_partial_downloads(media_dir: Path) -> None:
                 p.unlink(missing_ok=True)
 
 
+def _rewrite_youtube_set_runtime_state(rewrite_id: str, *, processing: bool, phase: str = "", status: str = "") -> None:
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return
+    rw["youtube_processing"] = bool(processing)
+    rw["youtube_phase"] = str(phase or "")
+    rw["youtube_status"] = str(status or "")
+    save_rewrite_job(rewrite_id, rw)
+
+
+def _rewrite_youtube_audio_exists(rw: dict) -> bool:
+    rel = str(rw.get("youtube_audio_file") or "").strip()
+    if not rel:
+        return False
+    ap = (BASE_DIR / rel).resolve()
+    try:
+        ap.relative_to(BASE_DIR.resolve())
+    except ValueError:
+        return False
+    return ap.is_file()
+
+
 def _rewrite_youtube_progress_hooks_with_stall(stall_sec: int, user_hooks: list | None) -> list:
     """Сначала вызывает пользовательские progress_hooks; при отсутствии роста скачанных байт N с — RuntimeError (смена client)."""
     inners: list = list(user_hooks or [])
@@ -1203,6 +1225,10 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "youtube_title": "",
         "youtube_audio_file": "",
         "youtube_transcript_text": "",
+        "youtube_transcript_url": "",
+        "youtube_processing": False,
+        "youtube_phase": "",
+        "youtube_status": "",
     }
 
 
@@ -1248,6 +1274,14 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
         data["youtube_audio_file"] = str(data.get("youtube_audio_file") or "")
         data.setdefault("youtube_transcript_text", "")
         data["youtube_transcript_text"] = str(data.get("youtube_transcript_text") or "")
+        data.setdefault("youtube_transcript_url", "")
+        data["youtube_transcript_url"] = str(data.get("youtube_transcript_url") or "")
+        data.setdefault("youtube_processing", False)
+        data["youtube_processing"] = bool(data.get("youtube_processing"))
+        data.setdefault("youtube_phase", "")
+        data["youtube_phase"] = str(data.get("youtube_phase") or "")
+        data.setdefault("youtube_status", "")
+        data["youtube_status"] = str(data.get("youtube_status") or "")
         return data
     except (json.JSONDecodeError, OSError):
         return None
@@ -1614,6 +1648,7 @@ def rewrite_youtube_verify(rewrite_id: str):
     if rw is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     body = request.get_json(silent=True) or {}
+    prev_url = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
     url = _youtube_url_normalize(str(body.get("youtube_url") or ""))
     if not _youtube_url_is_valid(url):
         rw["youtube_url"] = url
@@ -1673,6 +1708,13 @@ def rewrite_youtube_verify(rewrite_id: str):
     rw["youtube_url"] = url
     rw["youtube_verified"] = True
     rw["youtube_title"] = title
+    if prev_url != url:
+        rw["youtube_audio_file"] = ""
+        rw["youtube_transcript_text"] = ""
+        rw["youtube_transcript_url"] = ""
+        rw["youtube_processing"] = False
+        rw["youtube_phase"] = ""
+        rw["youtube_status"] = ""
     save_rewrite_job(rewrite_id, rw)
     return jsonify({"ok": True, "youtube_title": title})
 
@@ -1805,6 +1847,21 @@ def rewrite_youtube_download_stream(rewrite_id: str):
     event_q: queue.Queue[str | None] = queue.Queue()
     result_holder: dict[str, str | None] = {}
     last_progress_mono = [0.0]
+    last_state_save = [0.0]
+
+    _rewrite_youtube_set_runtime_state(
+        rewrite_id,
+        processing=True,
+        phase="download",
+        status="Скачивание: подготовка серверного потока…",
+    )
+
+    def persist_runtime_status(msg: str, *, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and (now - last_state_save[0] < 1.0):
+            return
+        last_state_save[0] = now
+        _rewrite_youtube_set_runtime_state(rewrite_id, processing=True, phase="download", status=msg)
 
     def emit(obj: dict) -> None:
         event_q.put(json.dumps(obj, ensure_ascii=False))
@@ -1816,17 +1873,22 @@ def rewrite_youtube_download_stream(rewrite_id: str):
             if now - last_progress_mono[0] < 0.22:
                 return
             last_progress_mono[0] = now
+            got = d.get("downloaded_bytes")
             emit(
                 {
                     "type": "progress",
                     "phase": "download",
-                    "downloaded_bytes": d.get("downloaded_bytes"),
+                    "downloaded_bytes": got,
                     "total_bytes": d.get("total_bytes"),
                     "total_bytes_estimate": d.get("total_bytes_estimate"),
                     "speed": d.get("speed"),
                     "eta": d.get("eta"),
                 }
             )
+            try:
+                persist_runtime_status(f"Скачивание аудио: {int(got or 0)} байт…")
+            except Exception:
+                pass
         elif st == "finished":
             emit(
                 {
@@ -1858,6 +1920,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
                         "message": msg,
                     }
                 )
+                persist_runtime_status(msg)
 
             rel, title = _rewrite_youtube_perform_download(
                 rewrite_id,
@@ -1868,8 +1931,20 @@ def rewrite_youtube_download_stream(rewrite_id: str):
             )
             result_holder["rel"] = rel
             result_holder["title"] = title
+            _rewrite_youtube_set_runtime_state(
+                rewrite_id,
+                processing=False,
+                phase="download_done",
+                status="Скачивание аудио завершено.",
+            )
         except Exception as e:
             result_holder["error"] = str(e)
+            _rewrite_youtube_set_runtime_state(
+                rewrite_id,
+                processing=False,
+                phase="download_error",
+                status=f"Ошибка скачивания: {e}",
+            )
         finally:
             event_q.put(None)
 
@@ -1938,6 +2013,7 @@ def rewrite_youtube_transcribe(rewrite_id: str):
     if err:
         return jsonify({"ok": False, "message": err}), 400
     rw["youtube_transcript_text"] = txt or ""
+    rw["youtube_transcript_url"] = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
     save_rewrite_job(rewrite_id, rw)
     return jsonify({"ok": True, "chars": len(rw["youtube_transcript_text"]), "words": len(rw["youtube_transcript_text"].split())})
 
@@ -1962,23 +2038,61 @@ def rewrite_youtube_transcribe_stream(rewrite_id: str):
 
     event_q: queue.Queue[str | None] = queue.Queue()
     result_holder: dict[str, str | None] = {}
+    last_state_save = [0.0]
+
+    _rewrite_youtube_set_runtime_state(
+        rewrite_id,
+        processing=True,
+        phase="transcribe",
+        status="Расшифровка: подготовка…",
+    )
+
+    def persist_runtime_status(msg: str, *, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and (now - last_state_save[0] < 1.0):
+            return
+        last_state_save[0] = now
+        _rewrite_youtube_set_runtime_state(rewrite_id, processing=True, phase="transcribe", status=msg)
 
     def put_progress(ev: dict) -> None:
         event_q.put(json.dumps({"type": "transcribe_progress", **ev}, ensure_ascii=False))
+        msg = str(ev.get("message") or "").strip()
+        if not msg and ev.get("phase") == "chunk" and ev.get("action") == "request":
+            msg = f"Расшифровка: часть {ev.get('index')}/{ev.get('total')}…"
+        if msg:
+            persist_runtime_status(msg)
 
     def worker() -> None:
         try:
             txt, err = _rewrite_transcription_text(api_key, ap, progress=put_progress)
             if err:
                 result_holder["error"] = err
+                _rewrite_youtube_set_runtime_state(
+                    rewrite_id,
+                    processing=False,
+                    phase="transcribe_error",
+                    status=f"Ошибка расшифровки: {err}",
+                )
             else:
                 result_holder["text"] = txt or ""
                 rw2 = load_rewrite_job(rewrite_id)
                 if rw2 is not None:
                     rw2["youtube_transcript_text"] = result_holder["text"]
+                    rw2["youtube_transcript_url"] = _youtube_url_normalize(str(rw2.get("youtube_url") or ""))
+                    rw2["youtube_processing"] = False
+                    rw2["youtube_phase"] = "transcribe_done"
+                    rw2["youtube_status"] = (
+                        f"Готово текст {len(result_holder['text'])} символов · {len(result_holder['text'].split())} слов"
+                    )
                     save_rewrite_job(rewrite_id, rw2)
         except Exception as e:
             result_holder["error"] = str(e)
+            _rewrite_youtube_set_runtime_state(
+                rewrite_id,
+                processing=False,
+                phase="transcribe_error",
+                status=f"Ошибка расшифровки: {e}",
+            )
         finally:
             event_q.put(None)
 
@@ -2024,6 +2138,31 @@ def rewrite_youtube_transcript_get(rewrite_id: str):
         return jsonify({"ok": False, "error": "not_found"}), 404
     txt = str(rw.get("youtube_transcript_text") or "")
     return jsonify({"ok": True, "text": txt})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/state", methods=["GET"])
+def rewrite_youtube_state_get(rewrite_id: str):
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    txt = str(rw.get("youtube_transcript_text") or "").strip()
+    current_url = _youtube_url_normalize(str(rw.get("youtube_url") or ""))
+    transcript_url = _youtube_url_normalize(str(rw.get("youtube_transcript_url") or ""))
+    transcript_matches_url = bool(txt) and bool(current_url) and transcript_url == current_url
+    return jsonify(
+        {
+            "ok": True,
+            "youtube_processing": bool(rw.get("youtube_processing")),
+            "youtube_phase": str(rw.get("youtube_phase") or ""),
+            "youtube_status": str(rw.get("youtube_status") or ""),
+            "youtube_title": str(rw.get("youtube_title") or ""),
+            "youtube_url": current_url,
+            "youtube_audio_ready": _rewrite_youtube_audio_exists(rw),
+            "youtube_transcript_ready": transcript_matches_url,
+            "transcript_chars": (len(txt) if transcript_matches_url else 0),
+            "transcript_words": (len(txt.split()) if transcript_matches_url else 0),
+        }
+    )
 
 
 @app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
