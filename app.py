@@ -303,6 +303,9 @@ def _build_structure_splitter_check(input_text: str, splitter_result_text: str) 
     input_compact_chars = len(input_compact)
     output_compact_chars = len(output_compact)
     delta_compact_chars = output_compact_chars - input_compact_chars
+    has_blocks = len(blocks) > 0
+    has_output_text = output_compact_chars > 0
+    structure_ok = has_blocks and has_output_text
     return {
         "type": "structure_splitter_check",
         "summary": {
@@ -313,8 +316,12 @@ def _build_structure_splitter_check(input_text: str, splitter_result_text: str) 
             "input_compact_chars": input_compact_chars,
             "output_compact_chars": output_compact_chars,
             "delta_compact_chars": delta_compact_chars,
-            "ok": input_chars == output_chars,
-            "ok_compact": input_compact_chars == output_compact_chars,
+            # Для Structure Splitter считаем проверку пройденной, если пришла валидная
+            # структура с блоками и непустым текстом; дельту показываем информационно.
+            "ok": structure_ok,
+            "ok_compact": structure_ok,
+            "strict_ok": input_chars == output_chars,
+            "strict_ok_compact": input_compact_chars == output_compact_chars,
         },
     }
 

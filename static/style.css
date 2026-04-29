@@ -1059,8 +1059,9 @@ textarea::placeholder {
 
 .rewrite-source-counts {
     margin-left: auto;
-    font-size: 0.68rem;
-    line-height: 1.35;
+    font-size: 0.6rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
     color: var(--text-muted);
     white-space: nowrap;
     align-self: center;
@@ -1255,14 +1256,21 @@ textarea::placeholder {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 28px;
-    height: 28px;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
     color: #f07178;
-    font-size: 1.05rem;
+    font-size: 1.15rem;
     font-weight: 700;
     line-height: 1;
     user-select: none;
     cursor: default;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 /* Author rules for .btn-regenerate set display; must beat that so [hidden] actually hides. */
@@ -1288,6 +1296,9 @@ textarea::placeholder {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.65rem 1rem;
     align-items: start;
+    padding-bottom: 0.55rem;
+    margin-bottom: 0.2rem;
+    border-bottom: 1px solid var(--border);
 }
 
 /* Scene Writer: System / User / Style в один ряд */
@@ -1349,25 +1360,55 @@ textarea::placeholder {
 }
 
 .rewrite-editor-check-line {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
+    flex-wrap: nowrap;
     align-items: baseline;
-    gap: 0.45rem;
+    justify-content: space-between;
+    gap: 0.35rem;
+    white-space: nowrap;
 }
 
 .rewrite-editor-check-line__left {
-    justify-self: start;
     text-align: left;
 }
 
+.rewrite-editor-check-line__sep {
+    opacity: 0.9;
+}
+
 .rewrite-editor-check-line__center {
-    justify-self: center;
     text-align: center;
     white-space: nowrap;
 }
 
 .rewrite-editor-check-line__right {
-    justify-self: end;
+    margin-left: auto;
+    text-align: right;
+}
+
+.rewrite-structure-splitter-check-line {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.45rem;
+    white-space: nowrap;
+}
+
+.rewrite-structure-splitter-check-line__in {
+    text-align: left;
+}
+
+.rewrite-structure-splitter-check-line__sep {
+    opacity: 0.9;
+}
+
+.rewrite-structure-splitter-check-line__out {
+    text-align: center;
+}
+
+.rewrite-structure-splitter-check-line__blocks {
+    margin-left: auto;
     text-align: right;
 }
 
@@ -1423,12 +1464,42 @@ textarea::placeholder {
     margin-top: 0.4rem;
 }
 
+.rewrite-scene-writer-check__divider {
+    margin-top: 0.4rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border);
+}
+
 .rewrite-scene-writer-check__row {
     display: grid;
     grid-template-columns: 1fr auto auto auto auto;
     gap: 0.55rem;
     align-items: baseline;
     font-variant-numeric: tabular-nums;
+}
+
+.rewrite-scene-writer-check__blocks-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem 0.9rem;
+    margin-top: 0.4rem;
+}
+
+.rewrite-scene-writer-check__blocks-col {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    align-content: start;
+    align-self: start;
+}
+
+.rewrite-scene-writer-check__block-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto;
+    gap: 0.45rem;
+    align-items: baseline;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .rewrite-scene-writer-check__ok {
@@ -1525,8 +1596,18 @@ textarea::placeholder {
     gap: 0;
 }
 
+.rewrite-stage-card[data-stage-key="scene_writer"].rewrite-stage-card--prompt-collapsed .rewrite-stage-row--controls {
+    gap: 0.65rem 1rem;
+}
+
 .rewrite-stage-row--result .slot-header {
     margin-bottom: 0.5rem;
+}
+
+.rewrite-stage-row--result {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .rewrite-stage-result-toolbar {
@@ -1539,8 +1620,9 @@ textarea::placeholder {
 
 .rewrite-stage-result-toolbar .rewrite-stage-result-counts {
     margin-left: auto;
-    font-size: 0.68rem;
-    line-height: 1.35;
+    font-size: 0.6rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
     color: var(--text-muted);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
