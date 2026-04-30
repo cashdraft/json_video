@@ -6,6 +6,7 @@ ReWrite Master — цепочка этапов: Analysis → Architect → Block
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,33 @@ def build_duration_length_spec_payload(
 
 def _json_user_message(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _normalize_edited_text(raw_text: str) -> str:
+    """Normalize escaped newlines coming from model JSON fields."""
+    txt = str(raw_text or "")
+    # Some model outputs include literal escaped sequences, sometimes double-escaped
+    # (e.g. "\\n", "\\\\n", "\\\\\\n"). Collapse any count of backslashes.
+    txt = re.sub(r"\\+r\\+n", "\n", txt)
+    txt = re.sub(r"\\+n", "\n", txt)
+    txt = re.sub(r"\\+r", "\n", txt)
+    txt = txt.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+    # Keep paragraphing readable but avoid runaway empty lines for TTS stages.
+    txt = re.sub(r"\n{3,}", "\n\n", txt)
+    return txt.strip()
+
+
+def _extract_edited_text(raw_payload: str) -> str:
+    raw = str(raw_payload or "").strip()
+    if not raw:
+        return ""
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return _normalize_edited_text(str(obj.get("edited_text") or ""))
+    except json.JSONDecodeError:
+        pass
+    return _normalize_edited_text(raw)
 
 
 def build_rewrite_system_prompt(
@@ -195,15 +223,7 @@ def build_retention_editor_user_message(
 ) -> str:
     """User для retention_editor: User Promt + edited_text."""
     up = (retention_editor_user_prompt or "").strip()
-    raw = str(edited_text or "").strip()
-    et = ""
-    if raw:
-        try:
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
-                et = str(obj.get("edited_text") or "").strip()
-        except json.JSONDecodeError:
-            et = raw
+    et = _extract_edited_text(edited_text)
     payload: dict[str, Any] = {
         "retention_editor_user_promt": up or "",
         "edited_text": et,
@@ -224,15 +244,7 @@ def build_hook_editor_user_message(
 ) -> str:
     """User для hook_editor: User Promt + edited_text."""
     up = (hook_editor_user_prompt or "").strip()
-    raw = str(edited_text or "").strip()
-    et = ""
-    if raw:
-        try:
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
-                et = str(obj.get("edited_text") or "").strip()
-        except json.JSONDecodeError:
-            et = raw
+    et = _extract_edited_text(edited_text)
     payload: dict[str, Any] = {
         "hook_editor_user_promt": up or "",
         "edited_text": et,
@@ -253,15 +265,7 @@ def build_flow_editor_user_message(
 ) -> str:
     """User для flow_editor: User Promt + edited_text."""
     up = (flow_editor_user_prompt or "").strip()
-    raw = str(edited_text or "").strip()
-    et = ""
-    if raw:
-        try:
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
-                et = str(obj.get("edited_text") or "").strip()
-        except json.JSONDecodeError:
-            et = raw
+    et = _extract_edited_text(edited_text)
     payload: dict[str, Any] = {
         "flow_editor_user_promt": up or "",
         "edited_text": et,
@@ -284,15 +288,7 @@ def build_persona_editor_user_message(
     """User для persona_editor: User Promt + Hero Prompt + edited_text."""
     up = (persona_editor_user_prompt or "").strip()
     hp = (hero_prompt or "").strip()
-    raw = str(edited_text or "").strip()
-    et = ""
-    if raw:
-        try:
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
-                et = str(obj.get("edited_text") or "").strip()
-        except json.JSONDecodeError:
-            et = raw
+    et = _extract_edited_text(edited_text)
     payload: dict[str, Any] = {
         "persona_editor_user_promt": up or "",
         "hero_prompt": hp,
@@ -314,15 +310,7 @@ def build_voiceover_editor_user_message(
 ) -> str:
     """User для voiceover_editor: User Promt + edited_text (без Hero Prompt)."""
     up = (voiceover_editor_user_prompt or "").strip()
-    raw = str(edited_text or "").strip()
-    et = ""
-    if raw:
-        try:
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
-                et = str(obj.get("edited_text") or "").strip()
-        except json.JSONDecodeError:
-            et = raw
+    et = _extract_edited_text(edited_text)
     payload: dict[str, Any] = {
         "voiceover_editor_user_promt": up or "",
         "edited_text": et,
@@ -343,15 +331,7 @@ def build_voice_flow_editor_user_message(
 ) -> str:
     """User для voice_flow_editor: User Promt + edited_text из Voiceover Editor."""
     up = (voice_flow_editor_user_prompt or "").strip()
-    raw = str(edited_text or "").strip()
-    et = ""
-    if raw:
-        try:
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
-                et = str(obj.get("edited_text") or "").strip()
-        except json.JSONDecodeError:
-            et = raw
+    et = _extract_edited_text(edited_text)
     payload: dict[str, Any] = {
         "voice_flow_editor_user_promt": up or "",
         "edited_text": et,
@@ -485,6 +465,7 @@ def default_stage_entry() -> dict[str, Any]:
         "prompt": "",
         "user_prompt": "",
         "style_prompt": "",
+        "past_prompt": "",
         "scene_writer_check": None,
         "structure_splitter_check": None,
         "block_writer_check": None,
@@ -493,6 +474,7 @@ def default_stage_entry() -> dict[str, Any]:
         "prompt_locked": False,
         "user_prompt_locked": False,
         "style_prompt_locked": False,
+        "past_prompt_locked": True,
     }
 
 
@@ -521,6 +503,7 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("prompt", "")
         e.setdefault("user_prompt", "")
         e.setdefault("style_prompt", "")
+        e.setdefault("past_prompt", "")
         e.setdefault("scene_writer_check", None)
         e.setdefault("structure_splitter_check", None)
         e.setdefault("block_writer_check", None)
@@ -529,10 +512,15 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("prompt_locked", False)
         e.setdefault("user_prompt_locked", False)
         e.setdefault("style_prompt_locked", False)
+        e.setdefault("past_prompt_locked", True)
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
         e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
         e["style_prompt_locked"] = bool(e.get("style_prompt_locked"))
+        e["past_prompt_locked"] = bool(e.get("past_prompt_locked"))
+        # UX rule: Past in Promt should be collapsed on page load.
+        if key == "scene_writer":
+            e["past_prompt_locked"] = True
         if not isinstance(e.get("scene_writer_check"), dict):
             e["scene_writer_check"] = None
         if not isinstance(e.get("structure_splitter_check"), dict):
@@ -636,6 +624,8 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["user_prompt"] = str(sv.get("user_prompt") or "")
         if "style_prompt" in sv:
             e["style_prompt"] = str(sv.get("style_prompt") or "")
+        if "past_prompt" in sv:
+            e["past_prompt"] = str(sv.get("past_prompt") or "")
         if "scene_writer_check" in sv:
             v = sv.get("scene_writer_check")
             e["scene_writer_check"] = v if isinstance(v, dict) else None
@@ -653,6 +643,9 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         style_locked_in_body = sv.get("style_prompt_locked") if "style_prompt_locked" in sv else None
         if style_locked_in_body is not None:
             e["style_prompt_locked"] = bool(style_locked_in_body)
+        past_locked_in_body = sv.get("past_prompt_locked") if "past_prompt_locked" in sv else None
+        if past_locked_in_body is not None:
+            e["past_prompt_locked"] = bool(past_locked_in_body)
         if "model" in sv:
             e["model"] = normalize_rewrite_model(str(sv.get("model") or ""))
         if "last_result" in sv:
@@ -926,12 +919,14 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "prompt": str(cell.get("prompt") or ""),
             "user_prompt": str(cell.get("user_prompt") or ""),
             "style_prompt": str(cell.get("style_prompt") or ""),
+            "past_prompt": str(cell.get("past_prompt") or ""),
             "scene_writer_check": cell.get("scene_writer_check") if isinstance(cell.get("scene_writer_check"), dict) else None,
             "structure_splitter_check": cell.get("structure_splitter_check") if isinstance(cell.get("structure_splitter_check"), dict) else None,
             "block_writer_check": cell.get("block_writer_check") if isinstance(cell.get("block_writer_check"), dict) else None,
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
             "style_prompt_locked": bool(cell.get("style_prompt_locked")),
+            "past_prompt_locked": bool(cell.get("past_prompt_locked")),
         }
     return source_text, stages
 

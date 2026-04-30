@@ -222,13 +222,15 @@
             {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
             {% set has_user_prompt = ((cell.user_prompt or '')|trim|length) > 0 %}
             {% set has_style_prompt = ((cell.style_prompt or '')|trim|length) > 0 %}
+            {% set has_past_prompt = ((cell.past_prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
             {% set prompt_locked = cell.prompt_locked|default(false) %}
             {% set user_prompt_locked = cell.user_prompt_locked|default(false) %}
             {% set style_prompt_locked = cell.style_prompt_locked|default(false) %}
+            {% set past_prompt_locked = cell.past_prompt_locked|default(true) %}
             {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-heading">
@@ -293,6 +295,18 @@
                                 </div>
                                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-style-prompt">
                                     <textarea id="rewrite-stage-{{ stage_key }}-style-prompt" class="rewrite-stage-style-prompt rewrite-slot-textarea{% if style_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Стиль/тон для всех сцен…" {% if not openai_key_set %}disabled{% elif style_prompt_locked %}readonly{% endif %}>{{ cell.style_prompt or '' }}</textarea>
+                                </div>
+                            </div>
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-style-prompt-cell">
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge badge-{{ 'yes' if has_past_prompt else 'no' }} rewrite-stage-past-prompt-badge">Past in Promt: {{ 'YES' if has_past_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-past-prompt-toggle{% if past_prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                    </button>
+                                </div>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-past-prompt">
+                                    <textarea id="rewrite-stage-{{ stage_key }}-past-prompt" class="rewrite-stage-past-prompt rewrite-slot-textarea{% if past_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Дополнительный past-контекст для Scene Writer…" {% if not openai_key_set %}disabled{% elif past_prompt_locked %}readonly{% endif %}>{{ cell.past_prompt or '' }}</textarea>
                                 </div>
                             </div>
                             {% endif %}
@@ -1548,6 +1562,7 @@
             applyPromptLockUI(block);
             applyAnalysisUserPromptLockUI(block);
             applyStylePromptLockUI(block);
+            applyPastPromptLockUI(block);
             applyResultLockUI(block);
         });
         syncStageRunButtons();
@@ -1643,12 +1658,20 @@
                     syncStylePromptBadge(block);
                 }
                     }
+                    if (key === 'scene_writer' && cell && typeof cell.past_prompt === 'string') {
+                        var pta = block.querySelector('.rewrite-stage-past-prompt');
+                        if (pta) {
+                            pta.value = cell.past_prompt;
+                            syncPastPromptBadge(block);
+                        }
+                    }
                     block.setAttribute('data-prompt-locked', '1');
                     if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'structure_splitter' || key === 'scene_writer') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
                 block.setAttribute('data-style-prompt-locked', '1');
+                block.setAttribute('data-past-prompt-locked', '1');
             }
                 });
                 templateSelectEl.value = name;
@@ -2008,12 +2031,14 @@
                 prompt: promptEl ? promptEl.value : '',
                 user_prompt: ((block.querySelector('.rewrite-stage-user-prompt') || {}).value || ''),
                 style_prompt: ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || ''),
+                past_prompt: ((block.querySelector('.rewrite-stage-past-prompt') || {}).value || ''),
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
                 last_result: resEl ? (resEl.value || '') : '',
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
                 user_prompt_locked: (block.getAttribute('data-user-prompt-locked') === '1'),
                 style_prompt_locked: (block.getAttribute('data-style-prompt-locked') === '1'),
+                past_prompt_locked: (block.getAttribute('data-past-prompt-locked') === '1'),
                 result_locked: (block.getAttribute('data-result-locked') === '1')
             };
         });
@@ -2211,6 +2236,53 @@
         badge.classList.toggle('badge-no', !hasP);
     }
 
+    function syncPastPromptBadge(block) {
+        const promptEl = block.querySelector('.rewrite-stage-past-prompt');
+        const badge = block.querySelector('.rewrite-stage-past-prompt-badge');
+        if (!promptEl || !badge) return;
+        var hasP = (promptEl.value || '').trim().length > 0;
+        badge.textContent = hasP ? 'Past in Promt: YES' : 'Past in Promt: NO';
+        badge.classList.toggle('badge-yes', hasP);
+        badge.classList.toggle('badge-no', !hasP);
+    }
+
+    function injectPastPromptIntoSceneWriterResult(rawText, pastPrompt) {
+        var txt = String(rawText || '');
+        var pp = String(pastPrompt || '').trim();
+        if (!txt.trim() || !pp) return txt;
+        var changed = false;
+        var out = [];
+        txt.split('\n').forEach(function (ln) {
+            var s = (ln || '').trim();
+            if (!s) {
+                out.push(ln);
+                return;
+            }
+            var obj = null;
+            try {
+                obj = JSON.parse(s);
+            } catch (_) {
+                out.push(ln);
+                return;
+            }
+            if (!obj || typeof obj !== 'object') {
+                out.push(ln);
+                return;
+            }
+            ['start', 'end'].forEach(function (slotName) {
+                var slot = obj[slotName];
+                if (!slot || typeof slot !== 'object') return;
+                var prompt = String(slot.prompt || '').trim();
+                if (!prompt) return;
+                if (prompt.indexOf(pp) === 0) return;
+                slot.prompt = pp + ' ' + prompt;
+                changed = true;
+            });
+            out.push(JSON.stringify(obj));
+        });
+        return changed ? out.join('\n') : txt;
+    }
+
     function applyStylePromptLockUI(block) {
         if (!block) return;
         var sk = block.getAttribute('data-stage-key');
@@ -2219,6 +2291,32 @@
         const ta = block.querySelector('.rewrite-stage-style-prompt');
         const toggle = block.querySelector('.rewrite-stage-style-prompt-toggle');
         const promptWrap = block.querySelector('.rewrite-slot--stage-style-prompt');
+        if (!openaiOk) {
+            if (ta) ta.disabled = true;
+            if (toggle) toggle.disabled = true;
+            if (promptWrap) promptWrap.style.display = 'none';
+            return;
+        }
+        if (ta) {
+            ta.disabled = false;
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+        }
+        if (promptWrap) promptWrap.style.display = locked ? 'none' : '';
+        if (toggle) {
+            toggle.disabled = false;
+            styleToggleBtn(toggle, locked);
+        }
+    }
+
+    function applyPastPromptLockUI(block) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key');
+        if (sk !== 'scene_writer') return;
+        const locked = block.getAttribute('data-past-prompt-locked') === '1';
+        const ta = block.querySelector('.rewrite-stage-past-prompt');
+        const toggle = block.querySelector('.rewrite-stage-past-prompt-toggle');
+        const promptWrap = block.querySelector('.rewrite-slot--stage-past-prompt');
         if (!openaiOk) {
             if (ta) ta.disabled = true;
             if (toggle) toggle.disabled = true;
@@ -2307,6 +2405,13 @@
                     sTa.disabled = !openaiOk;
                     sTa.readOnly = dis || sLocked;
                     sTa.classList.toggle('rewrite-source-textarea--locked', dis || sLocked);
+                }
+                const pTa = block.querySelector('.rewrite-stage-past-prompt');
+                if (pTa) {
+                    const pLocked = block.getAttribute('data-past-prompt-locked') === '1';
+                    pTa.disabled = !openaiOk;
+                    pTa.readOnly = dis || pLocked;
+                    pTa.classList.toggle('rewrite-source-textarea--locked', dis || pLocked);
                 }
             }
             const rLocked = block.getAttribute('data-result-locked') !== '0';
@@ -2469,6 +2574,18 @@
         if (spe) {
             spe.addEventListener('input', function () { syncStylePromptBadge(block); });
         }
+        var ppe = block.querySelector('.rewrite-stage-past-prompt');
+        if (ppe) {
+            ppe.addEventListener('input', function () {
+                syncPastPromptBadge(block);
+                scheduleAutosave(500);
+            });
+            ppe.addEventListener('change', function () {
+                syncPastPromptBadge(block);
+                scheduleAutosave(0);
+            });
+            syncPastPromptBadge(block);
+        }
         applyPromptLockUI(block);
         applyAnalysisUserPromptLockUI(block);
         applyStylePromptLockUI(block);
@@ -2608,6 +2725,51 @@
                     } catch (e2) {
                         block.setAttribute('data-style-prompt-locked', '0');
                         applyStylePromptLockUI(block);
+                        alert(String(e2));
+                    }
+                }
+            });
+        }
+        var pastToggle = block.querySelector('.rewrite-stage-past-prompt-toggle');
+        if (pastToggle) {
+            pastToggle.addEventListener('click', async function () {
+                if (!openaiOk || pastToggle.disabled) return;
+                var locked = block.getAttribute('data-past-prompt-locked') === '1';
+                if (locked) {
+                    block.setAttribute('data-past-prompt-locked', '0');
+                    applyPastPromptLockUI(block);
+                    try {
+                        var ok = await saveToServer();
+                        if (!ok) {
+                            block.setAttribute('data-past-prompt-locked', '1');
+                            applyPastPromptLockUI(block);
+                            alert('Не удалось переключить режим');
+                            return;
+                        }
+                        var pte = block.querySelector('.rewrite-stage-past-prompt');
+                        if (pte) pte.focus();
+                    } catch (e) {
+                        block.setAttribute('data-past-prompt-locked', '1');
+                        applyPastPromptLockUI(block);
+                        alert(String(e));
+                    }
+                } else {
+                    block.setAttribute('data-past-prompt-locked', '1');
+                    applyPastPromptLockUI(block);
+                    try {
+                        var ok2 = await saveToServer();
+                        if (!ok2) {
+                            block.setAttribute('data-past-prompt-locked', '0');
+                            applyPastPromptLockUI(block);
+                            alert('Не удалось сохранить');
+                        } else {
+                            if (!(await trySyncRewriteTemplateToDisk())) {
+                                alertTemplateSyncFailed();
+                            }
+                        }
+                    } catch (e2) {
+                        block.setAttribute('data-past-prompt-locked', '0');
+                        applyPastPromptLockUI(block);
                         alert(String(e2));
                     }
                 }
@@ -2842,11 +3004,17 @@
                         renderStructureSplitterCheck(block, ev);
                     } else if (ev.type === 'result' && typeof ev.content === 'string') {
                         gotFinalResult = true;
+                        var resultContent = ev.content;
+                        if (stageKey === 'scene_writer') {
+                            var pastEl = block.querySelector('.rewrite-stage-past-prompt');
+                            var pastVal = pastEl ? (pastEl.value || '') : '';
+                            resultContent = injectPastPromptIntoSceneWriterResult(resultContent, pastVal);
+                        }
                         if (pipelineStatusForward) {
-                            pipelineStatusForward('[' + stageKey + '] событие result: длина текста ' + ev.content.length + ' симв.');
+                            pipelineStatusForward('[' + stageKey + '] событие result: длина текста ' + resultContent.length + ' симв.');
                         }
                         if (resTextarea) {
-                            resTextarea.value = ev.content;
+                            resTextarea.value = resultContent;
                             resTextarea.classList.remove('rewrite-stage-result--busy');
                             resTextarea.classList.remove('rewrite-stage-result--error');
                         }

@@ -11,6 +11,12 @@ import json
 import mimetypes
 import os
 import queue
+from contextlib import contextmanager
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
 import re
 import shutil
 import subprocess
@@ -116,6 +122,50 @@ JOBS_DIR = BASE_DIR / "data" / "jobs"
 JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
 REWRITE_JOBS_DIR = BASE_DIR / "data" / "rewrite_jobs"
 REWRITE_MEDIA_DIR = BASE_DIR / "data" / "rewrite_media"
+
+# Serialize read-modify-write on the same job JSON. Without this, concurrent
+# requests (bulk ↻ video, overlapping polls) can last-write-win and drop e.g.
+# start.image_url while the UI still shows a thumbnail from an earlier response.
+_fcntl_job_locks_guard = threading.Lock()
+_fcntl_job_locks: dict[str, threading.Lock] = {}
+
+
+@contextmanager
+def _job_file_lock(job_id: str):
+    jid = (job_id or "").strip()
+    if not jid:
+        yield
+        return
+
+    if fcntl is not None:
+        JOBS_DIR.mkdir(parents=True, exist_ok=True)
+        lock_path = JOBS_DIR / f"{jid}.json.lock"
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        return
+
+    with _fcntl_job_locks_guard:
+        lk = _fcntl_job_locks.get(jid)
+        if lk is None:
+            lk = threading.Lock()
+            _fcntl_job_locks[jid] = lk
+    lk.acquire()
+    try:
+        yield
+    finally:
+        lk.release()
+
 
 _REWRITE_ID_RE = re.compile(r"^rewrite_\d{8}_\d{6}$")
 
@@ -277,18 +327,30 @@ def _extract_voiceover_plain_text(raw_text: str) -> str:
 
 
 def _parse_structure_splitter_blocks(raw_text: str) -> list[dict]:
+    blocks, _err = _parse_structure_splitter_blocks_with_error(raw_text)
+    return blocks
+
+
+def _parse_structure_splitter_blocks_with_error(raw_text: str) -> tuple[list[dict], str | None]:
     txt = str(raw_text or "").strip()
     if not txt:
-        return []
+        return [], "empty_result"
+
+    # Accept common manual-edit format: fenced markdown with JSON inside.
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", txt, re.IGNORECASE)
+    if fence_match:
+        txt = str(fence_match.group(1) or "").strip()
+
     try:
         parsed = json.loads(txt)
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as e:
+        return [], f"json_decode_error:{e.msg} at line {e.lineno}, col {e.colno}"
+
     if isinstance(parsed, list):
-        return [x for x in parsed if isinstance(x, dict)]
+        return [x for x in parsed if isinstance(x, dict)], None
     if isinstance(parsed, dict) and isinstance(parsed.get("blocks"), list):
-        return [x for x in parsed.get("blocks") if isinstance(x, dict)]
-    return []
+        return [x for x in parsed.get("blocks") if isinstance(x, dict)], None
+    return [], "json_is_not_list_or_blocks_object"
 
 
 def _build_structure_splitter_check(input_text: str, splitter_result_text: str) -> dict[str, Any]:
@@ -384,6 +446,73 @@ def _scene_writer_block_check(block: dict[str, Any], part_text: str, idx: int) -
         "avg_scene_chars": round(avg_chars, 1),
         "ok": ok,
     }
+
+
+def _inject_past_prompt_into_scene_json_lines(raw_text: str, past_prompt: str) -> str:
+    """Prepends past_prompt to non-empty start/end prompts in line-delimited scene JSON."""
+    txt = str(raw_text or "")
+    pp = str(past_prompt or "").strip()
+    if not txt.strip() or not pp:
+        return txt
+
+    out_lines: list[str] = []
+    changed = False
+    for ln in txt.splitlines():
+        s = ln.strip()
+        if not s:
+            out_lines.append(ln)
+            continue
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError:
+            out_lines.append(ln)
+            continue
+        if not isinstance(obj, dict):
+            out_lines.append(ln)
+            continue
+
+        for slot_name in ("start", "end"):
+            slot = obj.get(slot_name)
+            if not isinstance(slot, dict):
+                continue
+            prompt = str(slot.get("prompt") or "").strip()
+            if not prompt:
+                continue
+            if prompt.startswith(pp):
+                continue
+            slot["prompt"] = f"{pp} {prompt}"
+            changed = True
+
+        out_lines.append(json.dumps(obj, ensure_ascii=False))
+
+    return "\n".join(out_lines) if changed else txt
+
+
+def _sanitize_editor_result_json(raw_result: str) -> str:
+    """Normalize editor JSON result so edited_text has no \\n artifacts."""
+    raw = str(raw_result or "")
+    if not raw.strip():
+        return raw
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    if not isinstance(obj, dict):
+        return raw
+    et = obj.get("edited_text")
+    if not isinstance(et, str):
+        return raw
+
+    txt = et
+    # Handle literal escaped sequences first (possibly double-escaped).
+    txt = re.sub(r"\\+r\\+n", " ", txt)
+    txt = re.sub(r"\\+n", " ", txt)
+    txt = re.sub(r"\\+r", " ", txt)
+    # Then normalize real line breaks.
+    txt = txt.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    txt = re.sub(r"[ \t]{2,}", " ", txt).strip()
+    obj["edited_text"] = txt
+    return json.dumps(obj, ensure_ascii=False)
 
 
 def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
@@ -629,34 +758,35 @@ def save_job(job_id: str, job: dict) -> None:
 
 def update_job_field(job_id: str, field: str, value) -> bool:
     """Обновляет поле в job-файле. Возвращает True при успехе."""
-    job = load_job(job_id)
-    if job is None:
-        return False
-    job[field] = value
-    filepath = JOBS_DIR / f"{job_id}.json"
-    JOBS_DIR.mkdir(parents=True, exist_ok=True)
-    tmp_name = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=str(filepath.parent),
-            prefix=f"{filepath.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as f:
-            tmp_name = f.name
-            json.dump(job, f, ensure_ascii=False, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_name, filepath)
-    finally:
-        if tmp_name and os.path.exists(tmp_name):
-            try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-    return True
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return False
+        job[field] = value
+        filepath = JOBS_DIR / f"{job_id}.json"
+        JOBS_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_name = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=str(filepath.parent),
+                prefix=f"{filepath.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                tmp_name = f.name
+                json.dump(job, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, filepath)
+        finally:
+            if tmp_name and os.path.exists(tmp_name):
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+        return True
 
 
 def list_jobs() -> list[dict]:
@@ -2839,17 +2969,37 @@ def rewrite_project_run(rewrite_id: str):
             yield json.dumps({"type": "result", "content": split_result}, ensure_ascii=False) + "\n"
         elif stage_key == "scene_writer":
             raw_blocks = str(structure_splitter_text or "").strip()
-            blocks: list[dict] = []
-            try:
-                parsed = json.loads(raw_blocks) if raw_blocks else []
-                if isinstance(parsed, list):
-                    blocks = [b for b in parsed if isinstance(b, dict)]
-                elif isinstance(parsed, dict) and isinstance(parsed.get("blocks"), list):
-                    blocks = [b for b in parsed.get("blocks") if isinstance(b, dict)]
-            except json.JSONDecodeError:
-                blocks = []
+            scene_writer_past_prompt = str(
+                ((stages_snap.get("scene_writer") or {}).get("past_prompt") or "")
+            ).strip()
+            # Fallback: if frontend snapshot missed past_prompt (stale JS/cache),
+            # take persisted value from rewrite job JSON.
+            if not scene_writer_past_prompt:
+                rw_saved = load_rewrite_job(rewrite_id)
+                if isinstance(rw_saved, dict):
+                    st_saved = rw_saved.get("stages") if isinstance(rw_saved.get("stages"), dict) else {}
+                    sw_saved = st_saved.get("scene_writer") if isinstance(st_saved, dict) else {}
+                    if isinstance(sw_saved, dict):
+                        scene_writer_past_prompt = str(sw_saved.get("past_prompt") or "").strip()
+            blocks, parse_err = _parse_structure_splitter_blocks_with_error(raw_blocks)
             if not blocks:
-                yield json.dumps({"type": "error", "message": "Structure Splitter не вернул список блоков."}, ensure_ascii=False) + "\n"
+                human_reason = "пустой или невалидный JSON"
+                if parse_err == "empty_result":
+                    human_reason = "Result пустой"
+                elif parse_err and parse_err.startswith("json_decode_error:"):
+                    human_reason = parse_err.replace("json_decode_error:", "")
+                elif parse_err == "json_is_not_list_or_blocks_object":
+                    human_reason = "ожидался JSON-массив блоков или объект с полем blocks"
+                yield json.dumps(
+                    {
+                        "type": "error",
+                        "message": (
+                            "Structure Splitter не вернул список блоков. "
+                            f"Причина: {human_reason}."
+                        ),
+                    },
+                    ensure_ascii=False,
+                ) + "\n"
                 return
             total = len(blocks)
             acc_parts: list[str] = []
@@ -2878,6 +3028,7 @@ def rewrite_project_run(rewrite_id: str):
                         return
                     elif t == "status":
                         yield json.dumps({"type": "status", "message": f"[{i}/{total}] {str(item.get('message') or '')}"}, ensure_ascii=False) + "\n"
+                part = _inject_past_prompt_into_scene_json_lines(part, scene_writer_past_prompt)
                 acc_parts.append(part)
                 block_checks.append(_scene_writer_block_check(block, part, i))
             full = "\n\n".join([p for p in acc_parts if p]).strip()
@@ -2915,6 +3066,22 @@ def rewrite_project_run(rewrite_id: str):
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
+                if (
+                    stage_key
+                    in (
+                        "continuity_editor",
+                        "retention_editor",
+                        "hook_editor",
+                        "flow_editor",
+                        "persona_editor",
+                        "voiceover_editor",
+                        "voice_flow_editor",
+                    )
+                    and str(item.get("type") or "") == "result"
+                    and isinstance(item.get("content"), str)
+                ):
+                    item = dict(item)
+                    item["content"] = _sanitize_editor_result_json(str(item.get("content") or ""))
                 yield json.dumps(item, ensure_ascii=False) + "\n"
 
     return Response(
@@ -3052,15 +3219,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         txt = _format_openai_wire_payloads_txt(wire_bodies, header_lines=hdr or None)
     elif stage_key == "scene_writer":
         raw_blocks = str(structure_splitter_text or "").strip()
-        blocks_sw: list[dict] = []
-        try:
-            parsed_sw = json.loads(raw_blocks) if raw_blocks else []
-            if isinstance(parsed_sw, list):
-                blocks_sw = [b for b in parsed_sw if isinstance(b, dict)]
-            elif isinstance(parsed_sw, dict) and isinstance(parsed_sw.get("blocks"), list):
-                blocks_sw = [b for b in parsed_sw.get("blocks") if isinstance(b, dict)]
-        except json.JSONDecodeError:
-            blocks_sw = []
+        blocks_sw, _parse_err_sw = _parse_structure_splitter_blocks_with_error(raw_blocks)
         wire_bodies_sw: list[dict[str, Any]] = []
         total_sw = len(blocks_sw)
         for i, block in enumerate(blocks_sw, start=1):
@@ -3136,11 +3295,6 @@ def save():
 
 @app.route("/job/<job_id>/parse", methods=["POST"])
 def parse_for_job(job_id: str):
-    job = load_job(job_id)
-    if job is None:
-        flash("Проект не найден.", "error")
-        return redirect(url_for("video_index"))
-
     raw_text = request.form.get("json_input", "")
     aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
     resolution = request.form.get("resolution", "2K")
@@ -3157,56 +3311,62 @@ def parse_for_job(job_id: str):
             flash(err, "error")
         return redirect(url_for("job_page", job_id=job_id))
 
-    # Keep existing generated media for same scene_id+slot when prompt hasn't changed.
-    old_scenes = job.get("scenes", [])
-    old_map: dict[tuple[str, str], dict] = {}
-    if isinstance(old_scenes, list):
-        for old in old_scenes:
-            if not isinstance(old, dict):
-                continue
-            sid = str(old.get("scene_id") or "")
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            flash("Проект не найден.", "error")
+            return redirect(url_for("video_index"))
+
+        # Keep existing generated media for same scene_id+slot when prompt hasn't changed.
+        old_scenes = job.get("scenes", [])
+        old_map: dict[tuple[str, str], dict] = {}
+        if isinstance(old_scenes, list):
+            for old in old_scenes:
+                if not isinstance(old, dict):
+                    continue
+                sid = str(old.get("scene_id") or "")
+                for slot in ("start", "end", "video"):
+                    slot_obj = old.get(slot)
+                    if isinstance(slot_obj, dict):
+                        old_map[(sid, slot)] = slot_obj
+
+        for scene in scenes:
+            sid = str(scene.get("scene_id") or "")
             for slot in ("start", "end", "video"):
-                slot_obj = old.get(slot)
-                if isinstance(slot_obj, dict):
-                    old_map[(sid, slot)] = slot_obj
+                new_slot = scene.get(slot) if isinstance(scene.get(slot), dict) else {"prompt": None}
+                old_slot = old_map.get((sid, slot))
+                if not isinstance(old_slot, dict):
+                    continue
+                if (new_slot.get("prompt") or "") != (old_slot.get("prompt") or ""):
+                    continue
+                for k in ("image_url", "video_url", "video_quality", "generation"):
+                    if k in old_slot:
+                        new_slot[k] = old_slot[k]
+                scene[slot] = new_slot
 
-    for scene in scenes:
-        sid = str(scene.get("scene_id") or "")
-        for slot in ("start", "end", "video"):
-            new_slot = scene.get(slot) if isinstance(scene.get(slot), dict) else {"prompt": None}
-            old_slot = old_map.get((sid, slot))
-            if not isinstance(old_slot, dict):
-                continue
-            if (new_slot.get("prompt") or "") != (old_slot.get("prompt") or ""):
-                continue
-            for k in ("image_url", "video_url", "video_quality", "generation"):
-                if k in old_slot:
-                    new_slot[k] = old_slot[k]
-            scene[slot] = new_slot
+        meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+        meta["aspect_ratio"] = aspect_ratio
+        meta["video_duration"] = 10
+        meta["image_model"] = image_model
+        meta["image_model_label"] = image_model_label(image_model)
+        meta["video_model"] = video_model
+        meta["video_model_label"] = video_model_label(video_model)
+        meta["resolution"] = resolution
+        meta["output_format"] = "jpg"
+        meta["image_template"] = image_template
 
-    meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
-    meta["aspect_ratio"] = aspect_ratio
-    meta["video_duration"] = 10
-    meta["image_model"] = image_model
-    meta["image_model_label"] = image_model_label(image_model)
-    meta["video_model"] = video_model
-    meta["video_model_label"] = video_model_label(video_model)
-    meta["resolution"] = resolution
-    meta["output_format"] = "jpg"
-    meta["image_template"] = image_template
-
-    job["raw_input"] = raw_text
-    job["parsed_scenes"] = scenes
-    job["scenes"] = scenes
-    job["selected_aspect_ratio"] = aspect_ratio
-    job["selected_video_duration"] = 10
-    job["selected_image_model"] = image_model
-    job["selected_video_model"] = video_model
-    job["selected_resolution"] = resolution
-    job["selected_image_template"] = image_template
-    job["job_meta"] = meta
-    job["status"] = "ready" if scenes else "draft"
-    save_job(job_id, job)
+        job["raw_input"] = raw_text
+        job["parsed_scenes"] = scenes
+        job["scenes"] = scenes
+        job["selected_aspect_ratio"] = aspect_ratio
+        job["selected_video_duration"] = 10
+        job["selected_image_model"] = image_model
+        job["selected_video_model"] = video_model
+        job["selected_resolution"] = resolution
+        job["selected_image_template"] = image_template
+        job["job_meta"] = meta
+        job["status"] = "ready" if scenes else "draft"
+        save_job(job_id, job)
 
     flash(f"Сцены обновлены: {len(scenes)}.", "success")
     return redirect(url_for("job_page", job_id=job_id))
@@ -3215,57 +3375,68 @@ def parse_for_job(job_id: str):
 @app.route("/job/<job_id>/generate/start", methods=["POST"])
 def generate_slot_start(job_id: str):
     """Старт генерации для слота (start/end/video). Возвращает task_id."""
-    job = load_job(job_id)
-    if job is None:
-        return jsonify({"error": "Job not found"}), 404
-
     data = request.get_json() or {}
-    scene_idx = data.get("scene_index", 0)
+    try:
+        scene_idx = int(data.get("scene_index", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid scene index"}), 400
     slot = data.get("slot", "start")  # start | end | video
 
-    scenes = job.get("scenes", [])
-    if scene_idx < 0 or scene_idx >= len(scenes):
-        return jsonify({"error": "Invalid scene index"}), 400
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"error": "Job not found"}), 404
 
-    scene = scenes[scene_idx]
-    meta = job.get("job_meta", {})
-    aspect_ratio = normalize_aspect_ratio(meta.get("aspect_ratio", "16:9"), "16:9")
-    resolution = meta.get("resolution", "2K")
-    output_format = meta.get("output_format", "jpg")
-    video_model = normalize_video_model(meta.get("video_model", "veo3_fast"))
-    video_duration = int(meta.get("video_duration", 10) or 10)
+        scenes = job.get("scenes", [])
+        if scene_idx < 0 or scene_idx >= len(scenes):
+            return jsonify({"error": "Invalid scene index"}), 400
 
-    prompt = None
-    if slot == "start":
-        prompt = scene.get("start", {}).get("prompt")
-    elif slot == "end":
-        prompt = scene.get("end", {}).get("prompt")
-    elif slot == "video":
-        prompt = scene.get("video", {}).get("prompt")
+        scene = scenes[scene_idx]
+        if not isinstance(scene, dict):
+            return jsonify({"error": "Invalid scene"}), 400
 
-    if not prompt:
-        return jsonify({"error": f"No prompt for {slot}"}), 400
+        scene_id_key = str(scene.get("scene_id") or "").strip()
+        meta = job.get("job_meta", {}) if isinstance(job.get("job_meta"), dict) else {}
+        aspect_ratio = normalize_aspect_ratio(meta.get("aspect_ratio", "16:9"), "16:9")
+        resolution = meta.get("resolution", "2K")
+        output_format = meta.get("output_format", "jpg")
+        video_model = normalize_video_model(meta.get("video_model", "veo3_fast"))
+        video_duration = int(meta.get("video_duration", 10) or 10)
+        image_template_id = (meta.get("image_template") or "").strip()
 
-    video_image_urls: list[str] = []
-    video_generation_type = "TEXT_2_VIDEO"
-    if slot == "video":
-        start_prompt_exists = bool(scene.get("start", {}).get("prompt"))
-        end_prompt_exists = bool(scene.get("end", {}).get("prompt"))
-        start_image_url = scene.get("start", {}).get("image_url")
-        end_image_url = scene.get("end", {}).get("image_url")
+        prompt = None
+        if slot == "start":
+            prompt = scene.get("start", {}).get("prompt")
+        elif slot == "end":
+            prompt = scene.get("end", {}).get("prompt")
+        elif slot == "video":
+            prompt = scene.get("video", {}).get("prompt")
+        else:
+            return jsonify({"error": "Bad slot"}), 400
 
-        if start_prompt_exists and not start_image_url:
-            return jsonify({"error": "Generate Start image first"}), 400
-        if end_prompt_exists and not end_image_url:
-            return jsonify({"error": "Generate End image first"}), 400
+        if not prompt:
+            return jsonify({"error": f"No prompt for {slot}"}), 400
 
-        if start_image_url:
-            video_image_urls.append(start_image_url)
-        if end_image_url:
-            video_image_urls.append(end_image_url)
+        video_image_urls: list[str] = []
+        video_generation_type = "TEXT_2_VIDEO"
+        if slot == "video":
+            start_prompt_exists = bool(scene.get("start", {}).get("prompt"))
+            end_prompt_exists = bool(scene.get("end", {}).get("prompt"))
+            start_image_url = scene.get("start", {}).get("image_url")
+            end_image_url = scene.get("end", {}).get("image_url")
 
-        if video_image_urls:
-            video_generation_type = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+            if start_prompt_exists and not start_image_url:
+                return jsonify({"error": "Generate Start image first"}), 400
+            if end_prompt_exists and not end_image_url:
+                return jsonify({"error": "Generate End image first"}), 400
+
+            if start_image_url:
+                video_image_urls.append(start_image_url)
+            if end_image_url:
+                video_image_urls.append(end_image_url)
+
+            if video_image_urls:
+                video_generation_type = "FIRST_AND_LAST_FRAMES_2_VIDEO"
 
     try:
         if slot == "video":
@@ -3287,7 +3458,7 @@ def generate_slot_start(job_id: str):
                 )
         else:
             image_input_urls: list[str] = []
-            tid = (meta.get("image_template") or "").strip()
+            tid = image_template_id
             if tid:
                 td = safe_template_dir(IMAGE_TEMPLATES_DIR, tid)
                 if not td:
@@ -3318,29 +3489,52 @@ def generate_slot_start(job_id: str):
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
 
+    started_ts = datetime.now().timestamp()
+    resolved_idx = scene_idx
     GENERATION_TASKS[task_id] = {
         "job_id": job_id,
-        "scene_idx": scene_idx,
+        "scene_idx": resolved_idx,
         "slot": slot,
-        "started_at": datetime.now().timestamp(),
+        "started_at": started_ts,
         "video_model": video_model if slot == "video" else "",
     }
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            GENERATION_TASKS.pop(task_id, None)
+            return jsonify({"error": "Job not found"}), 404
+        scenes = job.get("scenes", [])
+        scene = None
+        if scene_id_key:
+            for i, sc in enumerate(scenes):
+                if isinstance(sc, dict) and str(sc.get("scene_id") or "").strip() == scene_id_key:
+                    resolved_idx = i
+                    scene = sc
+                    break
+        if scene is None and 0 <= scene_idx < len(scenes):
+            resolved_idx = scene_idx
+            scene = scenes[scene_idx]
+        if not isinstance(scene, dict):
+            GENERATION_TASKS.pop(task_id, None)
+            return jsonify({"error": "Scene list changed; retry"}), 409
 
-    # Persist in job file to survive page reload/restart.
-    scene[slot] = scene.get(slot) or {"prompt": prompt}
-    # If user starts regeneration, hide previous media until new result is ready.
-    scene[slot].pop("image_url", None)
-    scene[slot].pop("video_url", None)
-    if slot == "video":
-        scene[slot].pop("video_quality", None)
-    scene[slot]["generation"] = {
-        "task_id": task_id,
-        "state": "submitted",
-        "started_at": datetime.now().timestamp(),
-        "canceled": False,
-    }
-    job["scenes"] = scenes
-    save_job(job_id, job)
+        # Persist in job file to survive page reload/restart.
+        scene[slot] = scene.get(slot) or {"prompt": prompt}
+        # If user starts regeneration, hide previous media until new result is ready.
+        scene[slot].pop("image_url", None)
+        scene[slot].pop("video_url", None)
+        if slot == "video":
+            scene[slot].pop("video_quality", None)
+        scene[slot]["generation"] = {
+            "task_id": task_id,
+            "state": "submitted",
+            "started_at": started_ts,
+            "canceled": False,
+        }
+        job["scenes"] = scenes
+        save_job(job_id, job)
+
+    GENERATION_TASKS[task_id]["scene_idx"] = resolved_idx
 
     return jsonify({"task_id": task_id, "state": "submitted", "elapsed_seconds": 0})
 
@@ -3358,26 +3552,27 @@ def generate_slot_status(job_id: str):
 
     # Recover task meta from persisted job if server memory lost.
     if not task_meta:
-        job = load_job(job_id)
-        if not job:
-            return jsonify({"error": "Job not found"}), 404
-        for idx, scene in enumerate(job.get("scenes", [])):
-            for slot_name in ("start", "end", "video"):
-                slot_obj = scene.get(slot_name, {})
-                gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
-                if gen.get("task_id") == task_id and not gen.get("canceled"):
-                    task_meta = {
-                        "job_id": job_id,
-                        "scene_idx": idx,
-                        "slot": slot_name,
-                        "started_at": gen.get("started_at", datetime.now().timestamp()),
-                    }
-                    GENERATION_TASKS[task_id] = task_meta
+        with _job_file_lock(job_id):
+            job = load_job(job_id)
+            if not job:
+                return jsonify({"error": "Job not found"}), 404
+            for idx, scene in enumerate(job.get("scenes", [])):
+                for slot_name in ("start", "end", "video"):
+                    slot_obj = scene.get(slot_name, {})
+                    gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
+                    if gen.get("task_id") == task_id and not gen.get("canceled"):
+                        task_meta = {
+                            "job_id": job_id,
+                            "scene_idx": idx,
+                            "slot": slot_name,
+                            "started_at": gen.get("started_at", datetime.now().timestamp()),
+                        }
+                        GENERATION_TASKS[task_id] = task_meta
+                        break
+                if task_meta:
                     break
-            if task_meta:
-                break
-        if not task_meta:
-            return jsonify({"error": "task_id not found"}), 404
+            if not task_meta:
+                return jsonify({"error": "task_id not found"}), 404
 
     elapsed_seconds = int(datetime.now().timestamp() - task_meta["started_at"])
 
@@ -3438,24 +3633,25 @@ def generate_slot_status(job_id: str):
             if vm == "grok-imagine/image-to-video":
                 response["url"] = url
                 if url:
-                    job = load_job(job_id)
-                    if job is not None:
-                        scene_idx = task_meta["scene_idx"]
-                        scenes = job.get("scenes", [])
-                        if 0 <= scene_idx < len(scenes):
-                            scene = scenes[scene_idx]
-                            scene[slot] = scene.get(slot) or {"prompt": None}
-                            scene[slot]["video_url"] = url
-                            scene[slot]["video_quality"] = "720p"
-                            scene[slot]["generation"] = {
-                                "task_id": task_id,
-                                "state": "success",
-                                "started_at": task_meta["started_at"],
-                                "completed_at": datetime.now().timestamp(),
-                                "canceled": False,
-                            }
-                            job["scenes"] = scenes
-                            save_job(job_id, job)
+                    with _job_file_lock(job_id):
+                        job = load_job(job_id)
+                        if job is not None:
+                            scene_idx = task_meta["scene_idx"]
+                            scenes = job.get("scenes", [])
+                            if 0 <= scene_idx < len(scenes):
+                                scene = scenes[scene_idx]
+                                scene[slot] = scene.get(slot) or {"prompt": None}
+                                scene[slot]["video_url"] = url
+                                scene[slot]["video_quality"] = "720p"
+                                scene[slot]["generation"] = {
+                                    "task_id": task_id,
+                                    "state": "success",
+                                    "started_at": task_meta["started_at"],
+                                    "completed_at": datetime.now().timestamp(),
+                                    "canceled": False,
+                                }
+                                job["scenes"] = scenes
+                                save_job(job_id, job)
                 GENERATION_TASKS.pop(task_id, None)
             else:
                 # Show base video immediately, then keep polling until 1080p is ready.
@@ -3481,112 +3677,122 @@ def generate_slot_status(job_id: str):
                 except RuntimeError as e:
                     hd_error = str(e)
 
-                job = load_job(job_id)
-                if job is not None:
-                    scene_idx = task_meta["scene_idx"]
-                    scenes = job.get("scenes", [])
-                    if 0 <= scene_idx < len(scenes):
-                        scene = scenes[scene_idx]
-                        scene[slot] = scene.get(slot) or {"prompt": None}
-                        if url:
-                            scene[slot]["video_url"] = url
-                            scene[slot]["video_quality"] = "720p"
+                with _job_file_lock(job_id):
+                    job = load_job(job_id)
+                    if job is not None:
+                        scene_idx = task_meta["scene_idx"]
+                        scenes = job.get("scenes", [])
+                        if 0 <= scene_idx < len(scenes):
+                            scene = scenes[scene_idx]
+                            scene[slot] = scene.get(slot) or {"prompt": None}
+                            if url:
+                                scene[slot]["video_url"] = url
+                                scene[slot]["video_quality"] = "720p"
 
-                        if hd_done and hd_url:
-                            scene[slot]["video_url"] = hd_url
-                            scene[slot]["video_quality"] = "1080p"
+                            if hd_done and hd_url:
+                                scene[slot]["video_url"] = hd_url
+                                scene[slot]["video_quality"] = "1080p"
+                                scene[slot]["generation"] = {
+                                    "task_id": task_id,
+                                    "state": "success",
+                                    "started_at": task_meta["started_at"],
+                                    "completed_at": datetime.now().timestamp(),
+                                    "hd_state": "done",
+                                    "hd_started_at": hd_started_at,
+                                    "canceled": False,
+                                }
+                                response["state"] = "success"
+                                response["state_text"] = "Generation complete"
+                                response["url"] = hd_url
+                                response["hd_status_text"] = "1080p - done"
+                                response["hd_elapsed_seconds"] = int(
+                                    datetime.now().timestamp() - hd_started_at
+                                )
+                                GENERATION_TASKS.pop(task_id, None)
+                            else:
+                                scene[slot]["video_quality"] = "720p"
+                                scene[slot]["generation"] = {
+                                    "task_id": task_id,
+                                    "state": "upgrading_1080",
+                                    "started_at": task_meta["started_at"],
+                                    "hd_state": "waiting",
+                                    "hd_started_at": hd_started_at,
+                                    "hd_error": hd_error,
+                                    "canceled": False,
+                                }
+                            job["scenes"] = scenes
+                            save_job(job_id, job)
+        else:
+            response["url"] = url
+            if url:
+                with _job_file_lock(job_id):
+                    job = load_job(job_id)
+                    if job is not None:
+                        scene_idx = task_meta["scene_idx"]
+                        scenes = job.get("scenes", [])
+                        if 0 <= scene_idx < len(scenes):
+                            scene = scenes[scene_idx]
+                            scene[slot] = scene.get(slot) or {"prompt": None}
+                            scene[slot]["image_url"] = url
                             scene[slot]["generation"] = {
                                 "task_id": task_id,
                                 "state": "success",
                                 "started_at": task_meta["started_at"],
                                 "completed_at": datetime.now().timestamp(),
-                                "hd_state": "done",
-                                "hd_started_at": hd_started_at,
                                 "canceled": False,
                             }
-                            response["state"] = "success"
-                            response["state_text"] = "Generation complete"
-                            response["url"] = hd_url
-                            response["hd_status_text"] = "1080p - done"
-                            response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
-                            GENERATION_TASKS.pop(task_id, None)
-                        else:
-                            scene[slot]["video_quality"] = "720p"
-                            scene[slot]["generation"] = {
-                                "task_id": task_id,
-                                "state": "upgrading_1080",
-                                "started_at": task_meta["started_at"],
-                                "hd_state": "waiting",
-                                "hd_started_at": hd_started_at,
-                                "hd_error": hd_error,
-                                "canceled": False,
-                            }
-                        job["scenes"] = scenes
-                        save_job(job_id, job)
-        else:
-            response["url"] = url
-            if url:
-                job = load_job(job_id)
-                if job is not None:
-                    scene_idx = task_meta["scene_idx"]
-                    scenes = job.get("scenes", [])
-                    if 0 <= scene_idx < len(scenes):
-                        scene = scenes[scene_idx]
-                        scene[slot] = scene.get(slot) or {"prompt": None}
-                        scene[slot]["image_url"] = url
-                        scene[slot]["generation"] = {
-                            "task_id": task_id,
-                            "state": "success",
-                            "started_at": task_meta["started_at"],
-                            "completed_at": datetime.now().timestamp(),
-                            "canceled": False,
-                        }
-                        job["scenes"] = scenes
-                        save_job(job_id, job)
+                            job["scenes"] = scenes
+                            save_job(job_id, job)
             GENERATION_TASKS.pop(task_id, None)
     elif state == "fail":
         response["error"] = result.get("error", "Generation failed")
-        job = load_job(job_id)
-        if job is not None:
-            scene_idx = task_meta["scene_idx"]
-            slot = task_meta["slot"]
-            scenes = job.get("scenes", [])
-            if 0 <= scene_idx < len(scenes):
-                scene = scenes[scene_idx]
-                scene[slot] = scene.get(slot) or {"prompt": None}
-                if slot == "video":
-                    scene[slot].pop("video_quality", None)
-                scene[slot]["generation"] = {
-                    "task_id": task_id,
-                    "state": "fail",
-                    "started_at": task_meta["started_at"],
-                    "completed_at": datetime.now().timestamp(),
-                    "canceled": False,
-                    "error": response["error"],
-                }
-                job["scenes"] = scenes
-                save_job(job_id, job)
+        with _job_file_lock(job_id):
+            job = load_job(job_id)
+            if job is not None:
+                scene_idx = task_meta["scene_idx"]
+                slot = task_meta["slot"]
+                scenes = job.get("scenes", [])
+                if 0 <= scene_idx < len(scenes):
+                    scene = scenes[scene_idx]
+                    scene[slot] = scene.get(slot) or {"prompt": None}
+                    if slot == "video":
+                        scene[slot].pop("video_quality", None)
+                    scene[slot]["generation"] = {
+                        "task_id": task_id,
+                        "state": "fail",
+                        "started_at": task_meta["started_at"],
+                        "completed_at": datetime.now().timestamp(),
+                        "canceled": False,
+                        "error": response["error"],
+                    }
+                    job["scenes"] = scenes
+                    save_job(job_id, job)
         GENERATION_TASKS.pop(task_id, None)
     else:
         # Persist progress for refresh/recovery.
-        job = load_job(job_id)
-        if job is not None:
-            scene_idx = task_meta["scene_idx"]
-            slot = task_meta["slot"]
-            scenes = job.get("scenes", [])
-            if 0 <= scene_idx < len(scenes):
-                scene = scenes[scene_idx]
-                scene[slot] = scene.get(slot) or {"prompt": None}
-                scene[slot]["generation"] = {
-                    "task_id": task_id,
-                    "state": state,
-                    "started_at": task_meta["started_at"],
-                    "hd_state": scene[slot].get("generation", {}).get("hd_state") if slot == "video" else None,
-                    "hd_started_at": scene[slot].get("generation", {}).get("hd_started_at") if slot == "video" else None,
-                    "canceled": False,
-                }
-                job["scenes"] = scenes
-                save_job(job_id, job)
+        with _job_file_lock(job_id):
+            job = load_job(job_id)
+            if job is not None:
+                scene_idx = task_meta["scene_idx"]
+                slot = task_meta["slot"]
+                scenes = job.get("scenes", [])
+                if 0 <= scene_idx < len(scenes):
+                    scene = scenes[scene_idx]
+                    scene[slot] = scene.get(slot) or {"prompt": None}
+                    scene[slot]["generation"] = {
+                        "task_id": task_id,
+                        "state": state,
+                        "started_at": task_meta["started_at"],
+                        "hd_state": scene[slot].get("generation", {}).get("hd_state")
+                        if slot == "video"
+                        else None,
+                        "hd_started_at": scene[slot].get("generation", {}).get("hd_started_at")
+                        if slot == "video"
+                        else None,
+                        "canceled": False,
+                    }
+                    job["scenes"] = scenes
+                    save_job(job_id, job)
 
     return jsonify(response)
 
@@ -3604,20 +3810,21 @@ def generate_slot_cancel(job_id: str):
         return jsonify({"error": "task_id does not belong to this job"}), 403
 
     # Mark canceled in persisted job.
-    job = load_job(job_id)
-    if job:
-        scenes = job.get("scenes", [])
-        for scene in scenes:
-            for slot_name in ("start", "end", "video"):
-                slot_obj = scene.get(slot_name, {})
-                gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
-                if gen.get("task_id") == task_id:
-                    gen["canceled"] = True
-                    gen["state"] = "canceled"
-                    gen["completed_at"] = datetime.now().timestamp()
-                    scene[slot_name]["generation"] = gen
-        job["scenes"] = scenes
-        save_job(job_id, job)
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job:
+            scenes = job.get("scenes", [])
+            for scene in scenes:
+                for slot_name in ("start", "end", "video"):
+                    slot_obj = scene.get(slot_name, {})
+                    gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
+                    if gen.get("task_id") == task_id:
+                        gen["canceled"] = True
+                        gen["state"] = "canceled"
+                        gen["completed_at"] = datetime.now().timestamp()
+                        scene[slot_name]["generation"] = gen
+            job["scenes"] = scenes
+            save_job(job_id, job)
 
     GENERATION_TASKS.pop(task_id, None)
     return jsonify({"ok": True, "message": "Tracking canceled"})
@@ -3637,10 +3844,6 @@ def rename_job(job_id: str):
 @app.route("/job/<job_id>/prompt/update", methods=["POST"])
 def update_job_scene_prompt(job_id: str):
     """Обновляет prompt у конкретной сцены/слота (start|end|video)."""
-    job = load_job(job_id)
-    if job is None:
-        return jsonify({"ok": False, "error": "Job not found"}), 404
-
     body = request.get_json(silent=True) or {}
     slot = str(body.get("slot") or "").strip().lower()
     if slot not in ("start", "end", "video"):
@@ -3651,22 +3854,28 @@ def update_job_scene_prompt(job_id: str):
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "Bad scene_index"}), 400
 
-    scenes = job.get("scenes")
-    if not isinstance(scenes, list) or scene_index < 0 or scene_index >= len(scenes):
-        return jsonify({"ok": False, "error": "Scene index out of range"}), 400
-
-    scene = scenes[scene_index]
-    if not isinstance(scene, dict):
-        return jsonify({"ok": False, "error": "Scene is invalid"}), 400
-
-    slot_obj = scene.get(slot)
-    if not isinstance(slot_obj, dict):
-        slot_obj = {"prompt": ""}
-        scene[slot] = slot_obj
-
     prompt = str(body.get("prompt") or "").strip()
-    slot_obj["prompt"] = prompt
-    save_job(job_id, job)
+
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+
+        scenes = job.get("scenes")
+        if not isinstance(scenes, list) or scene_index < 0 or scene_index >= len(scenes):
+            return jsonify({"ok": False, "error": "Scene index out of range"}), 400
+
+        scene = scenes[scene_index]
+        if not isinstance(scene, dict):
+            return jsonify({"ok": False, "error": "Scene is invalid"}), 400
+
+        slot_obj = scene.get(slot)
+        if not isinstance(slot_obj, dict):
+            slot_obj = {"prompt": ""}
+            scene[slot] = slot_obj
+
+        slot_obj["prompt"] = prompt
+        save_job(job_id, job)
     return jsonify({"ok": True, "prompt": prompt})
 
 
@@ -3740,9 +3949,6 @@ def job_elevenlabs_template_save(job_id: str, name: str):
 
 @app.route("/job/<job_id>/elevenlabs/defaults", methods=["POST"])
 def job_elevenlabs_defaults_save(job_id: str):
-    job = load_job(job_id)
-    if job is None:
-        return jsonify({"ok": False, "error": "Job not found"}), 404
     body = request.get_json(silent=True) or {}
 
     def _pct(key: str, default: int) -> int:
@@ -3761,29 +3967,30 @@ def job_elevenlabs_defaults_save(job_id: str):
     else:
         use_speaker_boost = bool(raw_boost)
 
-    job["tts_defaults"] = {
-        "voice_id": voice_id,
-        "voice_name": voice_name,
-        "model_id": model_id,
-        "stability_pct": _pct("stability_pct", 50),
-        "similarity_pct": _pct("similarity_pct", 75),
-        "style_pct": _pct("style_pct", 0),
-        "speed_pct": _pct("speed_pct", 50),
-        "use_speaker_boost": use_speaker_boost,
-    }
-    if tts_template:
-        job["tts_template"] = tts_template
-    save_job(job_id, job)
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+
+        job["tts_defaults"] = {
+            "voice_id": voice_id,
+            "voice_name": voice_name,
+            "model_id": model_id,
+            "stability_pct": _pct("stability_pct", 50),
+            "similarity_pct": _pct("similarity_pct", 75),
+            "style_pct": _pct("style_pct", 0),
+            "speed_pct": _pct("speed_pct", 50),
+            "use_speaker_boost": use_speaker_boost,
+        }
+        if tts_template:
+            job["tts_template"] = tts_template
+        save_job(job_id, job)
     return jsonify({"ok": True})
 
 
 @app.route("/job/<job_id>/elevenlabs/tts", methods=["POST"])
 def job_elevenlabs_tts(job_id: str):
     """Генерация озвучки ElevenLabs, файл в data/job_audio/<job_id>/."""
-    job = load_job(job_id)
-    if job is None:
-        return jsonify({"error": "Job not found"}), 404
-
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
     voice_id = (data.get("voice_id") or "").strip()
@@ -3794,6 +4001,10 @@ def job_elevenlabs_tts(job_id: str):
         return jsonify({"error": "Введите текст"}), 400
     if not voice_id:
         return jsonify({"error": "Выберите голос"}), 400
+
+    with _job_file_lock(job_id):
+        if load_job(job_id) is None:
+            return jsonify({"error": "Job not found"}), 404
 
     max_c = max_chars_for_model(model_id)
     chunks = split_tts_text_into_chunks(text, max_c)
@@ -3872,21 +4083,25 @@ def job_elevenlabs_tts(job_id: str):
             "use_speaker_boost": use_speaker_boost,
         },
     }
-    job.pop("tts_outputs", None)
     tts_template = str(data.get("tts_template") or "").strip()
-    if tts_template:
-        job["tts_template"] = tts_template
-    job["tts_defaults"] = {
-        "voice_id": voice_id,
-        "model_id": model_id,
-        "stability_pct": stability_pct,
-        "similarity_pct": similarity_pct,
-        "style_pct": style_pct,
-        "speed_pct": speed_pct,
-        "use_speaker_boost": use_speaker_boost,
-    }
-    job["tts_last_text"] = text
-    save_job(job_id, job)
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"error": "Job not found"}), 404
+        job.pop("tts_outputs", None)
+        if tts_template:
+            job["tts_template"] = tts_template
+        job["tts_defaults"] = {
+            "voice_id": voice_id,
+            "model_id": model_id,
+            "stability_pct": stability_pct,
+            "similarity_pct": similarity_pct,
+            "style_pct": style_pct,
+            "speed_pct": speed_pct,
+            "use_speaker_boost": use_speaker_boost,
+        }
+        job["tts_last_text"] = text
+        save_job(job_id, job)
     return jsonify({"ok": True, **entry})
 
 
@@ -4380,30 +4595,31 @@ def job_download_all(job_id: str):
 @app.route("/job/<job_id>")
 def job_page(job_id: str):
     """Страница проекта — генерация изображений и видео."""
-    job = load_job(job_id)
-    if job is None:
-        flash("Проект не найден.", "error")
-        return redirect(url_for("video_index"))
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            flash("Проект не найден.", "error")
+            return redirect(url_for("video_index"))
 
-    # Совместимость со старыми job без project_name, job_meta
-    job.setdefault("project_name", "")
-    if "job_meta" not in job:
-        job["job_meta"] = {}
-    meta = job["job_meta"]
-    meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
-    meta.setdefault("video_duration", job.get("selected_video_duration", 10))
-    meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
-    meta["image_model_label"] = image_model_label(meta.get("image_model"))
-    meta.setdefault("video_model", job.get("selected_video_model", "veo3_fast"))
-    meta["video_model"] = normalize_video_model(meta.get("video_model"))
-    meta["video_model_label"] = video_model_label(meta.get("video_model"))
-    meta.setdefault("resolution", job.get("selected_resolution", "2K"))
-    meta.setdefault("output_format", "jpg")
-    meta.setdefault("image_template", job.get("selected_image_template", ""))
+        # Совместимость со старыми job без project_name, job_meta
+        job.setdefault("project_name", "")
+        if "job_meta" not in job:
+            job["job_meta"] = {}
+        meta = job["job_meta"]
+        meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
+        meta.setdefault("video_duration", job.get("selected_video_duration", 10))
+        meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
+        meta["image_model_label"] = image_model_label(meta.get("image_model"))
+        meta.setdefault("video_model", job.get("selected_video_model", "veo3_fast"))
+        meta["video_model"] = normalize_video_model(meta.get("video_model"))
+        meta["video_model_label"] = video_model_label(meta.get("video_model"))
+        meta.setdefault("resolution", job.get("selected_resolution", "2K"))
+        meta.setdefault("output_format", "jpg")
+        meta.setdefault("image_template", job.get("selected_image_template", ""))
 
-    if "tts_outputs" in job:
-        job.pop("tts_outputs", None)
-        save_job(job_id, job)
+        if "tts_outputs" in job:
+            job.pop("tts_outputs", None)
+            save_job(job_id, job)
 
     summary = compute_summary(job.get("scenes", []))
     template_display = job_template_display(meta.get("image_template", ""))

@@ -107,6 +107,8 @@ _STEM_TO_TARGET: dict[str, str] = {
     "scene writer user prompt": "stage_user:scene_writer",
     "scene writer style promt": "stage_style:scene_writer",
     "scene writer style prompt": "stage_style:scene_writer",
+    "scene writer past promt": "stage_past:scene_writer",
+    "scene writer past prompt": "stage_past:scene_writer",
 }
 
 # Обратно к имени файла при записи на диск (как при чтении).
@@ -139,6 +141,7 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage:scene_writer": "Scene Writer System Promt.txt",
     "stage_user:scene_writer": "Scene Writer User Promt.txt",
     "stage_style:scene_writer": "Scene Writer Style Promt.txt",
+    "stage_past:scene_writer": "Scene Writer Past in Promt.txt",
 }
 
 _STAGE_TARGETS: dict[str, str] = {
@@ -293,7 +296,10 @@ def load_rewrite_template(name: str) -> dict | None:
         "target_chars": 1500,
         "chars_per_minute": 344,
         "master_prompt": "",
-        "stages": {k: {"prompt": "", "user_prompt": "", "style_prompt": ""} for k in REWRITE_STAGE_KEYS},
+        "stages": {
+            k: {"prompt": "", "user_prompt": "", "style_prompt": "", "past_prompt": ""}
+            for k in REWRITE_STAGE_KEYS
+        },
     }
     config_raw: str | None = None
     for f in sorted(d.glob("*.txt"), key=lambda p: p.name.lower()):
@@ -326,6 +332,10 @@ def load_rewrite_template(name: str) -> dict | None:
             sk = target.split(":", 1)[1]
             if sk in REWRITE_STAGE_KEYS:
                 out["stages"][sk]["style_prompt"] = raw.strip()
+        elif target.startswith("stage_past:"):
+            sk = target.split(":", 1)[1]
+            if sk in REWRITE_STAGE_KEYS:
+                out["stages"][sk]["past_prompt"] = raw.strip()
 
     if config_raw is not None:
         cfg = parse_template_config(config_raw)
@@ -381,10 +391,12 @@ def save_rewrite_template_to_disk(
         prompt = ""
         user_prompt = ""
         style_prompt = ""
+        past_prompt = ""
         if isinstance(cell, dict):
             prompt = str(cell.get("prompt") or "")
             user_prompt = str(cell.get("user_prompt") or "")
             style_prompt = str(cell.get("style_prompt") or "")
+            past_prompt = str(cell.get("past_prompt") or "")
 
         # New naming: explicit System Promt / User Promt files.
         fn = _TARGET_TO_FILENAME.get(f"stage:{sk}")
@@ -396,6 +408,9 @@ def save_rewrite_template_to_disk(
         sfn = _TARGET_TO_FILENAME.get(f"stage_style:{sk}")
         if sfn:
             (d / sfn).write_text(style_prompt.rstrip() + "\n", encoding="utf-8")
+        pfn = _TARGET_TO_FILENAME.get(f"stage_past:{sk}")
+        if pfn:
+            (d / pfn).write_text(past_prompt.rstrip() + "\n", encoding="utf-8")
 
         # Backward-compatible legacy file names.
         legacy_title = _STAGE_TARGETS.get(sk, sk.capitalize())
