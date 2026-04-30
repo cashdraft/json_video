@@ -1,3 +1,1 @@
-# ReWrite template (chars/min + target duration, minutes 1–30)
-chars_per_minute: 700
-duration_minutes: 18
+target_chars: 12500

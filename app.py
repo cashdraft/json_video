@@ -241,6 +241,10 @@ app.secret_key = os.urandom(24)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+# Large scene batches can exceed Werkzeug's form defaults.
+# Allow bigger payloads for `/parse` and similar form submissions.
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
+app.config["MAX_FORM_MEMORY_SIZE"] = 64 * 1024 * 1024
 # Если nginx не отдаёт /static/ с того же хоста: STATIC_STYLE_HREF=https://…/static/style.css
 app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
 GENERATION_TASKS: dict[str, dict] = {}
@@ -4103,6 +4107,235 @@ def job_elevenlabs_tts(job_id: str):
         job["tts_last_text"] = text
         save_job(job_id, job)
     return jsonify({"ok": True, **entry})
+
+
+@app.route("/job/<job_id>/elevenlabs/tts/stream", methods=["POST"])
+def job_elevenlabs_tts_stream(job_id: str):
+    """Потоковая генерация озвучки ElevenLabs с детальным прогрессом (NDJSON)."""
+    data = request.get_json(silent=True) or {}
+
+    def _ev(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, ensure_ascii=False) + "\n"
+
+    @stream_with_context
+    def gen():
+        started = time.monotonic()
+
+        def elapsed() -> float:
+            return round(max(0.0, time.monotonic() - started), 1)
+
+        text = (data.get("text") or "").strip()
+        voice_id = (data.get("voice_id") or "").strip()
+        model_id = (data.get("model_id") or "eleven_multilingual_v2").strip()
+        voice_name = (data.get("voice_name") or "").strip() or voice_id
+
+        if not text:
+            yield _ev({"type": "error", "error": "Введите текст", "elapsed_seconds": elapsed()})
+            return
+        if not voice_id:
+            yield _ev({"type": "error", "error": "Выберите голос", "elapsed_seconds": elapsed()})
+            return
+
+        with _job_file_lock(job_id):
+            if load_job(job_id) is None:
+                yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
+                return
+
+        max_c = max_chars_for_model(model_id)
+        chunks = split_tts_text_into_chunks(text, max_c)
+        if not chunks:
+            yield _ev({"type": "error", "error": "Пустой текст", "elapsed_seconds": elapsed()})
+            return
+
+        def _pct(key: str, default: float) -> float:
+            try:
+                return float(data.get(key, default))
+            except (TypeError, ValueError):
+                return default
+
+        stability_pct = _pct("stability_pct", 50)
+        similarity_pct = _pct("similarity_pct", 75)
+        style_pct = _pct("style_pct", 0)
+        speed_pct = _pct("speed_pct", 50)
+        raw_boost = data.get("use_speaker_boost", True)
+        if isinstance(raw_boost, str):
+            use_speaker_boost = raw_boost.lower() in ("true", "1", "yes", "on")
+        else:
+            use_speaker_boost = bool(raw_boost)
+
+        tts_kw = dict(
+            voice_id=voice_id,
+            model_id=model_id,
+            stability_pct=stability_pct,
+            similarity_pct=similarity_pct,
+            style_pct=style_pct,
+            speed_pct=speed_pct,
+            use_speaker_boost=use_speaker_boost,
+        )
+
+        total_chars = len(text)
+        total_chunks = len(chunks)
+        yield _ev(
+            {
+                "type": "status",
+                "phase": "prepare",
+                "message": f"Подготовлено: {total_chunks} кусков, {total_chars} символов (лимит {max_c} на запрос).",
+                "total_chunks": total_chunks,
+                "total_chars": total_chars,
+                "chunk_limit": max_c,
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+        JOB_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+        out_dir = JOB_AUDIO_DIR / job_id
+        if out_dir.is_dir():
+            shutil.rmtree(out_dir, ignore_errors=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.mp3"
+        out_path = out_dir / fname
+
+        try:
+            if total_chunks == 1:
+                ch = chunks[0]
+                chunk_started = time.monotonic()
+                yield _ev(
+                    {
+                        "type": "status",
+                        "phase": "chunk_request",
+                        "chunk_index": 1,
+                        "total_chunks": 1,
+                        "chunk_chars": len(ch),
+                        "message": f"[1/1] Отправили в ElevenLabs: {len(ch)} символов. Ожидание ответа…",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+                audio = text_to_speech_bytes(text=ch, **tts_kw)
+                out_path.write_bytes(audio)
+                yield _ev(
+                    {
+                        "type": "status",
+                        "phase": "chunk_done",
+                        "chunk_index": 1,
+                        "total_chunks": 1,
+                        "chunk_chars": len(ch),
+                        "audio_bytes": len(audio),
+                        "chunk_wait_seconds": round(max(0.0, time.monotonic() - chunk_started), 1),
+                        "message": f"[1/1] Ответ получен: {len(audio)} байт аудио.",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+            else:
+                with tempfile.TemporaryDirectory() as tmp:
+                    part_paths: list[Path] = []
+                    for i, ch in enumerate(chunks, start=1):
+                        chunk_started = time.monotonic()
+                        yield _ev(
+                            {
+                                "type": "status",
+                                "phase": "chunk_request",
+                                "chunk_index": i,
+                                "total_chunks": total_chunks,
+                                "chunk_chars": len(ch),
+                                "message": f"[{i}/{total_chunks}] Отправили в ElevenLabs: {len(ch)} символов. Ожидание ответа…",
+                                "elapsed_seconds": elapsed(),
+                            }
+                        )
+                        part_bytes = text_to_speech_bytes(text=ch, **tts_kw)
+                        p = Path(tmp) / f"part_{i - 1:04d}.mp3"
+                        p.write_bytes(part_bytes)
+                        part_paths.append(p)
+                        yield _ev(
+                            {
+                                "type": "status",
+                                "phase": "chunk_done",
+                                "chunk_index": i,
+                                "total_chunks": total_chunks,
+                                "chunk_chars": len(ch),
+                                "audio_bytes": len(part_bytes),
+                                "chunk_wait_seconds": round(max(0.0, time.monotonic() - chunk_started), 1),
+                                "message": f"[{i}/{total_chunks}] Ответ получен: {len(part_bytes)} байт аудио.",
+                                "elapsed_seconds": elapsed(),
+                            }
+                        )
+
+                    yield _ev(
+                        {
+                            "type": "status",
+                            "phase": "merge_start",
+                            "message": f"Склейка {total_chunks} MP3-кусков…",
+                            "elapsed_seconds": elapsed(),
+                        }
+                    )
+                    merge_mp3_files_ffmpeg(part_paths, out_path)
+                    yield _ev(
+                        {
+                            "type": "status",
+                            "phase": "merge_done",
+                            "message": "Склейка завершена.",
+                            "elapsed_seconds": elapsed(),
+                        }
+                    )
+        except ValueError as e:
+            yield _ev({"type": "error", "error": str(e), "elapsed_seconds": elapsed()})
+            return
+        except RuntimeError as e:
+            yield _ev({"type": "error", "error": str(e), "elapsed_seconds": elapsed()})
+            return
+
+        audio_url = url_for("job_audio_file", job_id=job_id, filename=fname)
+        entry = {
+            "filename": fname,
+            "url": audio_url,
+            "created_at": datetime.now().timestamp(),
+            "voice_id": voice_id,
+            "voice_name": voice_name,
+            "model_id": model_id,
+            "chars": len(text),
+            "tts_chunks": len(chunks),
+            "tts_chunk_limit": max_c,
+            "text_preview": text[:120] + ("…" if len(text) > 120 else ""),
+            "settings": {
+                "stability_pct": stability_pct,
+                "similarity_pct": similarity_pct,
+                "style_pct": style_pct,
+                "speed_pct": speed_pct,
+                "use_speaker_boost": use_speaker_boost,
+            },
+        }
+
+        tts_template = str(data.get("tts_template") or "").strip()
+        with _job_file_lock(job_id):
+            job = load_job(job_id)
+            if job is None:
+                yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
+                return
+            job.pop("tts_outputs", None)
+            if tts_template:
+                job["tts_template"] = tts_template
+            job["tts_defaults"] = {
+                "voice_id": voice_id,
+                "model_id": model_id,
+                "stability_pct": stability_pct,
+                "similarity_pct": similarity_pct,
+                "style_pct": style_pct,
+                "speed_pct": speed_pct,
+                "use_speaker_boost": use_speaker_boost,
+            }
+            job["tts_last_text"] = text
+            save_job(job_id, job)
+
+        yield _ev(
+            {
+                "type": "result",
+                "ok": True,
+                **entry,
+                "message": f"Готово: {len(chunks)} кусков, {len(text)} символов, ожидание {elapsed()}с.",
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+    return Response(gen(), mimetype="application/x-ndjson; charset=utf-8")
 
 
 # --- ZIP «скачать всё»: фон + статус (прогресс) и прежний одношаговый GET ---

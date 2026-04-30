@@ -1704,16 +1704,30 @@
         btn.disabled = true;
         renderStatus(placeholder, 'Task submitted', 0, true);
         try {
-            const startResp = await fetch(`/job/${jobId}/generate/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scene_index: sceneIndex, slot: slot })
-            });
-            const startData = await parseJsonOrThrow(startResp, 'Start');
-            if (!startResp.ok || !startData.task_id) {
-                throw new Error(startData.error || 'Failed to submit task');
+            let taskId = '';
+            const maxAttempts = options.bulk ? 3 : 1;
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                const startResp = await fetch(`/job/${jobId}/generate/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_index: sceneIndex, slot: slot })
+                });
+                const startData = await parseJsonOrThrow(startResp, 'Start');
+                if (startResp.ok && startData.task_id) {
+                    taskId = startData.task_id;
+                    break;
+                }
+                const errMsg = startData.error || 'Failed to submit task';
+                if (!options.bulk || attempt >= maxAttempts || !isLikelyRateLimitError(errMsg)) {
+                    throw new Error(errMsg);
+                }
+                const backoffMs = attempt * 1800 + Math.floor(Math.random() * 350);
+                appendBulkLog(`… ${sceneId} · ${slot}: rate-limit, retry ${attempt}/${maxAttempts} через ${backoffMs}ms`);
+                await new Promise((r) => setTimeout(r, backoffMs));
             }
-            const taskId = startData.task_id;
+            if (!taskId) {
+                throw new Error('Failed to submit task');
+            }
             placeholder.dataset.taskId = taskId;
             if (options.bulk) {
                 bulkStartedTaskIds.add(taskId);
@@ -1751,6 +1765,15 @@
     });
 
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
+    const BULK_START_INTERVAL_MS = {
+        image: 650, // <= ~15 new requests / 10s
+        video: 900, // <= ~11 new requests / 10s
+    };
+
+    const isLikelyRateLimitError = (msg) => {
+        const s = String(msg || '').toLowerCase();
+        return s.includes('429') || s.includes('rate limit') || s.includes('too many requests');
+    };
 
     const imageSlotHasFinishedPicture = (placeholder) => {
         if (!placeholder) return false;
@@ -1841,7 +1864,8 @@
                     continue;
                 }
                 if (started > 0) {
-                    await new Promise((r) => setTimeout(r, 75));
+                    const gapMs = BULK_START_INTERVAL_MS[kind] || 700;
+                    await new Promise((r) => setTimeout(r, gapMs));
                 }
                 started += 1;
                 runners.push(startGenerationForButton(btn, { bulk: true }));
@@ -2319,8 +2343,15 @@
             const voice_name = voiceSel.options[voiceSel.selectedIndex]?.textContent || '';
             btnGen.disabled = true;
             busyEl.classList.remove('hidden');
+            const busyStartedAt = Date.now();
+            const setBusyText = (msg) => {
+                const waitSec = Math.max(0, Math.floor((Date.now() - busyStartedAt) / 1000));
+                const base = String(msg || 'Запрос к ElevenLabs…');
+                busyEl.textContent = `${base} (ждём ${waitSec}с)`;
+            };
+            setBusyText(`Подготовка: ${text.length} символов`);
             try {
-                const resp = await fetch(`/job/${jobId}/elevenlabs/tts`, {
+                const resp = await fetch(`/job/${jobId}/elevenlabs/tts/stream`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2336,12 +2367,79 @@
                         use_speaker_boost: document.getElementById('tts-speaker-boost').checked,
                     }),
                 });
-                const data = await resp.json();
-                if (!resp.ok || !data.ok) {
-                    throw new Error(data.error || `HTTP ${resp.status}`);
+
+                if (!resp.ok) {
+                    let msg = `HTTP ${resp.status}`;
+                    try {
+                        const data = await resp.json();
+                        if (data?.error) msg = data.error;
+                    } catch (_) {}
+                    throw new Error(msg);
                 }
-                ttsDownloadFilename = data.filename || 'tts.mp3';
-                player.src = data.url;
+
+                const reader = resp.body?.getReader();
+                if (!reader) {
+                    throw new Error('Нет потокового ответа от сервера');
+                }
+
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let finalData = null;
+
+                const handleEvent = (ev) => {
+                    if (!ev || typeof ev !== 'object') return;
+                    const elapsed = Number(ev.elapsed_seconds || 0);
+                    const waitSec = Number.isFinite(elapsed) && elapsed >= 0
+                        ? Math.floor(elapsed)
+                        : Math.max(0, Math.floor((Date.now() - busyStartedAt) / 1000));
+
+                    if (ev.type === 'status') {
+                        const msg = String(ev.message || 'Запрос к ElevenLabs…');
+                        busyEl.textContent = `${msg} (ждём ${waitSec}с)`;
+                        return;
+                    }
+                    if (ev.type === 'error') {
+                        throw new Error(String(ev.error || 'Ошибка ElevenLabs'));
+                    }
+                    if (ev.type === 'result') {
+                        finalData = ev;
+                        const msg = String(ev.message || 'Озвучка готова');
+                        busyEl.textContent = `${msg} (ждём ${waitSec}с)`;
+                    }
+                };
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let nl = buffer.indexOf('\n');
+                    while (nl >= 0) {
+                        const line = buffer.slice(0, nl).trim();
+                        buffer = buffer.slice(nl + 1);
+                        if (line) {
+                            let ev = null;
+                            try {
+                                ev = JSON.parse(line);
+                            } catch (_) {}
+                            handleEvent(ev);
+                        }
+                        nl = buffer.indexOf('\n');
+                    }
+                }
+                buffer += decoder.decode();
+                const tail = buffer.trim();
+                if (tail) {
+                    try {
+                        handleEvent(JSON.parse(tail));
+                    } catch (_) {}
+                }
+
+                if (!finalData || !finalData.ok || !finalData.url) {
+                    throw new Error('Не удалось получить итоговый аудио-файл');
+                }
+
+                ttsDownloadFilename = finalData.filename || 'tts.mp3';
+                player.src = finalData.url;
                 player.load();
                 if (seekEl) seekEl.value = '0';
                 if (timeCurrent) timeCurrent.textContent = '0:00';
