@@ -9,7 +9,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Tuple
 
 import requests
 
@@ -65,30 +65,141 @@ def normalize_aspect_ratio(value: str | None, default: str = "16:9") -> str:
     return raw if raw in allowed else default
 
 
+def _aspect_ratio_gpt_image2_i2i(ratio: str) -> str:
+    """Map normalized W:H to gpt-image-2-image-to-image allowed aspect_ratio values."""
+    r = (ratio or "").strip().replace("/", ":").replace(" ", "")
+    if r in {"auto", "1:1", "9:16", "16:9", "4:3", "3:4"}:
+        return r
+    if r == "3:2":
+        return "16:9"
+    if r == "2:3":
+        return "9:16"
+    return "16:9"
+
+
+def _aspect_ratio_wan_27(ratio: str) -> str:
+    """Map UI aspect ratio to wan/2-7-image allowed values (text-to-image, no input_urls)."""
+    r = (ratio or "").strip().replace("/", ":").replace(" ", "")
+    allowed = {"1:1", "16:9", "4:3", "21:9", "3:4", "9:16", "8:1", "1:8"}
+    if r in allowed:
+        return r
+    if r == "3:2":
+        return "16:9"
+    if r == "2:3":
+        return "9:16"
+    return "16:9"
+
+
+def _image_size_qwen2_edit(ratio: str) -> str:
+    """Map UI aspect ratio to qwen2/image-edit image_size enum."""
+    r = (ratio or "").strip().replace("/", ":").replace(" ", "")
+    allowed = {"1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"}
+    if r in allowed:
+        return r
+    return "16:9"
+
+
 def create_image_task(
     prompt: str,
     aspect_ratio: str = "16:9",
     resolution: str = "2K",
     output_format: str = "jpg",
     image_input: list[str] | None = None,
-) -> str:
-    """Create image generation task. Returns taskId."""
+    model: str = "nano-banana-pro",
+) -> Tuple[str, str]:
+    """Create image generation task. Returns (taskId, model field sent in JSON body)."""
     api_key = _get_api_key()
-    ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
-    inp: dict[str, Any] = {
-        "prompt": prompt,
-        "aspect_ratio": ratio,
-        # Some Kie endpoints/examples use camelCase; send both for compatibility.
-        "aspectRatio": ratio,
-        "resolution": resolution,
-        "output_format": output_format,
-    }
-    if image_input:
-        inp["image_input"] = image_input
-    payload = {
-        "model": "nano-banana-pro",
-        "input": inp,
-    }
+    mid_raw = (model or "").strip().lower()
+    if mid_raw not in {
+        "nano-banana-pro",
+        "nano-banana-2",
+        "gpt-image-2-image-to-image",
+        "grok-imagine/image-to-image",
+        "wan/2-7-image",
+        "qwen2/image-edit",
+    }:
+        mid_raw = "nano-banana-pro"
+
+    if mid_raw == "gpt-image-2-image-to-image":
+        if not image_input:
+            raise ValueError(
+                "Для GPT Image 2 (image-to-image) нужны референс-URL: выберите шаблон с изображениями."
+            )
+        ratio_gpt = _aspect_ratio_gpt_image2_i2i(
+            normalize_aspect_ratio(aspect_ratio, "16:9"),
+        )
+        inp_gpt: dict[str, Any] = {
+            "prompt": prompt,
+            "input_urls": image_input[:16],
+            "aspect_ratio": ratio_gpt,
+            "resolution": resolution,
+        }
+        payload = {"model": "gpt-image-2-image-to-image", "input": inp_gpt}
+    elif mid_raw == "grok-imagine/image-to-image":
+        if not image_input:
+            raise ValueError(
+                "Для Grok Imagine (image-to-image) нужны референс-URL: выберите шаблон с изображениями."
+            )
+        inp_grok: dict[str, Any] = {
+            "prompt": prompt,
+            "image_urls": image_input[:5],
+            "nsfw_checker": False,
+        }
+        payload = {"model": "grok-imagine/image-to-image", "input": inp_grok}
+    elif mid_raw == "wan/2-7-image":
+        res = resolution if resolution in ("1K", "2K", "4K") else "2K"
+        ratio_wan = _aspect_ratio_wan_27(normalize_aspect_ratio(aspect_ratio, "16:9"))
+        inp_wan: dict[str, Any] = {
+            "prompt": prompt,
+            "n": 1,
+            "enable_sequential": False,
+            "resolution": res,
+            "thinking_mode": False,
+            "watermark": False,
+            "seed": 0,
+            "nsfw_checker": False,
+        }
+        if image_input:
+            # Несколько input_urls в одном createTask у Wan = несколько правок/выходов и списаний.
+            # Держим один референс + n=1 → одна платная генерация (см. также prompt/n в доке Kie).
+            urls = image_input[:1]
+            inp_wan["input_urls"] = urls
+            inp_wan["bbox_list"] = [[]]
+        else:
+            inp_wan["aspect_ratio"] = ratio_wan
+        payload = {"model": "wan/2-7-image", "input": inp_wan}
+    elif mid_raw == "qwen2/image-edit":
+        if not image_input:
+            raise ValueError(
+                "Для Qwen2 Image Edit нужен URL исходного изображения: выберите шаблон с изображениями."
+            )
+        ratio_q = _image_size_qwen2_edit(normalize_aspect_ratio(aspect_ratio, "16:9"))
+        fmt = (output_format or "png").strip().lower()
+        out_fmt = "jpeg" if fmt in {"jpg", "jpeg"} else "png"
+        inp_qwen: dict[str, Any] = {
+            "prompt": (prompt or "")[:800],
+            "image_url": image_input[0],
+            "image_size": ratio_q,
+            "output_format": out_fmt,
+            "nsfw_checker": False,
+        }
+        payload = {"model": "qwen2/image-edit", "input": inp_qwen}
+    else:
+        ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
+        inp: dict[str, Any] = {
+            "prompt": prompt,
+            "aspect_ratio": ratio,
+            # Some Kie endpoints/examples use camelCase; send both for compatibility.
+            "aspectRatio": ratio,
+            "resolution": resolution,
+            "output_format": output_format,
+        }
+        if image_input:
+            inp["image_input"] = image_input
+        payload = {
+            "model": mid_raw,
+            "input": inp,
+        }
     resp = requests.post(
         CREATE_TASK,
         json=payload,
@@ -102,7 +213,8 @@ def create_image_task(
     task_id = data.get("data", {}).get("taskId")
     if not task_id:
         raise RuntimeError("No taskId in response")
-    return task_id
+    sent_model = str(payload["model"])
+    return task_id, sent_model
 
 
 def get_task_result(task_id: str) -> dict[str, Any]:
@@ -152,12 +264,13 @@ def create_video_task(
     aspect_ratio: str = "16:9",
     image_urls: list[str] | None = None,
     generation_type: str = "TEXT_2_VIDEO",
-) -> str:
-    """Create video generation task. Returns taskId."""
+) -> Tuple[str, str]:
+    """Create video generation task. Returns (taskId, model field sent in JSON body)."""
     api_key = _get_api_key()
+    mapped_model = _map_video_model(model)
     payload = {
         "prompt": prompt,
-        "model": _map_video_model(model),
+        "model": mapped_model,
         "generationType": generation_type,
         "aspect_ratio": aspect_ratio,
     }
@@ -176,7 +289,7 @@ def create_video_task(
     task_id = data.get("data", {}).get("taskId")
     if not task_id:
         raise RuntimeError("No taskId in response")
-    return task_id
+    return task_id, mapped_model
 
 
 def create_grok_image_to_video_task(
@@ -186,8 +299,8 @@ def create_grok_image_to_video_task(
     aspect_ratio: str = "16:9",
     duration_seconds: int = 6,
     nsfw_checker: bool = False,
-) -> str:
-    """Create Grok Imagine image-to-video task. Returns taskId."""
+) -> Tuple[str, str]:
+    """Create Grok Imagine image-to-video task. Returns (taskId, model field sent in JSON body)."""
     api_key = _get_api_key()
     dur = max(6, min(30, int(duration_seconds)))
     payload: dict[str, Any] = {
@@ -216,7 +329,7 @@ def create_grok_image_to_video_task(
     task_id = data.get("data", {}).get("taskId")
     if not task_id:
         raise RuntimeError("No taskId in response")
-    return task_id
+    return task_id, str(payload["model"])
 
 
 def get_video_task_result(task_id: str) -> dict[str, Any]:
@@ -293,16 +406,18 @@ def generate_image(
     output_format: str = "jpg",
     poll_interval: float = 2.0,
     max_wait: float = 120.0,
+    model: str = "nano-banana-pro",
 ) -> str:
     """
     Create task, poll until done, return first result URL.
     Raises RuntimeError on failure.
     """
-    task_id = create_image_task(
+    task_id, _sent_model = create_image_task(
         prompt=prompt,
         aspect_ratio=aspect_ratio,
         resolution=resolution,
         output_format=output_format,
+        model=model,
     )
     start = time.time()
     while time.time() - start < max_wait:

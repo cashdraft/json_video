@@ -10,8 +10,8 @@
 
 {"scene_id":"scene_001"}
 {"text":"...original text..."}
-{"end":{"prompt"}}
 {"start":{"prompt":"..."}}
+{"end":{"prompt"}}
 {"video":{"prompt":"..."}}
 
 (пустая строка между сценами)

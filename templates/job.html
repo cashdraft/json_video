@@ -7,6 +7,7 @@
     {% include '_stylesheet_link.html' %}
 </head>
 <body class="job-page">
+    <script>window.__JSON_VIDEO_ROOT__ = {{ request.script_root | tojson }};</script>
     {% macro template_no_image_visual() %}
     <span class="template-option-visual template-option-visual--placeholder" aria-hidden="true">
         <svg class="template-placeholder-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -191,6 +192,109 @@
             </div>
             {% endif %}
         </section>
+        <section class="tts-section video-panel" id="whisper-transcribe">
+            <h2 class="scene-id rewrite-pipeline-runner__title">Транскрибация (OpenAI / faster-whisper)</h2>
+            <p class="scene-text rewrite-pipeline-runner__lead">
+                Берет последний MP3 из блока ElevenLabs и отправляет либо в OpenAI Whisper API, либо в локальный faster-whisper. В логе ниже показываются этапы:
+                выбор файла, проверка/нарезка, отправка каждого chunk, ожидание ответа и итог.
+            </p>
+            <div class="settings-grid" style="margin-bottom: 0.75rem; max-width: 46rem;">
+                <div class="setting">
+                    <label for="whisper-engine">Движок</label>
+                    <select id="whisper-engine">
+                        <option value="openai">OpenAI Whisper API</option>
+                        <option value="faster-whisper">faster-whisper (локально)</option>
+                    </select>
+                </div>
+                <div class="setting">
+                    <label for="whisper-fw-model">Модель faster-whisper</label>
+                    <select id="whisper-fw-model">
+                        <option value="tiny">tiny</option>
+                        <option value="base">base</option>
+                        <option value="small" selected>small</option>
+                        <option value="medium">medium</option>
+                        <option value="large-v3">large-v3</option>
+                    </select>
+                </div>
+                <div class="setting">
+                    <label for="whisper-fw-compute">Compute type</label>
+                    <select id="whisper-fw-compute">
+                        <option value="int8" selected>int8</option>
+                        <option value="int8_float16">int8_float16</option>
+                        <option value="float16">float16</option>
+                        <option value="float32">float32</option>
+                    </select>
+                </div>
+            </div>
+            {% if not openai_key_set %}
+            <p class="tts-warning" id="whisper-openai-key-warning">
+                OPENAI режим недоступен без <code>OPENAI_API_KEY</code> в <code>.env</code>. Локальный faster-whisper работает без ключа.
+            </p>
+            {% endif %}
+            <div class="tts-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="whisper-transcribe-run">Распознать через Whisper</button>
+                <span id="whisper-busy" class="tts-busy hidden">Запрос к Whisper…</span>
+            </div>
+            <label class="tts-check">
+                <input type="checkbox" id="whisper-word-timestamps">
+                Word-level timestamps (таймкоды по словам)
+            </label>
+            <p id="whisper-error" class="tts-error hidden" role="alert"></p>
+            <div class="whisper-box">
+                <p class="tts-label">Подробный лог</p>
+                <pre id="whisper-log" class="whisper-log">Лог появится после запуска.</pre>
+                <p class="tts-label">Ответ Whisper (JSON)</p>
+                <textarea id="whisper-result" class="tts-textarea whisper-result" rows="10" readonly placeholder="{&quot;segments&quot;: [...]}"></textarea>
+            </div>
+        </section>
+
+        <section class="tts-section video-panel" id="whisper-scene-align">
+            <h2 class="scene-id rewrite-pipeline-runner__title">Таймкоды реплик по Whisper</h2>
+            <p class="scene-text rewrite-pipeline-runner__lead">
+                Берёт JSON из «Ответ Whisper» и сценарий в формате строк LDJSON (как в блоке ниже). Для каждой сцены ищет фразу в транскрипте
+                (нечёткое совпадение, упор на начало и конец фразы). Рекомендуется включать word-level timestamps при распознавании.
+                По умолчанию в результате только <code>scene_id</code>, <code>text</code> и секунды — без промптов картинки/видео.
+            </p>
+            <div class="tts-actions tts-actions--wrap">
+                <button type="button" class="btn btn-primary btn-sm" id="scene-whisper-align-run">Проставить секунды</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-stop" disabled>Остановить</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-from-json">Взять сцены из «JSON-кода сцен»</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-fill-whisper">Подставить Whisper из ответа выше</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-strip-prompts">Оставить только реплики</button>
+            </div>
+            <label class="tts-check" style="margin-top: 0.5rem;">
+                <input type="checkbox" id="scene-whisper-include-prompts-out">
+                Добавить в результат промпты <code>start</code> / <code>video</code> из сценария
+            </label>
+            <div class="settings-grid" style="margin-top: 0.75rem; max-width: 28rem;">
+                <div class="setting">
+                    <label for="scene-whisper-min-ratio">Мин. совпадение (0–1)</label>
+                    <input type="number" id="scene-whisper-min-ratio" min="0.15" max="0.99" step="0.01" value="0.52">
+                </div>
+                <div class="setting">
+                    <label for="scene-whisper-anchor-w">Вес якорей начала/конца (0–1)</label>
+                    <input type="number" id="scene-whisper-anchor-w" min="0" max="1" step="0.05" value="0.42">
+                </div>
+            </div>
+            <p id="scene-whisper-align-error" class="tts-error hidden" role="alert"></p>
+            <p id="scene-whisper-align-hint" class="scene-text" style="margin-top: 0.5rem;"></p>
+            <div class="whisper-box" style="margin-bottom: 0.75rem;">
+                <p class="tts-label">Лог сопоставления</p>
+                <pre id="scene-whisper-align-log" class="whisper-log">Лог появится после запуска.</pre>
+            </div>
+            {% if not openai_key_set %}
+            <div class="whisper-box" style="margin-bottom: 0.75rem;">
+                <p class="tts-label">JSON Whisper (вставьте вручную — блок распознавания недоступен без ключа)</p>
+                <textarea id="whisper-align-whisper-json" class="tts-textarea whisper-result" rows="6" placeholder="{&quot;segments&quot;: [...], &quot;text&quot;: &quot;...&quot;}"></textarea>
+            </div>
+            {% endif %}
+            <div class="whisper-box">
+                <p class="tts-label">Сценарий (LDJSON по строкам)</p>
+                <textarea id="scene-whisper-align-scenes" class="tts-textarea whisper-result" rows="8" placeholder='{"scene_id": "scene_001"}&#10;{"text": "Реплика для Whisper"}'></textarea>
+                <p class="tts-label">Результат с voice_start / voice_end (секунды)</p>
+                <textarea id="scene-whisper-align-out" class="tts-textarea whisper-result" rows="10" readonly placeholder="Запустите «Проставить секунды»…"></textarea>
+            </div>
+        </section>
 
         <form
             method="post"
@@ -248,8 +352,14 @@
                     </div>
                     <div class="setting">
                         <label for="image_model">Image Model</label>
+                        {% set _im = job.job_meta.image_model or job.selected_image_model or 'nano-banana-pro' %}
                         <select id="image_model" name="image_model">
-                            <option value="nano-banana-pro" selected>Nano Banana Pro</option>
+                            <option value="nano-banana-pro" {{ 'selected' if _im == 'nano-banana-pro' else '' }}>Nano Banana Pro</option>
+                            <option value="nano-banana-2" {{ 'selected' if _im == 'nano-banana-2' else '' }}>Google - Nano Banana 2</option>
+                            <option value="gpt-image-2-image-to-image" {{ 'selected' if _im == 'gpt-image-2-image-to-image' else '' }}>GPT Image 2 - Image To Image</option>
+                            <option value="grok-imagine/image-to-image" {{ 'selected' if _im == 'grok-imagine/image-to-image' else '' }}>Grok Imagine — Image To Image</option>
+                            <option value="wan/2-7-image" {{ 'selected' if _im == 'wan/2-7-image' else '' }}>Wan 2.7 Image</option>
+                            <option value="qwen2/image-edit" {{ 'selected' if _im == 'qwen2/image-edit' else '' }}>Qwen2 - Image Edit</option>
                         </select>
                     </div>
                     <div class="setting">
@@ -262,7 +372,7 @@
                         </select>
                     </div>
                     <div class="setting setting-wide template-setting">
-                        <label>Шаблон изображений (Nano Banana Pro)</label>
+                        <label>Шаблон изображений ({{ job.job_meta.image_model_label or 'Nano Banana Pro' }})</label>
                         {% set _tpl = job.job_meta.image_template or '' %}
                         {% if image_templates %}
                         <div class="template-picker" role="radiogroup" aria-label="Шаблон">
@@ -317,7 +427,7 @@
                         <button type="button" class="btn btn-danger btn-sm" id="bulk-generate-stop" disabled title="Остановить пакетную генерацию" aria-label="Остановить">Остановить</button>
                     </div>
                 </div>
-                <p class="scene-text rewrite-pipeline-runner__lead generation-runner__lead">Kie.ai: Nano Banana Pro (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
+                <p class="scene-text rewrite-pipeline-runner__lead generation-runner__lead">Kie.ai: {{ job.job_meta.image_model_label or 'Nano Banana Pro' }} (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
             </div>
             <pre class="rewrite-pipeline-runner__log" id="generation-bulk-log" aria-live="polite">Журнал пуст. Нажмите «↻ Image» или «↻ Video».</pre>
         </section>
@@ -1635,7 +1745,23 @@
 
             const elapsed = statusData.elapsed_seconds || 0;
             const state = statusData.state || 'unknown';
-            const stateText = statusData.state_text || 'Processing task';
+            let stateText = statusData.state_text || 'Processing task';
+            const apiMid = (
+                statusData.kie_api_model
+                || statusData.api_model_id
+                || ''
+            ).trim();
+            const formMid = slot === 'video'
+                ? (document.getElementById('video_model')?.value || '').trim()
+                : (document.getElementById('image_model')?.value || '').trim();
+            const mid = apiMid || formMid;
+            if (mid && !stateText.includes(mid)) {
+                stateText = `${stateText} · ${mid}`;
+            }
+            const kiePath = (statusData.kie_request_path || '').trim();
+            if (kiePath && !stateText.includes(kiePath)) {
+                stateText = `${stateText} → ${kiePath}`;
+            }
 
             if (state === 'success' && statusData.url) {
                 placeholder.setAttribute('data-status', 'done');
@@ -1707,10 +1833,15 @@
             let taskId = '';
             const maxAttempts = options.bulk ? 3 : 1;
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                const genPayload = { scene_index: sceneIndex, slot };
+                const vmEl = document.getElementById('video_model');
+                const imEl = document.getElementById('image_model');
+                if (slot === 'video' && vmEl?.value) genPayload.video_model = vmEl.value;
+                if (slot !== 'video' && imEl?.value) genPayload.image_model = imEl.value;
                 const startResp = await fetch(`/job/${jobId}/generate/start`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scene_index: sceneIndex, slot: slot })
+                    body: JSON.stringify(genPayload)
                 });
                 const startData = await parseJsonOrThrow(startResp, 'Start');
                 if (startResp.ok && startData.task_id) {
@@ -1908,6 +2039,201 @@
         appendBulkLog(`Остановка: cancel для ${ids.length} задач (опрос на клиенте остановлен).`);
     });
 
+    (function sceneWhisperAlignUi() {
+        /** POST URL: сервер отдаёт url_for; если переменной нет — запасной путь с тем же job_id. */
+        const alignScenesPostUrl = {{ (whisper_align_scenes_url | default('/job/' ~ job_id ~ '/whisper/align-scenes', true)) | tojson }};
+        const stripScenesToVoiceLines = (raw) => {
+            const scenes = [];
+            let cur = null;
+            for (const line of (raw || '').split(/\r?\n/)) {
+                const t = line.trim();
+                if (!t) continue;
+                let o;
+                try {
+                    o = JSON.parse(t);
+                } catch {
+                    continue;
+                }
+                if (!o || typeof o !== 'object') continue;
+                if ('scene_id' in o) {
+                    if (cur) scenes.push(cur);
+                    cur = { scene_id: o.scene_id };
+                    continue;
+                }
+                if (!cur) continue;
+                if ('text' in o) cur.text = o.text;
+            }
+            if (cur) scenes.push(cur);
+            const out = [];
+            for (const s of scenes) {
+                out.push(JSON.stringify({ scene_id: String(s.scene_id || '') }));
+                if (s.text != null) out.push(JSON.stringify({ text: s.text }));
+                out.push('');
+            }
+            return out.join('\n').trim();
+        };
+        const btn = document.getElementById('scene-whisper-align-run');
+        const btnStop = document.getElementById('scene-whisper-align-stop');
+        const btnFromJson = document.getElementById('scene-whisper-align-from-json');
+        const btnFillWhisper = document.getElementById('scene-whisper-align-fill-whisper');
+        const btnStrip = document.getElementById('scene-whisper-align-strip-prompts');
+        const incPromptsEl = document.getElementById('scene-whisper-include-prompts-out');
+        const scenesTa = document.getElementById('scene-whisper-align-scenes');
+        const outTa = document.getElementById('scene-whisper-align-out');
+        const logEl = document.getElementById('scene-whisper-align-log');
+        const errEl = document.getElementById('scene-whisper-align-error');
+        const hintEl = document.getElementById('scene-whisper-align-hint');
+        const minRatioEl = document.getElementById('scene-whisper-min-ratio');
+        const anchorWEl = document.getElementById('scene-whisper-anchor-w');
+        const jsonInputEl = document.getElementById('json_input');
+        const whisperResultEl = document.getElementById('whisper-result')
+            || document.getElementById('whisper-align-whisper-json');
+        const whisperLast = {{ job.whisper_last_result | default(none) | tojson }};
+        let alignAbortController = null;
+        const appendAlignLog = (line) => {
+            if (!logEl) return;
+            const stamp = new Date().toLocaleTimeString('ru-RU', { hour12: false });
+            const msg = `[${stamp}] ${line}`;
+            if (logEl.textContent.trim() === 'Лог появится после запуска.') {
+                logEl.textContent = msg;
+            } else {
+                logEl.textContent += `\n${msg}`;
+            }
+            logEl.scrollTop = logEl.scrollHeight;
+        };
+
+        btnFromJson?.addEventListener('click', () => {
+            if (!scenesTa || !jsonInputEl) return;
+            scenesTa.value = jsonInputEl.value || '';
+        });
+
+        btnStrip?.addEventListener('click', () => {
+            if (!scenesTa) return;
+            scenesTa.value = stripScenesToVoiceLines(scenesTa.value);
+        });
+
+        btnFillWhisper?.addEventListener('click', () => {
+            const ta = whisperResultEl;
+            if (!ta) return;
+            const v = (ta.value || '').trim();
+            if (v) return;
+            if (whisperLast && typeof whisperLast === 'object') {
+                ta.value = JSON.stringify(whisperLast, null, 2);
+            }
+        });
+
+        btn?.addEventListener('click', async () => {
+            if (errEl) {
+                errEl.classList.add('hidden');
+                errEl.textContent = '';
+            }
+            if (hintEl) hintEl.textContent = '';
+            if (logEl) logEl.textContent = 'Лог появится после запуска.';
+            const whisperRaw = (whisperResultEl?.value || '').trim();
+            const scenesRaw = (scenesTa?.value || '').trim();
+            if (!whisperRaw) {
+                if (errEl) {
+                    errEl.textContent = 'Вставьте JSON Whisper (поле «Ответ Whisper») или сначала выполните распознавание.';
+                    errEl.classList.remove('hidden');
+                }
+                return;
+            }
+            if (!scenesRaw) {
+                if (errEl) {
+                    errEl.textContent = 'Заполните LDJSON сцен или нажмите «Взять из JSON-кода сцен».';
+                    errEl.classList.remove('hidden');
+                }
+                return;
+            }
+            let whisperObj = null;
+            try {
+                whisperObj = JSON.parse(whisperRaw);
+            } catch (e) {
+                if (errEl) {
+                    errEl.textContent = 'Некорректный JSON в ответе Whisper.';
+                    errEl.classList.remove('hidden');
+                }
+                return;
+            }
+            btn.disabled = true;
+            if (btnStop) btnStop.disabled = false;
+            alignAbortController = new AbortController();
+            try {
+                const minR = parseFloat(minRatioEl?.value || '0.52');
+                const aw = parseFloat(anchorWEl?.value || '0.42');
+                appendAlignLog('Старт сопоставления сцен с Whisper...');
+                appendAlignLog(`Параметры: min_ratio=${Number.isFinite(minR) ? minR : 0.52}, anchor_weight=${Number.isFinite(aw) ? aw : 0.42}`);
+                appendAlignLog(`Промпты в выводе: ${Boolean(incPromptsEl?.checked) ? 'ON' : 'OFF'}`);
+                const resp = await fetch(alignScenesPostUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: alignAbortController.signal,
+                    body: JSON.stringify({
+                        whisper_json: whisperObj,
+                        scenes_ldjson: scenesRaw,
+                        min_ratio: Number.isFinite(minR) ? minR : 0.52,
+                        anchor_weight: Number.isFinite(aw) ? aw : 0.42,
+                        include_prompts_in_output: Boolean(incPromptsEl?.checked),
+                    }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.ok) {
+                    let msg = data.error || `HTTP ${resp.status}`;
+                    if (resp.status === 404) {
+                        msg += ' — проверьте URL в DevTools (Network): должен совпадать с префиксом страницы /job/… Перезапустите сервис после обновления кода.';
+                    }
+                    appendAlignLog(`Ошибка HTTP: ${msg}`);
+                    throw new Error(msg);
+                }
+                if (outTa) outTa.value = data.ldjson || '';
+                const w = data.warnings || [];
+                const wc = Array.isArray(w) ? w.length : 0;
+                const wordsUsed = data.words_used ?? '?';
+                const scenesParsed = data.scenes_parsed ?? '?';
+                const matched = data.matched_count ?? '?';
+                const unmatched = data.unmatched_count ?? '?';
+                appendAlignLog(`Разобрано сцен: ${scenesParsed}`);
+                appendAlignLog(`Слов из Whisper: ${wordsUsed}`);
+                appendAlignLog(`Совпало: ${matched}, без совпадения: ${unmatched}`);
+                if (wc) {
+                    appendAlignLog(`Предупреждений: ${wc}`);
+                    const warnList = Array.isArray(w) ? w.slice(0, 10) : [];
+                    warnList.forEach((msg) => appendAlignLog(`⚠ ${msg}`));
+                    if (Array.isArray(w) && w.length > warnList.length) {
+                        appendAlignLog(`... и еще ${w.length - warnList.length} предупреждений`);
+                    }
+                } else {
+                    appendAlignLog('Предупреждений нет.');
+                }
+                if (hintEl) {
+                    hintEl.textContent = `Слов в Whisper: ${wordsUsed}. Сцен: ${scenesParsed}. Совпало: ${matched}.`
+                        + (wc ? ` Предупреждений: ${wc}.` : ' Все сцены сопоставлены.');
+                }
+            } catch (e) {
+                if (e?.name === 'AbortError') {
+                    appendAlignLog('Остановлено пользователем.');
+                    if (hintEl) hintEl.textContent = 'Сопоставление остановлено.';
+                    return;
+                }
+                if (errEl) {
+                    errEl.textContent = e?.message || String(e);
+                    errEl.classList.remove('hidden');
+                }
+                appendAlignLog(`Ошибка: ${e?.message || String(e)}`);
+            } finally {
+                alignAbortController = null;
+                btn.disabled = false;
+                if (btnStop) btnStop.disabled = true;
+            }
+        });
+
+        btnStop?.addEventListener('click', () => {
+            if (!alignAbortController) return;
+            alignAbortController.abort();
+            btnStop.disabled = true;
+        });
+    })();
+
     // Resume polling after page refresh for active tasks.
     document.querySelectorAll('.scenes-section .scene-slot[data-slot="start"], .scenes-section .scene-slot[data-slot="end"], .scenes-section .scene-slot[data-slot="video"]').forEach(slotEl => {
         const placeholder = slotEl.querySelector('.slot-placeholder');
@@ -1954,8 +2280,26 @@
         const timeCurrent = document.getElementById('tts-time-current');
         const timeTotal = document.getElementById('tts-time-total');
         const downloadBtn = document.getElementById('tts-download-btn');
+        const whisperBtn = document.getElementById('whisper-transcribe-run');
+        const whisperBusyEl = document.getElementById('whisper-busy');
+        const whisperErrEl = document.getElementById('whisper-error');
+        const whisperLogEl = document.getElementById('whisper-log');
+        const whisperResultEl = document.getElementById('whisper-result');
+        const whisperWordTsEl = document.getElementById('whisper-word-timestamps');
+        const whisperEngineEl = document.getElementById('whisper-engine');
+        const whisperFwModelEl = document.getElementById('whisper-fw-model');
+        const whisperFwComputeEl = document.getElementById('whisper-fw-compute');
+        const openaiKeySet = {{ openai_key_set | tojson }};
         let ttsDownloadFilename = 'tts.mp3';
+        let currentAudioFilename = ttsLastAudioFilename || '';
         if (!modelSel || !voiceSel) return;
+        const syncWhisperEngineUi = () => {
+            const isFw = (whisperEngineEl?.value || 'openai') === 'faster-whisper';
+            if (whisperFwModelEl) whisperFwModelEl.disabled = !isFw;
+            if (whisperFwComputeEl) whisperFwComputeEl.disabled = !isFw;
+        };
+        whisperEngineEl?.addEventListener('change', syncWhisperEngineUi);
+        syncWhisperEngineUi();
 
         const sliderIds = {
             speed_pct: 'tts-speed',
@@ -2234,6 +2578,7 @@
         const initLastTtsPlayer = () => {
             if (!ttsLastAudioUrl || !player || !playerWrap) return;
             ttsDownloadFilename = ttsLastAudioFilename || 'voiceover.mp3';
+            currentAudioFilename = ttsLastAudioFilename || '';
             player.src = ttsLastAudioUrl;
             player.load();
             if (seekEl) seekEl.value = '0';
@@ -2244,6 +2589,148 @@
             playerWrap.classList.remove('hidden');
         };
         initLastTtsPlayer();
+
+        const fmtHms = (v) => {
+            if (!Number.isFinite(v) || v < 0) return '0:00';
+            const sec = Math.floor(v);
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m}:${String(s).padStart(2, '0')}`;
+        };
+        const appendWhisperLog = (line) => {
+            if (!whisperLogEl) return;
+            const stamp = new Date().toLocaleTimeString('ru-RU', { hour12: false });
+            whisperLogEl.textContent += (whisperLogEl.textContent ? '\n' : '') + `[${stamp}] ${line}`;
+            whisperLogEl.scrollTop = whisperLogEl.scrollHeight;
+        };
+        const setWhisperBusy = (msg, elapsedSec = null) => {
+            if (!whisperBusyEl) return;
+            const wait = Number.isFinite(elapsedSec) ? ` (ждём ${fmtHms(Number(elapsedSec))})` : '';
+            whisperBusyEl.textContent = `${msg || 'Запрос к Whisper…'}${wait}`;
+        };
+
+        whisperBtn?.addEventListener('click', async () => {
+            if (whisperErrEl) {
+                whisperErrEl.classList.add('hidden');
+                whisperErrEl.textContent = '';
+            }
+            if (whisperResultEl) whisperResultEl.value = '';
+            if (whisperLogEl) whisperLogEl.textContent = '';
+
+            if (!currentAudioFilename) {
+                const msg = 'Нет MP3 для транскрибации. Сначала сгенерируйте озвучку в ElevenLabs.';
+                if (whisperErrEl) {
+                    whisperErrEl.textContent = msg;
+                    whisperErrEl.classList.remove('hidden');
+                }
+                return;
+            }
+            const engine = (whisperEngineEl?.value || 'openai').trim();
+            if (engine === 'openai' && !openaiKeySet) {
+                const msg = 'OPENAI_API_KEY не задан. Переключите движок на faster-whisper или укажите ключ.';
+                if (whisperErrEl) {
+                    whisperErrEl.textContent = msg;
+                    whisperErrEl.classList.remove('hidden');
+                }
+                return;
+            }
+
+            whisperBtn.disabled = true;
+            whisperBusyEl?.classList.remove('hidden');
+            appendWhisperLog(`Старт транскрибации файла ${currentAudioFilename}`);
+            appendWhisperLog(`Движок: ${engine}`);
+            appendWhisperLog(
+                `Режим timestamps: ${whisperWordTsEl?.checked ? 'segment + word' : 'segment only'}`
+            );
+            setWhisperBusy('Подготовка запроса к Whisper…', 0);
+
+            try {
+                const resp = await fetch(`/job/${jobId}/whisper/transcribe/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: currentAudioFilename,
+                        engine,
+                        fw_model: whisperFwModelEl?.value || 'small',
+                        fw_device: 'cpu',
+                        fw_compute_type: whisperFwComputeEl?.value || 'int8',
+                        word_timestamps: Boolean(whisperWordTsEl?.checked),
+                    }),
+                });
+                if (!resp.ok) {
+                    let msg = `HTTP ${resp.status}`;
+                    try {
+                        const data = await resp.json();
+                        if (data?.error) msg = data.error;
+                    } catch (_) {}
+                    throw new Error(msg);
+                }
+                const reader = resp.body?.getReader();
+                if (!reader) throw new Error('Нет потокового ответа от сервера');
+
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let finalResponse = null;
+
+                const handleEvent = (ev) => {
+                    if (!ev || typeof ev !== 'object') return;
+                    const elapsed = Number(ev.elapsed_seconds);
+                    if (ev.type === 'status') {
+                        const msg = String(ev.message || 'Статус Whisper…');
+                        setWhisperBusy(msg, elapsed);
+                        appendWhisperLog(msg + (Number.isFinite(elapsed) ? ` · ${elapsed.toFixed(1)}с` : ''));
+                        return;
+                    }
+                    if (ev.type === 'error') {
+                        throw new Error(String(ev.error || 'Ошибка Whisper'));
+                    }
+                    if (ev.type === 'result') {
+                        const msg = String(ev.message || 'Whisper завершен');
+                        setWhisperBusy(msg, elapsed);
+                        appendWhisperLog(msg + (Number.isFinite(elapsed) ? ` · ${elapsed.toFixed(1)}с` : ''));
+                        finalResponse = ev.response || null;
+                        if (whisperResultEl) {
+                            whisperResultEl.value = JSON.stringify(finalResponse || {}, null, 2);
+                        }
+                    }
+                };
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let nl = buffer.indexOf('\n');
+                    while (nl >= 0) {
+                        const line = buffer.slice(0, nl).trim();
+                        buffer = buffer.slice(nl + 1);
+                        if (line) {
+                            let ev = null;
+                            try { ev = JSON.parse(line); } catch (_) {}
+                            handleEvent(ev);
+                        }
+                        nl = buffer.indexOf('\n');
+                    }
+                }
+                buffer += decoder.decode();
+                const tail = buffer.trim();
+                if (tail) {
+                    try { handleEvent(JSON.parse(tail)); } catch (_) {}
+                }
+                if (!finalResponse) {
+                    throw new Error('Whisper не вернул итоговый JSON-ответ');
+                }
+            } catch (e) {
+                const msg = e?.message || String(e);
+                appendWhisperLog(`Ошибка: ${msg}`);
+                if (whisperErrEl) {
+                    whisperErrEl.textContent = msg;
+                    whisperErrEl.classList.remove('hidden');
+                }
+            } finally {
+                whisperBtn.disabled = false;
+                whisperBusyEl?.classList.add('hidden');
+            }
+        });
 
         fetch(`/job/${jobId}/elevenlabs/voices`)
             .then((r) => r.json())
@@ -2439,6 +2926,7 @@
                 }
 
                 ttsDownloadFilename = finalData.filename || 'tts.mp3';
+                currentAudioFilename = finalData.filename || '';
                 player.src = finalData.url;
                 player.load();
                 if (seekEl) seekEl.value = '0';

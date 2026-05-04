@@ -15,7 +15,7 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — целевой объём в символах 500–40 000, шаг 500 (см. parse_template_config; старые chars/duration тоже читаются)
   Hero Prompt, Master Prompt
-  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt»)
+  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», voice_flow_editor: «Voice Flow Editor …», title_strategist: «Title Strategist …», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt», youtube_packaging: «YouTube packaging …»)
 """
 
 from __future__ import annotations
@@ -95,6 +95,17 @@ _STEM_TO_TARGET: dict[str, str] = {
     "voice flow editor system prompt": "stage:voice_flow_editor",
     "voice flow editor user promt": "stage_user:voice_flow_editor",
     "voice flow editor user prompt": "stage_user:voice_flow_editor",
+    "title strategist prompt": "stage:title_strategist",
+    "title strategist system promt": "stage:title_strategist",
+    "title strategist system prompt": "stage:title_strategist",
+    "title strategist user promt": "stage_user:title_strategist",
+    "title strategist user prompt": "stage_user:title_strategist",
+    # Совместимость: старые имена файлов Voice Flow Editor 2 → тот же этап title_strategist.
+    "voice flow editor 2 prompt": "stage:title_strategist",
+    "voice flow editor 2 system promt": "stage:title_strategist",
+    "voice flow editor 2 system prompt": "stage:title_strategist",
+    "voice flow editor 2 user promt": "stage_user:title_strategist",
+    "voice flow editor 2 user prompt": "stage_user:title_strategist",
     "structure splitter prompt": "stage:structure_splitter",
     "structure splitter system promt": "stage:structure_splitter",
     "structure splitter system prompt": "stage:structure_splitter",
@@ -109,6 +120,12 @@ _STEM_TO_TARGET: dict[str, str] = {
     "scene writer style prompt": "stage_style:scene_writer",
     "scene writer past promt": "stage_past:scene_writer",
     "scene writer past prompt": "stage_past:scene_writer",
+    "youtube packaging prompt": "stage:youtube_packaging",
+    "youtube packaging engine prompt": "stage:youtube_packaging",
+    "youtube packaging system promt": "stage:youtube_packaging",
+    "youtube packaging system prompt": "stage:youtube_packaging",
+    "youtube packaging user promt": "stage_user:youtube_packaging",
+    "youtube packaging user prompt": "stage_user:youtube_packaging",
 }
 
 # Обратно к имени файла при записи на диск (как при чтении).
@@ -136,12 +153,16 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:voiceover_editor": "Voiceover Editor User Promt.txt",
     "stage:voice_flow_editor": "Voice Flow Editor System Promt.txt",
     "stage_user:voice_flow_editor": "Voice Flow Editor User Promt.txt",
+    "stage:title_strategist": "Title Strategist System Promt.txt",
+    "stage_user:title_strategist": "Title Strategist User Promt.txt",
     "stage:structure_splitter": "Structure Splitter System Promt.txt",
     "stage_user:structure_splitter": "Structure Splitter User Promt.txt",
     "stage:scene_writer": "Scene Writer System Promt.txt",
     "stage_user:scene_writer": "Scene Writer User Promt.txt",
     "stage_style:scene_writer": "Scene Writer Style Promt.txt",
     "stage_past:scene_writer": "Scene Writer Past in Promt.txt",
+    "stage:youtube_packaging": "YouTube packaging engine System Promt.txt",
+    "stage_user:youtube_packaging": "YouTube packaging engine User Promt.txt",
 }
 
 _STAGE_TARGETS: dict[str, str] = {
@@ -155,8 +176,10 @@ _STAGE_TARGETS: dict[str, str] = {
     "persona_editor": "Persona Editor",
     "voiceover_editor": "Voiceover Editor",
     "voice_flow_editor": "Voice Flow Editor",
+    "title_strategist": "Title Strategist",
     "structure_splitter": "Structure Splitter",
     "scene_writer": "Scene Writer",
+    "youtube_packaging": "YouTube packaging engine",
 }
 
 

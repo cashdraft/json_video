@@ -1039,6 +1039,43 @@ textarea::placeholder {
     margin: 0 0 0.55rem 0;
 }
 
+.rewrite-source-title-field {
+    margin-bottom: 0.6rem;
+}
+
+.rewrite-source-title-field__label {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
+}
+
+.rewrite-source-title-input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-input, rgba(255, 255, 255, 0.04));
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    font-family: inherit;
+}
+
+.rewrite-source-title-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+
+.rewrite-source-title-input:focus {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
+}
+
 .rewrite-slot--master-prompt {
     min-height: 0;
 }
@@ -1320,6 +1357,11 @@ textarea::placeholder {
     display: none;
 }
 
+/* Слот превью YouTube packaging в шаблоне изначально пустой — не скрывать до первого renderYoutubePackagingPreview */
+.rewrite-scene-writer-check.rewrite-youtube-packaging-preview:empty {
+    display: block;
+}
+
 .rewrite-scene-writer-check__head {
     display: flex;
     align-items: center;
@@ -1516,6 +1558,149 @@ textarea::placeholder {
 
 .rewrite-scene-writer-check__hint {
     margin-top: 0.35rem;
+}
+
+/* YouTube packaging: один блок в стиле «Проверка Scene Writer» (класс rewrite-scene-writer-check на корне) */
+.rewrite-scene-writer-check.rewrite-youtube-packaging-preview {
+    margin-top: 0.45rem;
+}
+
+.rewrite-youtube-packaging__sec-label {
+    margin-bottom: 0.1rem;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: lowercase;
+}
+
+.rewrite-youtube-packaging__sec-label + .rewrite-scene-writer-check__blocks-grid {
+    margin-top: 0.28rem;
+}
+
+.rewrite-youtube-packaging__sec-label + .rewrite-youtube-packaging__tags,
+.rewrite-youtube-packaging__sec-label + .rewrite-youtube-packaging__thumb-grid {
+    margin-top: 0.2rem;
+}
+
+/* top_5_titles: та же сетка 3×N, что «Проверка Scene Writer» */
+
+.rewrite-youtube-top5__cell {
+    display: grid;
+    gap: 0.12rem;
+    min-width: 0;
+    margin-bottom: 0.28rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
+.rewrite-scene-writer-check__blocks-col > .rewrite-youtube-top5__cell:last-child {
+    margin-bottom: 0;
+}
+
+.rewrite-youtube-top5__row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.35rem 0.45rem;
+    align-items: baseline;
+    font-variant-numeric: tabular-nums;
+}
+
+.rewrite-youtube-top5__num {
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-muted);
+}
+
+.rewrite-youtube-top5__en {
+    min-width: 0;
+    white-space: normal;
+    word-break: break-word;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.rewrite-youtube-top5__score {
+    white-space: nowrap;
+    font-weight: 700;
+    color: var(--accent);
+    justify-self: end;
+}
+
+.rewrite-youtube-top5__ru {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+    padding-left: 0.05rem;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.rewrite-youtube-packaging__desc {
+    margin-top: 0.2rem;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.rewrite-youtube-packaging__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.rewrite-youtube-packaging__tag {
+    display: inline-block;
+    padding: 0.14rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    background: rgba(106, 208, 157, 0.1);
+    border: 1px solid rgba(106, 208, 157, 0.28);
+}
+
+.rewrite-youtube-packaging__empty {
+    margin: 0.15rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+}
+
+.rewrite-youtube-packaging__thumb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.65rem;
+}
+
+.rewrite-youtube-packaging__thumb-card {
+    padding: 0.45rem 0.55rem;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    background: rgba(0, 0, 0, 0.12);
+    font-size: 0.74rem;
+    line-height: 1.4;
+}
+
+.rewrite-youtube-packaging__thumb-num {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.rewrite-youtube-packaging__thumb-row {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.35rem 0.5rem;
+    margin-top: 0.35rem;
+}
+
+.rewrite-youtube-packaging__thumb-k {
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    word-break: break-word;
+}
+
+.rewrite-youtube-packaging__thumb-v {
+    word-break: break-word;
 }
 
 .rewrite-scene-writer-sliders {
@@ -2055,6 +2240,31 @@ textarea::placeholder {
 .tts-player-wrap {
     margin-top: 0.75rem;
     width: 100%;
+}
+
+.whisper-box {
+    margin-top: 0.75rem;
+}
+
+.whisper-log {
+    margin: 0.35rem 0 0.8rem;
+    padding: 0.7rem 0.8rem;
+    min-height: 120px;
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--text-muted);
+    font-size: 0.83rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.whisper-result {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.84rem;
 }
 
 .tts-player-native {

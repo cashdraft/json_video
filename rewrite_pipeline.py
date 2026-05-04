@@ -328,15 +328,58 @@ def build_voice_flow_editor_system_prompt(
 def build_voice_flow_editor_user_message(
     voice_flow_editor_user_prompt: str,
     edited_text: str = "",
+    *,
+    user_promt_field: str = "voice_flow_editor_user_promt",
+    original_title: str | None = None,
 ) -> str:
-    """User для voice_flow_editor: User Promt + edited_text из Voiceover Editor."""
+    """User для voice_flow_editor / title_strategist: User Promt + edited_text из Voiceover Editor.
+
+    Для title_strategist передайте original_title (строка из поля «Исходное название»); для voice_flow_editor
+    оставьте original_title=None — ключ в JSON не попадёт.
+    В user JSON поле original_title идёт первым (удобно в экспорте). В тексте user-promt подставляется
+    плейсхолдер {{ORIGINAL_TITLE}}, если он есть в шаблоне.
+    """
     up = (voice_flow_editor_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    payload: dict[str, Any] = {
-        "voice_flow_editor_user_promt": up or "",
-        "edited_text": et,
-    }
+    key = (user_promt_field or "voice_flow_editor_user_promt").strip() or "voice_flow_editor_user_promt"
+    if original_title is not None and key == "title_strategist_user_promt":
+        tit = (original_title or "").strip()
+        repl = tit if tit else "(пусто)"
+        up = up.replace("{{ORIGINAL_TITLE}}", repl)
+    payload: dict[str, Any] = {}
+    if original_title is not None:
+        ot = (original_title or "").strip()
+        payload["original_title"] = ot if ot else "(пусто)"
+    payload[key] = up or ""
+    payload["edited_text"] = et
     return _json_user_message(payload)
+
+
+def apply_title_strategist_original_title_to_user_json(user_json_str: str, original_title: str) -> str:
+    """Всегда добавляет/обновляет original_title в user JSON Title Strategist и подставляет {{ORIGINAL_TITLE}} в промпт.
+
+    Вызывается из app после compose — чтобы в экспорте и в реальном POST поле не терялось при рассинхроне кода.
+    """
+    val_raw = (original_title or "").strip()
+    val_disp = val_raw if val_raw else "(пусто)"
+    try:
+        obj = json.loads(user_json_str)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return user_json_str
+    if not isinstance(obj, dict):
+        return user_json_str
+    tsp = obj.get("title_strategist_user_promt")
+    if isinstance(tsp, str):
+        s = tsp.replace("{{ORIGINAL_TITLE}}", val_disp)
+        s = s.replace("{{ ORIGINAL_TITLE }}", val_disp)
+        obj["title_strategist_user_promt"] = s
+    obj["original_title"] = val_disp
+    ordered: dict[str, Any] = {"original_title": val_disp}
+    for k, v in obj.items():
+        if k == "original_title":
+            continue
+        ordered[k] = v
+    return json.dumps(ordered, ensure_ascii=False, indent=2)
 
 
 def build_structure_splitter_system_prompt(
@@ -360,6 +403,25 @@ def build_structure_splitter_user_message(
     return _json_user_message(payload)
 
 
+def build_youtube_packaging_system_prompt(packaging_prompt: str) -> str:
+    """Этап youtube_packaging: в system только YouTube packaging System Promt."""
+    return (packaging_prompt or "").strip()
+
+
+def build_youtube_packaging_user_message(
+    user_prompt: str,
+    scene_writer_output: str = "",
+) -> str:
+    """User: User Promt + сырой вывод Scene Writer (JSON-строки сцен)."""
+    up = (user_prompt or "").strip()
+    raw = str(scene_writer_output or "").strip()
+    payload: dict[str, Any] = {
+        "youtube_packaging_user_promt": up or "",
+        "scene_writer_output": raw or "(пусто)",
+    }
+    return _json_user_message(payload)
+
+
 # (ключ в JSON, заголовок в UI)
 REWRITE_STAGES: list[tuple[str, str]] = [
     ("analysis", "Analysis"),
@@ -372,8 +434,10 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
     ("voice_flow_editor", "Voice Flow Editor"),
+    ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
+    ("youtube_packaging", "YouTube packaging engine"),
 ]
 
 REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
@@ -424,6 +488,11 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем. В System: Voice Flow Editor System Promt. "
         "В User (по порядку): Voice Flow Editor User Promt, edited_text из Voiceover Editor."
     ),
+    "title_strategist": (
+        "Отправляем. В System: Title Strategist System Promt. "
+        "В User (по порядку): original_title (из «Исходное название»), Title Strategist User Promt "
+        "(в тексте {{ORIGINAL_TITLE}} заменяется на это значение), edited_text из Voiceover Editor."
+    ),
     "structure_splitter": (
         "Отправляем. В System: Structure Splitter System Promt. "
         "В User (по порядку): Structure Splitter User Promt, full_text.txt из Voiceover Editor."
@@ -431,6 +500,11 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     "scene_writer": (
         "Отправляем block-by-block. В System: Scene Writer System Promt. "
         "В User: Scene Writer User Promt, Scene Writer Style Promt, параметры длины сцены и текущий block."
+    ),
+    "youtube_packaging": (
+        "Отправляем один POST. В System: YouTube packaging System Promt. "
+        "В User: YouTube packaging User Promt и поле scene_writer_output (полный результат Scene Writer). "
+        "В превью блок заголовков — только top_5_titles. Плюс final_description, hashtags, thumbnail_options по схеме в System Promt."
     ),
 }
 
@@ -455,8 +529,12 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
     "persona_editor": "Уточняет персонализацию и тон героя на основе edited_text и Hero Prompt.",
     "voiceover_editor": "Правит текст под озвучку на основе edited_text после Persona Editor.",
     "voice_flow_editor": "Финально выравнивает voice flow на основе edited_text после Voiceover Editor.",
+    "title_strategist": "Как Voice Flow: edited_text = результат Voiceover Editor. В user JSON первым идёт original_title («Исходное название»); в шаблоне User Promt можно {{ORIGINAL_TITLE}} — подставится то же значение.",
     "structure_splitter": "Разбивает полный текст после Voiceover Editor на структурные части.",
     "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
+    "youtube_packaging": (
+        "Собирает заголовки, описание, хештеги и идеи превью для YouTube из готового вывода Scene Writer."
+    ),
 }
 
 
@@ -494,6 +572,16 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(stages, dict):
         stages = new_stages_dict()
         job["stages"] = stages
+
+    # Миграция: старый ключ voice_flow_editor_2 → title_strategist.
+    if "voice_flow_editor_2" in stages:
+        old_v2 = stages.pop("voice_flow_editor_2")
+        if isinstance(old_v2, dict):
+            cur = stages.get("title_strategist")
+            if isinstance(cur, dict):
+                cur.update(old_v2)
+            else:
+                stages["title_strategist"] = old_v2
 
     for key in REWRITE_STAGE_KEYS:
         if key not in stages or not isinstance(stages[key], dict):
@@ -536,6 +624,19 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             vfe["prompt"] = str(voe.get("prompt") or "")
         if not str(vfe.get("user_prompt") or "").strip() and str(voe.get("user_prompt") or "").strip():
             vfe["user_prompt"] = str(voe.get("user_prompt") or "")
+
+    ts_st = stages.get("title_strategist") if isinstance(stages.get("title_strategist"), dict) else None
+    if isinstance(ts_st, dict) and isinstance(vfe, dict) and isinstance(voe, dict):
+        if not str(ts_st.get("prompt") or "").strip():
+            if str(vfe.get("prompt") or "").strip():
+                ts_st["prompt"] = str(vfe.get("prompt") or "")
+            elif str(voe.get("prompt") or "").strip():
+                ts_st["prompt"] = str(voe.get("prompt") or "")
+        if not str(ts_st.get("user_prompt") or "").strip():
+            if str(vfe.get("user_prompt") or "").strip():
+                ts_st["user_prompt"] = str(vfe.get("user_prompt") or "")
+            elif str(voe.get("user_prompt") or "").strip():
+                ts_st["user_prompt"] = str(voe.get("user_prompt") or "")
 
     for dead in list(stages.keys()):
         if dead not in REWRITE_STAGE_KEYS:
@@ -592,6 +693,9 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     job["hero_prompt_locked"] = bool(job.get("hero_prompt_locked"))
     job.setdefault("audio_timing_locked", False)
     job["audio_timing_locked"] = bool(job.get("audio_timing_locked"))
+
+    job.setdefault("source_title", "")
+    job["source_title"] = str(job.get("source_title") or "")
 
     return job
 
@@ -661,8 +765,11 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
         return None
     for i in range(idx):
         pk, plabel = REWRITE_STAGES[i]
-        if stage_key in ("structure_splitter", "scene_writer") and pk == "voice_flow_editor":
-            # Voice Flow не должен быть обязательным для downstream-логики.
+        if stage_key in ("structure_splitter", "scene_writer") and pk in (
+            "voice_flow_editor",
+            "title_strategist",
+        ):
+            # Voice Flow и Title Strategist не обязательны для downstream-логики.
             continue
         prev = stages.get(pk) or {}
         if not str(prev.get("last_result") or "").strip():
@@ -691,6 +798,8 @@ def compose_rewrite_openai_request_body(
     persona_editor_text: str = "",
     voiceover_editor_text: str = "",
     structure_splitter_text: str = "",
+    scene_writer_output_text: str = "",
+    original_title: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -704,8 +813,10 @@ def compose_rewrite_openai_request_body(
         "persona_editor",
         "voiceover_editor",
         "voice_flow_editor",
+        "title_strategist",
         "structure_splitter",
         "scene_writer",
+        "youtube_packaging",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
     pre_err = validate_prerequisites(stage_key, stages_snap)
@@ -802,6 +913,17 @@ def compose_rewrite_openai_request_body(
         user_text = build_voice_flow_editor_user_message(
             str(cell.get("user_prompt") or ""),
             voiceover_editor_text,
+            user_promt_field="voice_flow_editor_user_promt",
+        )
+    elif stage_key == "title_strategist":
+        prompt = build_voice_flow_editor_system_prompt(
+            str(cell.get("prompt") or ""),
+        )
+        user_text = build_voice_flow_editor_user_message(
+            str(cell.get("user_prompt") or ""),
+            voiceover_editor_text,
+            user_promt_field="title_strategist_user_promt",
+            original_title=original_title,
         )
     elif stage_key == "structure_splitter":
         prompt = build_structure_splitter_system_prompt(
@@ -820,6 +942,15 @@ def compose_rewrite_openai_request_body(
             "style_promt": style_prompt,
         }
         user_text = _json_user_message(payload)
+    elif stage_key == "youtube_packaging":
+        sw = (scene_writer_output_text or "").strip()
+        if not sw:
+            return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
+        prompt = build_youtube_packaging_system_prompt(str(cell.get("prompt") or ""))
+        user_text = build_youtube_packaging_user_message(
+            str(cell.get("user_prompt") or ""),
+            sw,
+        )
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -842,8 +973,10 @@ def compose_rewrite_openai_request_body(
         "persona_editor",
         "voiceover_editor",
         "voice_flow_editor",
+        "title_strategist",
         "structure_splitter",
         "scene_writer",
+        "youtube_packaging",
     ):
         dur_payload = build_duration_length_spec_payload(
             target_chars=target_chars,
@@ -929,6 +1062,13 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "past_prompt_locked": bool(cell.get("past_prompt_locked")),
         }
     return source_text, stages
+
+
+def snapshot_original_title_from_body(body: dict[str, Any], job: dict[str, Any]) -> str:
+    """Поле «Исходное название» для user этапа title_strategist: снимок с формы или из project.json."""
+    if isinstance(body, dict) and "source_title" in body:
+        return str(body.get("source_title") or "").strip()
+    return str((job or {}).get("source_title") or "").strip()
 
 
 def snapshot_master_prompt_from_body(body: dict[str, Any]) -> str:

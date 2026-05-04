@@ -97,6 +97,10 @@
             </div>
 
             <div class="scene-card rewrite-source-card rewrite-source-card--body">
+                <div class="rewrite-source-title-field">
+                    <label for="rewrite-source-title" class="rewrite-source-title-field__label">Исходное название</label>
+                    <input type="text" id="rewrite-source-title" class="rewrite-source-title-input{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
+                </div>
                 <div class="rewrite-source-body-header">
                     <div class="scene-id rewrite-source-body-title">Исходный текст</div>
                     <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
@@ -206,14 +210,14 @@
                 <div class="rewrite-pipeline-runner__head">
                     <div>
                         <div class="scene-id rewrite-pipeline-runner__title">Конвейер</div>
-                        <p class="scene-text rewrite-pipeline-runner__lead">По очереди: Analysis → Structure → Draft1 → Сontinuity Editor → Retention Editor → Hook Editor → Flow Editor → Persona Editor → Voiceover Editor → Structure Splitter → Scene Writer. Журнал ниже; карточки этапов обновляются так же, как при ручном запуске.</p>
+                        <p class="scene-text rewrite-pipeline-runner__lead">По очереди: Analysis → Architect → Block Writer → Сontinuity Editor → Retention Editor → Hook Editor → Flow Editor → Persona Editor → Voiceover Editor → Voice Flow Editor → Title Strategist → Structure Splitter → Scene Writer → YouTube packaging engine. Журнал ниже; карточки этапов обновляются так же, как при ручном запуске.</p>
                     </div>
                     <div class="rewrite-pipeline-runner__actions">
                         <button type="button" class="btn btn-secondary btn-sm" id="rewrite-pipeline-run-btn" {% if not openai_key_set %}disabled{% endif %}>Сгенерировать</button>
                         <button type="button" class="btn btn-danger btn-sm" id="rewrite-pipeline-stop-btn" disabled>Остановить</button>
                     </div>
                 </div>
-                <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — этапы 1…6 по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
+                <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — все этапы конвейера по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
             </section>
 
             <div class="scenes-grid rewrite-stages-list">
@@ -230,7 +234,7 @@
             {% set past_prompt_locked = cell.past_prompt_locked|default(true) %}
             {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-heading">
@@ -270,7 +274,7 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'continuity_editor' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'voice_flow_editor' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' %}
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'continuity_editor' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'voice_flow_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_user_prompt else 'no' }} rewrite-stage-user-prompt-badge">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
@@ -330,15 +334,18 @@
                                     <span class="slot-status slot-status-with-spinner rewrite-stage-status-text"></span>
                                     <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn">Cancel</button>
                                 </div>
-                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="3" {% if result_locked %}readonly{% endif %} placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
+                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="{% if stage_key == 'youtube_packaging' %}8{% else %}3{% endif %}" {% if result_locked %}readonly{% endif %} placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
+                            {% if stage_key == 'youtube_packaging' %}
+                            <div class="rewrite-scene-writer-check rewrite-youtube-packaging-preview" data-youtube-packaging-preview aria-live="polite"></div>
+                            {% endif %}
                             {% if stage_key == 'scene_writer' %}
                             <div class="rewrite-scene-writer-check" data-scene-writer-check></div>
                             {% endif %}
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
                             {% endif %}
-                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'continuity_editor', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'voice_flow_editor'] %}
+                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'continuity_editor', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'voice_flow_editor', 'title_strategist'] %}
                             <div class="rewrite-scene-writer-check" data-editor-check></div>
                             {% endif %}
                         </div>
@@ -413,7 +420,7 @@
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="rewrite-youtube-insert-confirm-title">Вставка расшифровки</h3>
             </div>
-            <p class="confirm-modal__lead">В поле «Исходный текст» уже есть текст. Заменить его расшифровкой YouTube?</p>
+            <p class="confirm-modal__lead">В поле «Исходный текст» уже есть текст. Заменить расшифровкой YouTube и подставить название ролика в «Исходное название»?</p>
             <div class="confirm-modal__actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert-confirm-cancel">Отмена</button>
                 <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-insert-confirm-ok">Да, заменить</button>
@@ -449,6 +456,7 @@
     const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
+    const sourceTitleEl = document.getElementById('rewrite-source-title');
     const sourceCountsEl = document.getElementById('rewrite-source-counts');
     const masterEl = document.getElementById('rewrite-master-prompt');
     const masterToggleBtn = document.getElementById('rewrite-master-toggle');
@@ -639,7 +647,7 @@
 
     function openYoutubeInsertConfirm() {
         if (!ytInsertConfirmModal || !ytInsertConfirmCancelBtn || !ytInsertConfirmOkBtn) {
-            return Promise.resolve(window.confirm('В поле «Исходный текст» уже есть текст. Заменить его расшифровкой YouTube?'));
+            return Promise.resolve(window.confirm('В поле «Исходный текст» уже есть текст. Заменить расшифровкой YouTube и подставить название ролика в «Исходное название»?'));
         }
         ytInsertConfirmModal.classList.remove('hidden');
         ytInsertConfirmModal.setAttribute('aria-hidden', 'false');
@@ -1358,6 +1366,270 @@
         wrap.innerHTML = html;
     }
 
+    function ytPackEscapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function parseYoutubePackagingResult(raw) {
+        var t = (raw || '').trim();
+        if (!t) return { ok: false, error: 'Пусто', data: null };
+        var fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fence) t = fence[1].trim();
+        try {
+            var o = JSON.parse(t);
+            if (typeof o !== 'object' || o === null || Array.isArray(o)) {
+                return { ok: false, error: 'Корень ответа не объект', data: null };
+            }
+            return { ok: true, error: '', data: o };
+        } catch (e1) {
+            var a = t.indexOf('{');
+            var b = t.lastIndexOf('}');
+            if (a >= 0 && b > a) {
+                try {
+                    var o2 = JSON.parse(t.slice(a, b + 1));
+                    if (typeof o2 === 'object' && o2 !== null && !Array.isArray(o2)) {
+                        return { ok: true, error: '', data: o2 };
+                    }
+                } catch (e2) {}
+            }
+            return { ok: false, error: 'Не удалось разобрать JSON', data: null };
+        }
+    }
+
+    /** Элемент top_5_titles: строка или объект — в читаемый текст. */
+    function formatYoutubeTitleItem(x) {
+        if (x == null) return '';
+        var t = typeof x;
+        if (t === 'string' || t === 'number' || t === 'boolean') return String(x);
+        if (t === 'object' && !Array.isArray(x)) {
+            var order = ['rank', 'title_id', 'id', 'title_en', 'title_ru', 'angle', 'score', 'reason_en', 'reason_ru'];
+            var lines = [];
+            var seen = {};
+            order.forEach(function (k) {
+                if (!Object.prototype.hasOwnProperty.call(x, k)) return;
+                var val = x[k];
+                if (val === '' || val === null || val === undefined) return;
+                seen[k] = true;
+                lines.push(k + ': ' + String(val));
+            });
+            Object.keys(x).forEach(function (k) {
+                if (seen[k]) return;
+                var val = x[k];
+                if (val === '' || val === null || val === undefined) return;
+                if (typeof val === 'object') {
+                    try {
+                        lines.push(k + ': ' + JSON.stringify(val));
+                    } catch (e) {
+                        lines.push(k + ': …');
+                    }
+                } else {
+                    lines.push(k + ': ' + String(val));
+                }
+            });
+            return lines.join('\n');
+        }
+        try {
+            return JSON.stringify(x);
+        } catch (e) {
+            return String(x);
+        }
+    }
+
+    function formatYoutubeFinalDescription(val) {
+        if (val == null) return '';
+        if (typeof val === 'string') return val;
+        if (typeof val === 'object' && !Array.isArray(val)) {
+            if (typeof val.text === 'string') return val.text;
+            if (typeof val.body === 'string') return val.body;
+            if (typeof val.description === 'string') return val.description;
+            var chunks = [];
+            ['en', 'ru'].forEach(function (lang) {
+                if (typeof val[lang] === 'string' && val[lang].trim()) chunks.push(val[lang].trim());
+            });
+            if (chunks.length) return chunks.join('\n\n');
+            return formatYoutubeTitleItem(val);
+        }
+        return String(val);
+    }
+
+    function formatYoutubeScoreVal(val) {
+        if (val === '' || val == null) return '';
+        var sc = Number(val);
+        if (!isNaN(sc)) {
+            return Math.abs(sc - Math.round(sc)) < 1e-9 ? String(Math.round(sc)) : String(Math.round(sc * 10) / 10);
+        }
+        return String(val).trim();
+    }
+
+    /** Одна ячейка top_5_titles — как строки в Проверке Scene Writer: сетка из 3 колонок. */
+    function renderTop5TitleCellHtml(item, index) {
+        var num = index + 1;
+        var titleEn = '';
+        var titleRu = '';
+        var scoreStr = '';
+        if (typeof item === 'string') {
+            titleEn = item.trim();
+            if (!titleEn) return '';
+            return (
+                '<div class="rewrite-youtube-top5__cell">' +
+                '<div class="rewrite-youtube-top5__row">' +
+                '<span class="rewrite-youtube-top5__num">#' + String(index + 1) + '</span>' +
+                '<span class="rewrite-youtube-top5__en">' + ytPackEscapeHtml(titleEn) + '</span>' +
+                '<span class="rewrite-youtube-top5__score"></span>' +
+                '</div></div>'
+            );
+        }
+        if (item && typeof item === 'object') {
+            if (item.rank != null && item.rank !== '') {
+                var r = parseInt(String(item.rank), 10);
+                if (!isNaN(r)) num = r;
+            }
+            titleEn = (item.title_en != null ? String(item.title_en) : '').trim();
+            titleRu = (item.title_ru != null ? String(item.title_ru) : '').trim();
+            scoreStr = formatYoutubeScoreVal(item.score);
+            if (!titleEn && item.title) titleEn = String(item.title).trim();
+            if (!titleEn && titleRu) {
+                titleEn = titleRu;
+                titleRu = '';
+            }
+        } else {
+            return '';
+        }
+        var html = '<div class="rewrite-youtube-top5__cell">';
+        html += '<div class="rewrite-youtube-top5__row">';
+        html += '<span class="rewrite-youtube-top5__num">#' + ytPackEscapeHtml(String(num)) + '</span>';
+        html += '<span class="rewrite-youtube-top5__en">' + ytPackEscapeHtml(titleEn || '—') + '</span>';
+        html += '<span class="rewrite-youtube-top5__score">' + (scoreStr ? ytPackEscapeHtml(scoreStr) : '') + '</span>';
+        html += '</div>';
+        if (titleRu) {
+            html += '<div class="rewrite-youtube-top5__ru">' + ytPackEscapeHtml(titleRu) + '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    /** Только сетка top_5 (без внешней рамки rewrite-scene-writer-check — она на корне превью). */
+    function renderTop5TitlesBlocksGridInner(rawTop5) {
+        if (!rawTop5.length) return '';
+        var colCount = 3;
+        var perCol = Math.ceil(rawTop5.length / colCount);
+        var html = '<div class="rewrite-scene-writer-check__blocks-grid">';
+        for (var c = 0; c < colCount; c += 1) {
+            html += '<div class="rewrite-scene-writer-check__blocks-col">';
+            var start = c * perCol;
+            var end = Math.min(start + perCol, rawTop5.length);
+            for (var i = start; i < end; i += 1) {
+                html += renderTop5TitleCellHtml(rawTop5[i], i);
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function normalizeYoutubeHashtags(obj) {
+        var v = obj.hashtags;
+        function tagToStr(x) {
+            if (x == null) return '';
+            if (typeof x === 'string') return x.trim();
+            if (typeof x === 'object' && x.tag) return String(x.tag).trim();
+            if (typeof x === 'object' && x.name) return String(x.name).trim();
+            if (typeof x === 'object') return formatYoutubeTitleItem(x).replace(/\n/g, ' ').trim();
+            return String(x).trim();
+        }
+        if (Array.isArray(v)) return v.map(tagToStr).filter(Boolean);
+        if (typeof v === 'string') {
+            return v.split(/[\s,]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+        }
+        return [];
+    }
+
+    function renderYoutubePackagingPreview(block) {
+        if (!block) return;
+        var wrap = block.querySelector('[data-youtube-packaging-preview]');
+        if (!wrap) return;
+        var ta = block.querySelector('.rewrite-stage-result');
+        var raw = ta ? (ta.value || '') : '';
+        var parsed = parseYoutubePackagingResult(raw);
+        if (!parsed.ok || !parsed.data) {
+            wrap.innerHTML =
+                '<div class="rewrite-scene-writer-check__head"><strong>YouTube packaging</strong> <span class="rewrite-scene-writer-check__no">' +
+                ytPackEscapeHtml(parsed.error || 'ошибка') +
+                '</span></div>';
+            return;
+        }
+        var d = parsed.data;
+        var rawTop5 = Array.isArray(d.top_5_titles) ? d.top_5_titles : [];
+        var desc = formatYoutubeFinalDescription(d.final_description);
+        var tags = normalizeYoutubeHashtags(d);
+        var thumbs = Array.isArray(d.thumbnail_options) ? d.thumbnail_options : [];
+        var hasDesc = !!String(desc).trim();
+
+        var html = '';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>YouTube packaging</strong> <span class="rewrite-scene-writer-check__ok">OK</span></div>';
+        html += '<div class="rewrite-scene-writer-check__hint">';
+        html += 'top_5: <strong>' + String(rawTop5.length) + '</strong> | ';
+        html += 'описание: <strong>' + (hasDesc ? 'да' : 'нет') + '</strong> | ';
+        html += 'хештеги: <strong>' + String(tags.length) + '</strong> | ';
+        html += 'превью: <strong>' + String(thumbs.length) + '</strong>';
+        html += '</div>';
+        html += '<div class="rewrite-scene-writer-check__divider"></div>';
+
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-youtube-packaging__sec-label"><strong>top_5_titles</strong></div>';
+        if (rawTop5.length) {
+            html += renderTop5TitlesBlocksGridInner(rawTop5);
+        } else {
+            html += '<p class="rewrite-youtube-packaging__empty">—</p>';
+        }
+
+        html += '<div class="rewrite-scene-writer-check__divider"></div>';
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-youtube-packaging__sec-label"><strong>final_description</strong></div>';
+        if (hasDesc) {
+            html += '<div class="rewrite-youtube-packaging__desc">' + ytPackEscapeHtml(desc).replace(/\n/g, '<br>') + '</div>';
+        } else {
+            html += '<p class="rewrite-youtube-packaging__empty">—</p>';
+        }
+
+        html += '<div class="rewrite-scene-writer-check__divider"></div>';
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-youtube-packaging__sec-label"><strong>hashtags</strong></div>';
+        if (tags.length) {
+            html += '<div class="rewrite-youtube-packaging__tags">';
+            tags.forEach(function (tag) {
+                html += '<span class="rewrite-youtube-packaging__tag">' + ytPackEscapeHtml(tag) + '</span>';
+            });
+            html += '</div>';
+        } else {
+            html += '<p class="rewrite-youtube-packaging__empty">—</p>';
+        }
+
+        html += '<div class="rewrite-scene-writer-check__divider"></div>';
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-youtube-packaging__sec-label"><strong>thumbnail_options</strong></div>';
+        if (thumbs.length) {
+            html += '<div class="rewrite-youtube-packaging__thumb-grid">';
+            thumbs.forEach(function (item, idx) {
+                if (!item || typeof item !== 'object') return;
+                html += '<div class="rewrite-youtube-packaging__thumb-card">';
+                html += '<div class="rewrite-youtube-packaging__thumb-num">#' + String(idx + 1) + '</div>';
+                Object.keys(item).forEach(function (k) {
+                    var val = item[k];
+                    if (val == null || val === '') return;
+                    html += '<div class="rewrite-youtube-packaging__thumb-row"><span class="rewrite-youtube-packaging__thumb-k">' + ytPackEscapeHtml(k) + '</span>';
+                    html += '<span class="rewrite-youtube-packaging__thumb-v">' + ytPackEscapeHtml(String(val)).replace(/\n/g, '<br>') + '</span></div>';
+                });
+                html += '</div>';
+            });
+            html += '</div>';
+        } else {
+            html += '<p class="rewrite-youtube-packaging__empty">—</p>';
+        }
+
+        wrap.innerHTML = html;
+    }
+
     function renderEditorCheck(block) {
         if (!block) return;
         var wrap = block.querySelector('[data-editor-check]');
@@ -1382,7 +1654,8 @@
             flow_editor: true,
             persona_editor: true,
             voiceover_editor: true,
-            voice_flow_editor: true
+            voice_flow_editor: true,
+            title_strategist: true
         };
         if (strictEditorStages[stageKey]) {
             var stageLabel = STAGE_LABELS[stageKey] || 'Editor';
@@ -1489,12 +1762,18 @@
         if (!sourceEl) return;
         if (!openaiOk) {
             sourceEl.disabled = true;
+            if (sourceTitleEl) sourceTitleEl.disabled = true;
             if (sourceToggleBtn) sourceToggleBtn.disabled = true;
             return;
         }
         sourceEl.disabled = false;
         sourceEl.readOnly = sourceLocked;
         sourceEl.classList.toggle('rewrite-source-textarea--locked', sourceLocked);
+        if (sourceTitleEl) {
+            sourceTitleEl.disabled = false;
+            sourceTitleEl.readOnly = sourceLocked;
+            sourceTitleEl.classList.toggle('rewrite-source-textarea--locked', sourceLocked);
+        }
         styleToggleBtn(sourceToggleBtn, sourceLocked);
         if (sourceToggleBtn) sourceToggleBtn.disabled = false;
     }
@@ -1527,7 +1806,7 @@
             let ok = true;
             for (let i = 0; i < idx; i++) {
                 const prevKey = STAGE_KEYS_ORDER[i];
-                if ((sk === 'structure_splitter' || sk === 'scene_writer') && prevKey === 'voice_flow_editor') {
+                if ((sk === 'structure_splitter' || sk === 'scene_writer') && (prevKey === 'voice_flow_editor' || prevKey === 'title_strategist')) {
                     continue;
                 }
                 const prev = byKey[prevKey];
@@ -1589,6 +1868,10 @@
         sourceEl.addEventListener('change', updateSourceCounts);
         sourceEl.addEventListener('change', function () { scheduleAutosave(0); });
     }
+    if (sourceTitleEl) {
+        sourceTitleEl.addEventListener('input', function () { scheduleAutosave(500); });
+        sourceTitleEl.addEventListener('change', function () { scheduleAutosave(0); });
+    }
     updateSourceCounts();
 
     if (targetCharsRangeEl && targetCharsValEl) {
@@ -1644,7 +1927,7 @@
                             syncPromptBadge(block);
                         }
                     }
-                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'structure_splitter' || key === 'scene_writer') && cell && typeof cell.user_prompt === 'string') {
+                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
                         var uta = block.querySelector('.rewrite-stage-user-prompt');
                         if (uta) {
                             uta.value = cell.user_prompt;
@@ -1666,7 +1949,7 @@
                         }
                     }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'structure_splitter' || key === 'scene_writer') {
+                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'youtube_packaging') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
@@ -2006,11 +2289,15 @@
             }
             sourceEl.value = txt;
             updateSourceCounts();
+            if (sourceTitleEl) {
+                var insTitle = ytVideoTitleTextEl ? String(ytVideoTitleTextEl.textContent || '').trim() : '';
+                if (insTitle) sourceTitleEl.value = insTitle;
+            }
             var ok = await saveToServer();
             if (!ok) {
                 setYtStatus('Текст вставлен, но не удалось сохранить.', true);
             } else {
-                setYtStatus('Текст вставлен в исходное поле.', false);
+                setYtStatus('Текст и название подставлены в поля исходника.', false);
             }
         } catch (e) {
             setYtStatus(String(e), true);
@@ -2044,6 +2331,7 @@
         });
         return {
             source_text: sourceEl ? sourceEl.value : '',
+            source_title: sourceTitleEl ? sourceTitleEl.value : '',
             source_locked: sourceLocked,
             master_prompt: masterEl ? masterEl.value : '',
             master_prompt_locked: masterLocked,
@@ -2199,7 +2487,7 @@
     function applyAnalysisUserPromptLockUI(block) {
         if (!block) return;
         var sk = block.getAttribute('data-stage-key');
-        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'continuity_editor' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'voice_flow_editor' && sk !== 'structure_splitter' && sk !== 'scene_writer') return;
+        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'continuity_editor' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'voice_flow_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'youtube_packaging') return;
         const locked = block.getAttribute('data-user-prompt-locked') === '1';
         const ta = block.querySelector('.rewrite-stage-user-prompt');
         const toggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
@@ -2379,6 +2667,10 @@
             sourceEl.disabled = !openaiOk;
             sourceEl.readOnly = dis || sourceLocked;
         }
+        if (sourceTitleEl) {
+            sourceTitleEl.disabled = !openaiOk;
+            sourceTitleEl.readOnly = dis || sourceLocked;
+        }
         if (templateSelectEl) templateSelectEl.disabled = dis;
         if (templateCreateBtn) templateCreateBtn.disabled = dis;
         if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
@@ -2392,7 +2684,7 @@
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
             }
-            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'continuity_editor' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'voice_flow_editor' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer') {
+            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'continuity_editor' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'voice_flow_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
                 const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
                 const uTa = block.querySelector('.rewrite-stage-user-prompt');
                 if (uTa) {
@@ -2787,6 +3079,8 @@
                 } else if (sk === 'scene_writer') {
                     block.setAttribute('data-scene-writer-check-json', '');
                     renderSceneWriterCheck(block, null);
+                } else if (sk === 'youtube_packaging') {
+                    renderYoutubePackagingPreview(block);
                 } else if (sk === 'draft1') {
                     block.setAttribute('data-block-writer-check-json', '');
                     renderEditorCheck(block);
@@ -2803,6 +3097,8 @@
                 } else if (sk === 'scene_writer') {
                     block.setAttribute('data-scene-writer-check-json', '');
                     renderSceneWriterCheck(block, null);
+                } else if (sk === 'youtube_packaging') {
+                    renderYoutubePackagingPreview(block);
                 } else if (sk === 'draft1') {
                     block.setAttribute('data-block-writer-check-json', '');
                     renderEditorCheck(block);
@@ -3026,6 +3322,9 @@
                         }
                         updateResultCounts(block);
                         renderEditorCheck(block);
+                        if (stageKey === 'youtube_packaging') {
+                            renderYoutubePackagingPreview(block);
+                        }
                         syncStageRunButtons();
                     }
                 }
@@ -3308,6 +3607,10 @@
     if (sceneWriterBlockInit) {
         renderSceneWriterCheck(sceneWriterBlockInit, readSceneWriterCheckFromBlock(sceneWriterBlockInit));
     }
+    var youtubePackagingBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
+    if (youtubePackagingBlockInit) {
+        renderYoutubePackagingPreview(youtubePackagingBlockInit);
+    }
     var structureSplitterBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
     if (structureSplitterBlockInit) {
         var persistedStructureCheck = readStructureSplitterCheckFromBlock(structureSplitterBlockInit);
@@ -3333,7 +3636,7 @@
             voiceoverResultElInit.addEventListener('change', recheck2);
         }
     }
-    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="voice_flow_editor"]').forEach(function (block) {
+    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="voice_flow_editor"], .rewrite-stage-card[data-stage-key="title_strategist"]').forEach(function (block) {
         renderEditorCheck(block);
         var ta = block.querySelector('.rewrite-stage-result');
         if (ta) {

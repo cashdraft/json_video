@@ -7,6 +7,7 @@ Web interface for parsing scene JSON and preparing for image/video generation.
 from __future__ import annotations
 
 import copy
+import difflib
 import json
 import mimetypes
 import os
@@ -55,6 +56,10 @@ from flask import (
 )
 import requests
 from yt_dlp import YoutubeDL
+try:
+    from faster_whisper import WhisperModel as FasterWhisperModel
+except Exception:
+    FasterWhisperModel = None  # type: ignore[assignment]
 
 from image_templates import (
     IMAGE_TEMPLATES_DIR,
@@ -101,11 +106,13 @@ from rewrite_pipeline import (
     REWRITE_STAGES,
     any_stage_has_result,
     clamp_target_chars,
+    apply_title_strategist_original_title_to_user_json,
     compose_rewrite_openai_request_body,
     merge_stages_from_request,
     new_stages_dict,
     normalize_rewrite_job_data,
     snapshot_master_prompt_from_body,
+    snapshot_original_title_from_body,
     snapshot_pipeline_extras_from_body,
     snapshot_stages_from_body,
     stage_run_prerequisites_met,
@@ -248,6 +255,8 @@ app.config["MAX_FORM_MEMORY_SIZE"] = 64 * 1024 * 1024
 # Если nginx не отдаёт /static/ с того же хоста: STATIC_STYLE_HREF=https://…/static/style.css
 app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
 GENERATION_TASKS: dict[str, dict] = {}
+_FW_MODEL_CACHE_LOCK = threading.Lock()
+_FW_MODEL_CACHE: dict[tuple[str, str, str], Any] = {}
 
 
 def public_base_url_for_kie() -> str:
@@ -1661,6 +1670,812 @@ def _rewrite_transcription_text(
     return "\n\n".join(parts).strip(), None
 
 
+def _fw_get_model(model_name: str, device: str, compute_type: str):
+    if FasterWhisperModel is None:
+        raise RuntimeError("faster-whisper не установлен в окружении сервера.")
+    key = (model_name, device, compute_type)
+    with _FW_MODEL_CACHE_LOCK:
+        cached = _FW_MODEL_CACHE.get(key)
+        if cached is not None:
+            return cached
+        model = FasterWhisperModel(model_name, device=device, compute_type=compute_type)
+        _FW_MODEL_CACHE[key] = model
+        return model
+
+
+@app.route("/job/<job_id>/whisper/transcribe/stream", methods=["POST"])
+def job_whisper_transcribe_stream(job_id: str):
+    """Транскрибация последней TTS-озвучки через OpenAI Whisper или локальный faster-whisper."""
+    body = request.get_json(silent=True) or {}
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    raw_engine = str(body.get("engine") or "openai").strip().lower()
+    engine = "faster-whisper" if raw_engine in {"faster-whisper", "faster_whisper", "local"} else "openai"
+    fw_model_name = str(body.get("fw_model") or "small").strip() or "small"
+    fw_device = str(body.get("fw_device") or "cpu").strip().lower() or "cpu"
+    fw_compute = str(body.get("fw_compute_type") or "int8").strip().lower() or "int8"
+    raw_word_ts = body.get("word_timestamps", False)
+    if isinstance(raw_word_ts, str):
+        want_word_timestamps = raw_word_ts.strip().lower() in {"1", "true", "yes", "on"}
+    else:
+        want_word_timestamps = bool(raw_word_ts)
+
+    def _ev(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, ensure_ascii=False) + "\n"
+
+    @stream_with_context
+    def gen():
+        started = time.monotonic()
+
+        def elapsed() -> float:
+            return round(max(0.0, time.monotonic() - started), 1)
+
+        if engine == "openai" and not api_key:
+            yield _ev({"type": "error", "error": "Не задан OPENAI_API_KEY в .env", "elapsed_seconds": elapsed()})
+            return
+
+        with _job_file_lock(job_id):
+            job = load_job(job_id)
+            if job is None:
+                yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
+                return
+
+        audio_dir = JOB_AUDIO_DIR / job_id
+        requested_name = str(body.get("filename") or "").strip()
+        audio_path: Path | None = None
+        if requested_name:
+            cand = (audio_dir / requested_name).resolve()
+            try:
+                cand.relative_to(audio_dir.resolve())
+                if cand.is_file() and cand.suffix.lower() == ".mp3":
+                    audio_path = cand
+            except Exception:
+                audio_path = None
+        if audio_path is None and audio_dir.is_dir():
+            mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if mp3s:
+                audio_path = mp3s[0]
+        if audio_path is None or not audio_path.is_file():
+            yield _ev(
+                {
+                    "type": "error",
+                    "error": "Не найден MP3 для транскрибации. Сначала сгенерируйте озвучку в блоке ElevenLabs.",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+            return
+
+        try:
+            src_bytes = int(audio_path.stat().st_size)
+        except OSError:
+            src_bytes = 0
+        src_duration = _probe_audio_duration_seconds(audio_path)
+        yield _ev(
+            {
+                "type": "status",
+                "phase": "source",
+                "filename": audio_path.name,
+                "file_bytes": src_bytes,
+                "duration_seconds": src_duration,
+                "message": f"Источник: {audio_path.name} ({src_bytes} байт).",
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+        if engine == "faster-whisper":
+            yield _ev(
+                {
+                    "type": "status",
+                    "phase": "plan",
+                    "engine": "faster-whisper",
+                    "message": (
+                        f"Локальный faster-whisper: model={fw_model_name}, device={fw_device}, compute_type={fw_compute}."
+                        + (" Таймкоды слов: ON." if want_word_timestamps else " Таймкоды слов: OFF.")
+                    ),
+                    "elapsed_seconds": elapsed(),
+                    "word_timestamps": want_word_timestamps,
+                }
+            )
+            try:
+                model = _fw_get_model(fw_model_name, fw_device, fw_compute)
+            except Exception as e:
+                yield _ev(
+                    {
+                        "type": "error",
+                        "error": f"Не удалось инициализировать faster-whisper ({fw_model_name}/{fw_device}/{fw_compute}): {e}",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+                return
+            try:
+                segments_iter, info = model.transcribe(
+                    str(audio_path),
+                    word_timestamps=want_word_timestamps,
+                    vad_filter=False,
+                )
+                all_segments: list[dict[str, Any]] = []
+                next_segment_id = 0
+                word_count = 0
+                text_parts: list[str] = []
+                for seg in segments_iter:
+                    txt = str(getattr(seg, "text", "") or "").strip()
+                    st = float(getattr(seg, "start", 0.0) or 0.0)
+                    en = float(getattr(seg, "end", st) or st)
+                    if en < st:
+                        en = st
+                    if not txt:
+                        continue
+                    norm_seg: dict[str, Any] = {
+                        "id": next_segment_id,
+                        "start": round(st, 3),
+                        "end": round(en, 3),
+                        "text": txt,
+                    }
+                    if want_word_timestamps:
+                        words_raw = getattr(seg, "words", None)
+                        if words_raw:
+                            words_norm: list[dict[str, Any]] = []
+                            for w in words_raw:
+                                wtxt = str(getattr(w, "word", "") or "").strip()
+                                if not wtxt:
+                                    continue
+                                wst = float(getattr(w, "start", st) or st)
+                                wen = float(getattr(w, "end", wst) or wst)
+                                if wen < wst:
+                                    wen = wst
+                                words_norm.append({"word": wtxt, "start": round(wst, 3), "end": round(wen, 3)})
+                            if words_norm:
+                                norm_seg["words"] = words_norm
+                                word_count += len(words_norm)
+                    all_segments.append(norm_seg)
+                    text_parts.append(txt)
+                    next_segment_id += 1
+                response_payload: dict[str, Any] = {
+                    "segments": all_segments,
+                    "text": " ".join(text_parts).strip(),
+                    "word_timestamps": want_word_timestamps,
+                    "word_count": word_count,
+                    "engine": "faster-whisper",
+                    "model": fw_model_name,
+                }
+                lang = str(getattr(info, "language", "") or "")
+                if lang:
+                    response_payload["language"] = lang
+                if want_word_timestamps and word_count == 0:
+                    response_payload["word_timestamps_warning"] = (
+                        "Word-level timestamps были запрошены, но faster-whisper не вернул words."
+                    )
+                    yield _ev(
+                        {
+                            "type": "status",
+                            "phase": "final_words_missing",
+                            "message": "Word-level timestamps запрошены, но words в ответе не получены.",
+                            "elapsed_seconds": elapsed(),
+                        }
+                    )
+                with _job_file_lock(job_id):
+                    job2 = load_job(job_id)
+                    if isinstance(job2, dict):
+                        job2["whisper_last_result"] = response_payload
+                        job2["whisper_last_audio"] = audio_path.name
+                        save_job(job_id, job2)
+                yield _ev(
+                    {
+                        "type": "result",
+                        "ok": True,
+                        "response": response_payload,
+                        "segments": len(all_segments),
+                        "chars": len(response_payload.get("text") or ""),
+                        "message": f"Готово: {len(all_segments)} сегментов (faster-whisper).",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+                return
+            except Exception as e:
+                yield _ev(
+                    {
+                        "type": "error",
+                        "error": f"Ошибка faster-whisper: {e}",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+                return
+
+        split_events: list[dict[str, Any]] = []
+
+        def _split_progress(ev: dict[str, Any]) -> None:
+            split_events.append(ev)
+
+        chunks = _split_audio_for_transcription(audio_path, segment_seconds=180, progress=_split_progress)
+        total = len(chunks)
+        for ev in split_events:
+            msg = str(ev.get("message") or "").strip()
+            if not msg:
+                continue
+            yield _ev(
+                {
+                    "type": "status",
+                    "phase": "split",
+                    "message": msg,
+                    "elapsed_seconds": elapsed(),
+                    "details": ev,
+                }
+            )
+        yield _ev(
+            {
+                "type": "status",
+                "phase": "plan",
+                "total_chunks": total,
+                "message": (
+                    ("Один запрос к Whisper API." if total == 1 else f"Будет {total} запросов к Whisper API (по одному на chunk).")
+                    + (" Таймкоды слов: ON." if want_word_timestamps else " Таймкоды слов: OFF.")
+                ),
+                "elapsed_seconds": elapsed(),
+                "word_timestamps": want_word_timestamps,
+            }
+        )
+
+        all_segments: list[dict[str, Any]] = []
+        full_text_parts: list[str] = []
+        cumulative_offset = 0.0
+        next_segment_id = 0
+        language = ""
+
+        total_words_returned = 0
+        for i, ch in enumerate(chunks, start=1):
+            try:
+                ch_bytes = int(ch.stat().st_size) if ch.is_file() else 0
+            except OSError:
+                ch_bytes = 0
+            chunk_started = time.monotonic()
+            payload: dict[str, Any] = {}
+            raw_segments: list[Any] = []
+            chunk_has_words = False
+            max_attempts = 2 if want_word_timestamps else 1
+            for attempt in range(1, max_attempts + 1):
+                attempt_note = f" (попытка {attempt}/{max_attempts})" if max_attempts > 1 else ""
+                yield _ev(
+                    {
+                        "type": "status",
+                        "phase": "chunk_request",
+                        "chunk_index": i,
+                        "total_chunks": total,
+                        "chunk_file": ch.name,
+                        "chunk_bytes": ch_bytes,
+                        "message": f"[{i}/{total}] Отправили chunk в Whisper: {ch_bytes} байт. Ожидание ответа…{attempt_note}",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+                try:
+                    with open(ch, "rb") as f:
+                        mime = mimetypes.guess_type(ch.name)[0] or "application/octet-stream"
+                        req_data: list[tuple[str, str]] = [
+                            ("model", "whisper-1"),
+                            ("response_format", "verbose_json"),
+                            ("timestamp_granularities[]", "segment"),
+                        ]
+                        if want_word_timestamps:
+                            req_data.append(("timestamp_granularities[]", "word"))
+                        r = requests.post(
+                            "https://api.openai.com/v1/audio/transcriptions",
+                            headers={"Authorization": f"Bearer {api_key}"},
+                            files={"file": (ch.name, f, mime)},
+                            data=req_data,
+                            timeout=900,
+                        )
+                except requests.RequestException as e:
+                    yield _ev({"type": "error", "error": f"Сеть/таймаут (chunk {i}/{total}): {e}", "elapsed_seconds": elapsed()})
+                    return
+
+                if not r.ok:
+                    try:
+                        err = (r.json().get("error") or {}).get("message") or ""
+                    except Exception:
+                        err = ""
+                    msg = err or (r.text or "")[:700] or f"HTTP {r.status_code}"
+                    yield _ev({"type": "error", "error": f"{msg} (chunk {i}/{total})", "elapsed_seconds": elapsed()})
+                    return
+
+                try:
+                    payload = r.json() or {}
+                except Exception:
+                    payload = {}
+
+                rs = payload.get("segments")
+                raw_segments = rs if isinstance(rs, list) else []
+                chunk_has_words = any(
+                    isinstance(seg, dict)
+                    and isinstance(seg.get("words"), list)
+                    and bool(seg.get("words"))
+                    for seg in raw_segments
+                )
+                if want_word_timestamps and (not chunk_has_words) and attempt < max_attempts:
+                    yield _ev(
+                        {
+                            "type": "status",
+                            "phase": "chunk_retry_no_words",
+                            "chunk_index": i,
+                            "total_chunks": total,
+                            "message": f"[{i}/{total}] Whisper не вернул words, повторяем chunk еще раз…",
+                            "elapsed_seconds": elapsed(),
+                        }
+                    )
+                    continue
+                break
+
+            if not language:
+                language = str(payload.get("language") or "")
+            chunk_text = str(payload.get("text") or "").strip()
+            if chunk_text:
+                full_text_parts.append(chunk_text)
+
+            if want_word_timestamps and not chunk_has_words:
+                yield _ev(
+                    {
+                        "type": "status",
+                        "phase": "chunk_words_missing",
+                        "chunk_index": i,
+                        "total_chunks": total,
+                        "message": f"[{i}/{total}] В ответе нет word timestamps: используем только segment timestamps.",
+                        "elapsed_seconds": elapsed(),
+                    }
+                )
+
+            chunk_last_end = 0.0
+            normalized_segments: list[dict[str, Any]] = []
+            for seg in raw_segments:
+                if not isinstance(seg, dict):
+                    continue
+                txt = str(seg.get("text") or "").strip()
+                if not txt:
+                    continue
+                try:
+                    st = float(seg.get("start") or 0.0)
+                except (TypeError, ValueError):
+                    st = 0.0
+                try:
+                    en = float(seg.get("end") or st)
+                except (TypeError, ValueError):
+                    en = st
+                if en < st:
+                    en = st
+                chunk_last_end = max(chunk_last_end, en)
+                normalized_segments.append(
+                    {
+                        "id": next_segment_id,
+                        "start": round(cumulative_offset + st, 3),
+                        "end": round(cumulative_offset + en, 3),
+                        "text": txt,
+                    }
+                )
+                if want_word_timestamps:
+                    words_raw = seg.get("words")
+                    words_norm: list[dict[str, Any]] = []
+                    if isinstance(words_raw, list):
+                        for w in words_raw:
+                            if not isinstance(w, dict):
+                                continue
+                            wtxt = str(w.get("word") or "").strip()
+                            if not wtxt:
+                                continue
+                            try:
+                                wst = float(w.get("start") or 0.0)
+                            except (TypeError, ValueError):
+                                wst = 0.0
+                            try:
+                                wen = float(w.get("end") or wst)
+                            except (TypeError, ValueError):
+                                wen = wst
+                            if wen < wst:
+                                wen = wst
+                            words_norm.append(
+                                {
+                                    "word": wtxt,
+                                    "start": round(cumulative_offset + wst, 3),
+                                    "end": round(cumulative_offset + wen, 3),
+                                }
+                            )
+                    if words_norm:
+                        total_words_returned += len(words_norm)
+                        normalized_segments[-1]["words"] = words_norm
+                next_segment_id += 1
+
+            if not normalized_segments and chunk_text:
+                dur = _probe_audio_duration_seconds(ch) or 0.0
+                normalized_segments.append(
+                    {
+                        "id": next_segment_id,
+                        "start": round(cumulative_offset, 3),
+                        "end": round(cumulative_offset + max(0.0, dur), 3),
+                        "text": chunk_text,
+                    }
+                )
+                next_segment_id += 1
+                chunk_last_end = max(chunk_last_end, dur)
+
+            all_segments.extend(normalized_segments)
+            chunk_wait = round(max(0.0, time.monotonic() - chunk_started), 1)
+            yield _ev(
+                {
+                    "type": "status",
+                    "phase": "chunk_done",
+                    "chunk_index": i,
+                    "total_chunks": total,
+                    "chunk_wait_seconds": chunk_wait,
+                    "chunk_text_chars": len(chunk_text),
+                    "chunk_segments": len(normalized_segments),
+                    "message": f"[{i}/{total}] Ответ получен: {len(normalized_segments)} сегментов, {len(chunk_text)} символов.",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+            cumulative_offset += max(0.0, chunk_last_end)
+
+        if len(chunks) > 1:
+            for p in chunks:
+                try:
+                    p.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            try:
+                (audio_path.parent / "_transcribe_chunks").rmdir()
+            except OSError:
+                pass
+
+        response_payload: dict[str, Any] = {
+            "segments": all_segments,
+            "text": " ".join(part for part in full_text_parts if part).strip(),
+            "word_timestamps": want_word_timestamps,
+            "word_count": total_words_returned,
+        }
+        if language:
+            response_payload["language"] = language
+        if want_word_timestamps and total_words_returned == 0:
+            response_payload["word_timestamps_warning"] = (
+                "Word-level timestamps были запрошены, но API вернул только segments."
+            )
+            yield _ev(
+                {
+                    "type": "status",
+                    "phase": "final_words_missing",
+                    "message": "Word-level timestamps запрошены, но API вернул только segments.",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+
+        with _job_file_lock(job_id):
+            job2 = load_job(job_id)
+            if isinstance(job2, dict):
+                job2["whisper_last_result"] = response_payload
+                job2["whisper_last_audio"] = audio_path.name
+                save_job(job_id, job2)
+
+        yield _ev(
+            {
+                "type": "result",
+                "ok": True,
+                "response": response_payload,
+                "segments": len(all_segments),
+                "chars": len(response_payload.get("text") or ""),
+                "message": f"Готово: {len(all_segments)} сегментов.",
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+    return Response(gen(), mimetype="application/x-ndjson; charset=utf-8")
+
+
+def _align_norm_token(t: str) -> str:
+    s = (t or "").strip().lower()
+    while s and not (s[0].isalnum() or ("\u0400" <= s[0] <= "\u04ff")):
+        s = s[1:]
+    while s and not (s[-1].isalnum() or ("\u0400" <= s[-1] <= "\u04ff")):
+        s = s[:-1]
+    return s
+
+
+def _align_norm_phrase(s: str) -> str:
+    parts: list[str] = []
+    for w in (s or "").split():
+        nw = _align_norm_token(w)
+        if nw:
+            parts.append(nw)
+    return " ".join(parts)
+
+
+def _whisper_flat_words(segments: list[Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        try:
+            st = float(seg.get("start") or 0.0)
+        except (TypeError, ValueError):
+            st = 0.0
+        try:
+            en = float(seg.get("end") or st)
+        except (TypeError, ValueError):
+            en = st
+        if en < st:
+            en = st
+        words_raw = seg.get("words")
+        if isinstance(words_raw, list) and words_raw:
+            for w in words_raw:
+                if not isinstance(w, dict):
+                    continue
+                wtxt = str(w.get("word") or "").strip()
+                if not wtxt:
+                    continue
+                try:
+                    wst = float(w.get("start") or 0.0)
+                except (TypeError, ValueError):
+                    wst = st
+                try:
+                    wen = float(w.get("end") or wst)
+                except (TypeError, ValueError):
+                    wen = wst
+                if wen < wst:
+                    wen = wst
+                nt = _align_norm_token(wtxt)
+                if not nt:
+                    continue
+                out.append({"norm": nt, "start": wst, "end": wen, "raw": wtxt})
+            continue
+        txt = str(seg.get("text") or "").strip()
+        raw_parts = txt.split()
+        if not raw_parts:
+            continue
+        n = len(raw_parts)
+        dur = max(en - st, 0.0)
+        for i, rp in enumerate(raw_parts):
+            ws = st + dur * i / n
+            we = st + dur * (i + 1) / n
+            nt = _align_norm_token(rp)
+            if not nt:
+                continue
+            out.append({"norm": nt, "start": ws, "end": we, "raw": rp})
+    return out
+
+
+def _parse_scenes_ldjson(raw: str) -> list[dict[str, Any]]:
+    scenes: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        if "scene_id" in obj:
+            if current:
+                scenes.append(current)
+            current = {"scene_id": str(obj.get("scene_id") or "").strip()}
+        elif current is not None:
+            if "text" in obj:
+                current["text"] = obj.get("text")
+            if "start" in obj:
+                current["start"] = obj.get("start")
+            if "video" in obj:
+                current["video"] = obj.get("video")
+        else:
+            continue
+    if current:
+        scenes.append(current)
+    return scenes
+
+
+def _best_word_span_for_scene(
+    words: list[dict[str, Any]],
+    scene_norm: str,
+    scene_tokens: list[str],
+    search_from: int,
+    *,
+    min_ratio: float,
+    anchor_weight: float,
+) -> dict[str, Any] | None:
+    if not scene_norm or not scene_tokens or not words:
+        return None
+    n_words = len(words)
+    stoks = len(scene_tokens)
+    max_span = min(max(stoks * 8 + 80, stoks + 40), min(600, n_words))
+    best: tuple[float, int, int, float, float, float] | None = None
+
+    for i in range(search_from, n_words):
+        acc: list[str] = []
+        for j in range(i, min(i + max_span, n_words)):
+            acc.append(str(words[j].get("norm") or ""))
+            chunk = " ".join(acc)
+            if len(chunk) > len(scene_norm) * 3 + 60:
+                break
+            ratio = difflib.SequenceMatcher(None, chunk, scene_norm).ratio()
+            pref = (
+                difflib.SequenceMatcher(None, str(words[i].get("norm") or ""), scene_tokens[0]).ratio()
+                if scene_tokens
+                else 1.0
+            )
+            suff = (
+                difflib.SequenceMatcher(None, str(words[j].get("norm") or ""), scene_tokens[-1]).ratio()
+                if scene_tokens
+                else 1.0
+            )
+            score = ratio * (1.0 - anchor_weight) + (pref + suff) * 0.5 * anchor_weight
+            if best is None or score > best[0]:
+                best = (score, i, j, ratio, pref, suff)
+
+    if best is None:
+        return None
+    _sc, i, j, ratio, pref, suff = best
+    if ratio < min_ratio and max(pref, suff) < 0.35:
+        return None
+    if ratio < min_ratio * 0.75 and min(pref, suff) < 0.25:
+        return None
+    t0 = float(words[i].get("start") or 0.0)
+    t1 = float(words[j].get("end") or t0)
+    return {
+        "voice_start": round(t0, 3),
+        "voice_end": round(max(t1, t0), 3),
+        "match_ratio": round(float(ratio), 4),
+        "anchor_first": round(float(pref), 4),
+        "anchor_last": round(float(suff), 4),
+        "word_from": i,
+        "word_to": j,
+    }
+
+
+def align_whisper_scenes_payload(
+    whisper: dict[str, Any],
+    scenes_ldjson: str,
+    *,
+    min_ratio: float = 0.52,
+    anchor_weight: float = 0.42,
+    include_prompts_in_output: bool = False,
+) -> tuple[list[dict[str, Any]], str, list[str]]:
+    warnings: list[str] = []
+    segments = whisper.get("segments")
+    if not isinstance(segments, list):
+        segments = []
+    words = _whisper_flat_words(segments)
+    if not words and segments:
+        warnings.append("Нет слов для выравнивания: включите word-level timestamps или проверьте segments.")
+    scenes = _parse_scenes_ldjson(scenes_ldjson)
+    if not scenes:
+        warnings.append("Не удалось разобрать сценарий (LDJSON по строкам).")
+
+    items: list[dict[str, Any]] = []
+    ld_lines: list[str] = []
+    search_from = 0
+
+    for sc in scenes:
+        sid = str(sc.get("scene_id") or "").strip() or "?"
+        raw_text = sc.get("text")
+        text_val = raw_text if isinstance(raw_text, str) else ("" if raw_text is None else str(raw_text))
+        scene_norm = _align_norm_phrase(text_val)
+        scene_tokens = scene_norm.split()
+        entry: dict[str, Any] = {
+            "scene_id": sid,
+            "text": text_val,
+            "voice_start": None,
+            "voice_end": None,
+            "match_ratio": None,
+            "warning": None,
+        }
+        if not scene_norm:
+            entry["warning"] = "empty_text"
+            warnings.append(f"{sid}: пустой text.")
+        elif not words:
+            entry["warning"] = "no_whisper_words"
+        else:
+            span = _best_word_span_for_scene(
+                words,
+                scene_norm,
+                scene_tokens,
+                search_from,
+                min_ratio=min_ratio,
+                anchor_weight=anchor_weight,
+            )
+            if span:
+                entry["voice_start"] = span["voice_start"]
+                entry["voice_end"] = span["voice_end"]
+                entry["match_ratio"] = span["match_ratio"]
+                entry["anchors"] = {"first": span["anchor_first"], "last": span["anchor_last"]}
+                search_from = max(search_from, int(span["word_to"]) + 1)
+            else:
+                entry["warning"] = "no_match"
+                warnings.append(f'{sid}: низкое совпадение с Whisper (text: "{text_val[:48]}…").')
+
+        items.append(entry)
+
+        ld_lines.append(json.dumps({"scene_id": sid}, ensure_ascii=False))
+        ld_lines.append(json.dumps({"text": text_val}, ensure_ascii=False))
+        if entry["voice_start"] is not None and entry["voice_end"] is not None:
+            ld_lines.append(
+                json.dumps(
+                    {"voice_start": entry["voice_start"], "voice_end": entry["voice_end"]},
+                    ensure_ascii=False,
+                )
+            )
+            if entry.get("match_ratio") is not None:
+                ld_lines.append(json.dumps({"match_ratio": entry["match_ratio"]}, ensure_ascii=False))
+        else:
+            ld_lines.append(json.dumps({"voice_start": None, "voice_end": None}, ensure_ascii=False))
+        if entry.get("warning"):
+            ld_lines.append(json.dumps({"warning": entry["warning"]}, ensure_ascii=False))
+        if include_prompts_in_output:
+            sp = sc.get("start")
+            if isinstance(sp, dict):
+                ld_lines.append(json.dumps({"start": sp}, ensure_ascii=False))
+            vp = sc.get("video")
+            if isinstance(vp, dict):
+                ld_lines.append(json.dumps({"video": vp}, ensure_ascii=False))
+        ld_lines.append("")
+
+    return items, "\n".join(ld_lines).strip() + ("\n" if ld_lines else ""), warnings
+
+
+@app.route("/job/<job_id>/whisper/align-scenes", methods=["POST"])
+def job_whisper_align_scenes(job_id: str):
+    """Нечёткое сопоставление строк сцен с таймлайном Whisper (segments[].words)."""
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    body = request.get_json(silent=True) or {}
+    raw_whisper = body.get("whisper_json") or body.get("whisper")
+    whisper: dict[str, Any] | None = None
+    if isinstance(raw_whisper, dict):
+        whisper = raw_whisper
+    elif isinstance(raw_whisper, str):
+        try:
+            w = json.loads(raw_whisper)
+            whisper = w if isinstance(w, dict) else None
+        except json.JSONDecodeError:
+            whisper = None
+    if whisper is None:
+        return jsonify({"ok": False, "error": "Нужен объект Whisper JSON (поле whisper_json)."}), 400
+
+    scenes_raw = body.get("scenes_ldjson") or body.get("scenes") or ""
+    if not isinstance(scenes_raw, str) or not scenes_raw.strip():
+        return jsonify({"ok": False, "error": "Нужен текст сценария (строки LDJSON, поле scenes_ldjson)."}), 400
+
+    try:
+        min_ratio = float(body.get("min_ratio", 0.52))
+    except (TypeError, ValueError):
+        min_ratio = 0.52
+    min_ratio = max(0.15, min(0.99, min_ratio))
+    try:
+        anchor_weight = float(body.get("anchor_weight", 0.42))
+    except (TypeError, ValueError):
+        anchor_weight = 0.42
+    anchor_weight = max(0.0, min(1.0, anchor_weight))
+    raw_inc = body.get("include_prompts_in_output", False)
+    if isinstance(raw_inc, str):
+        include_prompts = raw_inc.strip().lower() in {"1", "true", "yes", "on"}
+    else:
+        include_prompts = bool(raw_inc)
+
+    items, ldjson, warns = align_whisper_scenes_payload(
+        whisper,
+        scenes_raw,
+        min_ratio=min_ratio,
+        anchor_weight=anchor_weight,
+        include_prompts_in_output=include_prompts,
+    )
+    matched_count = sum(1 for it in items if it.get("voice_start") is not None and it.get("voice_end") is not None)
+    unmatched_count = max(0, len(items) - matched_count)
+    return jsonify(
+        {
+            "ok": True,
+            "items": items,
+            "ldjson": ldjson,
+            "warnings": warns,
+            "words_used": len(_whisper_flat_words(whisper.get("segments") or [])),
+            "scenes_parsed": len(items),
+            "matched_count": matched_count,
+            "unmatched_count": unmatched_count,
+        }
+    )
+
+
 def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
     now = datetime.now().isoformat(timespec="seconds")
     return {
@@ -1669,6 +2484,7 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "created_at": now,
         "updated_at": now,
         "source_text": "",
+        "source_title": "",
         "stages": new_stages_dict(),
         "model": REWRITE_DEFAULT_MODEL,
         "last_prompt": "",
@@ -1716,6 +2532,15 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
         with open(target_fp, "r", encoding="utf-8") as f:
             data = json.load(f)
         normalize_rewrite_job_data(data)
+        # Миграция артефакта: voice_flow_editor_2.result.txt → title_strategist.result.txt
+        pdir = _rewrite_project_dir(rewrite_id)
+        _old_v2_res = pdir / "voice_flow_editor_2.result.txt"
+        _new_ts_res = pdir / "title_strategist.result.txt"
+        if _old_v2_res.is_file() and not _new_ts_res.is_file():
+            try:
+                _old_v2_res.rename(_new_ts_res)
+            except OSError:
+                pass
         # Source of truth for stage results: separate files per stage in project folder.
         for sk in REWRITE_STAGE_KEYS:
             rf = _rewrite_stage_result_path(rewrite_id, sk)
@@ -1870,11 +2695,60 @@ def video_model_label(value: str | None) -> str:
     return "Veo 3.1 Fast" if model_id == "veo3_fast" else "Veo 3.1 Quality"
 
 
+def _kie_gen_extra(task_meta: dict) -> dict:
+    """Поля трассировки запроса Kie для сохранения в scene[slot].generation."""
+    out: dict = {}
+    km = (task_meta.get("kie_api_model") or "").strip()
+    kp = (task_meta.get("kie_request_path") or "").strip()
+    if km:
+        out["kie_api_model"] = km
+    if kp:
+        out["kie_request_path"] = kp
+    return out
+
+
+IMAGE_MODELS_REQUIRE_REFERENCE_URLS: frozenset[str] = frozenset(
+    (
+        "gpt-image-2-image-to-image",
+        "grok-imagine/image-to-image",
+        "qwen2/image-edit",
+    )
+)
+
+
+def normalize_image_model(value: str | None) -> str:
+    """Значение модели для Kie createTask (известные id из UI)."""
+    raw = (value or "").strip().lower()
+    mid = raw.replace(" ", "-")
+    if mid == "nano-banana-2":
+        return "nano-banana-2"
+    if mid == "gpt-image-2-image-to-image":
+        return "gpt-image-2-image-to-image"
+    if raw == "grok-imagine/image-to-image":
+        return "grok-imagine/image-to-image"
+    if raw == "wan/2-7-image":
+        return "wan/2-7-image"
+    if raw == "qwen2/image-edit":
+        return "qwen2/image-edit"
+    return "nano-banana-pro"
+
+
 def image_model_label(value: str | None) -> str:
     """Короткая подпись для UI (Nano Banana Pro и т.д.)."""
-    mid = (value or "").strip().lower()
-    if mid in {"nano-banana-pro", "nano banana pro"}:
+    raw = (value or "").strip().lower()
+    mid = raw.replace(" ", "-")
+    if mid == "nano-banana-pro":
         return "Nano Banana Pro"
+    if mid == "nano-banana-2":
+        return "Google - Nano Banana 2"
+    if mid == "gpt-image-2-image-to-image":
+        return "GPT Image 2 - Image To Image"
+    if raw == "grok-imagine/image-to-image":
+        return "Grok Imagine — Image To Image"
+    if raw == "wan/2-7-image":
+        return "Wan 2.7 Image"
+    if raw == "qwen2/image-edit":
+        return "Qwen2 - Image Edit"
     return (value or "").strip() or "Nano Banana Pro"
 
 
@@ -2138,6 +3012,8 @@ def rewrite_project_save(rewrite_id: str):
     # Снимок с формы — источник истины; lock только режим UI, не отбрасываем значения.
     if "source_text" in body:
         rw["source_text"] = str(body.get("source_text") or "")
+    if "source_title" in body:
+        rw["source_title"] = str(body.get("source_title") or "")
     if locked_in_body is not None:
         rw["source_locked"] = bool(locked_in_body)
     m_lock_in = body.get("master_prompt_locked") if "master_prompt_locked" in body else None
@@ -2779,9 +3655,11 @@ def rewrite_youtube_state_get(rewrite_id: str):
 @app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
 def rewrite_project_run(rewrite_id: str):
     """Стрим NDJSON: отдельная сборка для structure и draft1; остальные — общая."""
-    if load_rewrite_job(rewrite_id) is None:
+    rw_job = load_rewrite_job(rewrite_id)
+    if rw_job is None:
         return jsonify({"error": "not_found"}), 404
     body = request.get_json(silent=True) or {}
+    original_title = snapshot_original_title_from_body(body, rw_job)
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
@@ -2804,8 +3682,10 @@ def rewrite_project_run(rewrite_id: str):
             "persona_editor",
             "voiceover_editor",
             "voice_flow_editor",
+            "title_strategist",
             "structure_splitter",
             "scene_writer",
+            "youtube_packaging",
         ) and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
@@ -2861,7 +3741,7 @@ def rewrite_project_run(rewrite_id: str):
                 except OSError:
                     persona_editor_text = ""
         voiceover_editor_text = ""
-        if stage_key in ("voice_flow_editor", "structure_splitter"):
+        if stage_key in ("voice_flow_editor", "title_strategist", "structure_splitter"):
             voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
             if not voiceover_editor_text.strip():
                 p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
@@ -2881,6 +3761,16 @@ def rewrite_project_run(rewrite_id: str):
                         structure_splitter_text = p.read_text(encoding="utf-8")
                     except OSError:
                         structure_splitter_text = ""
+        scene_writer_output_text = ""
+        if stage_key == "youtube_packaging":
+            scene_writer_output_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
+            if not scene_writer_output_text.strip():
+                p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
+                if p.exists():
+                    try:
+                        scene_writer_output_text = p.read_text(encoding="utf-8")
+                    except OSError:
+                        scene_writer_output_text = ""
         payload, compose_err = compose_rewrite_openai_request_body(
             stage_key,
             source_text=source_text,
@@ -2896,6 +3786,8 @@ def rewrite_project_run(rewrite_id: str):
             persona_editor_text=persona_editor_text,
             voiceover_editor_text=voiceover_editor_text,
             structure_splitter_text=structure_splitter_text,
+            scene_writer_output_text=scene_writer_output_text,
+            original_title=original_title,
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -2903,6 +3795,9 @@ def rewrite_project_run(rewrite_id: str):
         msgs = payload["messages"]
         prompt = str(msgs[0].get("content") or "")
         user_text = str(msgs[1].get("content") or "")
+        if stage_key == "title_strategist":
+            user_text = apply_title_strategist_original_title_to_user_json(user_text, original_title)
+            msgs[1]["content"] = user_text
         model = str(payload.get("model") or "")
         if stage_key == "draft1":
             analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
@@ -3080,6 +3975,8 @@ def rewrite_project_run(rewrite_id: str):
                         "persona_editor",
                         "voiceover_editor",
                         "voice_flow_editor",
+                        "title_strategist",
+                        "youtube_packaging",
                     )
                     and str(item.get("type") or "") == "result"
                     and isinstance(item.get("content"), str)
@@ -3098,9 +3995,11 @@ def rewrite_project_run(rewrite_id: str):
 @app.route("/rewrite/<rewrite_id>/api-payload", methods=["POST"])
 def rewrite_project_api_payload(rewrite_id: str):
     """Скачивание JSON тела запроса к OpenAI для этапа (как при запуске ↻)."""
-    if load_rewrite_job(rewrite_id) is None:
+    rw_job = load_rewrite_job(rewrite_id)
+    if rw_job is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     body = request.get_json(silent=True) or {}
+    original_title = snapshot_original_title_from_body(body, rw_job)
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
@@ -3154,7 +4053,7 @@ def rewrite_project_api_payload(rewrite_id: str):
             except OSError:
                 persona_editor_text = ""
     voiceover_editor_text = ""
-    if stage_key in ("voice_flow_editor", "structure_splitter"):
+    if stage_key in ("voice_flow_editor", "title_strategist", "structure_splitter"):
         voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
         if not voiceover_editor_text.strip():
             p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
@@ -3174,6 +4073,16 @@ def rewrite_project_api_payload(rewrite_id: str):
                     structure_splitter_text = p.read_text(encoding="utf-8")
                 except OSError:
                     structure_splitter_text = ""
+    scene_writer_output_text = ""
+    if stage_key == "youtube_packaging":
+        scene_writer_output_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
+        if not scene_writer_output_text.strip():
+            p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
+            if p.exists():
+                try:
+                    scene_writer_output_text = p.read_text(encoding="utf-8")
+                except OSError:
+                    scene_writer_output_text = ""
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -3189,9 +4098,19 @@ def rewrite_project_api_payload(rewrite_id: str):
         persona_editor_text=persona_editor_text,
         voiceover_editor_text=voiceover_editor_text,
         structure_splitter_text=structure_splitter_text,
+        scene_writer_output_text=scene_writer_output_text,
+        original_title=original_title,
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
+    if stage_key == "title_strategist":
+        _msgs_fix = payload.get("messages")
+        if isinstance(_msgs_fix, list) and len(_msgs_fix) > 1:
+            _uc = _msgs_fix[1].get("content") if isinstance(_msgs_fix[1], dict) else None
+            if isinstance(_uc, str):
+                _msgs_fix[1]["content"] = apply_title_strategist_original_title_to_user_json(
+                    _uc, original_title
+                )
     msgs = payload.get("messages") if isinstance(payload.get("messages"), list) else []
     sys_c = str((msgs[0] or {}).get("content") or "") if msgs else ""
     usr_c = str((msgs[1] or {}).get("content") or "") if len(msgs) > 1 else ""
@@ -3302,7 +4221,7 @@ def parse_for_job(job_id: str):
     raw_text = request.form.get("json_input", "")
     aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
     resolution = request.form.get("resolution", "2K")
-    image_model = request.form.get("image_model", "nano-banana-pro")
+    image_model = normalize_image_model(request.form.get("image_model"))
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
     image_template = request.form.get("image_template", "").strip()
     if image_template and not safe_template_dir(IMAGE_TEMPLATES_DIR, image_template):
@@ -3404,7 +4323,17 @@ def generate_slot_start(job_id: str):
         aspect_ratio = normalize_aspect_ratio(meta.get("aspect_ratio", "16:9"), "16:9")
         resolution = meta.get("resolution", "2K")
         output_format = meta.get("output_format", "jpg")
-        video_model = normalize_video_model(meta.get("video_model", "veo3_fast"))
+        # Выбор из выпадающих списков на странице (fetch ниже); иначе последнее сохранённое в job JSON.
+        body_im = data.get("image_model")
+        body_vm = data.get("video_model")
+        if isinstance(body_im, str) and body_im.strip():
+            image_model = normalize_image_model(body_im.strip())
+        else:
+            image_model = normalize_image_model(meta.get("image_model"))
+        if isinstance(body_vm, str) and body_vm.strip():
+            video_model = normalize_video_model(body_vm.strip())
+        else:
+            video_model = normalize_video_model(meta.get("video_model", "veo3_fast"))
         video_duration = int(meta.get("video_duration", 10) or 10)
         image_template_id = (meta.get("image_template") or "").strip()
 
@@ -3442,24 +4371,29 @@ def generate_slot_start(job_id: str):
             if video_image_urls:
                 video_generation_type = "FIRST_AND_LAST_FRAMES_2_VIDEO"
 
+    kie_api_model = ""
+    kie_request_path = ""
+
     try:
         if slot == "video":
             if video_model == "grok-imagine/image-to-video":
-                task_id = create_grok_image_to_video_task(
+                task_id, kie_api_model = create_grok_image_to_video_task(
                     prompt=prompt,
                     image_urls=video_image_urls or None,
                     aspect_ratio=aspect_ratio,
                     duration_seconds=video_duration,
                     nsfw_checker=False,
                 )
+                kie_request_path = "/api/v1/jobs/createTask"
             else:
-                task_id = create_video_task(
+                task_id, kie_api_model = create_video_task(
                     prompt=prompt,
                     model=video_model,
                     aspect_ratio=aspect_ratio,
                     image_urls=video_image_urls,
                     generation_type=video_generation_type,
                 )
+                kie_request_path = "/api/v1/veo/generate"
         else:
             image_input_urls: list[str] = []
             tid = image_template_id
@@ -3481,15 +4415,23 @@ def generate_slot_start(job_id: str):
                             "error": "В шаблоне нет референс-изображений: добавьте 1–5 файлов .jpg/.png/.webp (logo.png не считается)"
                         }
                     ), 400
-            task_id = create_image_task(
+            if image_model in IMAGE_MODELS_REQUIRE_REFERENCE_URLS and not image_input_urls:
+                return jsonify(
+                    {
+                        "error": "Эта модель (image-to-image) требует референсы: выберите шаблон с изображениями в блоке «Шаблон изображений»."
+                    }
+                ), 400
+            task_id, kie_api_model = create_image_task(
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
                 resolution=resolution,
                 output_format=output_format,
                 image_input=image_input_urls if image_input_urls else None,
+                model=image_model,
             )
+            kie_request_path = "/api/v1/jobs/createTask"
     except ValueError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
 
@@ -3501,6 +4443,9 @@ def generate_slot_start(job_id: str):
         "slot": slot,
         "started_at": started_ts,
         "video_model": video_model if slot == "video" else "",
+        "image_model": image_model if slot != "video" else "",
+        "kie_api_model": kie_api_model,
+        "kie_request_path": kie_request_path,
     }
     with _job_file_lock(job_id):
         job = load_job(job_id)
@@ -3534,8 +4479,18 @@ def generate_slot_start(job_id: str):
             "state": "submitted",
             "started_at": started_ts,
             "canceled": False,
+            "kie_api_model": kie_api_model,
+            "kie_request_path": kie_request_path,
         }
         job["scenes"] = scenes
+        meta_save = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+        meta_save["image_model"] = image_model
+        meta_save["image_model_label"] = image_model_label(image_model)
+        meta_save["video_model"] = video_model
+        meta_save["video_model_label"] = video_model_label(video_model)
+        job["job_meta"] = meta_save
+        job["selected_image_model"] = image_model
+        job["selected_video_model"] = video_model
         save_job(job_id, job)
 
     GENERATION_TASKS[task_id]["scene_idx"] = resolved_idx
@@ -3565,11 +4520,24 @@ def generate_slot_status(job_id: str):
                     slot_obj = scene.get(slot_name, {})
                     gen = slot_obj.get("generation", {}) if isinstance(slot_obj, dict) else {}
                     if gen.get("task_id") == task_id and not gen.get("canceled"):
+                        meta_j = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
                         task_meta = {
                             "job_id": job_id,
                             "scene_idx": idx,
                             "slot": slot_name,
                             "started_at": gen.get("started_at", datetime.now().timestamp()),
+                            "video_model": (
+                                normalize_video_model(meta_j.get("video_model"))
+                                if slot_name == "video"
+                                else ""
+                            ),
+                            "image_model": (
+                                normalize_image_model(meta_j.get("image_model"))
+                                if slot_name != "video"
+                                else ""
+                            ),
+                            "kie_api_model": (gen.get("kie_api_model") or "").strip(),
+                            "kie_request_path": (gen.get("kie_request_path") or "").strip(),
                         }
                         GENERATION_TASKS[task_id] = task_meta
                         break
@@ -3597,6 +4565,13 @@ def generate_slot_status(job_id: str):
                 task_meta["video_model"] = vm
                 GENERATION_TASKS[task_id] = task_meta
         else:
+            job_for_model = load_job(job_id) or {}
+            im = normalize_image_model(
+                task_meta.get("image_model")
+                or ((job_for_model.get("job_meta") or {}).get("image_model"))
+            )
+            task_meta["image_model"] = im
+            GENERATION_TASKS[task_id] = task_meta
             result = get_task_result(task_id)
     except ValueError as e:
         return jsonify({"error": str(e)}), 500
@@ -3604,14 +4579,35 @@ def generate_slot_status(job_id: str):
         return jsonify({"error": str(e)}), 502
 
     state = result.get("state", "unknown")
-    slot_label = "video" if task_meta.get("slot") == "video" else "image"
+    slot_nm = task_meta.get("slot", "start")
+    job_for_m = load_job(job_id) or {}
+    meta_j = job_for_m.get("job_meta") if isinstance(job_for_m.get("job_meta"), dict) else {}
+    # Поле model из JSON тела запроса при createTask / veo generate (сохранено в задаче).
+    kie_model_truth = (task_meta.get("kie_api_model") or "").strip()
+    kie_path_truth = (task_meta.get("kie_request_path") or "").strip()
+    if kie_model_truth:
+        status_model_line = kie_model_truth
+    else:
+        if slot_nm == "video":
+            guess = (task_meta.get("video_model") or "").strip() or normalize_video_model(
+                meta_j.get("video_model")
+            )
+        else:
+            guess = (task_meta.get("image_model") or "").strip() or normalize_image_model(
+                meta_j.get("image_model")
+            )
+        status_model_line = f"{guess} (оценка из job_meta, задача без сохранённого kie_api_model)"
+    path_suffix = f" → {kie_path_truth}" if kie_path_truth else ""
+    model_suffix = f" · {status_model_line}{path_suffix}"
+
+    slot_label = "video" if slot_nm == "video" else "image"
     state_text = {
-        "waiting": "В очереди Kie.ai (задача принята)",
-        "queuing": "В очереди на генерацию",
-        "generating": f"Генерация {slot_label}",
-        "success": "Готово",
-        "fail": "Ошибка генерации",
-    }.get(state, "Обработка…")
+        "waiting": f"В очереди Kie.ai (задача принята){model_suffix}",
+        "queuing": f"В очереди на генерацию{model_suffix}",
+        "generating": f"Генерация {slot_label}{model_suffix}",
+        "success": f"Готово{model_suffix}",
+        "fail": f"Ошибка генерации{model_suffix}",
+    }.get(state, f"Обработка…{model_suffix}")
 
     # Долгое waiting — обычно перегрузка/очередь на стороне провайдера, не баг UI.
     if state in ("waiting", "queuing") and elapsed_seconds >= 180:
@@ -3625,6 +4621,9 @@ def generate_slot_status(job_id: str):
         "state": state,
         "state_text": state_text,
         "elapsed_seconds": elapsed_seconds,
+        "kie_api_model": kie_model_truth or None,
+        "kie_request_path": kie_path_truth or None,
+        "api_model_id": status_model_line,
     }
 
     if state == "success":
@@ -3653,6 +4652,7 @@ def generate_slot_status(job_id: str):
                                     "started_at": task_meta["started_at"],
                                     "completed_at": datetime.now().timestamp(),
                                     "canceled": False,
+                                    **_kie_gen_extra(task_meta),
                                 }
                                 job["scenes"] = scenes
                                 save_job(job_id, job)
@@ -3667,7 +4667,7 @@ def generate_slot_status(job_id: str):
 
                 response["url"] = url
                 response["state"] = "upgrading_1080"
-                response["state_text"] = "720p waiting 1080p"
+                response["state_text"] = f"720p waiting 1080p{model_suffix}"
                 response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
                 response["hd_status_text"] = f"720p waiting 1080p ({response['hd_elapsed_seconds']} sec)"
 
@@ -3704,9 +4704,10 @@ def generate_slot_status(job_id: str):
                                     "hd_state": "done",
                                     "hd_started_at": hd_started_at,
                                     "canceled": False,
+                                    **_kie_gen_extra(task_meta),
                                 }
                                 response["state"] = "success"
-                                response["state_text"] = "Generation complete"
+                                response["state_text"] = f"Generation complete{model_suffix}"
                                 response["url"] = hd_url
                                 response["hd_status_text"] = "1080p - done"
                                 response["hd_elapsed_seconds"] = int(
@@ -3723,6 +4724,7 @@ def generate_slot_status(job_id: str):
                                     "hd_started_at": hd_started_at,
                                     "hd_error": hd_error,
                                     "canceled": False,
+                                    **_kie_gen_extra(task_meta),
                                 }
                             job["scenes"] = scenes
                             save_job(job_id, job)
@@ -3744,6 +4746,7 @@ def generate_slot_status(job_id: str):
                                 "started_at": task_meta["started_at"],
                                 "completed_at": datetime.now().timestamp(),
                                 "canceled": False,
+                                **_kie_gen_extra(task_meta),
                             }
                             job["scenes"] = scenes
                             save_job(job_id, job)
@@ -3768,6 +4771,7 @@ def generate_slot_status(job_id: str):
                         "completed_at": datetime.now().timestamp(),
                         "canceled": False,
                         "error": response["error"],
+                        **_kie_gen_extra(task_meta),
                     }
                     job["scenes"] = scenes
                     save_job(job_id, job)
@@ -3794,6 +4798,7 @@ def generate_slot_status(job_id: str):
                         if slot == "video"
                         else None,
                         "canceled": False,
+                        **_kie_gen_extra(task_meta),
                     }
                     job["scenes"] = scenes
                     save_job(job_id, job)
@@ -4842,6 +5847,7 @@ def job_page(job_id: str):
         meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
         meta.setdefault("video_duration", job.get("selected_video_duration", 10))
         meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
+        meta["image_model"] = normalize_image_model(meta.get("image_model"))
         meta["image_model_label"] = image_model_label(meta.get("image_model"))
         meta.setdefault("video_model", job.get("selected_video_model", "veo3_fast"))
         meta["video_model"] = normalize_video_model(meta.get("video_model"))
@@ -4857,6 +5863,7 @@ def job_page(job_id: str):
     summary = compute_summary(job.get("scenes", []))
     template_display = job_template_display(meta.get("image_template", ""))
     elevenlabs_key_set = bool((os.getenv("ELEVENLABS_API_KEY") or "").strip())
+    openai_key_set = bool((os.getenv("OPENAI_API_KEY") or "").strip())
     res_display = meta.get("resolution") or job.get("selected_resolution") or "2K"
     img_label = meta.get("image_model_label") or image_model_label(meta.get("image_model"))
     vid_label = meta.get("video_model_label") or video_model_label(meta.get("video_model"))
@@ -4871,6 +5878,11 @@ def job_page(job_id: str):
         if mp3s:
             tts_last_audio_name = mp3s[0].name
             tts_last_audio_href = url_for("job_audio_file", job_id=job_id, filename=mp3s[0].name)
+    try:
+        whisper_align_scenes_url = url_for("job_whisper_align_scenes", job_id=job_id)
+    except Exception:
+        root = ((request.script_root or "").rstrip("/")) if has_request_context() else ""
+        whisper_align_scenes_url = f"{root}/job/{job_id}/whisper/align-scenes"
     return render_template(
         "job.html",
         job_id=job_id,
@@ -4887,9 +5899,11 @@ def job_page(job_id: str):
         image_templates=templates_ui_rows(),
         tts_models=TTS_MODELS,
         elevenlabs_key_set=elevenlabs_key_set,
+        openai_key_set=openai_key_set,
         tts_defaults=job.get("tts_defaults") or {},
         tts_template_names=list_elevenlabs_template_names(),
         tts_template=(job.get("tts_template") or "Naomi"),
+        whisper_align_scenes_url=whisper_align_scenes_url,
     )
 
 
