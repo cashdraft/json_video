@@ -3761,16 +3761,16 @@ def rewrite_project_run(rewrite_id: str):
                         structure_splitter_text = p.read_text(encoding="utf-8")
                     except OSError:
                         structure_splitter_text = ""
-        scene_writer_output_text = ""
+        title_strategist_result_text = ""
         if stage_key == "youtube_packaging":
-            scene_writer_output_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
-            if not scene_writer_output_text.strip():
-                p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
+            title_strategist_result_text = str((stages_snap.get("title_strategist") or {}).get("last_result") or "")
+            if not title_strategist_result_text.strip():
+                p = _rewrite_stage_result_path(rewrite_id, "title_strategist")
                 if p.exists():
                     try:
-                        scene_writer_output_text = p.read_text(encoding="utf-8")
+                        title_strategist_result_text = p.read_text(encoding="utf-8")
                     except OSError:
-                        scene_writer_output_text = ""
+                        title_strategist_result_text = ""
         payload, compose_err = compose_rewrite_openai_request_body(
             stage_key,
             source_text=source_text,
@@ -3786,7 +3786,7 @@ def rewrite_project_run(rewrite_id: str):
             persona_editor_text=persona_editor_text,
             voiceover_editor_text=voiceover_editor_text,
             structure_splitter_text=structure_splitter_text,
-            scene_writer_output_text=scene_writer_output_text,
+            title_strategist_result_text=title_strategist_result_text,
             original_title=original_title,
         )
         if compose_err:
@@ -4073,16 +4073,16 @@ def rewrite_project_api_payload(rewrite_id: str):
                     structure_splitter_text = p.read_text(encoding="utf-8")
                 except OSError:
                     structure_splitter_text = ""
-    scene_writer_output_text = ""
+    title_strategist_result_text = ""
     if stage_key == "youtube_packaging":
-        scene_writer_output_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
-        if not scene_writer_output_text.strip():
-            p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
+        title_strategist_result_text = str((stages_snap.get("title_strategist") or {}).get("last_result") or "")
+        if not title_strategist_result_text.strip():
+            p = _rewrite_stage_result_path(rewrite_id, "title_strategist")
             if p.exists():
                 try:
-                    scene_writer_output_text = p.read_text(encoding="utf-8")
+                    title_strategist_result_text = p.read_text(encoding="utf-8")
                 except OSError:
-                    scene_writer_output_text = ""
+                    title_strategist_result_text = ""
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -4098,7 +4098,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         persona_editor_text=persona_editor_text,
         voiceover_editor_text=voiceover_editor_text,
         structure_splitter_text=structure_splitter_text,
-        scene_writer_output_text=scene_writer_output_text,
+        title_strategist_result_text=title_strategist_result_text,
         original_title=original_title,
     )
     if err:

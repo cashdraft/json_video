@@ -1,0 +1,371 @@
+{
+  "benchmark_usage": {
+    "original_title": "People Who Think Too Much",
+    "used_original_formula": "[Group Identity] Who [Behavior/Struggle]",
+    "what_was_preserved_en": [
+      "Clear audience targeting",
+      "Simplicity and relatability",
+      "Focus on the behavior (thinking too much)"
+    ],
+    "what_was_preserved_ru": [
+      "Четкое определение целевой аудитории",
+      "Простота и узнаваемость",
+      "Фокус на поведении (слишком много думать)"
+    ],
+    "how_generated_titles_improve_it_en": "The new titles add curiosity, emotional resonance, and often hint at solutions or deeper causes. They keep the directness of the original but offer more reasons to click by promising insight or relief.",
+    "how_generated_titles_improve_it_ru": "Новые заголовки добавляют любопытство, эмоциональный отклик и часто намекают на решение или глубокие причины. Они сохраняют прямоту оригинала, но дают больше поводов кликнуть, обещая понимание или облегчение."
+  },
+  "titles": [
+    {
+      "id": 1,
+      "title_en": "Why Some Minds Never Switch Off",
+      "title_ru": "Почему некоторые умы не могут отключиться",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Inspired by original, adds curiosity and science",
+      "score": 9.5,
+      "reason_en": "Directly addresses the experience, adds a curiosity gap, and hints at a scientific explanation.",
+      "reason_ru": "Прямо описывает опыт, добавляет элемент любопытства и намекает на научное объяснение."
+    },
+    {
+      "id": 2,
+      "title_en": "The Psychology of People Who Overthink",
+      "title_ru": "Психология людей, которые слишком много думают",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Keeps original formula, adds psychology angle",
+      "score": 9.2,
+      "reason_en": "Uses the original structure but adds a promise of deeper understanding.",
+      "reason_ru": "Использует оригинальную структуру, но обещает более глубокое понимание."
+    },
+    {
+      "id": 3,
+      "title_en": "How Overthinking Traps You in Mental Loops",
+      "title_ru": "Как переосмысление затягивает в ментальные ловушки",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Expands on original, adds mechanism and consequence",
+      "score": 9.0,
+      "reason_en": "Explains the trap of overthinking and hints at the underlying process.",
+      "reason_ru": "Объясняет ловушку переосмысления и намекает на скрытый процесс."
+    },
+    {
+      "id": 4,
+      "title_en": "Why Overthinkers Feel So Tired",
+      "title_ru": "Почему переосмысливающие так устают",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Focuses on consequence, adds emotional trigger",
+      "score": 8.8,
+      "reason_en": "Connects overthinking to exhaustion, making it relatable and emotional.",
+      "reason_ru": "Связывает переосмысление с усталостью, делая это узнаваемым и эмоциональным."
+    },
+    {
+      "id": 5,
+      "title_en": "How to Break Free from Overthinking",
+      "title_ru": "Как выбраться из переосмысления",
+      "angle": "How to Break Free from Overthinking",
+      "benchmark_relation": "Adds solution promise to original",
+      "score": 9.3,
+      "reason_en": "Promises relief and a clear benefit, highly clickable.",
+      "reason_ru": "Обещает облегчение и явную пользу, очень кликабельно."
+    },
+    {
+      "id": 6,
+      "title_en": "What Happens in the Brain When You Overthink",
+      "title_ru": "Что происходит в мозге, когда вы переосмысливаете",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Adds neuroscience curiosity to original",
+      "score": 8.9,
+      "reason_en": "Invites curiosity about brain science, specific and clear.",
+      "reason_ru": "Пробуждает интерес к науке о мозге, конкретно и понятно."
+    },
+    {
+      "id": 7,
+      "title_en": "Why You Can’t Stop Replaying Conversations",
+      "title_ru": "Почему вы не можете перестать прокручивать разговоры",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Targets a relatable symptom, adds curiosity",
+      "score": 8.7,
+      "reason_en": "Focuses on a common overthinking habit, relatable and intriguing.",
+      "reason_ru": "Фокусируется на привычке переосмысливать, узнаваемо и интересно."
+    },
+    {
+      "id": 8,
+      "title_en": "The Trap of Being Too Perceptive",
+      "title_ru": "Ловушка слишком чутких людей",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Reframes overthinking as a side effect of sensitivity",
+      "score": 8.6,
+      "reason_en": "Links perceptiveness to overthinking, reframing the struggle.",
+      "reason_ru": "Связывает чуткость с переосмысливанием, переосмысливает проблему."
+    },
+    {
+      "id": 9,
+      "title_en": "Why Overthinking Feels Impossible to Stop",
+      "title_ru": "Почему переосмысление кажется невозможным остановить",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Addresses the core struggle, adds emotional tension",
+      "score": 8.8,
+      "reason_en": "Names the main frustration, relatable and emotionally charged.",
+      "reason_ru": "Называет главную проблему, узнаваемо и эмоционально."
+    },
+    {
+      "id": 10,
+      "title_en": "How Childhood Shapes Overthinking",
+      "title_ru": "Как детство формирует переосмысление",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Adds developmental angle to original",
+      "score": 8.5,
+      "reason_en": "Connects childhood to adult overthinking, adds depth.",
+      "reason_ru": "Связывает детство с взрослым переосмысливанием, добавляет глубину."
+    },
+    {
+      "id": 11,
+      "title_en": "Why Your Mind Won’t Rest",
+      "title_ru": "Почему ваш ум не отдыхает",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Direct, emotional, and curiosity-driven",
+      "score": 9.1,
+      "reason_en": "Simple, emotional, and directly addresses the viewer’s struggle.",
+      "reason_ru": "Просто, эмоционально и прямо обращается к проблеме зрителя."
+    },
+    {
+      "id": 12,
+      "title_en": "The Real Reason You Overthink Everything",
+      "title_ru": "Настоящая причина, почему вы всё переосмысливаете",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Adds promise of hidden truth to original",
+      "score": 8.4,
+      "reason_en": "Promises a deeper explanation, though slightly cliché.",
+      "reason_ru": "Обещает более глубокое объяснение, но немного клишировано."
+    },
+    {
+      "id": 13,
+      "title_en": "Why Overthinkers Notice Every Detail",
+      "title_ru": "Почему переосмысливающие замечают каждую мелочь",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Links sensitivity to overthinking, relatable",
+      "score": 8.6,
+      "reason_en": "Connects perceptiveness to overthinking, relatable for target audience.",
+      "reason_ru": "Связывает чуткость с переосмысливанием, узнаваемо для целевой аудитории."
+    },
+    {
+      "id": 14,
+      "title_en": "How to Stop Getting Stuck in Your Head",
+      "title_ru": "Как перестать застревать в своих мыслях",
+      "angle": "How to Break Free from Overthinking",
+      "benchmark_relation": "Solution-focused, addresses core pain",
+      "score": 9.0,
+      "reason_en": "Promises actionable relief, uses everyday language.",
+      "reason_ru": "Обещает практическое облегчение, использует повседневный язык."
+    },
+    {
+      "id": 15,
+      "title_en": "Why Overthinking Makes You Anxious",
+      "title_ru": "Почему переосмысление вызывает тревогу",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Links overthinking to anxiety, emotional",
+      "score": 8.7,
+      "reason_en": "Connects overthinking to a common emotional outcome.",
+      "reason_ru": "Связывает переосмысление с распространённой эмоцией."
+    },
+    {
+      "id": 16,
+      "title_en": "The Overthinker’s Mind Explained",
+      "title_ru": "Ум переосмысливающего: объяснение",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Directly names the group, promises explanation",
+      "score": 8.5,
+      "reason_en": "Targets the group and promises insight, clear and direct.",
+      "reason_ru": "Обращается к группе и обещает понимание, ясно и прямо."
+    },
+    {
+      "id": 17,
+      "title_en": "Why You Can’t Let Things Go",
+      "title_ru": "Почему вы не можете отпустить мысли",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Focuses on a relatable struggle, emotional",
+      "score": 8.6,
+      "reason_en": "Names a common pain point, emotionally resonant.",
+      "reason_ru": "Называет распространённую проблему, эмоционально."
+    },
+    {
+      "id": 18,
+      "title_en": "How to Calm a Busy Mind",
+      "title_ru": "Как успокоить беспокойный ум",
+      "angle": "How to Break Free from Overthinking",
+      "benchmark_relation": "Solution-focused, gentle language",
+      "score": 8.8,
+      "reason_en": "Promises relief in a gentle, approachable way.",
+      "reason_ru": "Обещает облегчение мягко и доступно."
+    },
+    {
+      "id": 19,
+      "title_en": "Why Some People Get Stuck in Thought Loops",
+      "title_ru": "Почему некоторые застревают в мысленных петлях",
+      "angle": "The Science Behind Endless Thought Loops",
+      "benchmark_relation": "Curiosity-driven, names the phenomenon",
+      "score": 8.7,
+      "reason_en": "Explains a specific experience, sparks curiosity.",
+      "reason_ru": "Объясняет конкретный опыт, вызывает интерес."
+    },
+    {
+      "id": 20,
+      "title_en": "How Empathy Can Lead to Overthinking",
+      "title_ru": "Как эмпатия приводит к переосмыслению",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Links positive trait to struggle, reframing",
+      "score": 8.5,
+      "reason_en": "Shows how a strength can become a struggle, intriguing.",
+      "reason_ru": "Показывает, как сильная сторона становится проблемой, интересно."
+    },
+    {
+      "id": 21,
+      "title_en": "Why Overthinkers Struggle to Relax",
+      "title_ru": "Почему переосмысливающим сложно расслабиться",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Names the struggle, relatable and emotional",
+      "score": 8.6,
+      "reason_en": "Directly addresses a common frustration, emotional.",
+      "reason_ru": "Прямо обращается к распространённой проблеме, эмоционально."
+    },
+    {
+      "id": 22,
+      "title_en": "How to Stop Overthinking Without Fighting Your Thoughts",
+      "title_ru": "Как перестать переосмысливать, не борясь с мыслями",
+      "angle": "How to Break Free from Overthinking",
+      "benchmark_relation": "Solution-focused, gentle and novel approach",
+      "score": 9.0,
+      "reason_en": "Promises a new way to stop overthinking, gentle and hopeful.",
+      "reason_ru": "Обещает новый способ остановить переосмысление, мягко и обнадёживающе."
+    },
+    {
+      "id": 23,
+      "title_en": "Why Overthinking Feels Like a Trap",
+      "title_ru": "Почему переосмысление похоже на ловушку",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Emotional metaphor, relatable",
+      "score": 8.5,
+      "reason_en": "Uses a strong metaphor, emotionally resonant.",
+      "reason_ru": "Использует сильную метафору, эмоционально."
+    },
+    {
+      "id": 24,
+      "title_en": "How to Find Peace When Your Mind Won’t Stop",
+      "title_ru": "Как найти покой, когда ум не останавливается",
+      "angle": "How to Break Free from Overthinking",
+      "benchmark_relation": "Solution-focused, emotional",
+      "score": 8.8,
+      "reason_en": "Promises peace and relief, emotionally appealing.",
+      "reason_ru": "Обещает покой и облегчение, эмоционально привлекательно."
+    },
+    {
+      "id": 25,
+      "title_en": "Why Overthinkers Replay the Past",
+      "title_ru": "Почему переосмысливающие возвращаются к прошлому",
+      "angle": "The Hidden Cost of Perceptiveness",
+      "benchmark_relation": "Names a specific habit, relatable",
+      "score": 8.4,
+      "reason_en": "Focuses on a common overthinking behavior, relatable.",
+      "reason_ru": "Фокусируется на привычном поведении переосмысливающих, узнаваемо."
+    }
+  ],
+  "top_5_titles": [
+    {
+      "rank": 1,
+      "title_id": 1,
+      "title_en": "Why Some Minds Never Switch Off",
+      "title_ru": "Почему некоторые умы не могут отключиться",
+      "score": 9.5,
+      "why_selected_en": "Extremely clear, curiosity-driven, and emotionally resonant. Directly addresses the core struggle.",
+      "why_selected_ru": "Очень ясно, вызывает любопытство и эмоционально откликается. Прямо обращается к основной проблеме."
+    },
+    {
+      "rank": 2,
+      "title_id": 5,
+      "title_en": "How to Break Free from Overthinking",
+      "title_ru": "Как выбраться из переосмысления",
+      "score": 9.3,
+      "why_selected_en": "Promises a solution, uses simple language, and targets the main pain point.",
+      "why_selected_ru": "Обещает решение, использует простой язык и затрагивает главную боль."
+    },
+    {
+      "rank": 3,
+      "title_id": 11,
+      "title_en": "Why Your Mind Won’t Rest",
+      "title_ru": "Почему ваш ум не отдыхает",
+      "score": 9.1,
+      "why_selected_en": "Short, emotional, and directly names the viewer’s experience.",
+      "why_selected_ru": "Коротко, эмоционально и прямо называет опыт зрителя."
+    },
+    {
+      "rank": 4,
+      "title_id": 2,
+      "title_en": "The Psychology of People Who Overthink",
+      "title_ru": "Психология людей, которые слишком много думают",
+      "score": 9.2,
+      "why_selected_en": "Keeps the original formula but adds a promise of deeper insight.",
+      "why_selected_ru": "Сохраняет оригинальную формулу, но добавляет обещание глубокого понимания."
+    },
+    {
+      "rank": 5,
+      "title_id": 14,
+      "title_en": "How to Stop Getting Stuck in Your Head",
+      "title_ru": "Как перестать застревать в своих мыслях",
+      "score": 9.0,
+      "why_selected_en": "Addresses the core pain and promises actionable relief.",
+      "why_selected_ru": "Затрагивает главную боль и обещает практическое облегчение."
+    }
+  ],
+  "final_description": {
+    "hook_en": "Ever feel like your mind just won’t turn off? You’re not alone.",
+    "hook_ru": "Чувствуете, что ваш ум не может отключиться? Вы не одиноки.",
+    "core_en": "This video explores why some people get trapped in endless thought loops and what’s really happening in the brain during overthinking. We’ll look at the hidden links between sensitivity, childhood experiences, and mental exhaustion. You’ll learn why overthinking is so hard to stop—and what you can do about it.",
+    "core_ru": "В этом видео мы разберём, почему некоторые люди застревают в бесконечных мысленных петлях и что на самом деле происходит в мозге при переосмыслении. Мы рассмотрим скрытые связи между чувствительностью, детским опытом и умственным истощением. Вы узнаете, почему так сложно остановить переосмысление — и что с этим делать.",
+    "value_en": "You’ll gain a new understanding of your mind and practical ways to find peace, even if you’ve struggled with overthinking for years.",
+    "value_ru": "Вы получите новое понимание своего ума и практические способы обрести покой, даже если давно боретесь с переосмыслением.",
+    "seo_en": "overthinking, rumination, mental exhaustion, how to stop overthinking, psychology of overthinking, sensitive mind, thought loops",
+    "seo_ru": "переосмысление, руминация, умственное истощение, как перестать переосмысливать, психология переосмысления, чувствительный ум, мысленные петли"
+  },
+  "hashtags": [
+    "#overthinking",
+    "#psychology",
+    "#mentalhealth",
+    "#selfhelp",
+    "#anxiety"
+  ],
+  "thumbnail_options": [
+    {
+      "id": 1,
+      "text_en": "Stuck in Your Head?",
+      "text_ru": "Застрял в мыслях?",
+      "reason_en": "Directly names the core struggle and creates instant self-recognition.",
+      "reason_ru": "Прямо называет главную проблему и вызывает мгновенное узнавание."
+    },
+    {
+      "id": 2,
+      "text_en": "Can’t Switch Off",
+      "text_ru": "Не могу отключиться",
+      "reason_en": "Simple, emotional, and visually strong for overthinkers.",
+      "reason_ru": "Просто, эмоционально и визуально сильно для переосмысливающих."
+    },
+    {
+      "id": 3,
+      "text_en": "The Overthinker’s Trap",
+      "text_ru": "Ловушка мыслей",
+      "reason_en": "Uses a metaphor to show the exhausting cycle of overthinking.",
+      "reason_ru": "Использует метафору, чтобы показать изматывающий цикл переосмысления."
+    },
+    {
+      "id": 4,
+      "text_en": "Why Your Mind Won’t Rest",
+      "text_ru": "Почему ум не отдыхает",
+      "reason_en": "Directly addresses the main pain point and curiosity.",
+      "reason_ru": "Прямо обращается к главной боли и вызывает интерес."
+    },
+    {
+      "id": 5,
+      "text_en": "Break Free",
+      "text_ru": "Освободись",
+      "reason_en": "Short, hopeful, and visually powerful for a solution-focused message.",
+      "reason_ru": "Коротко, обнадёживающе и визуально сильно для сообщения о решении."
+    }
+  ]
+}

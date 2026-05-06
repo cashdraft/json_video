@@ -1,0 +1,95 @@
+{
+  "core_topic": "overthinking and its psychological roots",
+  "one_sentence_video_promise": "Reveal why some people can't switch off their minds, the hidden costs of overthinking, and how to break free from mental loops.",
+  "original_title_analysis": {
+    "original_title": "People Who Think Too Much",
+    "title_formula": "[Group Identity] Who [Behavior/Struggle]",
+    "why_it_works": [
+      "Directly names the target audience",
+      "Creates instant self-recognition",
+      "Implies a shared struggle",
+      "Simple and relatable language"
+    ],
+    "what_to_preserve": [
+      "Clear audience targeting",
+      "Simplicity and relatability",
+      "Focus on the behavior (thinking too much)"
+    ],
+    "what_to_avoid_copying": [
+      "Overly generic phrasing",
+      "Lack of emotional or curiosity hook",
+      "Absence of a promise or solution"
+    ]
+  },
+  "target_viewer": {
+    "primary_identity": "overthinkers",
+    "secondary_identity": "highly sensitive and perceptive people",
+    "viewer_self_recognition_phrases": [
+      "my mind never switches off",
+      "I replay conversations in my head",
+      "I notice subtle changes in others",
+      "I feel mentally exhausted for no clear reason"
+    ]
+  },
+  "main_pain": "Feeling trapped in endless mental loops that cause exhaustion and anxiety.",
+  "emotional_tension": "The more you think, the more tired and stuck you feel, yet you can't stop searching for answers.",
+  "core_paradox": "The same mental habits that make you perceptive and empathetic also trap you in exhausting overthinking.",
+  "psychological_mechanism": [
+    "maladaptive rumination",
+    "default mode network overactivity",
+    "childhood adaptation to unpredictability",
+    "dopamine reinforcement of thought loops",
+    "cognitive empathy leading to emotional overload"
+  ],
+  "strongest_angles": [
+    {
+      "angle_id": "1",
+      "angle_name": "The Hidden Cost of Perceptiveness",
+      "why_it_clicks": "Reframes overthinking as a side effect of a positive trait, reducing shame and increasing self-understanding."
+    },
+    {
+      "angle_id": "2",
+      "angle_name": "The Science Behind Endless Thought Loops",
+      "why_it_clicks": "Offers a scientific explanation, satisfying curiosity and validating the viewer's experience."
+    },
+    {
+      "angle_id": "3",
+      "angle_name": "How to Break Free from Overthinking",
+      "why_it_clicks": "Promises actionable solutions, appealing to viewers desperate for relief."
+    }
+  ],
+  "curiosity_gaps": [
+    "Why do some people get stuck in thought loops while others don't?",
+    "What is really happening in the brain during overthinking?",
+    "Is there a way to stop overthinking without fighting your thoughts?",
+    "How does childhood unpredictability shape adult thinking patterns?"
+  ],
+  "seo_keywords": [
+    "overthinking",
+    "rumination",
+    "mental exhaustion",
+    "cognitive empathy",
+    "default mode network",
+    "how to stop overthinking",
+    "psychology of overthinking"
+  ],
+  "title_style_recommendations": [
+    "Directly address the viewer's experience",
+    "Imply a hidden truth or surprising cause",
+    "Promise relief or a solution",
+    "Use emotionally resonant language",
+    "Balance relatability with intrigue"
+  ],
+  "thumbnail_text_directions": [
+    "Stuck in Your Head?",
+    "Can't Switch Off",
+    "The Overthinker's Trap",
+    "Why Your Mind Won't Rest"
+  ],
+  "avoid_in_titles": [
+    "Overly clinical or technical language",
+    "Generic or vague phrasing",
+    "Titles that blame or shame the viewer",
+    "Overpromising instant solutions"
+  ]
+}

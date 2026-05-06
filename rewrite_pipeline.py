@@ -410,14 +410,14 @@ def build_youtube_packaging_system_prompt(packaging_prompt: str) -> str:
 
 def build_youtube_packaging_user_message(
     user_prompt: str,
-    scene_writer_output: str = "",
+    title_strategist_result: str = "",
 ) -> str:
-    """User: User Promt + сырой вывод Scene Writer (JSON-строки сцен)."""
+    """User: YouTube packaging User Promt + Result этапа Title Strategist."""
     up = (user_prompt or "").strip()
-    raw = str(scene_writer_output or "").strip()
+    raw = str(title_strategist_result or "").strip()
     payload: dict[str, Any] = {
         "youtube_packaging_user_promt": up or "",
-        "scene_writer_output": raw or "(пусто)",
+        "title_strategist_result": raw or "(пусто)",
     }
     return _json_user_message(payload)
 
@@ -503,7 +503,7 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     ),
     "youtube_packaging": (
         "Отправляем один POST. В System: YouTube packaging System Promt. "
-        "В User: YouTube packaging User Promt и поле scene_writer_output (полный результат Scene Writer). "
+        "В User: YouTube packaging User Promt и поле title_strategist_result (Result этапа Title Strategist). "
         "В превью блок заголовков — только top_5_titles. Плюс final_description, hashtags, thumbnail_options по схеме в System Promt."
     ),
 }
@@ -798,7 +798,7 @@ def compose_rewrite_openai_request_body(
     persona_editor_text: str = "",
     voiceover_editor_text: str = "",
     structure_splitter_text: str = "",
-    scene_writer_output_text: str = "",
+    title_strategist_result_text: str = "",
     original_title: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
@@ -943,13 +943,13 @@ def compose_rewrite_openai_request_body(
         }
         user_text = _json_user_message(payload)
     elif stage_key == "youtube_packaging":
-        sw = (scene_writer_output_text or "").strip()
-        if not sw:
-            return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
+        ts = (title_strategist_result_text or "").strip()
+        if not ts:
+            return None, "Нет результата Title Strategist — выполните этап Title Strategist и сохраните проект."
         prompt = build_youtube_packaging_system_prompt(str(cell.get("prompt") or ""))
         user_text = build_youtube_packaging_user_message(
             str(cell.get("user_prompt") or ""),
-            sw,
+            ts,
         )
     else:
         prompt = build_rewrite_system_prompt(

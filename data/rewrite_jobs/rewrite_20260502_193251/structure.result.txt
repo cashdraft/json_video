@@ -1,0 +1,288 @@
+{
+  "target_chars_total": 12000,
+  "narrative_arc": {
+    "opening_function": "Grab attention with the paradox of overthinking in intelligent, empathetic people and establish the core question.",
+    "middle_function": "Unpack the mechanisms, origins, and consequences of overthinking, using scientific research, clear definitions, and contrasts to build understanding and escalate stakes.",
+    "ending_function": "Deliver a reframing payoff: overthinking as an adaptation, not a flaw, and offer actionable perspective shifts for relief.",
+    "arc_summary": "The video begins by challenging assumptions about overthinking, then systematically explains its psychological, neurological, and developmental roots, highlights its paradoxical nature and consequences, and concludes by reframing it as an adaptive trait with practical implications for self-acceptance and change."
+  },
+  "global_rules": {
+    "language": "English",
+    "voice_style": "for_voiceover",
+    "avoid_repetition": true,
+    "maintain_semantic_progression": true,
+    "hook_density": "controlled",
+    "tone_goal": "Analytical, empathetic, and empowering"
+  },
+  "blocks": [
+    {
+      "block_id": 1,
+      "block_name": "The Overthinking Paradox: Why the Smartest Minds Struggle",
+      "block_role": "hook",
+      "purpose": "Immediately engage viewers by presenting the paradox: intelligent, empathetic people are often exhausted by overthinking, not overdoing.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Introduce the paradox of overthinking in intelligent, empathetic individuals",
+        "Frame overthinking as a widespread, misunderstood phenomenon"
+      ],
+      "must_not_cover": [
+        "Direct audience address",
+        "Conversational or rhetorical questions"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": ["Overthinking as an adaptive habit, not a flaw"],
+        "C": ["Metaphors about the mind being 'always online'"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": true,
+        "mid_hooks": 0,
+        "open_loop": true
+      },
+      "next_block_hint": "Define overthinking and introduce its psychological mechanisms."
+    },
+    {
+      "block_id": 2,
+      "block_name": "What Is Overthinking? The Science of Maladaptive Rumination",
+      "block_role": "setup|explanation",
+      "purpose": "Clearly define maladaptive rumination, distinguish it from normal thought, and introduce its cognitive mechanisms.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "Definition of maladaptive rumination",
+        "Key features: repetitive thought loops, focus on uncertainty and social situations",
+        "Introduce the term as used by psychologists"
+      ],
+      "must_not_cover": [
+        "Redundant examples of overthinking behaviors",
+        "Direct audience address"
+      ],
+      "source_mapping": {
+        "A": ["Definition of maladaptive rumination"],
+        "B": [],
+        "C": ["Examples of overthinkers replaying conversations or lying awake"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Explain the neurological and developmental origins of overthinking."
+    },
+    {
+      "block_id": 3,
+      "block_name": "Inside the Overthinker's Brain: Neurological and Developmental Roots",
+      "block_role": "explanation|proof",
+      "purpose": "Explore the brain mechanisms and early life experiences that give rise to overthinking, grounding the phenomenon in science.",
+      "target_chars_min": 1400,
+      "target_chars_ideal": 1700,
+      "target_chars_max": 2000,
+      "must_cover": [
+        "Role of prefrontal cortex and default mode network",
+        "Developmental origins in childhood/adolescence, especially in unpredictable environments",
+        "Research from Yale and University of Michigan on pattern recognition"
+      ],
+      "must_not_cover": [
+        "Therapeutic approaches",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [
+          "Role of prefrontal cortex and default mode network",
+          "Research from Yale and University of Michigan on pattern recognition"
+        ],
+        "B": ["Developmental origins in unpredictable environments"],
+        "C": ["Childhood household scenarios"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Differentiate between types of rumination and their consequences."
+    },
+    {
+      "block_id": 4,
+      "block_name": "Two Faces of Rumination: Reflective vs. Brooding",
+      "block_role": "contrast",
+      "purpose": "Clarify the distinction between reflective (potentially helpful) and brooding (harmful) rumination, using contrast to deepen understanding.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Distinction between reflective and brooding rumination",
+        "Consequences of each type",
+        "Smooth transition between the two types"
+      ],
+      "must_not_cover": [
+        "Therapeutic solutions",
+        "Redundant examples"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": ["Distinction between reflective and brooding rumination"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Show how productive reflection can slide into unproductive rumination and why this matters."
+    },
+    {
+      "block_id": 5,
+      "block_name": "The Trap: When Reflection Becomes a Loop",
+      "block_role": "turn",
+      "purpose": "Explain how and why reflective rumination can devolve into brooding, highlighting the illusion of progress and the role of dopamine.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1100,
+      "target_chars_max": 1300,
+      "must_cover": [
+        "How productive reflection can become unproductive rumination",
+        "Illusion of progress",
+        "Dopamine's role in reinforcing mental loops"
+      ],
+      "must_not_cover": [
+        "Therapeutic approaches",
+        "Personal anecdotes"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": ["Dopamine's role in reinforcing rumination"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Present research linking overthinking to empathy and social sensitivity."
+    },
+    {
+      "block_id": 6,
+      "block_name": "The Empathy Connection: Why Overthinkers Feel More",
+      "block_role": "proof|explanation",
+      "purpose": "Present research showing the link between overthinking, cognitive empathy, and social sensitivity, reinforcing the adaptive side of the trait.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1100,
+      "target_chars_max": 1300,
+      "must_cover": [
+        "Research findings on rumination and cognitive empathy",
+        "Overthinking linked to higher empathy and social sensitivity"
+      ],
+      "must_not_cover": [
+        "Therapeutic advice",
+        "Emotional appeals"
+      ],
+      "source_mapping": {
+        "A": ["2013 Psychological Science study on rumination and cognitive empathy"],
+        "B": ["Overthinking linked to higher empathy and social sensitivity"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Describe the exhaustion and tension overthinkers experience, escalating the stakes."
+    },
+    {
+      "block_id": 7,
+      "block_name": "The Cost: Exhaustion and the Limits of Thinking",
+      "block_role": "explanation|stakes",
+      "purpose": "Describe the emotional and cognitive toll of overthinking, emphasizing why understanding and addressing it matters.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "Exhaustion and tension experienced by overthinkers",
+        "Not all problems can be solved by thinking alone"
+      ],
+      "must_not_cover": [
+        "Therapeutic solutions",
+        "Extended emotional reflection"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": ["Descriptions of emotional texture and social nuance"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Introduce therapeutic approaches and the concept of changing one's relationship to thoughts."
+    },
+    {
+      "block_id": 8,
+      "block_name": "A New Approach: Changing the Relationship to Thoughts",
+      "block_role": "turn|explanation",
+      "purpose": "Introduce therapeutic approaches (e.g., ACT, cognitive diffusion) that focus on observing thoughts rather than suppressing them.",
+      "target_chars_min": 1100,
+      "target_chars_ideal": 1400,
+      "target_chars_max": 1600,
+      "must_cover": [
+        "Therapeutic approaches: ACT, cognitive diffusion",
+        "Focus on changing relationship to thoughts, not suppression"
+      ],
+      "must_not_cover": [
+        "Personal therapy stories",
+        "Overly technical jargon"
+      ],
+      "source_mapping": {
+        "A": ["ACT and cognitive diffusion as therapeutic approaches"],
+        "B": ["Therapeutic focus on changing relationship to thoughts"],
+        "C": ["Therapist-patient reframing dialogue"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Deliver the final reframing and actionable perspective shift."
+    },
+    {
+      "block_id": 9,
+      "block_name": "Reframing Overthinking: From Flaw to Adaptation",
+      "block_role": "payoff|conclusion",
+      "purpose": "Deliver the core payoff: overthinking is an adaptation, not a defect, and outline actionable perspective shifts for viewers.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1700,
+      "target_chars_max": 2000,
+      "must_cover": [
+        "Reframe overthinking as an adaptation",
+        "Summarize key insights",
+        "Outline actionable perspective shifts (e.g., teaching the mind it is safe to rest)"
+      ],
+      "must_not_cover": [
+        "Extended emotional appeals",
+        "Generalizations without actionable advice"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": ["Overthinking as an adaptive habit, not a flaw"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "End with a concise, empowering close that reinforces the main message."
+    }
+  ]
+}

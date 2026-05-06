@@ -1,0 +1,1064 @@
+{"scene_id":"scene_001"}
+{"text":"There’s a pattern you might notice in people who pick up on everything—the ones who sense the mood in a room before anyone else."}
+{"start":{"prompt":"A group of people in a room, one person stands out, subtly observing and noticing the atmosphere before others. The observer's face shows attentiveness and sensitivity, while others are unaware."}}
+{"video":{"prompt":"Camera slowly zooms in on the perceptive individual as their eyes scan the room, picking up subtle cues from others' body language and expressions."}}
+
+{"scene_id":"scene_002"}
+{"text":"They’re often called smart or perceptive."}
+{"start":{"prompt":"Close-up of the same person's face, with soft lighting highlighting their thoughtful expression. In the background, faint silhouettes of people whispering or gesturing towards them, suggesting admiration."}}
+{"video":{"prompt":"The camera gently pans to show people quietly acknowledging the perceptive person, with subtle nods or glances."}}
+
+{"scene_id":"scene_003"}
+{"text":"But behind this awareness, there’s a cost: their minds rarely switch off."}
+{"start":{"prompt":"The perceptive individual sits alone, their face thoughtful and slightly weary, surrounded by a faint visual representation of swirling thoughts or ideas."}}
+{"video":{"prompt":"Animated thought clouds or abstract lines swirl around the person's head, indicating constant mental activity even in stillness."}}
+
+{"scene_id":"scene_004"}
+{"text":"Even in quiet moments, thoughts keep going."}
+{"start":{"prompt":"The person sits in a peaceful, quiet environment—perhaps a park bench or a dimly lit room—yet their eyes remain active, hinting at ongoing internal dialogue."}}
+{"video":{"prompt":"Subtle animation of fleeting images or words passing through the air around the person, representing persistent thoughts."}}
+
+{"scene_id":"scene_005"}
+{"text":"Analyzing, replaying, predicting."}
+{"start":{"prompt":"A sequence of three overlapping images: the person reviewing past events, replaying conversations, and imagining future scenarios, all layered around their head."}}
+{"video":{"prompt":"Quick cuts between the three mental activities—analyzing, replaying, predicting—showing the rapid pace of their thoughts."}}
+
+{"scene_id":"scene_006"}
+{"text":"It’s not about doing too much. It’s about thinking too much."}
+{"start":{"prompt":"The person sits still, hands resting, but their face shows intense concentration, contrasting physical calm with mental busyness."}}
+{"video":{"prompt":"Camera slowly circles the person, emphasizing the contrast between their motionless body and the restless energy in their eyes."}}
+
+{"scene_id":"scene_007"}
+{"text":"The result is a kind of tiredness that’s hard to explain."}
+{"start":{"prompt":"Close-up of the person's face, eyes slightly drooping, with a subtle shadow under their eyes, conveying a unique, deep fatigue."}}
+{"video":{"prompt":"The lighting dims slightly, and the person's expression shifts from alertness to visible exhaustion."}}
+
+{"scene_id":"scene_008"}
+{"text":"This isn’t rare. It’s actually common."}
+{"start":{"prompt":"A montage of several different people in various settings, all showing similar signs of mental fatigue and introspection."}}
+{"video":{"prompt":"Camera pans across each individual, highlighting the universality of the experience."}}
+
+{"scene_id":"scene_009"}
+{"text":"People who are quick to understand others often get stuck in their own thoughts."}
+{"start":{"prompt":"A person listens attentively to someone else, then turns away, lost in their own thoughts, with a distant look in their eyes."}}
+{"video":{"prompt":"The scene transitions from active listening to the person becoming absorbed in their internal world, fading out the background."}}
+
+{"scene_id":"scene_010"}
+{"text":"They replay conversations, imagine every possible outcome, and try to prepare for things that might never happen."}
+{"start":{"prompt":"The person sits at a desk, surrounded by floating, translucent images of past conversations, imagined scenarios, and possible futures."}}
+{"video":{"prompt":"The floating images animate around the person, showing rapid shifts between memories and imagined events."}}
+
+{"scene_id":"scene_011"}
+{"text":"On the outside, it can look like caution or wisdom."}
+{"start":{"prompt":"The person appears calm and composed in a social setting, others looking at them with respect, interpreting their quietness as wisdom."}}
+{"video":{"prompt":"Camera focuses on the person's serene exterior, while others nod approvingly or glance admiringly at them."}}
+
+{"scene_id":"scene_012"}
+{"text":"Inside, it feels like being caught in a loop with no clear way out."}
+{"start":{"prompt":"The same person is shown in isolation, surrounded by looping, circular patterns or visual motifs representing repetitive thoughts."}}
+{"video":{"prompt":"The camera slowly spins around the person, emphasizing the sensation of being trapped in an endless mental cycle."}}
+
+{"scene_id":"scene_013"}
+{"text":"Overthinking isn’t a flaw or a weakness."}
+{"start":{"prompt":"Крупный план задумчивого человека, сидящего в спокойной обстановке, выражение лица нейтральное, фон мягкий и размытый, чтобы акцентировать внимание на человеке."}}
+{"video":{"prompt":"Камера медленно приближается к лицу человека, подчеркивая его задумчивость и внутренний диалог."}}
+
+{"scene_id":"scene_014"}
+{"text":"It’s a habit the mind uses to stay safe."}
+{"start":{"prompt":"Изображение мозга или головы человека, вокруг которой мягкое сияние, символизирующее защиту, спокойная цветовая гамма."}}
+{"video":{"prompt":"Легкое мерцание или пульсация света вокруг головы, чтобы показать работу защитных механизмов разума."}}
+
+{"scene_id":"scene_015"}
+{"text":"For some, it’s like the brain is always online—scanning for threats, searching for answers, never fully relaxing."}
+{"start":{"prompt":"Вид сбоку на голову человека, внутри которой стилизовано изображены шестерёнки и вспышки, символизирующие постоянную активность мозга."}}
+{"video":{"prompt":"Анимация вращающихся шестерёнок и движущихся волн внутри головы, иллюстрирующих непрерывную работу мозга."}}
+
+{"scene_id":"scene_016"}
+{"text":"This can be draining, even if no one else sees it."}
+{"start":{"prompt":"Человек сидит в одиночестве, выглядит усталым, вокруг него обычная обстановка, но его лицо выражает внутреннюю усталость."}}
+{"video":{"prompt":"Медленное затемнение фона, чтобы подчеркнуть чувство истощения, камера плавно отдаляется."}}
+
+{"scene_id":"scene_017"}
+{"text":"Most people misunderstand what’s really happening."}
+{"start":{"prompt":"Группа людей на фоне, обсуждающих что-то между собой, в центре — человек, который выглядит задумчивым и немного отстранённым."}}
+{"video":{"prompt":"Камера фокусируется на задумчивом человеке, остальные люди слегка размыты, чтобы показать непонимание окружающих."}}
+
+{"scene_id":"scene_018"}
+{"text":"They see someone thoughtful or quiet and think it’s just carefulness."}
+{"start":{"prompt":"Человек сидит в компании, молчит, остальные смотрят на него с легким удивлением или недоумением, атмосфера спокойная."}}
+{"video":{"prompt":"Камера медленно перемещается от лиц окружающих к лицу молчаливого человека, подчеркивая разницу в восприятии."}}
+
+{"scene_id":"scene_019"}
+{"text":"But it’s more complicated."}
+{"start":{"prompt":"Крупный план лица человека, на котором отражается сложная гамма эмоций, фон затемнён, чтобы выделить внутреннюю сложность."}}
+{"video":{"prompt":"Легкое движение камеры вокруг лица, создающее ощущение глубины и многослойности эмоций."}}
+
+{"scene_id":"scene_020"}
+{"text":"The same qualities that make someone perceptive and empathetic can also make them vulnerable to this silent exhaustion."}
+{"start":{"prompt":"Человек с мягким, внимательным взглядом, вокруг него едва заметное свечение, но на лице видны признаки усталости."}}
+{"video":{"prompt":"Анимация легкого мерцания вокруг человека, постепенно затухающего, чтобы показать переход от эмпатии к усталости."}}
+
+{"scene_id":"scene_021"}
+{"text":"The more they notice, the harder it is to switch off."}
+{"start":{"prompt":"Человек смотрит на множество деталей вокруг себя, глаза широко открыты, в отражении зрачков видны разные сцены или образы."}}
+{"video":{"prompt":"Камера быстро перемещается между деталями, которые видит человек, затем возвращается к его лицу, подчеркивая напряжение."}}
+
+{"scene_id":"scene_022"}
+{"text":"There’s a reason this pattern shows up in sensitive, observant people."}
+{"start":{"prompt":"Группа людей, среди которых выделяются один или два человека с внимательным, чутким выражением лица, остальные выглядят более расслабленно."}}
+{"video":{"prompt":"Камера выделяет чувствительных людей в группе, слегка затемняя остальных, чтобы подчеркнуть их особенности."}}
+
+{"scene_id":"scene_023"}
+{"text":"The mind’s drive to understand and predict is strong."}
+{"start":{"prompt":"Изображение мозга или головы, внутри которой видны сложные схемы, линии и символы, символизирующие анализ и предсказание."}}
+{"video":{"prompt":"Анимация движущихся линий и символов внутри головы, показывающая активную работу разума."}}
+
+{"scene_id":"scene_024"}
+{"text":"When it turns inward, it can become a trap."}
+{"start":{"prompt":"Человек сидит, обхватив голову руками, вокруг него стилизованные ловушки или сети, символизирующие внутренний капкан."}}
+{"video":{"prompt":"Анимация затягивающихся сетей или ловушек вокруг головы человека, чтобы показать внутреннее напряжение."}}
+
+{"scene_id":"scene_025"}
+{"text":"So what’s happening inside when overthinking takes over?"}
+{"start":{"prompt":"Крупный план головы человека, внутри которой видны хаотичные мысли, облака или вспышки, символизирующие внутренний процесс."}}
+{"video":{"prompt":"Анимация быстро сменяющихся образов внутри головы, создающих ощущение хаоса и перегрузки."}}
+
+{"scene_id":"scene_026"}
+{"text":"And is there a way out, or are some people just stuck with it?"}
+{"start":{"prompt":"Человек стоит перед развилкой или лабиринтом, задумчиво смотрит вперёд, вокруг — туман или неясность."}}
+{"video":{"prompt":"Камера медленно движется от лица человека к развилке, подчеркивая неопределённость и поиск выхода."}}
+
+{"scene_id":"scene_027"}
+{"text":"Psychologists use a term for the kind of overthinking that wears people down: maladaptive rumination."}
+{"start":{"prompt":"A psychologist in a calm, well-lit office, holding a notepad, with the words 'maladaptive rumination' written clearly on a whiteboard behind them. The psychologist looks thoughtful, surrounded by books and psychological diagrams."}}
+{"video":{"prompt":"Camera slowly zooms in on the term 'maladaptive rumination' on the whiteboard as the psychologist gestures toward it, emphasizing its importance."}}
+
+{"scene_id":"scene_028"}
+{"text":"This isn’t just thinking a lot. It’s a mental loop that replays the same worries, doubts, or regrets—without resolution."}
+{"start":{"prompt":"A person sitting alone at a desk, head resting on their hand, surrounded by thought bubbles containing repeated images of worries, doubts, and regrets. The person's expression is tired and frustrated."}}
+{"video":{"prompt":"The thought bubbles animate in a loop, circling around the person's head, showing the same images over and over, emphasizing the repetitive nature."}}
+
+{"scene_id":"scene_029"}
+{"text":"The mind gets stuck, circling the same questions: “Did I say the wrong thing?” “What if I made a mistake?” “Why did that happen?”"}
+{"start":{"prompt":"Close-up of a person's face with a furrowed brow, surrounded by swirling question marks and text bubbles showing the questions: 'Did I say the wrong thing?', 'What if I made a mistake?', 'Why did that happen?'"}}
+{"video":{"prompt":"The camera slowly rotates around the person's head as the question bubbles orbit, highlighting the feeling of being mentally stuck."}}
+
+{"scene_id":"scene_030"}
+{"text":"Maladaptive rumination has a few key features."}
+{"start":{"prompt":"A clean infographic slide with the title 'Key Features of Maladaptive Rumination' and three empty bullet points, ready to be filled."}}
+{"video":{"prompt":"The camera pans across the infographic as the title appears, preparing the viewer for the upcoming list."}}
+
+{"scene_id":"scene_031"}
+{"text":"First, it’s repetitive—the same thoughts come back again and again."}
+{"start":{"prompt":"The infographic now shows the first bullet point: 'Repetitive: the same thoughts come back again and again,' with a looping arrow icon beside it."}}
+{"video":{"prompt":"The looping arrow animates, spinning in a circle to visually reinforce the idea of repetition."}}
+
+{"scene_id":"scene_032"}
+{"text":"Second, it usually focuses on uncertainty, especially about social situations or the future."}
+{"start":{"prompt":"The infographic adds a second bullet point: 'Focuses on uncertainty, especially about social situations or the future,' with icons of a question mark, a group of people, and a calendar."}}
+{"video":{"prompt":"Icons gently pulse or shimmer, drawing attention to the uncertainty and social/future themes."}}
+
+{"scene_id":"scene_033"}
+{"text":"The mind wants clarity but gets lost in endless analysis."}
+{"start":{"prompt":"A person stands at a crossroads in a foggy landscape, looking confused, with multiple blurry paths ahead and a magnifying glass in hand."}}
+{"video":{"prompt":"The fog swirls and thickens, obscuring the paths further as the person turns in place, searching for clarity."}}
+
+{"scene_id":"scene_034"}
+{"text":"Third, these loops don’t lead to new insights or decisions."}
+{"start":{"prompt":"The infographic now shows the third bullet point: 'No new insights or decisions,' with an icon of a maze and a person standing still at the center."}}
+{"video":{"prompt":"The maze icon animates, showing the person trying to move but always ending up in the same spot."}}
+
+{"scene_id":"scene_035"}
+{"text":"They just create confusion and self-doubt."}
+{"start":{"prompt":"A close-up of a person's face in a mirror, their reflection fragmented and blurry, with visible signs of confusion and self-doubt in their expression."}}
+{"video":{"prompt":"The reflection in the mirror distorts and shifts, emphasizing the emotional turmoil."}}
+
+{"scene_id":"scene_036"}
+{"text":"This is different from normal reflection."}
+{"start":{"prompt":"Split-screen image: on one side, a person calmly journaling with a peaceful expression; on the other, a person looking anxious and overwhelmed."}}
+{"video":{"prompt":"The camera pans from the calm side to the anxious side, highlighting the contrast between normal reflection and rumination."}}
+
+{"scene_id":"scene_037"}
+{"text":"Healthy thinking helps people learn from experience or plan ahead."}
+{"start":{"prompt":"A person sitting at a desk, writing in a journal, surrounded by positive symbols like a lightbulb, calendar, and upward arrows, representing learning and planning."}}
+{"video":{"prompt":"The positive symbols gently animate, glowing and moving upward, reinforcing the benefits of healthy thinking."}}
+
+{"scene_id":"scene_038"}
+{"text":"Maladaptive rumination is more like being stuck in a maze with no exit."}
+{"start":{"prompt":"A person stands in the center of a complex, high-walled maze, looking around with a lost expression, no visible exit in sight."}}
+{"video":{"prompt":"The camera pulls back to reveal the endless maze, emphasizing the feeling of being trapped."}}
+
+{"scene_id":"scene_039"}
+{"text":"The more you try to think your way out, the more tangled it gets."}
+{"start":{"prompt":"The person in the maze tries to move forward, but the paths twist and turn, becoming more complicated and tangled with each step."}}
+{"video":{"prompt":"The maze walls shift and rearrange as the person moves, making the maze increasingly complex and confusing."}}
+
+{"scene_id":"scene_040"}
+{"text":"Psychologists see this as the brain’s problem-solving system getting hijacked."}
+{"start":{"prompt":"A stylized brain diagram with gears and pathways, some of which are blocked or rerouted by warning signs labeled 'Hijacked'."}}
+{"video":{"prompt":"The gears in the brain stutter and jam, and warning signs flash, illustrating the hijacking of the problem-solving system."}}
+
+{"scene_id":"scene_041"}
+{"text":"Instead of moving forward, it just circles the same track."}
+{"start":{"prompt":"A brain-shaped racetrack with a small figure running in circles, unable to find an exit, symbolizing repetitive thought patterns."}}
+{"video":{"prompt":"The figure runs endlessly around the track, never progressing, while the camera slowly zooms out to show the futility."}}
+
+{"scene_id":"scene_042"}
+{"text":"Why does this often focus on social situations?"}
+{"start":{"prompt":"Видна группа людей, стоящих вместе, некоторые из них выглядят обеспокоенными или задумчивыми, между ними ощущается напряжённая атмосфера, лица выражают неуверенность и тревогу."}}
+{"video":{"prompt":"Камера медленно приближается к лицу одного из людей, подчеркивая его обеспокоенное выражение и взгляд в сторону других."}}
+
+{"scene_id":"scene_043"}
+{"text":"Human brains care about what others think."}
+{"start":{"prompt":"Крупный план человеческого мозга, наложенного на силуэт человека, вокруг которого размытые силуэты других людей, как будто их мнения влияют на центральную фигуру."}}
+{"video":{"prompt":"Вокруг мозга появляются всплывающие облачка с вопросительными знаками и силуэтами людей, которые как бы обсуждают или оценивают центральную фигуру."}}
+
+{"scene_id":"scene_044"}
+{"text":"When something feels unresolved—an awkward conversation, a strange look, a missed signal—the mind replays it, looking for answers."}
+{"start":{"prompt":"Человек сидит один в комнате, вокруг него полупрозрачные образы: сцена неловкого разговора, чей-то странный взгляд, жест, который был пропущен; все эти сцены как воспоминания окружают его."}}
+{"video":{"prompt":"Воспоминания оживают и повторяются по кругу вокруг головы человека, как зацикленные короткие фрагменты, а он смотрит в одну точку, погружённый в мысли."}}
+
+{"scene_id":"scene_045"}
+{"text":"With maladaptive rumination, the replay never ends."}
+{"start":{"prompt":"Вид сверху на человека, вокруг которого по кругу движутся прозрачные копии его самого, повторяющие одни и те же жесты и выражения лица."}}
+{"video":{"prompt":"Копии продолжают двигаться по кругу, создавая ощущение бесконечного повторения, камера медленно вращается вокруг центральной фигуры."}}
+
+{"scene_id":"scene_046"}
+{"text":"Uncertainty just grows."}
+{"start":{"prompt":"Человек стоит в тумане, вокруг него постепенно сгущается дымка, символизирующая нарастающую неуверенность и тревогу."}}
+{"video":{"prompt":"Туман становится гуще, размывая контуры человека и окружающего пространства, камера медленно отдаляется."}}
+
+{"scene_id":"scene_047"}
+{"text":"This isn’t a rare glitch."}
+{"start":{"prompt":"Крупный план лица человека, на котором отражается осознание, что его состояние — не уникально; на заднем плане видны силуэты других людей с похожими выражениями."}}
+{"video":{"prompt":"Камера плавно перемещается, показывая, что таких людей много, они стоят рядом, каждый в своём мире переживаний."}}
+
+{"scene_id":"scene_048"}
+{"text":"It’s a well-known mental habit."}
+{"start":{"prompt":"Изображение мозга, в котором видны повторяющиеся нейронные цепи, символизирующие привычку; рядом — книги и научные статьи о психологии."}}
+{"video":{"prompt":"Нейронные цепи подсвечиваются, книги и статьи перелистываются, подчеркивая изученность явления."}}
+
+{"scene_id":"scene_049"}
+{"text":"Researchers have studied how these loops form and why they’re hard to break."}
+{"start":{"prompt":"Учёные в лаборатории обсуждают данные, на экране компьютера — графики и схемы, иллюстрирующие петли повторяющихся мыслей."}}
+{"video":{"prompt":"Камера фокусируется на экране, где анимация показывает формирование и закрепление мыслительных петель."}}
+
+{"scene_id":"scene_050"}
+{"text":"The word “maladaptive” means the process doesn’t help the person cope."}
+{"start":{"prompt":"На экране появляется слово «maladaptive», рядом — человек, который выглядит уставшим и подавленным, несмотря на усилия справиться с проблемой."}}
+{"video":{"prompt":"Слово «maladaptive» постепенно увеличивается, затем исчезает, оставляя только человека, который опускает голову."}}
+
+{"scene_id":"scene_051"}
+{"text":"It keeps the mind busy, but stuck."}
+{"start":{"prompt":"Человек сидит за столом, его голова окружена вращающимися мыслями в виде облачков, он выглядит задумчивым и застрявшим в раздумьях."}}
+{"video":{"prompt":"Облачка с мыслями вращаются всё быстрее, но человек не двигается, подчеркивая ощущение застоя."}}
+
+{"scene_id":"scene_052"}
+{"text":"So when psychologists talk about overthinking, they don’t mean being thoughtful or careful."}
+{"start":{"prompt":"Психолог объясняет пациенту, на доске написано слово «overthinking», рядом перечёркнуты слова «thoughtful» и «careful»."}}
+{"video":{"prompt":"Психолог указывает на доску, подчёркивая разницу между понятиями, пациент внимательно слушает."}}
+
+{"scene_id":"scene_053"}
+{"text":"They mean a specific mental trap—a loop that looks like thinking but actually blocks real understanding."}
+{"start":{"prompt":"Изображение ловушки в виде петли, внутри которой человек ходит по кругу, вокруг — символы мыслей, которые не приводят к решению."}}
+{"video":{"prompt":"Человек пытается выйти из петли, но снова возвращается в начало, мысли кружатся вокруг него, камера плавно отдаляется."}}
+
+{"scene_id":"scene_054"}
+{"text":"Why does the brain fall into this pattern at all?"}
+{"start":{"prompt":"Крупный план человеческого мозга на нейтральном фоне, мозг подсвечен мягким светом, чтобы выделить его структуру, вокруг нет других объектов, акцент на задумчивости."}}
+{"video":{"prompt":"Камера медленно приближается к мозгу, легкое мерцание света подчеркивает активность внутри мозга."}}
+
+{"scene_id":"scene_055"}
+{"text":"To see why some people get stuck in endless mental cycles while others don’t, it helps to look at the brain itself."}
+{"start":{"prompt":"Изображение двух силуэтов людей, один выглядит задумчивым и обеспокоенным, другой спокойным, между ними схематичное изображение мозга, акцент на различиях."}}
+{"video":{"prompt":"Камера плавно перемещается от одного силуэта к другому, затем фокусируется на мозге между ними."}}
+
+{"scene_id":"scene_056"}
+{"text":"Two systems matter: the prefrontal cortex and the default mode network."}
+{"start":{"prompt":"Схематичное изображение человеческого мозга, выделены две области: префронтальная кора и сеть пассивного режима, каждая подсвечена своим цветом."}}
+{"video":{"prompt":"Анимация: подсветка сначала одной области мозга, затем другой, плавное переключение между ними."}}
+
+{"scene_id":"scene_057"}
+{"text":"The prefrontal cortex handles planning, analysis, and impulse control."}
+{"start":{"prompt":"Крупный план мозга с ярко выделенной префронтальной корой, рядом иконки, символизирующие планирование, анализ и контроль импульсов."}}
+{"video":{"prompt":"Анимация: иконки поочередно подсвечиваются, показывая функции префронтальной коры."}}
+
+{"scene_id":"scene_058"}
+{"text":"It’s like an internal director, always evaluating what’s happening, what might happen, and how to respond."}
+{"start":{"prompt":"Внутри мозга появляется миниатюрная фигура режиссера с мегафоном, наблюдающая за экранами с разными жизненными ситуациями."}}
+{"video":{"prompt":"Анимация: режиссер указывает на экраны, которые сменяют сцены с разными вариантами событий."}}
+
+{"scene_id":"scene_059"}
+{"text":"When this system is overactive, a person might replay the same scenarios over and over, trying to anticipate every possibility."}
+{"start":{"prompt":"Человек сидит с закрытыми глазами, вокруг головы кружатся повторяющиеся изображения одних и тех же ситуаций, символизирующих зацикленность."}}
+{"video":{"prompt":"Анимация: изображения вокруг головы вращаются по кругу, повторяясь снова и снова."}}
+
+{"scene_id":"scene_060"}
+{"text":"The default mode network turns on when you’re not focused on a task."}
+{"start":{"prompt":"Мозг на фоне, область сети пассивного режима подсвечена, человек сидит расслабленно, не занимается никакой деятельностью."}}
+{"video":{"prompt":"Анимация: область сети пассивного режима начинает светиться, когда человек откидывается назад и расслабляется."}}
+
+{"scene_id":"scene_061"}
+{"text":"It runs internal dialogue, memories, daydreams, and reflections about yourself and others."}
+{"start":{"prompt":"Вокруг головы человека появляются облака мыслей с изображениями воспоминаний, диалогов, мечтаний и размышлений о себе и других."}}
+{"video":{"prompt":"Анимация: облака мыслей сменяют друг друга, показывая разные типы внутренней активности."}}
+
+{"scene_id":"scene_062"}
+{"text":"In people who overthink, this network is often more active."}
+{"start":{"prompt":"Человек с напряженным выражением лица, область сети пассивного режима в мозге ярко светится, вокруг головы много мыслительных облаков."}}
+{"video":{"prompt":"Анимация: облака мыслей быстро появляются и исчезают, область мозга светится интенсивнее."}}
+
+{"scene_id":"scene_063"}
+{"text":"The brain can’t “go quiet” even at rest."}
+{"start":{"prompt":"Человек лежит с закрытыми глазами, но мозг подсвечен и активен, вокруг головы легкое свечение, символизирующее активность."}}
+{"video":{"prompt":"Анимация: свечение вокруг головы пульсирует, показывая, что мозг не успокаивается даже в покое."}}
+
+{"scene_id":"scene_064"}
+{"text":"Research shows that in these people, the default mode network turns on more often and stays active longer than in those who don’t ruminate."}
+{"start":{"prompt":"Сравнительная диаграмма двух мозгов: один с ярко подсвеченной сетью пассивного режима, другой с тусклой, рядом подписи 'Overthinker' и 'Non-ruminator'."}}
+{"video":{"prompt":"Анимация: подсветка на первом мозге загорается чаще и дольше, на втором — тускло и кратковременно."}}
+
+{"scene_id":"scene_065"}
+{"text":"But why is the brain set up this way? Childhood matters."}
+{"start":{"prompt":"Крупный план человеческого мозга, наложенного на силуэт ребёнка. Атмосфера задумчивая, фон мягкий, акцент на связи между мозгом и детством."}}
+{"video":{"prompt":"Плавное приближение к мозгу, затем переход к изображению ребёнка, чтобы подчеркнуть связь между мозгом и детством."}}
+
+{"scene_id":"scene_066"}
+{"text":"If a child grows up in an unpredictable environment—where adults’ moods shift, rules change, or there are hidden family tensions—the brain learns to stay alert."}
+{"start":{"prompt":"Сцена в доме: ребёнок наблюдает за взрослыми, чьи эмоции и поведение быстро меняются. В комнате ощущается напряжённость, детали интерьера намекают на нестабильность."}}
+{"video":{"prompt":"Мимика взрослых меняется, правила и предметы в комнате перемещаются, ребёнок становится настороженным, взгляд напряжённый."}}
+
+{"scene_id":"scene_067"}
+{"text":"It looks for patterns to predict what might happen next."}
+{"start":{"prompt":"Ребёнок внимательно наблюдает за окружающими, взгляд устремлён на детали, в воздухе визуализируются линии и схемы, символизирующие поиск закономерностей."}}
+{"video":{"prompt":"Линии и схемы оживают, соединяя объекты в комнате, камера следует за взглядом ребёнка, подчеркивая его попытки предугадать события."}}
+
+{"scene_id":"scene_068"}
+{"text":"This is an unconscious adaptation: if you can’t control the outside, you try to control your own thoughts."}
+{"start":{"prompt":"Ребёнок сидит в одиночестве, вокруг хаотичная обстановка, но внутри головы визуализируется упорядоченное пространство, символизирующее внутренний контроль."}}
+{"video":{"prompt":"Внешний хаос постепенно затухает, камера плавно перемещается внутрь головы ребёнка, показывая спокойствие и порядок внутри."}}
+
+{"scene_id":"scene_069"}
+{"text":"Studies show that people raised in unstable conditions develop a sharper ability to spot hidden patterns."}
+{"start":{"prompt":"Графики и научные диаграммы на фоне силуэтов детей, выросших в разных условиях. Один из силуэтов выделяется, вокруг него появляются сложные узоры и схемы."}}
+{"video":{"prompt":"Диаграммы оживают, линии соединяются, выделяя силуэт ребёнка, вокруг которого формируются сложные паттерны."}}
+
+{"scene_id":"scene_070"}
+{"text":"Their brains are trained to notice subtle cues, to avoid missing threats or changes."}
+{"start":{"prompt":"Крупный план лица подростка, взгляд сосредоточен, вокруг него всплывают едва заметные детали: тени, жесты, выражения лиц других людей."}}
+{"video":{"prompt":"Камера медленно обходит подростка, детали вокруг становятся ярче, акцентируя внимание на мелких изменениях в окружении."}}
+
+{"scene_id":"scene_071"}
+{"text":"On one hand, this makes them more attentive to details."}
+{"start":{"prompt":"Человек внимательно рассматривает сложную мозаику или картину, взгляд сосредоточен на мелких деталях, фон нейтральный."}}
+{"video":{"prompt":"Камера плавно приближает отдельные фрагменты мозаики, показывая, как человек замечает мельчайшие детали."}}
+
+{"scene_id":"scene_072"}
+{"text":"On the other, it can lead to seeing connections that aren’t really there."}
+{"start":{"prompt":"Тот же человек смотрит на абстрактные линии и точки, которые начинают складываться в несуществующие фигуры и связи."}}
+{"video":{"prompt":"Линии и точки на фоне начинают соединяться в причудливые, несуществующие узоры, камера слегка кружит вокруг человека."}}
+
+{"scene_id":"scene_073"}
+{"text":"The brain keeps forming hypotheses, analyzing, comparing, and returning to the same thoughts to avoid missing anything important."}
+{"start":{"prompt":"Внутри головы человека визуализируются сложные схемы, стрелки, повторяющиеся круги, символизирующие постоянный анализ и возвращение к мыслям."}}
+{"video":{"prompt":"Схемы и стрелки внутри головы двигаются, соединяются, повторяются, камера следует за их движением, создавая ощущение бесконечного анализа."}}
+
+{"scene_id":"scene_074"}
+{"text":"In the end, the habit of overthinking isn’t just a personality trait."}
+{"start":{"prompt":"Человек сидит задумчиво, вокруг него облака мыслей, в которых видны фрагменты прошлого и нейронные связи, атмосфера серьёзная."}}
+{"video":{"prompt":"Облака мыслей медленно движутся вокруг человека, внутри них мелькают воспоминания и нейронные вспышки."}}
+
+{"scene_id":"scene_075"}
+{"text":"It’s how the brain learned to survive uncertainty."}
+{"start":{"prompt":"Изображение мозга, окружённого абстрактными символами неопределённости: туман, размытые силуэты, хаотичные линии."}}
+{"video":{"prompt":"Туман и линии вокруг мозга двигаются, мозг светится изнутри, подчёркивая его адаптацию к неопределённости."}}
+
+{"scene_id":"scene_076"}
+{"text":"It’s an invisible setting, built up over years and reinforced in the brain’s wiring."}
+{"start":{"prompt":"Внутри мозга визуализируются невидимые настройки: сложные нейронные сети, которые постепенно укрепляются и становятся ярче."}}
+{"video":{"prompt":"Нейронные сети внутри мозга пульсируют, разрастаются и становятся всё более сложными, камера медленно отдаляется."}}
+
+{"scene_id":"scene_077"}
+{"text":"The more unpredictability someone faced growing up, the more likely their brain is to lean toward endless analysis and internal dialogue."}
+{"start":{"prompt":"Ряд силуэтов людей разного возраста, у некоторых из них внутри головы видны сложные схемы и облака мыслей, символизирующие внутренний диалог."}}
+{"video":{"prompt":"Камера медленно перемещается вдоль ряда силуэтов, у некоторых облака мыслей и схемы внутри головы становятся ярче и динамичнее."}}
+
+{"scene_id":"scene_078"}
+{"text":"It’s important to note: not all rumination is the same."}
+{"start":{"prompt":"Крупный план задумчивого человека, сидящего в спокойной обстановке, с легкой задумчивой улыбкой, вокруг мягкий рассеянный свет, на лице выражение размышления. На фоне нет отвлекающих деталей, акцент на лице и эмоциях."}}
+{"video":{"prompt":"Камера медленно приближается к лицу человека, подчеркивая его задумчивость и внутренний диалог."}}
+
+{"scene_id":"scene_079"}
+{"text":"Next, let’s look at the different types of repetitive thoughts and why some are especially draining."}
+{"start":{"prompt":"На экране появляется инфографика с двумя разными путями мыслей: один светлый и прямой, другой темный и закрученный, символизирующий разные типы повторяющихся мыслей."}}
+{"video":{"prompt":"Инфографика плавно анимируется: стрелки расходятся в разные стороны, выделяя различие между типами мыслей."}}
+
+{"scene_id":"scene_080"}
+{"text":"Rumination isn’t always negative. It has two sides."}
+{"start":{"prompt":"Два силуэта человека, разделённые вертикальной линией: один в теплых тонах, другой в холодных, оба задумчивы, но выражение лица разное — спокойное и тревожное."}}
+{"video":{"prompt":"Камера медленно перемещается от одного силуэта к другому, подчеркивая контраст между двумя сторонами размышлений."}}
+
+{"scene_id":"scene_081"}
+{"text":"The first is reflective rumination. This happens when someone revisits a past event to understand it."}
+{"start":{"prompt":"Человек смотрит на старую фотографию или воспоминание, вокруг мягкий свет, атмосфера спокойствия и анализа."}}
+{"video":{"prompt":"Камера фокусируется на лице человека, затем плавно переходит к фотографии или визуализации воспоминания."}}
+
+{"scene_id":"scene_082"}
+{"text":"They look for meaning, analyze what could have been done differently."}
+{"start":{"prompt":"Человек задумчиво смотрит в окно, рядом блокнот с заметками, на лице выражение поиска смысла и анализа."}}
+{"video":{"prompt":"Рука человека делает заметки в блокноте, камера плавно двигается от лица к руке и обратно."}}
+
+{"scene_id":"scene_083"}
+{"text":"This is like a careful internal review. There’s movement: questions are asked, answers are found, sometimes new solutions appear."}
+{"start":{"prompt":"Внутренний монолог: над головой человека появляются облака с вопросами и ответами, символизирующие процесс размышления и поиска решений."}}
+{"video":{"prompt":"Облака с вопросами и ответами анимируются, плавно сменяя друг друга, показывая движение мыслей."}}
+
+{"scene_id":"scene_084"}
+{"text":"It’s like untangling a knot—step by step, calmly."}
+{"start":{"prompt":"Крупный план рук, аккуратно распутывающих сложный узел на веревке, вокруг спокойная атмосфера."}}
+{"video":{"prompt":"Руки медленно и аккуратно распутывают узел, показывая постепенность и спокойствие процесса."}}
+
+{"scene_id":"scene_085"}
+{"text":"Reflective rumination can help. It lets people recognize mistakes, understand others’ motives, and draw conclusions."}
+{"start":{"prompt":"Человек улыбается с облегчением, перед ним блокнот с заметками и схемами, на лице выражение понимания и принятия."}}
+{"video":{"prompt":"Камера плавно отъезжает, показывая, как человек делает выводы и чувствует облегчение."}}
+
+{"scene_id":"scene_086"}
+{"text":"This kind of reflection often brings relief or at least a sense that things are clearer."}
+{"start":{"prompt":"Человек глубоко выдыхает, на лице появляется легкая улыбка, вокруг светлеет, атмосфера становится более ясной."}}
+{"video":{"prompt":"Камера медленно поднимается вверх, показывая, как пространство вокруг становится светлее и чище."}}
+
+{"scene_id":"scene_087"}
+{"text":"The other side is brooding. Here, thoughts circle endlessly with no progress."}
+{"start":{"prompt":"Человек сидит, обхватив голову руками, вокруг него темные закрученные линии, символизирующие зацикленные мысли."}}
+{"video":{"prompt":"Темные линии анимируются, вращаясь вокруг головы человека, подчеркивая бесконечный круг мыслей."}}
+
+{"scene_id":"scene_088"}
+{"text":"The person returns to the same pain, grievance, or fear. There’s no search for meaning—just repetition. Everything gets stuck."}
+{"start":{"prompt":"Человек смотрит в одну точку, вокруг повторяющиеся образы боли, обиды или страха, которые не меняются."}}
+{"video":{"prompt":"Образы повторяются по кругу, не давая человеку двигаться вперед, камера медленно вращается вокруг него."}}
+
+{"scene_id":"scene_089"}
+{"text":"Instead of untangling the knot, the person pulls the same end, making it tighter."}
+{"start":{"prompt":"Руки человека тянут за один конец узла, который становится только туже, выражение лица напряженное."}}
+{"video":{"prompt":"Узел затягивается еще сильнее, камера фокусируется на усилии и безрезультатности действий."}}
+
+{"scene_id":"scene_090"}
+{"text":"Brooding doesn’t bring relief. It just increases anxiety, irritation, and guilt. Afterward, the burden feels heavier."}
+{"start":{"prompt":"Человек выглядит уставшим и подавленным, на плечах визуализирован тяжелый груз, лицо выражает тревогу и усталость."}}
+{"video":{"prompt":"Груз на плечах становится визуально тяжелее, человек опускает голову, камера медленно отдаляется."}}
+
+{"scene_id":"scene_091"}
+{"text":"The main difference between these types is movement. Reflective rumination leads to understanding, even if it’s hard. Brooding is stagnation."}
+{"start":{"prompt":"Два пути: один светлый и ведущий вперед, другой темный и замкнутый в круг, по каждому идет человек."}}
+{"video":{"prompt":"Камера разделяется на два направления: один человек идет вперед, другой ходит по кругу, подчеркивая разницу."}}
+
+{"scene_id":"scene_092"}
+{"text":"It brings no new ideas or solutions—just tiredness and a sense of being stuck. Sometimes the line between these states is thin."}
+{"start":{"prompt":"Человек стоит на границе между светлой и темной зоной, выглядит растерянным, вокруг нет новых идей, только усталость."}}
+{"video":{"prompt":"Камера медленно перемещается вдоль границы, показывая, как человек колеблется между двумя состояниями."}}
+
+{"scene_id":"scene_093"}
+{"text":"Someone might start by trying to understand, then slowly shift into being stuck. Why does this happen, and why is it a problem? Let’s look at that."}
+{"start":{"prompt":"Человек сначала анализирует ситуацию, затем постепенно его выражение становится тревожным и он застревает в мыслях, на фоне вопросительный знак."}}
+{"video":{"prompt":"Плавная смена выражения лица с задумчивого на тревожное, камера фокусируется на вопросительном знаке, намекая на дальнейшее объяснение."}}
+
+{"scene_id":"scene_094"}
+{"text":"The process is often unnoticed."}
+{"start":{"prompt":"A close-up of a thoughtful person staring into space, their face neutral and pensive, with soft, diffused lighting highlighting their features. The background is blurred, suggesting an indistinct environment."}}
+{"video":{"prompt":"The camera slowly zooms in on the person's face, emphasizing their distant gaze and subtle expressions of contemplation."}}
+
+{"scene_id":"scene_095"}
+{"text":"At first, reflection seems useful: searching for reasons, analyzing details, trying to understand what went wrong."}
+{"start":{"prompt":"A person sits at a desk with papers and a notebook, pen in hand, looking down thoughtfully. Their posture is attentive, and their brow is slightly furrowed in concentration. The desk is neatly organized, and the setting is calm."}}
+{"video":{"prompt":"The person writes something in the notebook, then pauses, tapping the pen against their chin as they look over the papers, deep in thought."}}
+
+{"scene_id":"scene_096"}
+{"text":"It feels like an internal dialogue aiming for a conclusion."}
+{"start":{"prompt":"A split-screen effect shows the same person on both sides, facing each other as if in conversation. Both versions have thoughtful expressions, one gesturing as if explaining, the other listening intently."}}
+{"video":{"prompt":"The two versions of the person subtly nod and gesture, mimicking a silent conversation, with the camera gently panning between them."}}
+
+{"scene_id":"scene_097"}
+{"text":"But at some point, the process stops moving forward."}
+{"start":{"prompt":"The same person now sits motionless at the desk, staring blankly ahead. The papers and notebook remain untouched, and the lighting is slightly dimmer, creating a stagnant atmosphere."}}
+{"video":{"prompt":"The camera lingers on the person's stillness, emphasizing the lack of movement or progress in the scene."}}
+
+{"scene_id":"scene_098"}
+{"text":"The same thoughts repeat."}
+{"start":{"prompt":"A visual loop: the person repeatedly flips through the same page in the notebook, their expression unchanged, suggesting monotony and repetition."}}
+{"video":{"prompt":"The action of flipping the page loops seamlessly, highlighting the endless cycle of repeating thoughts."}}
+
+{"scene_id":"scene_099"}
+{"text":"There’s an illusion of progress—the sense that an answer is just out of reach."}
+{"start":{"prompt":"The person reaches toward a glowing, blurry object just beyond their grasp on the desk, their hand outstretched and face hopeful yet frustrated."}}
+{"video":{"prompt":"The glowing object seems to move further away as the person reaches, creating a sense of unattainable progress."}}
+
+{"scene_id":"scene_100"}
+{"text":"The brain gives a familiar feeling: “I’m close to the core.”"}
+{"start":{"prompt":"A stylized visualization of a brain with a glowing center, radiating soft light. The words 'I’m close to the core' appear faintly around the glowing area."}}
+{"video":{"prompt":"The glow in the center of the brain pulses gently, as if signaling a sense of anticipation or nearness to a solution."}}
+
+{"scene_id":"scene_101"}
+{"text":"But this is a trap."}
+{"start":{"prompt":"A visual metaphor: the person is shown standing in a transparent box, looking around with a puzzled expression, unaware of the invisible walls confining them."}}
+{"video":{"prompt":"The camera circles the box, revealing the invisible barriers as the person gently presses against them, realizing they are trapped."}}
+
+{"scene_id":"scene_102"}
+{"text":"In reality, there’s no movement—just repetition, which increases tiredness and anxiety."}
+{"start":{"prompt":"The person sits slumped at the desk, dark circles under their eyes, surrounded by crumpled papers. The atmosphere is heavy, and their posture shows exhaustion and stress."}}
+{"video":{"prompt":"The lighting dims further, and the person's head slowly lowers onto their arms, emphasizing growing fatigue and anxiety."}}
+
+{"scene_id":"scene_103"}
+{"text":"Why does this happen? It’s not just habit. Dopamine is involved."}
+{"start":{"prompt":"A thought bubble appears above the person's head, showing a stylized dopamine molecule and a looping arrow, indicating a cycle. The person looks up at the bubble, curious and slightly confused."}}
+{"video":{"prompt":"The dopamine molecule in the bubble glows briefly, and the looping arrow animates to show the cycle repeating."}}
+
+{"scene_id":"scene_104"}
+{"text":"Usually, dopamine is linked to pleasure and motivation. Here, it works differently."}
+{"start":{"prompt":"A split image: on one side, a happy person receives a reward (like a gold star), on the other, the same person sits alone, lost in thought, with a faint dopamine symbol above their head."}}
+{"video":{"prompt":"The gold star on the left sparkles, while on the right, the dopamine symbol pulses faintly, contrasting the two scenarios."}}
+
+{"scene_id":"scene_105"}
+{"text":"Each time a familiar thought returns, the brain gets a small dopamine reward."}
+{"start":{"prompt":"A stylized brain illustration with small bursts of light each time a circular arrow loops back to the same spot, representing the return of familiar thoughts."}}
+{"video":{"prompt":"The bursts of light appear in sync with the looping arrow, showing the brain receiving small rewards repeatedly."}}
+
+{"scene_id":"scene_106"}
+{"text":"A subtle signal: “You’re on the right track, keep thinking.”"}
+{"start":{"prompt":"A glowing sign inside the brain illustration reads 'You’re on the right track, keep thinking.' The sign is subtle, almost blending into the background."}}
+{"video":{"prompt":"The sign flickers gently, drawing the viewer’s attention to the misleading encouragement."}}
+
+{"scene_id":"scene_107"}
+{"text":"But there is no track—just repetition. So a closed cycle forms."}
+{"start":{"prompt":"A person walks in circles on a path that loops endlessly, with no exit in sight. The path is clearly marked but leads nowhere."}}
+{"video":{"prompt":"The camera pulls back to reveal the endless loop, emphasizing the closed cycle and lack of progress."}}
+
+{"scene_id":"scene_108"}
+{"text":"The brain reinforces the loop because it’s rewarded for it. There’s a sense of doing something important, but really, you’re just stuck."}
+{"start":{"prompt":"The person sits at a desk with a satisfied expression, surrounded by stacks of identical papers, unaware that nothing has changed. A faint dopamine symbol hovers above their head."}}
+{"video":{"prompt":"The person smiles and nods, but the camera slowly reveals the repetitive nature of their actions and the unchanged environment."}}
+
+{"scene_id":"scene_109"}
+{"text":"The longer this goes on, the harder it is to break free. Is it possible to interrupt this cycle, or does the mind always win? Why do some people fall into these traps more than others? And how does this connect to their ability to sense others?"}
+{"start":{"prompt":"A montage: the person stands at the edge of a maze, looking uncertain; another person breaks free from a loop; a third person observes others thoughtfully, suggesting empathy and self-awareness."}}
+{"video":{"prompt":"The camera transitions between the different people, highlighting their struggles and moments of realization, ending with a thoughtful pause on the last person."}}
+
+{"scene_id":"scene_110"}
+{"text":"There’s a trait often missed in people who overthink."}
+{"start":{"prompt":"A thoughtful person sits alone, looking pensive, with subtle facial expression suggesting deep contemplation. The background is neutral, focusing attention on the person's face and posture."}}
+{"video":{"prompt":"Camera slowly zooms in on the person's face, highlighting their thoughtful expression and the subtle tension in their eyes."}}
+
+{"scene_id":"scene_111"}
+{"text":"They don’t just think a lot—they often feel more deeply."}
+{"start":{"prompt":"Close-up of the same person, now with a hand over their heart, eyes slightly moist, conveying a sense of emotional depth and sensitivity."}}
+{"video":{"prompt":"A gentle shimmer effect around the heart area, suggesting deep feelings, while the camera lingers on the person's expressive face."}}
+
+{"scene_id":"scene_112"}
+{"text":"This isn’t a coincidence."}
+{"start":{"prompt":"A simple, direct shot of the person looking at the camera, as if making an important point, with a serious and knowing expression."}}
+{"video":{"prompt":"Camera holds steady, then slowly fades to the next scene, emphasizing the significance of the statement."}}
+
+{"scene_id":"scene_113"}
+{"text":"In 2013, a study found that people who get stuck in thought more often have higher levels of cognitive empathy."}
+{"start":{"prompt":"A visual of a research paper or scientific article dated 2013, with highlighted text about cognitive empathy, and a silhouette of a person surrounded by thought bubbles."}}
+{"video":{"prompt":"Animated highlight moves across the text, and thought bubbles gently pulse to indicate active thinking."}}
+
+{"scene_id":"scene_114"}
+{"text":"This isn’t about sympathy or pity."}
+{"start":{"prompt":"A split-screen showing the words 'Sympathy' and 'Pity' crossed out, while 'Cognitive Empathy' is highlighted in bold."}}
+{"video":{"prompt":"The camera pans from the crossed-out words to the highlighted 'Cognitive Empathy,' drawing attention to the distinction."}}
+
+{"scene_id":"scene_115"}
+{"text":"Cognitive empathy is the ability to accurately sense what another person feels or thinks, even without words."}
+{"start":{"prompt":"Two people sit facing each other in silence, one person intuitively sensing the other's emotions, with subtle facial cues and body language."}}
+{"video":{"prompt":"A soft glow connects the two people, visually representing the silent understanding between them."}}
+
+{"scene_id":"scene_116"}
+{"text":"Why does this happen?"}
+{"start":{"prompt":"A person with a questioning expression, surrounded by floating question marks, as if pondering the reason behind their own behavior."}}
+{"video":{"prompt":"Question marks gently rotate around the person's head, emphasizing curiosity and introspection."}}
+
+{"scene_id":"scene_117"}
+{"text":"When someone tends to overthink, their brain constantly analyzes details: words, tone, gestures, even pauses."}
+{"start":{"prompt":"A stylized brain with animated lines connecting to floating icons representing words, speech bubbles, hand gestures, and pauses."}}
+{"video":{"prompt":"Icons light up one by one as the brain sends out signals, showing the process of constant analysis."}}
+
+{"scene_id":"scene_118"}
+{"text":"Attention is drawn to nuances."}
+{"start":{"prompt":"A magnifying glass hovers over subtle facial expressions and small gestures, highlighting tiny details in a social interaction."}}
+{"video":{"prompt":"Magnifying glass moves smoothly across the scene, zooming in on different nuanced expressions and gestures."}}
+
+{"scene_id":"scene_119"}
+{"text":"As a result, the person quickly picks up on changes in someone’s mood, notices hidden emotions, senses tension—even if nothing is said."}
+{"start":{"prompt":"A person in a group setting subtly notices another person's shift in mood, with faint visual cues like a change in posture or facial expression."}}
+{"video":{"prompt":"Camera focuses on the observer's eyes, then shifts to the subtle changes in the other person's demeanor, highlighting the detection of hidden emotions."}}
+
+{"scene_id":"scene_120"}
+{"text":"Research shows these people have higher social sensitivity."}
+{"start":{"prompt":"A bar graph or chart labeled 'Social Sensitivity,' with one bar significantly higher, and a silhouette of a person next to it."}}
+{"video":{"prompt":"The high bar animates upward, drawing attention to the increased social sensitivity, while the silhouette glows softly."}}
+
+{"scene_id":"scene_121"}
+{"text":"They notice when someone is upset, even if it’s hidden."}
+{"start":{"prompt":"A person discreetly observing another who is trying to hide their sadness, with subtle tears or a forced smile."}}
+{"video":{"prompt":"Camera slowly zooms in on the observer, then shifts focus to the hidden sadness of the other person, emphasizing the act of noticing."}}
+
+{"scene_id":"scene_122"}
+{"text":"They sense when something is off in a group, when someone withdraws, or when the mood shifts."}
+{"start":{"prompt":"A group of people interacting, with one person slightly apart or withdrawn, and the observer noticing the change in group dynamics."}}
+{"video":{"prompt":"Camera pans across the group, highlighting the withdrawn individual and the observer's attentive gaze."}}
+
+{"scene_id":"scene_123"}
+{"text":"This isn’t intuition; it’s the result of constant internal processing."}
+{"start":{"prompt":"A person surrounded by swirling thought patterns and gears, indicating active mental processing rather than mystical intuition."}}
+{"video":{"prompt":"Gears and thought patterns animate around the person's head, reinforcing the idea of ongoing internal analysis."}}
+
+{"scene_id":"scene_124"}
+{"text":"But this sensitivity also makes them more vulnerable to others’ emotions."}
+{"start":{"prompt":"The sensitive person appears weighed down or affected by a cloud of emotions emanating from people around them."}}
+{"video":{"prompt":"Emotional clouds drift from others toward the sensitive person, who visibly reacts, showing vulnerability."}}
+
+{"scene_id":"scene_125"}
+{"text":"They don’t just notice when someone nearby is upset—they start to feel it themselves, sometimes even more strongly. This isn’t a choice, but a side effect of the same tendency to overthink. A mind that’s always analyzing can’t easily switch off, even with others’ feelings. So, the overthinker often becomes an “emotional barometer”—the first to notice changes, the first to sense tension, the first to worry about others. This might look like a gift, but it’s just another side of the same mechanism that causes mental traps."}
+{"start":{"prompt":"A montage: the overthinker surrounded by people, visibly absorbing their emotions, with a metaphorical barometer overlay showing fluctuating readings. The overthinker looks both empathetic and burdened."}}
+{"video":{"prompt":"Barometer needle moves rapidly as the overthinker reacts to others' emotions; camera shifts between faces in the crowd and the overthinker's changing expressions, ending with a thoughtful, slightly troubled look."}}
+
+{"scene_id":"scene_126"}
+{"text":"Overthinking can seem useful—as if you’re always searching for solutions, unable to relax until everything is clear."}
+{"start":{"prompt":"Человек сидит за столом, задумчиво смотрит в одну точку, вокруг него множество листов с заметками и схемами, на лице напряжённое выражение, в комнате приглушённый свет, создающий атмосферу поиска решения."}}
+{"video":{"prompt":"Камера медленно приближается к лицу человека, показывая его сосредоточенность и внутреннее напряжение, вокруг головы появляются анимированные мысли и вопросы."}}
+
+{"scene_id":"scene_127"}
+{"text":"But this comes with a hidden cost: constant tension."}
+{"start":{"prompt":"Крупный план лица человека, на лбу видны морщины от напряжения, плечи подняты, руки сжаты в кулаки, фон слегка размытый, чтобы подчеркнуть внутреннее напряжение."}}
+{"video":{"prompt":"Плавное движение камеры вдоль тела, показывающее напряжённые мышцы и жесты, вокруг головы появляется визуализация напряжения в виде пульсирующих линий."}}
+
+{"scene_id":"scene_128"}
+{"text":"The brain works nonstop, even during simple tasks or while trying to sleep."}
+{"start":{"prompt":"Человек выполняет простое действие, например, наливает воду в стакан, но в его голове видны анимированные шестерёнки и схемы, символизирующие непрерывную работу мозга."}}
+{"video":{"prompt":"Анимация мыслей и шестерёнок продолжается даже когда человек ложится в кровать, показывая, что мозг не останавливается ни на минуту."}}
+
+{"scene_id":"scene_129"}
+{"text":"Inside, it feels like carrying a weight that can’t be put down or shared."}
+{"start":{"prompt":"Внутри силуэта человека изображён тяжёлый груз или камень, который он несёт на спине, лицо выражает усталость и безысходность, фон тёмный и давящий."}}
+{"video":{"prompt":"Камера медленно обходит человека, показывая, как груз остаётся с ним, несмотря на попытки его сбросить или поделиться с кем-то."}}
+
+{"scene_id":"scene_130"}
+{"text":"Outwardly, it might look like ordinary tiredness."}
+{"start":{"prompt":"Человек сидит на рабочем месте, опирается головой на руку, глаза полузакрыты, окружающие не обращают на него внимания, атмосфера обычного офиса."}}
+{"video":{"prompt":"Камера плавно отдаляется, показывая, что для окружающих человек выглядит просто уставшим, без признаков внутренней борьбы."}}
+
+{"scene_id":"scene_131"}
+{"text":"Inside, it’s a specific kind of depletion."}
+{"start":{"prompt":"Внутри силуэта человека изображён опустошённый резервуар или пустая батарейка, лицо выражает глубокую усталость, фон становится более холодным и тусклым."}}
+{"video":{"prompt":"Анимация показывает, как уровень энергии внутри человека падает до минимума, несмотря на внешнее спокойствие."}}
+
+{"scene_id":"scene_132"}
+{"text":"You wake up already tired, because your mind kept spinning through the night."}
+{"start":{"prompt":"Человек просыпается утром, лежит в кровати с усталым выражением лица, под глазами тёмные круги, на фоне видны анимированные мысли, кружащиеся вокруг головы."}}
+{"video":{"prompt":"Камера медленно поднимается от кровати к лицу человека, показывая, что мысли не прекращались даже во сне."}}
+
+{"scene_id":"scene_133"}
+{"text":"During the day, there’s a sense of being on edge, even if nothing is happening."}
+{"start":{"prompt":"Человек сидит в пустой комнате, напряжённо смотрит в окно, руки сжаты, поза напряжённая, вокруг тишина и спокойствие."}}
+{"video":{"prompt":"Камера плавно обходит человека, подчеркивая его внутреннее напряжение на фоне внешнего спокойствия."}}
+
+{"scene_id":"scene_134"}
+{"text":"There’s a constant feeling of having missed something, misunderstood, or left something unresolved."}
+{"start":{"prompt":"Вокруг головы человека появляются анимированные иконки вопросительных знаков, недостающих пазлов и незаконченных дел, лицо выражает тревогу и неуверенность."}}
+{"video":{"prompt":"Анимация показывает, как эти иконки постоянно сменяются и не исчезают, создавая ощущение незавершённости."}}
+
+{"scene_id":"scene_135"}
+{"text":"The paradox is that the more you think, the less energy you have for action."}
+{"start":{"prompt":"Человек стоит перед двумя дверями: одна ведёт к действиям, другая к мыслям, он колеблется, выглядит уставшим, а за дверью мыслей видны вихри и тени."}}
+{"video":{"prompt":"Камера фокусируется на лице человека, показывая его усталость, затем плавно перемещается к двери действий, которая кажется всё дальше."}}
+
+{"scene_id":"scene_136"}
+{"text":"At some point, thoughts start to get in the way of living."}
+{"start":{"prompt":"Человек пытается пройти по улице, но перед ним появляются прозрачные стены или лабиринт из мыслей, которые мешают двигаться вперёд."}}
+{"video":{"prompt":"Анимация показывает, как человек сталкивается с невидимыми преградами, символизирующими мешающие мысли."}}
+
+{"scene_id":"scene_137"}
+{"text":"Rest becomes hard, even when you’re not doing anything."}
+{"start":{"prompt":"Человек лежит на диване, закрыв глаза, но его лицо напряжено, вокруг головы появляются анимированные волны беспокойства."}}
+{"video":{"prompt":"Камера медленно приближается к лицу, показывая, что даже в покое человек не может расслабиться."}}
+
+{"scene_id":"scene_138"}
+{"text":"The mind produces a constant noise that won’t go away."}
+{"start":{"prompt":"Внутри головы человека изображён хаотичный поток мыслей, символизированный шумовыми волнами и беспорядочными линиями, лицо выражает раздражение."}}
+{"video":{"prompt":"Анимация усиливает визуализацию шума, волны становятся ярче и интенсивнее, подчёркивая постоянство этого состояния."}}
+
+{"scene_id":"scene_139"}
+{"text":"This isn’t just annoying—it’s exhausting."}
+{"start":{"prompt":"Человек сидит, опустив голову, плечи поникли, вокруг него визуализированы волны усталости и истощения, фон становится тусклым и размытым."}}
+{"video":{"prompt":"Камера медленно отдаляется, показывая, как человек остаётся один на фоне размытых очертаний, подчёркивая его истощение."}}
+
+{"scene_id":"scene_140"}
+{"text":"Here, the main limit of thinking becomes clear."}
+{"start":{"prompt":"A thoughtful person sits alone in a quiet, dimly lit room, surrounded by books and notes, looking contemplative and slightly frustrated, as if realizing something important about their own mind."}}
+{"video":{"prompt":"Camera slowly zooms in on the person's face as their expression shifts from concentration to a subtle realization, emphasizing the moment of clarity."}}
+
+{"scene_id":"scene_141"}
+{"text":"Not all problems can be solved by thinking alone."}
+{"start":{"prompt":"A close-up of the same person, now with a furrowed brow, staring at a complex puzzle or unsolved equation on a desk, hands resting on their temples."}}
+{"video":{"prompt":"The person sighs and leans back, the puzzle pieces remain unmoved, highlighting the sense of mental limitation."}}
+
+{"scene_id":"scene_142"}
+{"text":"Some situations don’t change, no matter how many times you go over them."}
+{"start":{"prompt":"A clock on the wall shows time passing as the person repeatedly reviews the same notes, the environment unchanged, symbolizing stagnation."}}
+{"video":{"prompt":"The hands of the clock spin quickly while the person flips through the same pages, showing the passage of time without progress."}}
+
+{"scene_id":"scene_143"}
+{"text":"Some questions have no answer, no matter how hard you try."}
+{"start":{"prompt":"A stack of unanswered letters or a blackboard filled with unsolved questions, the person looking at them with a sense of helplessness."}}
+{"video":{"prompt":"The person writes a question on the board, pauses, and then erases it in frustration, emphasizing the lack of answers."}}
+
+{"scene_id":"scene_144"}
+{"text":"Still, the mind keeps going—hoping that this time, a solution will appear."}
+{"start":{"prompt":"The person sits with eyes closed, deep in thought, surrounded by swirling abstract shapes representing persistent thoughts and hope for a breakthrough."}}
+{"video":{"prompt":"The abstract shapes gently move around the person's head, symbolizing ongoing mental activity and hope."}}
+
+{"scene_id":"scene_145"}
+{"text":"The result is a closed loop: the more you try to think through everything, the more tired you get."}
+{"start":{"prompt":"A visual loop: the person walks in circles around the room, looking increasingly fatigued with each lap, papers scattered along their path."}}
+{"video":{"prompt":"The camera follows the person as they repeat their circular path, their posture slumping more with each round, showing growing exhaustion."}}
+
+{"scene_id":"scene_146"}
+{"text":"The more exhausted you are, the harder it is to stop."}
+{"start":{"prompt":"The person sits slumped at a desk, eyes heavy, but still trying to write or think, unable to break away from the task."}}
+{"video":{"prompt":"The person's hand trembles as they try to write, eyelids drooping, but they force themselves to continue."}}
+
+{"scene_id":"scene_147"}
+{"text":"There’s a fear that if you stop thinking, you’ll miss something important."}
+{"start":{"prompt":"The person glances nervously at a closed notebook, hesitant to put it away, as if afraid of missing a crucial idea."}}
+{"video":{"prompt":"The person reaches for the notebook, hesitates, and then clutches it tightly, showing reluctance to let go."}}
+
+{"scene_id":"scene_148"}
+{"text":"But the longer this goes on, the less meaning there is, and the more tired you become."}
+{"start":{"prompt":"The room grows darker and messier, the person looking lost and drained, surrounded by scattered papers and fading light."}}
+{"video":{"prompt":"The lighting dims further, and the person’s movements slow, emphasizing increasing fatigue and loss of purpose."}}
+
+{"scene_id":"scene_149"}
+{"text":"This brings up a key question: what to do when thinking doesn’t help?"}
+{"start":{"prompt":"A close-up of the person’s face, eyes wide with uncertainty, as a large question mark appears in the background."}}
+{"video":{"prompt":"The camera slowly pans around the person, highlighting their confusion and the looming question mark."}}
+
+{"scene_id":"scene_150"}
+{"text":"How do you get out of the cycle when analysis has become a habit?"}
+{"start":{"prompt":"The person stands at a crossroads, one path looping back on itself, the other leading into a bright, open space, symbolizing choice."}}
+{"video":{"prompt":"The person hesitates, looking between the looping path and the open one, unsure which way to go."}}
+
+{"scene_id":"scene_151"}
+{"text":"The answer isn’t to think even more."}
+{"start":{"prompt":"The person shakes their head, pushing away a pile of notes, signaling a rejection of further analysis."}}
+{"video":{"prompt":"The person firmly closes a notebook and sets it aside, making a decisive gesture to stop overthinking."}}
+
+{"scene_id":"scene_152"}
+{"text":"What does it actually mean to step out of the loop?"}
+{"start":{"prompt":"The person stands at the edge of the looping path, looking thoughtfully toward the open, sunlit path ahead."}}
+{"video":{"prompt":"The camera slowly zooms out, showing the person contemplating the possibility of leaving the loop behind."}}
+
+{"scene_id":"scene_153"}
+{"text":"How does it work in practice?"}
+{"start":{"prompt":"The person takes a tentative step onto the open path, leaving the circular path behind, with light illuminating their way."}}
+{"video":{"prompt":"The person walks forward with growing confidence, the environment becoming brighter and more vibrant as they move away from the loop."}}
+
+{"scene_id":"scene_154"}
+{"text":"There are approaches that don’t suggest fighting thoughts, but changing your relationship to them."}
+{"start":{"prompt":"A calm, neutral-toned room with a person sitting thoughtfully, surrounded by soft light. The person appears relaxed, not tense, and there are no signs of struggle or conflict in their expression or posture."}}
+{"video":{"prompt":"Camera slowly zooms in on the person's face as they reflect, emphasizing a sense of acceptance and contemplation rather than resistance."}}
+
+{"scene_id":"scene_155"}
+{"text":"One is ACT—Acceptance and Commitment Therapy."}
+{"start":{"prompt":"A close-up of a book or pamphlet titled 'ACT—Acceptance and Commitment Therapy' lying on a table, with a hand gently resting nearby."}}
+{"video":{"prompt":"The camera pans over the title of the book, highlighting the words 'Acceptance and Commitment Therapy' as the hand lightly taps the cover."}}
+
+{"scene_id":"scene_156"}
+{"text":"The main idea isn’t to push thoughts away, but to notice them."}
+{"start":{"prompt":"A person sitting quietly with eyes closed, a gentle expression on their face, as faint thought bubbles appear above their head."}}
+{"video":{"prompt":"The thought bubbles slowly appear and float above the person's head, while the person remains calm and observant."}}
+
+{"scene_id":"scene_157"}
+{"text":"Not to argue or prove them wrong, but just to see: this thought has appeared, and it’s here."}
+{"start":{"prompt":"A person looking at a single thought bubble in front of them, not interacting with it, just observing it with a neutral expression."}}
+{"video":{"prompt":"The thought bubble gently pulses or glows, while the person simply watches it without reacting."}}
+
+{"scene_id":"scene_158"}
+{"text":"In ACT, this is called cognitive defusion."}
+{"start":{"prompt":"A diagram or visual label appears next to the person, with the words 'Cognitive Defusion' in clear, bold letters."}}
+{"video":{"prompt":"The label 'Cognitive Defusion' fades in smoothly next to the person, drawing attention to the concept."}}
+
+{"scene_id":"scene_159"}
+{"text":"Imagine thoughts as clouds in the sky."}
+{"start":{"prompt":"A serene sky filled with soft, fluffy clouds drifting gently, with a subtle overlay of thought bubbles transforming into clouds."}}
+{"video":{"prompt":"The thought bubbles morph into clouds and begin to drift slowly across the sky."}}
+
+{"scene_id":"scene_160"}
+{"text":"They appear, pass by, and disappear."}
+{"start":{"prompt":"A wide view of the sky as clouds form, move across the frame, and gradually fade away."}}
+{"video":{"prompt":"Clouds move gently from one side of the sky to the other, dissolving as they exit the frame."}}
+
+{"scene_id":"scene_161"}
+{"text":"You don’t have to grab every cloud."}
+{"start":{"prompt":"A person standing under the sky, looking up at the clouds with hands relaxed at their sides, making no attempt to reach for the clouds."}}
+{"video":{"prompt":"The camera pans upward from the person to the drifting clouds, emphasizing the distance and the person's passive stance."}}
+
+{"scene_id":"scene_162"}
+{"text":"You don’t have to believe every thought that comes up."}
+{"start":{"prompt":"A person observes several thought bubbles floating by, each with different words inside, while the person remains calm and detached."}}
+{"video":{"prompt":"The thought bubbles float past the person, who watches them without reacting or trying to catch them."}}
+
+{"scene_id":"scene_163"}
+{"text":"This isn’t about stopping thinking, or convincing yourself that thoughts don’t matter."}
+{"start":{"prompt":"A person sits peacefully with eyes open, surrounded by faint, transparent thought bubbles, showing that thoughts are present but not overwhelming."}}
+{"video":{"prompt":"The thought bubbles gently move around the person, never disappearing, illustrating ongoing thoughts."}}
+
+{"scene_id":"scene_164"}
+{"text":"It’s about not merging with them."}
+{"start":{"prompt":"A person stands with a clear boundary between themselves and a cluster of thought bubbles, emphasizing separation."}}
+{"video":{"prompt":"The thought bubbles approach the boundary but do not cross it, highlighting the distinction between the person and their thoughts."}}
+
+{"scene_id":"scene_165"}
+{"text":"When someone is stuck in overthinking, they become fused with their thoughts—it feels like this is all they are."}
+{"start":{"prompt":"A person surrounded and almost engulfed by swirling thought bubbles, their face showing confusion or overwhelm."}}
+{"video":{"prompt":"The thought bubbles swirl tightly around the person, partially obscuring them, to illustrate fusion with thoughts."}}
+
+{"scene_id":"scene_166"}
+{"text":"Stepping back lets you see: thoughts have their own flow, but they aren’t you."}
+{"start":{"prompt":"The person takes a step back from the cluster of thought bubbles, which continue to float independently, while the person looks on with clarity."}}
+{"video":{"prompt":"The camera pulls back as the person steps away, and the thought bubbles drift freely, showing separation and perspective."}}
+
+{"scene_id":"scene_167"}
+{"text":"Therapy often uses simple exercises."}
+{"start":{"prompt":"A therapist and client sit across from each other in a comfortable office, with a notepad and pen on the table."}}
+{"video":{"prompt":"The therapist gestures gently, suggesting the introduction of an exercise, while the client listens attentively."}}
+
+{"scene_id":"scene_168"}
+{"text":"For example, mentally naming a thought: “Right now, I have the thought that I won’t manage.”"}
+{"start":{"prompt":"A close-up of a person with a thought bubble above their head containing the words: 'Right now, I have the thought that I won’t manage.'"}}
+{"video":{"prompt":"The thought bubble appears above the person's head as they silently read or acknowledge the words inside."}}
+
+{"scene_id":"scene_169"}
+{"text":"Or picturing the thought written on a piece of paper floating down a river. This isn’t a trick; it’s a way to see that a thought is just an event in the mind, not an absolute truth."}
+{"start":{"prompt":"A peaceful river scene with a piece of paper floating gently on the water, the paper has a thought written on it, and a person watches from the riverbank."}}
+{"video":{"prompt":"The camera follows the piece of paper as it floats downstream, gradually moving away from the person, symbolizing letting go of the thought."}}
+
+{"scene_id":"scene_170"}
+{"text":"This is different from the usual approach."}
+{"start":{"prompt":"A split-screen comparison: on one side, a person sits at a desk looking frustrated, surrounded by thought bubbles; on the other side, the same person appears calm and contemplative, observing the bubbles without reacting."}}
+{"video":{"prompt":"Camera slowly zooms in on the calm side, emphasizing the contrast between frustration and calm observation."}}
+
+{"scene_id":"scene_171"}
+{"text":"Usually, people try to argue with their thoughts, to find counterarguments."}
+{"start":{"prompt":"A person sits with furrowed brows, pointing at a floating thought bubble, while other bubbles with question marks and exclamation points hover around, representing counterarguments."}}
+{"video":{"prompt":"Animated thought bubbles bounce as the person gestures, showing an internal debate."}}
+
+{"scene_id":"scene_172"}
+{"text":"The more you argue, the more stubborn the thought gets."}
+{"start":{"prompt":"A thought bubble grows larger and darker as the person continues to argue with it, looking increasingly frustrated."}}
+{"video":{"prompt":"The thought bubble pulses and expands, resisting the person's attempts to push it away."}}
+
+{"scene_id":"scene_173"}
+{"text":"ACT suggests observing, not arguing."}
+{"start":{"prompt":"A calm person sits cross-legged, eyes gently open, watching thought bubbles float by without interacting with them."}}
+{"video":{"prompt":"Thought bubbles drift slowly past the person, who remains still and peaceful."}}
+
+{"scene_id":"scene_174"}
+{"text":"Letting go, not fighting."}
+{"start":{"prompt":"The person opens their hand, releasing a thought bubble that gently floats upward and away."}}
+{"video":{"prompt":"The thought bubble rises and fades as the person relaxes, symbolizing letting go."}}
+
+{"scene_id":"scene_175"}
+{"text":"This doesn’t mean thoughts will disappear."}
+{"start":{"prompt":"Several thought bubbles remain visible around the person, who acknowledges them with a calm expression."}}
+{"video":{"prompt":"The bubbles gently hover in place, showing that thoughts persist but are not overwhelming."}}
+
+{"scene_id":"scene_176"}
+{"text":"They’ll keep coming."}
+{"start":{"prompt":"New thought bubbles appear one after another around the person, who remains composed."}}
+{"video":{"prompt":"Bubbles slowly materialize and float by, illustrating the ongoing nature of thoughts."}}
+
+{"scene_id":"scene_177"}
+{"text":"But if you don’t grab onto each thought or try to control them, they lose their grip."}
+{"start":{"prompt":"The person sits with open hands, letting thought bubbles pass by without reaching for them; the bubbles become lighter and more transparent."}}
+{"video":{"prompt":"Bubbles drift past and gradually fade, showing their diminishing influence."}}
+
+{"scene_id":"scene_178"}
+{"text":"It becomes clear: not everything that comes to mind needs a response."}
+{"start":{"prompt":"A person looks thoughtfully at a single thought bubble, then gently turns away, leaving the bubble behind."}}
+{"video":{"prompt":"Camera pans as the person shifts focus from the bubble to the open space ahead, symbolizing clarity."}}
+
+{"scene_id":"scene_179"}
+{"text":"Not all thoughts are instructions for action."}
+{"start":{"prompt":"Several thought bubbles appear, some with images of actions inside, but the person calmly observes without reacting."}}
+{"video":{"prompt":"The action-filled bubbles float by without the person moving, emphasizing non-reactivity."}}
+
+{"scene_id":"scene_180"}
+{"text":"This approach doesn’t treat thoughts as enemies."}
+{"start":{"prompt":"The person sits peacefully among thought bubbles, none of which appear threatening or aggressive."}}
+{"video":{"prompt":"Bubbles gently float around the person, who smiles softly, showing acceptance."}}
+
+{"scene_id":"scene_181"}
+{"text":"It encourages seeing them as they are—just thoughts."}
+{"start":{"prompt":"The person looks at a thought bubble with curiosity and neutrality, recognizing it as harmless."}}
+{"video":{"prompt":"The bubble becomes semi-transparent, highlighting its insubstantial nature."}}
+
+{"scene_id":"scene_182"}
+{"text":"This changes the whole dynamic."}
+{"start":{"prompt":"The scene shifts to a brighter, more open space with the person appearing relaxed and content, surrounded by faint, non-intrusive thought bubbles."}}
+{"video":{"prompt":"Camera pulls back to reveal a peaceful environment, symbolizing a positive shift in mindset."}}
+
+{"scene_id":"scene_183"}
+{"text":"Look at overthinking from another angle."}
+{"start":{"prompt":"A thoughtful person sits alone, looking contemplative, as if considering a new perspective. The setting is calm, with soft lighting and a neutral background, emphasizing introspection."}}
+{"video":{"prompt":"Camera slowly zooms in on the person's face as their expression shifts from worry to curiosity, suggesting a change in viewpoint."}}
+
+{"scene_id":"scene_184"}
+{"text":"It’s often seen as a flaw—something broken that needs fixing."}
+{"start":{"prompt":"A close-up of a brain illustration with cracks or puzzle pieces missing, symbolizing the perception of overthinking as a flaw. The background is muted, focusing attention on the brain."}}
+{"video":{"prompt":"The cracks or missing pieces in the brain illustration gently pulse or glow, highlighting the idea of something needing repair."}}
+
+{"scene_id":"scene_185"}
+{"text":"But overthinking is an adaptation."}
+{"start":{"prompt":"A brain illustration transforms, showing gears and mechanisms inside, representing adaptation and evolution. The image is clear and detailed, with a sense of positive transformation."}}
+{"video":{"prompt":"The gears inside the brain begin to turn smoothly, symbolizing the adaptive function of overthinking."}}
+
+{"scene_id":"scene_186"}
+{"text":"It’s the mind’s way of staying safe."}
+{"start":{"prompt":"A person is shown with a protective bubble or shield around their head, symbolizing the mind's instinct to protect. The environment outside the bubble appears uncertain or shadowy."}}
+{"video":{"prompt":"The protective bubble gently shimmers, reinforcing the sense of safety and security provided by the mind."}}
+
+{"scene_id":"scene_187"}
+{"text":"When overthinking happens, the brain scans for threats, replays situations, and looks for patterns."}
+{"start":{"prompt":"A stylized brain with animated lines and icons representing scanning, replaying memories, and pattern recognition. The background is dark, highlighting the brain's activity."}}
+{"video":{"prompt":"Icons and lines move rapidly around the brain, simulating scanning for threats, replaying events, and connecting patterns."}}
+
+{"scene_id":"scene_188"}
+{"text":"It’s not a sign of weakness."}
+{"start":{"prompt":"A confident person stands tall, with a subtle glow around their head, rejecting the idea of weakness. The background is uplifting and bright."}}
+{"video":{"prompt":"The glow around the person's head intensifies slightly, emphasizing inner strength and resilience."}}
+
+{"scene_id":"scene_189"}
+{"text":"It’s proof that the mind is trying to protect from uncertainty, mistakes, or pain."}
+{"start":{"prompt":"A brain is shown with gentle, protective hands around it, shielding it from abstract shapes representing uncertainty, mistakes, and pain. The scene is soft and reassuring."}}
+{"video":{"prompt":"The protective hands subtly move, blocking the abstract shapes as they approach the brain, reinforcing the idea of protection."}}
+
+{"scene_id":"scene_190"}
+{"text":"The same brain that generates endless thoughts at night is the one that notices subtle shifts in others’ moods and picks up on details others miss."}
+{"start":{"prompt":"A split scene: on one side, a person lies awake at night with swirling thought bubbles above their head; on the other, the same person observes a group, noticing small changes in facial expressions and details."}}
+{"video":{"prompt":"The thought bubbles swirl and fade into scenes of the person attentively observing others, highlighting their sensitivity and attention to detail."}}
+
+{"scene_id":"scene_191"}
+{"text":"This sensitivity isn’t random; it’s a system built for survival."}
+{"start":{"prompt":"A close-up of a brain with highlighted neural pathways, overlaid with evolutionary imagery such as ancient humans on alert. The scene connects sensitivity to survival."}}
+{"video":{"prompt":"Neural pathways light up, then dissolve into images of ancient humans scanning their environment, illustrating the evolutionary purpose of sensitivity."}}
+
+{"scene_id":"scene_192"}
+{"text":"In the past, constant alertness was useful."}
+{"start":{"prompt":"A prehistoric human stands in a wild landscape, alert and watchful, scanning for danger. The environment is natural and slightly tense."}}
+{"video":{"prompt":"The camera pans across the landscape as the human's eyes move, scanning for threats, emphasizing the usefulness of alertness."}}
+
+{"scene_id":"scene_193"}
+{"text":"Today, the same system can become overactive."}
+{"start":{"prompt":"A modern person sits at a desk, surrounded by swirling notifications and anxious thoughts, showing the overactivity of the alert system in today's world."}}
+{"video":{"prompt":"Notifications and thought bubbles swirl faster around the person, illustrating the overactive nature of the mind's alert system."}}
+
+{"scene_id":"scene_194"}
+{"text":"But the basic mechanism is the same: the mind is trying to help."}
+{"start":{"prompt":"A side-by-side comparison: on one side, an ancient human alert in nature; on the other, a modern person deep in thought. Both have a glowing brain, symbolizing the same underlying mechanism."}}
+{"video":{"prompt":"The glowing brains pulse in sync, connecting the ancient and modern scenes, reinforcing the continuity of the mind's protective mechanism."}}
+
+{"scene_id":"scene_195"}
+{"text":"What does this mean?"}
+{"start":{"prompt":"На экране крупным планом появляется вопросительный текст: 'What does this mean?' на нейтральном фоне, возможно, с легким затемнением вокруг, чтобы выделить вопрос."}}
+{"video":{"prompt":"Камера медленно приближает текст, создавая ощущение задумчивости и интриги."}}
+
+{"scene_id":"scene_196"}
+{"text":"First, it means there’s nothing broken."}
+{"start":{"prompt":"Вид сверху на спокойную, целую мозаику или пазл без недостающих частей, символизирующую целостность и отсутствие поломки."}}
+{"video":{"prompt":"Камера плавно облетает мозаику, подчеркивая ее целостность и гармонию."}}
+
+{"scene_id":"scene_197"}
+{"text":"The mind is working as it’s supposed to—maybe too well."}
+{"start":{"prompt":"Изображение человеческого мозга, сияющего мягким светом, с плавно движущимися нейронными связями, символизирующими активную работу разума."}}
+{"video":{"prompt":"Анимация: нейронные связи внутри мозга вспыхивают и двигаются чуть быстрее обычного, показывая чрезмерную активность."}}
+
+{"scene_id":"scene_198"}
+{"text":"The solution isn’t to fight thoughts or force them to stop."}
+{"start":{"prompt":"Человек сидит с закрытыми глазами, вокруг головы кружатся легкие облака мыслей, которые он не пытается оттолкнуть руками."}}
+{"video":{"prompt":"Облака мыслей медленно проплывают мимо головы человека, не сталкиваясь с ним, а спокойно исчезая."}}
+
+{"scene_id":"scene_199"}
+{"text":"The task is to show the mind that it’s safe to rest."}
+{"start":{"prompt":"Человек лежит на мягкой поверхности, его лицо расслаблено, вокруг головы мягкое сияние, создающее ощущение безопасности и покоя."}}
+{"video":{"prompt":"Камера медленно отдаляется, подчеркивая атмосферу уюта и защищенности, свет вокруг головы становится мягче."}}
+
+{"scene_id":"scene_200"}
+{"text":"Not every problem needs an immediate answer."}
+{"start":{"prompt":"На столе лежит блокнот с вопросами, но ручка отложена в сторону, а человек спокойно смотрит в окно, не спеша искать решения."}}
+{"video":{"prompt":"Камера медленно перемещается от блокнота к лицу человека, показывая его спокойствие и отсутствие спешки."}}
+
+{"scene_id":"scene_201"}
+{"text":"You can notice a thought and let it pass without chasing it."}
+{"start":{"prompt":"Вид сбоку: человек сидит с закрытыми глазами, а над его головой появляется легкая мысль в виде облачка, которое медленно уплывает прочь."}}
+{"video":{"prompt":"Анимация: облачко-мысль медленно проплывает мимо и растворяется, человек остается спокойным и невозмутимым."}}
+
+{"scene_id":"scene_202"}
+{"text":"One practical shift: when you notice your mind spiraling, pause and ask, “What is my mind trying to protect me from right now?”"}
+{"start":{"prompt":"Человек внезапно останавливается в движении, вокруг головы закручиваются спирали мыслей, он кладет руку на грудь и задумчиво смотрит вверх, словно задает себе вопрос."}}
+{"video":{"prompt":"Спирали мыслей замедляются, камера фокусируется на лице человека в момент осознанного вопроса."}}
+
+{"scene_id":"scene_203"}
+{"text":"This question can change your whole perspective."}
+{"start":{"prompt":"Изображение человека, который смотрит на мир через увеличительное стекло, и окружающая сцена становится ярче и четче, символизируя изменение восприятия."}}
+{"video":{"prompt":"Камера плавно увеличивает масштаб, показывая, как детали вокруг становятся яснее и насыщеннее."}}
+
+{"scene_id":"scene_204"}
+{"text":"Instead of seeing thoughts as enemies, they become signals—signs of care, of wanting to get things right, of paying attention."}
+{"start":{"prompt":"Человек смотрит на облака мыслей, которые теперь светятся мягким светом и имеют форму сердечек, галочек и глаз, символизируя заботу, стремление к правильности и внимательность."}}
+{"video":{"prompt":"Анимация: облака-мысли мягко пульсируют светом, плавно двигаются вокруг головы человека, создавая ощущение поддержки."}}
+
+{"scene_id":"scene_205"}
+{"text":"But also signs that sometimes, it’s okay to step back."}
+{"start":{"prompt":"Человек делает шаг назад от стола с бумагами и вопросами, расслабленно опускает плечи, вокруг него появляется мягкое сияние покоя."}}
+{"video":{"prompt":"Камера плавно отдаляется, показывая, как человек становится спокойнее, а атмосфера вокруг наполняется светом и умиротворением."}}
+
+{"scene_id":"scene_206"}
+{"text":"Another angle: overthinking is a habit, not a permanent state."}
+{"start":{"prompt":"A thoughtful person sits alone in a cozy room, looking contemplative, with a gentle light illuminating their face. The atmosphere is calm and introspective, suggesting a moment of realization."}}
+{"video":{"prompt":"The camera slowly zooms in on the person's face as their expression shifts from worry to understanding, highlighting the moment of insight."}}
+
+{"scene_id":"scene_207"}
+{"text":"Habits can change—not by force, but by gradual retraining."}
+{"start":{"prompt":"Close-up of the same person, now holding a notebook and pen, jotting down thoughts. The background shows subtle reminders of progress, like sticky notes or a calendar with checkmarks."}}
+{"video":{"prompt":"The person gently writes in the notebook, then looks up with a small, hopeful smile, symbolizing the beginning of change through gentle effort."}}
+
+{"scene_id":"scene_208"}
+{"text":"When you notice your mind racing, try grounding in the present: notice your breath, the feeling of your feet on the floor, the sounds around you."}
+{"start":{"prompt":"The person sits comfortably in a chair, eyes closed, taking a deep breath. Their feet rest firmly on the floor, and soft ambient details like a ticking clock and distant birds are visible."}}
+{"video":{"prompt":"The camera pans from the person's calm face to their feet, then to subtle movements in the room, like curtains swaying and a clock ticking, emphasizing sensory grounding."}}
+
+{"scene_id":"scene_209"}
+{"text":"This isn’t about escaping thoughts, but about showing your mind, again and again, that safety is here, now."}
+{"start":{"prompt":"The person opens their eyes and looks around the peaceful room, noticing comforting details like a warm mug, a soft blanket, and sunlight streaming through the window."}}
+{"video":{"prompt":"The camera follows the person's gaze as they gently touch the mug and smile, reinforcing the sense of present safety and comfort."}}
+
+{"scene_id":"scene_210"}
+{"text":"There’s no need for constant alertness."}
+{"start":{"prompt":"The person relaxes back into the chair, shoulders dropping, with a visible sense of relief and calmness in their posture."}}
+{"video":{"prompt":"The camera slowly pulls back, showing the person exhaling deeply and settling into a more relaxed state."}}
+
+{"scene_id":"scene_211"}
+{"text":"Overthinking isn’t a defect. It’s an old adaptation working in a new world."}
+{"start":{"prompt":"A split-screen shows the person in the present on one side, and a faded image of an ancient human in a cautious stance on the other, symbolizing adaptation across time."}}
+{"video":{"prompt":"The ancient image gradually fades, leaving only the present-day person, who looks more at ease, illustrating the shift from old adaptation to new understanding."}}
+
+{"scene_id":"scene_212"}
+{"text":"The more you see this, the less control these thoughts have."}
+{"start":{"prompt":"The person looks at their reflection in a mirror, noticing a calmer, more confident version of themselves. The room appears brighter and more inviting."}}
+{"video":{"prompt":"The reflection in the mirror becomes clearer and more vibrant as the person smiles, symbolizing growing self-awareness and reduced power of overthinking."}}
+
+{"scene_id":"scene_213"}
+{"text":"It becomes possible to move from fighting your mind to working with it. That’s where real change starts."}
+{"start":{"prompt":"The person stands up, looking determined and hopeful, with an open window behind them letting in fresh air and sunlight, representing new beginnings."}}
+{"video":{"prompt":"The camera follows the person as they walk toward the window, open it, and take a deep breath, symbolizing the start of positive change and collaboration with their mind."}}

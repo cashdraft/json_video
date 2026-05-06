@@ -17,7 +17,6 @@ CRITICAL RULES:
 ---
 
 TITLES:
-
 6. Generate EXACTLY 25 titles.
 7. Titles MUST be in English.
 8. Every title MUST have a Russian translation.
@@ -25,11 +24,16 @@ TITLES:
    - angle
    - score (1–10)
    - reason (EN + RU)
-10. Prefer short, clear, emotionally strong titles.
-11. Avoid generic and vague titles.
-12. Avoid overly academic wording unless paired with simple language.
-13. Most titles should be under 60 characters.
-
+10. Titles MUST sound natural when spoken aloud.
+11. Use simple, everyday words. NO academic or clinical language.
+12. Avoid compound phrases with dashes, colons, or parentheses unless it genuinely improves clarity.
+13. The best titles describe the topic plainly and let the subject matter create the intrigue — NOT clever wordplay or dramatic phrasing.
+14. Model your title style after these examples:
+    - "The Psychology of People Who Avoid Difficult Conversations"
+    - "Every Level of Buying a Home — Broke Renter to Mortgage Free"
+    Observe: short words, clear subject, no hype, naturally curious.
+15. Most titles should be under 60 characters.
+16. Avoid: "hidden cost", "the real reason", "dilemma", "wired for", "hijacks", and similar copywriter clichés.
 ---
 
 TOP TITLES:
