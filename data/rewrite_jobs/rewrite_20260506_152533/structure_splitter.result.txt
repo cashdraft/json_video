@@ -1,0 +1,104 @@
+[
+  {
+    "block_id": 1,
+    "block_name": "Social Media Ubiquity",
+    "purpose": "Introduces the prevalence of social media and the unusualness of abstaining.",
+    "text": "Right now, about 4.9 billion people use social media. That’s more than half the world. For most, it’s just part of life—scrolling, posting, reacting. It’s so normal that not using social media at all seems almost strange. But there are people who step away. They don’t post. They don’t scroll. They don’t keep accounts. In a world where almost everyone is sharing and watching, these people stand out. Not because they’re missing something, but because they’ve made a different choice. Not using social media today is like walking quietly while everyone else is talking loudly. It’s not about rejecting technology or thinking you’re better. It’s just a different way to be part of the world. When being online is expected, this choice stands out."
+  },
+  {
+    "block_id": 2,
+    "block_name": "Automatic Online Habits",
+    "purpose": "Explores how social media use has become automatic and how abstaining is perceived.",
+    "text": "Most people don’t notice how automatic their online habits have become. The idea of not joining in can seem odd. Even risky. But for those who step away, the lack of updates, likes, and notifications isn’t a loss. It’s a quiet decision—not to join the performance. Why does this seem so unusual? The answer isn’t just about technology. It’s about how people work."
+  },
+  {
+    "block_id": 3,
+    "block_name": "Social Media Design",
+    "purpose": "Explains how social media platforms are intentionally designed to capture attention.",
+    "text": "Social media isn’t neutral. It’s built by people who understand psychology—sometimes better than the users do. These platforms are designed to keep you engaged. The people behind them study how our brains react to rewards, attention, and approval. Their goal is simple: keep you coming back. Dopamine is a big part of this. Every like, comment, or new follower gives a small dopamine hit. This is the same chemical involved in gambling, eating sweets, and some drugs. It makes us repeat what feels good. Social media uses this, giving endless chances to chase the next small reward. Notifications, red dots, and surprises are all meant to trigger the brain’s reward system."
+  },
+  {
+    "block_id": 4,
+    "block_name": "Algorithmic Engagement",
+    "purpose": "Describes how algorithms adapt to user behavior to maximize engagement.",
+    "text": "The feed isn’t just a list of new posts. It’s a system that learns what grabs your attention, what makes you react, and what keeps you there. If you pause on a post, the system notices. Strong reactions—anger, excitement, envy—teach the algorithm even more. It then shows you more of what gets a response, good or bad. The goal isn’t your happiness. It’s your attention. That’s why it’s hard to step away. It’s not just about keeping up with friends. It’s about being caught in a loop that’s built to hold you. The more you use it, the more it adapts. And the harder it is to leave. For most, this feels normal. But there’s a reason to step outside this loop that isn’t just about being different."
+  },
+  {
+    "block_id": 5,
+    "block_name": "External Validation Cycle",
+    "purpose": "Explains the psychological cycle of seeking validation through social media.",
+    "text": "Most people use social media for external validation. Every like or comment is a small sign of approval. This isn’t just a feeling—brain scans show that getting likes lights up the same reward centers as winning at a slot machine. The brain learns to want this feedback: post, wait, get a response, feel good, repeat. Over time, the main motivation shifts from real interest to seeking recognition."
+  },
+  {
+    "block_id": 6,
+    "block_name": "Intrinsic Motivation",
+    "purpose": "Contrasts social media users with abstainers, focusing on intrinsic versus extrinsic motivation.",
+    "text": "People who choose not to use social media show a different pattern. Their brains respond less to outside rewards and more to what’s happening inside. They find satisfaction in finishing something, learning, or enjoying a moment—things that don’t need an audience. This is called intrinsic motivation: doing things because they matter to you, not because someone else approves. Where motivation comes from affects well-being. Intrinsic motivation is linked to more stability, less anxiety, and higher satisfaction. Relying on outside approval is linked to lower self-esteem and more stress. Studies show that tying self-worth to likes and approval isn’t good for us. The difference is clear. Social media users often look for approval from others. People who don’t use it are more likely to find reward in their own actions, without needing an audience. This changes how satisfaction and self-worth are felt."
+  },
+  {
+    "block_id": 7,
+    "block_name": "Mental Health Impacts",
+    "purpose": "Discusses studies on social media use and its effects on mental health.",
+    "text": "Think about mental health. One study split college students into two groups: one limited social media to 30 minutes a day, the other used it as usual. After three weeks, the limited group felt less depressed and lonely. Those who stopped completely had the lowest anxiety and highest satisfaction—even compared to those who just cut back. The change wasn’t small. It was noticeable."
+  },
+  {
+    "block_id": 8,
+    "block_name": "Comparison and Well-being",
+    "purpose": "Explores how social media fosters comparison and its negative effects.",
+    "text": "Social media is built around comparison. People see highlights from others’ lives. Even knowing these are just the best moments, the brain reacts. This often leads to feeling left out or not good enough. Over time, constant comparison is linked to more anxiety, depression, and loneliness. Especially for heavy users. The more you compare, the more doubt you feel. Even small breaks help, but the biggest changes come from stopping completely."
+  },
+  {
+    "block_id": 9,
+    "block_name": "Time and Attention",
+    "purpose": "Highlights the time spent on social media and the benefits of reclaiming it.",
+    "text": "The average person spends over two and a half hours a day on social media. That’s 912 hours, or 38 days, a year. That’s a lot of time. People who step away don’t just have empty hours—they use that time for things that last: reading, learning, building relationships. The time gained isn’t just about numbers. It’s a chance for real change. People often feel less distracted, more present, and more in control."
+  },
+  {
+    "block_id": 10,
+    "block_name": "Attention and Presence",
+    "purpose": "Examines the effects of social media on attention and the benefits of abstaining.",
+    "text": "Frequent users often have what’s called continuous partial attention. The mind is never fully on one thing. Always waiting for the next notification. This isn’t multitasking—it’s a constant split in focus. The result is less depth in experience and memory. People who don’t use social media are more present. Their attention is whole, leading to richer experiences and stronger memories."
+  },
+  {
+    "block_id": 11,
+    "block_name": "Relationships and Connection",
+    "purpose": "Addresses the myth of social isolation among abstainers and emphasizes quality relationships.",
+    "text": "There’s a myth that people who avoid social media are isolated. In reality, many have strong real-world relationships. Before social media, people connected face-to-face. That hasn’t changed. People who abstain often invest more in fewer relationships, which brings more satisfaction. Quality matters more than quantity."
+  },
+  {
+    "block_id": 12,
+    "block_name": "Creativity and Originality",
+    "purpose": "Discusses how abstaining from social media can foster creativity and self-trust.",
+    "text": "Creativity also changes without social media. Without pressure to follow trends or seek approval, people have more space to think and create in their own way. Their work is often more personal and less filtered. Without constant comparison, originality and self-trust grow."
+  },
+  {
+    "block_id": 13,
+    "block_name": "FOMO and Clarity",
+    "purpose": "Explores the fear of missing out and the clarity gained by stepping away.",
+    "text": "Fear of missing out is common, but most of what’s missed isn’t important. The feed is a cycle of updates that rarely matter for long. People who step away often find that the initial worry fades, replaced by clarity and relief. The real world, though quieter, offers more real engagement."
+  },
+  {
+    "block_id": 14,
+    "block_name": "Emotional Manipulation",
+    "purpose": "Explains how algorithms exploit emotions and the benefits of breaking the cycle.",
+    "text": "Social media algorithms are built to keep you engaged, often by stirring up strong emotions—anger, envy, insecurity. This keeps people coming back, but it can hurt self-esteem and well-being. Stepping away breaks this cycle, allowing for a steadier sense of self."
+  },
+  {
+    "block_id": 15,
+    "block_name": "Memory and Experience",
+    "purpose": "Describes how documenting for social media affects memory and experience.",
+    "text": "Documenting life for social media can weaken memories. Focusing on how to share an experience takes attention away from the experience itself. People who don’t document for an audience remember more, and remember better."
+  },
+  {
+    "block_id": 16,
+    "block_name": "Autonomy and Awareness",
+    "purpose": "Clarifies that abstaining is about autonomy and conscious choice, not superiority.",
+    "text": "Not using social media isn’t about being better or rejecting technology. It’s a choice to take back attention and autonomy. Most people follow digital habits without thinking. Abstainers break this pattern—not by rejecting technology, but by not letting it control their focus. The decision isn’t about being right. It’s about being aware."
+  },
+  {
+    "block_id": 17,
+    "block_name": "Conclusion and Affirmation",
+    "purpose": "Concludes by affirming the value and meaning of stepping away from social media.",
+    "text": "Choosing not to use social media isn’t a retreat from modern life. It’s a conscious act to protect your mind from constant outside demands. This choice is backed by psychology and neuroscience. Stepping away protects attention, brings back presence, and deepens relationships. It’s not about missing out. It’s about being more present with what matters. In a world where being online is the default, stepping away is a real and meaningful choice. It’s a way to say: my attention isn’t for sale, and life doesn’t need an audience to matter."
+  }
+]

@@ -987,22 +987,12 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "scene_writer_live":
         prompt = (str(cell.get("prompt") or "") or "").strip()
         up = str(cell.get("user_prompt") or "").strip()
-        ct = (str(cell.get("style_prompt") or "photos") or "photos").strip().lower()
-        if ct not in ("photos", "videos"):
-            ct = "photos"
-        try:
-            target = int(str(cell.get("past_prompt") or "50").strip())
-        except (TypeError, ValueError):
-            target = 50
-        target = max(1, min(100, target))
         sw = str(scene_writer_result_text or "").strip()
         if not sw:
             return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
         user_text = _json_user_message(
             {
                 "scene_writer_live_user_promt": up,
-                "content_type": ct,
-                "target_percent": target,
                 "scene_writer_result": sw,
             }
         )

@@ -192,110 +192,6 @@
             </div>
             {% endif %}
         </section>
-        <section class="tts-section video-panel" id="whisper-transcribe">
-            <h2 class="scene-id rewrite-pipeline-runner__title">Транскрибация (OpenAI / faster-whisper)</h2>
-            <p class="scene-text rewrite-pipeline-runner__lead">
-                Берет последний MP3 из блока ElevenLabs и отправляет либо в OpenAI Whisper API, либо в локальный faster-whisper. В логе ниже показываются этапы:
-                выбор файла, проверка/нарезка, отправка каждого chunk, ожидание ответа и итог.
-            </p>
-            <div class="settings-grid" style="margin-bottom: 0.75rem; max-width: 46rem;">
-                <div class="setting">
-                    <label for="whisper-engine">Движок</label>
-                    <select id="whisper-engine">
-                        <option value="openai">OpenAI Whisper API</option>
-                        <option value="faster-whisper">faster-whisper (локально)</option>
-                    </select>
-                </div>
-                <div class="setting">
-                    <label for="whisper-fw-model">Модель faster-whisper</label>
-                    <select id="whisper-fw-model">
-                        <option value="tiny">tiny</option>
-                        <option value="base">base</option>
-                        <option value="small" selected>small</option>
-                        <option value="medium">medium</option>
-                        <option value="large-v3">large-v3</option>
-                    </select>
-                </div>
-                <div class="setting">
-                    <label for="whisper-fw-compute">Compute type</label>
-                    <select id="whisper-fw-compute">
-                        <option value="int8" selected>int8</option>
-                        <option value="int8_float16">int8_float16</option>
-                        <option value="float16">float16</option>
-                        <option value="float32">float32</option>
-                    </select>
-                </div>
-            </div>
-            {% if not openai_key_set %}
-            <p class="tts-warning" id="whisper-openai-key-warning">
-                OPENAI режим недоступен без <code>OPENAI_API_KEY</code> в <code>.env</code>. Локальный faster-whisper работает без ключа.
-            </p>
-            {% endif %}
-            <div class="tts-actions">
-                <button type="button" class="btn btn-primary btn-sm" id="whisper-transcribe-run">Распознать через Whisper</button>
-                <span id="whisper-busy" class="tts-busy hidden">Запрос к Whisper…</span>
-            </div>
-            <label class="tts-check">
-                <input type="checkbox" id="whisper-word-timestamps">
-                Word-level timestamps (таймкоды по словам)
-            </label>
-            <p id="whisper-error" class="tts-error hidden" role="alert"></p>
-            <div class="whisper-box">
-                <p class="tts-label">Подробный лог</p>
-                <pre id="whisper-log" class="whisper-log">Лог появится после запуска.</pre>
-                <p class="tts-label">Ответ Whisper (JSON)</p>
-                <textarea id="whisper-result" class="tts-textarea whisper-result" rows="10" readonly placeholder="{&quot;segments&quot;: [...]}"></textarea>
-            </div>
-        </section>
-
-        <section class="tts-section video-panel" id="whisper-scene-align">
-            <h2 class="scene-id rewrite-pipeline-runner__title">Таймкоды реплик по Whisper</h2>
-            <p class="scene-text rewrite-pipeline-runner__lead">
-                Берёт JSON из «Ответ Whisper» и сценарий в формате строк LDJSON (как в блоке ниже). Для каждой сцены ищет фразу в транскрипте
-                (нечёткое совпадение, упор на начало и конец фразы). Рекомендуется включать word-level timestamps при распознавании.
-                По умолчанию в результате только <code>scene_id</code>, <code>text</code> и секунды — без промптов картинки/видео.
-            </p>
-            <div class="tts-actions tts-actions--wrap">
-                <button type="button" class="btn btn-primary btn-sm" id="scene-whisper-align-run">Проставить секунды</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-stop" disabled>Остановить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-from-json">Взять сцены из «JSON-кода сцен»</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-fill-whisper">Подставить Whisper из ответа выше</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="scene-whisper-align-strip-prompts">Оставить только реплики</button>
-            </div>
-            <label class="tts-check" style="margin-top: 0.5rem;">
-                <input type="checkbox" id="scene-whisper-include-prompts-out">
-                Добавить в результат промпты <code>start</code> / <code>video</code> из сценария
-            </label>
-            <div class="settings-grid" style="margin-top: 0.75rem; max-width: 28rem;">
-                <div class="setting">
-                    <label for="scene-whisper-min-ratio">Мин. совпадение (0–1)</label>
-                    <input type="number" id="scene-whisper-min-ratio" min="0.15" max="0.99" step="0.01" value="0.52">
-                </div>
-                <div class="setting">
-                    <label for="scene-whisper-anchor-w">Вес якорей начала/конца (0–1)</label>
-                    <input type="number" id="scene-whisper-anchor-w" min="0" max="1" step="0.05" value="0.42">
-                </div>
-            </div>
-            <p id="scene-whisper-align-error" class="tts-error hidden" role="alert"></p>
-            <p id="scene-whisper-align-hint" class="scene-text" style="margin-top: 0.5rem;"></p>
-            <div class="whisper-box" style="margin-bottom: 0.75rem;">
-                <p class="tts-label">Лог сопоставления</p>
-                <pre id="scene-whisper-align-log" class="whisper-log">Лог появится после запуска.</pre>
-            </div>
-            {% if not openai_key_set %}
-            <div class="whisper-box" style="margin-bottom: 0.75rem;">
-                <p class="tts-label">JSON Whisper (вставьте вручную — блок распознавания недоступен без ключа)</p>
-                <textarea id="whisper-align-whisper-json" class="tts-textarea whisper-result" rows="6" placeholder="{&quot;segments&quot;: [...], &quot;text&quot;: &quot;...&quot;}"></textarea>
-            </div>
-            {% endif %}
-            <div class="whisper-box">
-                <p class="tts-label">Сценарий (LDJSON по строкам)</p>
-                <textarea id="scene-whisper-align-scenes" class="tts-textarea whisper-result" rows="8" placeholder='{"scene_id": "scene_001"}&#10;{"text": "Реплика для Whisper"}'></textarea>
-                <p class="tts-label">Результат с voice_start / voice_end (секунды)</p>
-                <textarea id="scene-whisper-align-out" class="tts-textarea whisper-result" rows="10" readonly placeholder="Запустите «Проставить секунды»…"></textarea>
-            </div>
-        </section>
-
         <form
             method="post"
             action="{{ url_for('parse_for_job', job_id=job_id) }}"
@@ -446,20 +342,40 @@
                 {% set end_ready = scene.end.image_url|default('', true) %}
                 {% set video_ready = (not has_start_prompt or start_ready) and (not has_end_prompt or end_ready) %}
                 <div
-                    class="scene-card"
+                    class="scene-card{{ ' scene-card--live' if has_live_media else '' }}"
                     data-scene-index="{{ loop.index0 }}"
+                    data-scene-id="{{ scene.scene_id }}"
                     data-has-start-prompt="{{ '1' if has_start_prompt else '0' }}"
                     data-has-end-prompt="{{ '1' if has_end_prompt else '0' }}"
                 >
+                    {% if has_live_media %}
+                    <button
+                        type="button"
+                        class="scene-card-delete-btn"
+                        data-action="delete-live-scene"
+                        data-scene-index="{{ loop.index0 }}"
+                        data-scene-id="{{ scene.scene_id }}"
+                        title="Удалить сцену"
+                        aria-label="Удалить сцену {{ scene.scene_id }}"
+                    >
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                            <path fill="currentColor" d="M9 3a1 1 0 0 0-1 1v1H4a1 1 0 1 0 0 2h1v12a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7h1a1 1 0 1 0 0-2h-4V4a1 1 0 0 0-1-1H9zm1 2h4v0H10V5zm-3 4h10v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9zm3 2a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0v-6a1 1 0 0 0-1-1zm4 0a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0v-6a1 1 0 0 0-1-1z"/>
+                        </svg>
+                    </button>
+                    {% endif %}
                     <div class="scene-header">
                         <div class="scene-id">{{ scene.scene_id }}</div>
+                        {% if scene.text_ru %}
+                        <div class="scene-text scene-text--ru" title="{{ scene.text_ru }}">{{ scene.text_ru }}</div>
+                        {% endif %}
                         <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
                     </div>
                     <div class="scene-slots">
                         {% if has_live_media %}
                         {% set pexels_items = scene.pexels_results if scene.pexels_results is defined and scene.pexels_results else [] %}
                         {% set excluded_keywords = scene.excluded_keywords if scene.excluded_keywords is defined and scene.excluded_keywords else [] %}
-                        <div class="scene-slot scene-slot--pexels" data-slot="pexels" data-excluded-keywords-json="{{ excluded_keywords|tojson|forceescape }}">
+                        {% set selected_pexels = scene.pexels_selected_indices if scene.pexels_selected_indices is defined and scene.pexels_selected_indices else [] %}
+                        <div class="scene-slot scene-slot--pexels" data-slot="pexels" data-scene-index="{{ loop.index0 }}" data-scene-id="{{ scene.scene_id }}" data-excluded-keywords-json="{{ excluded_keywords|tojson|forceescape }}" data-selected-indices-json="{{ selected_pexels|tojson|forceescape }}">
                             <div class="slot-header">
                                 <span class="slot-badge badge-yes">Live media: {{ (scene.content_type or 'photos')|lower }}</span>
                                 <span class="slot-header-meta">Keywords:</span>
@@ -492,13 +408,23 @@
                                 {% if pexels_items %}
                                 <div class="pexels-slots-grid">
                                     {% for it in pexels_items[:8] %}
-                                    <div class="scene-slot pexels-slot-item">
+                                    {% set pex_idx = loop.index0 %}
+                                    {% set is_selected = pex_idx in selected_pexels %}
+                                    <div class="scene-slot pexels-slot-item{{ ' pexels-slot-item--selected' if is_selected else '' }}" data-pexels-index="{{ pex_idx }}">
                                         <div class="slot-placeholder" data-status="done">
                                             {% if (scene.content_type or '')|lower in ['video', 'videos'] %}
                                             <video src="{{ it.local_url or it.media_url or '' }}" class="slot-image" muted playsinline preload="metadata" controls></video>
                                             {% else %}
                                             <img src="{{ it.local_url or it.thumbnail_url or it.media_url or '' }}" alt="Pexels result" class="slot-image">
                                             {% endif %}
+                                            <button
+                                                type="button"
+                                                class="pexels-select-toggle{{ ' pexels-select-toggle--checked' if is_selected else '' }}"
+                                                data-action="toggle-pexels-select"
+                                                aria-pressed="{{ 'true' if is_selected else 'false' }}"
+                                                aria-label="Выбрать"
+                                                title="Выбрать"
+                                            ><span class="pexels-select-toggle__check" aria-hidden="true"></span></button>
                                         </div>
                                         <div class="pexels-item-meta">
                                             <span class="pexels-meta-left">{{ 'Video' if (scene.content_type or '')|lower in ['video', 'videos'] else 'Photo' }}</span>
@@ -726,6 +652,19 @@
             <div class="confirm-modal__actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="json-confirm-cancel">Отмена</button>
                 <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="json-confirm-ok">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+    <div class="confirm-modal hidden" id="scene-delete-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-scene-delete-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="scene-delete-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="scene-delete-confirm-title">Удалить сцену</h3>
+            </div>
+            <p class="confirm-modal__lead" id="scene-delete-confirm-text">Точно удалить сцену?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="scene-delete-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm" id="scene-delete-confirm-ok">Удалить</button>
             </div>
         </div>
     </div>
@@ -1964,7 +1903,7 @@
             return;
         }
         let html = '<div class="pexels-slots-grid">';
-        items.slice(0, 8).forEach((it) => {
+        items.slice(0, 8).forEach((it, idx) => {
             const srcLink = String((it && (it.source_url || '')) || '').trim();
             const thumb = String((it && (it.local_url || it.thumbnail_url || it.media_url)) || '').trim();
             const media = String((it && (it.local_url || it.media_url || '')) || '').trim();
@@ -1972,13 +1911,14 @@
             const w = Number((it && it.width) || 0);
             const h = Number((it && it.height) || 0);
             if (!thumb && !media) return;
-            html += '<div class="scene-slot pexels-slot-item">';
+            html += `<div class="scene-slot pexels-slot-item" data-pexels-index="${idx}">`;
             html += '<div class="slot-placeholder" data-status="done">';
             if (ct === 'videos' || ct === 'video') {
                 html += `<video src="${media}" class="slot-image" muted playsinline preload="metadata" controls></video>`;
             } else {
                 html += `<img src="${thumb}" alt="Pexels result" class="slot-image">`;
             }
+            html += '<button type="button" class="pexels-select-toggle" data-action="toggle-pexels-select" aria-pressed="false" aria-label="Выбрать" title="Выбрать"><span class="pexels-select-toggle__check" aria-hidden="true"></span></button>';
             html += '</div>';
             html += '<div class="pexels-item-meta">';
             html += `<span class="pexels-meta-left">${(ct === 'videos' || ct === 'video') ? 'Video' : 'Photo'}</span>`;
@@ -2066,6 +2006,9 @@
                 writeExcludedKeywords(pexelsSlot, data.excluded_keywords || excludedKeywords);
                 syncKeywordChipsVisibility(pexelsSlot);
                 renderPexelsResults(placeholder, data.content_type, data.items || []);
+                if (typeof window.__pexelsResetSelection === 'function') {
+                    window.__pexelsResetSelection(pexelsSlot);
+                }
                 appendBulkLog(`✓ ${sceneId} · pexels: найдено ${Array.isArray(data.items) ? data.items.length : 0}`);
             } catch (e) {
                 const msg = e && e.message ? e.message : String(e);
@@ -2118,6 +2061,174 @@
         });
         writeExcludedKeywords(slot, rebuildExcludedFromDom(slot));
     });
+
+    (function pexelsSelection() {
+        const PEXELS_SELECT_LIMIT = 2;
+
+        const readSelectedIndices = (slot) => {
+            if (!slot) return [];
+            const raw = slot.getAttribute('data-selected-indices-json') || '[]';
+            try {
+                const arr = JSON.parse(raw);
+                if (!Array.isArray(arr)) return [];
+                const out = [];
+                const seen = new Set();
+                for (const x of arr) {
+                    const v = Number.parseInt(x, 10);
+                    if (!Number.isFinite(v) || v < 0) continue;
+                    if (seen.has(v)) continue;
+                    seen.add(v);
+                    out.push(v);
+                    if (out.length >= PEXELS_SELECT_LIMIT) break;
+                }
+                return out;
+            } catch (_) {
+                return [];
+            }
+        };
+
+        const writeSelectedIndices = (slot, arr) => {
+            if (!slot) return;
+            slot.setAttribute('data-selected-indices-json', JSON.stringify(arr || []));
+        };
+
+        const applyUi = (slot) => {
+            if (!slot) return;
+            const sel = new Set(readSelectedIndices(slot));
+            const items = slot.querySelectorAll('.pexels-slot-item');
+            const dimUnselected = sel.size >= PEXELS_SELECT_LIMIT;
+            items.forEach((item) => {
+                const idx = Number.parseInt(item.getAttribute('data-pexels-index') || '', 10);
+                const isSelected = Number.isFinite(idx) && sel.has(idx);
+                item.classList.toggle('pexels-slot-item--selected', isSelected);
+                item.classList.toggle('pexels-slot-item--dimmed', dimUnselected && !isSelected);
+                const btn = item.querySelector('.pexels-select-toggle');
+                if (btn) {
+                    btn.classList.toggle('pexels-select-toggle--checked', isSelected);
+                    btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+                }
+            });
+        };
+
+        const persist = async (slot, indices) => {
+            const sceneIndex = Number.parseInt(slot.getAttribute('data-scene-index') || '', 10);
+            const sceneId = String(slot.getAttribute('data-scene-id') || '').trim();
+            if (!Number.isFinite(sceneIndex) || sceneIndex < 0) return;
+            try {
+                const resp = await fetch(`/job/${jobId}/pexels/select`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_index: sceneIndex, scene_id: sceneId, selected_indices: indices }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.ok) {
+                    throw new Error(data.error || `HTTP ${resp.status}`);
+                }
+                if (Array.isArray(data.selected_indices)) {
+                    writeSelectedIndices(slot, data.selected_indices);
+                    applyUi(slot);
+                }
+            } catch (err) {
+                openJobErrorModal(err && err.message ? err.message : String(err));
+            }
+        };
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest('[data-action="toggle-pexels-select"]') : null;
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const item = btn.closest('.pexels-slot-item');
+            const slot = btn.closest('.scene-slot[data-slot="pexels"]');
+            if (!item || !slot) return;
+            const idx = Number.parseInt(item.getAttribute('data-pexels-index') || '', 10);
+            if (!Number.isFinite(idx) || idx < 0) return;
+            const current = readSelectedIndices(slot);
+            const has = current.indexOf(idx);
+            let next;
+            if (has >= 0) {
+                next = current.filter((v) => v !== idx);
+            } else {
+                if (current.length >= PEXELS_SELECT_LIMIT) {
+                    openJobErrorModal(`Можно выбрать максимум ${PEXELS_SELECT_LIMIT} элемента. Снимите выделение, чтобы выбрать другой.`);
+                    return;
+                }
+                next = current.concat([idx]);
+            }
+            writeSelectedIndices(slot, next);
+            applyUi(slot);
+            persist(slot, next);
+        });
+
+        document.querySelectorAll('.scene-slot[data-slot="pexels"]').forEach(applyUi);
+
+        window.__pexelsApplySelectionUi = applyUi;
+        window.__pexelsResetSelection = (slot) => {
+            if (!slot) return;
+            writeSelectedIndices(slot, []);
+            applyUi(slot);
+        };
+    })();
+
+    (function liveSceneDelete() {
+        const modal = document.getElementById('scene-delete-confirm-modal');
+        const textEl = document.getElementById('scene-delete-confirm-text');
+        const cancelBtn = document.getElementById('scene-delete-confirm-cancel');
+        const okBtn = document.getElementById('scene-delete-confirm-ok');
+        if (!modal || !okBtn || !cancelBtn) return;
+        let pending = null;
+        const close = () => {
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            okBtn.disabled = false;
+            pending = null;
+        };
+        const open = (sceneIndex, sceneId) => {
+            pending = { sceneIndex, sceneId };
+            if (textEl) {
+                textEl.textContent = `Точно удалить сцену "${sceneId}"? Это действие нельзя отменить.`;
+            }
+            okBtn.disabled = false;
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+        };
+        document.addEventListener('click', (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest('[data-action="delete-live-scene"]') : null;
+            if (!btn) return;
+            e.preventDefault();
+            const idx = parseInt(btn.getAttribute('data-scene-index') || '', 10);
+            const sid = String(btn.getAttribute('data-scene-id') || '').trim();
+            if (!Number.isFinite(idx) || idx < 0 || !sid) return;
+            open(idx, sid);
+        });
+        cancelBtn.addEventListener('click', close);
+        modal.addEventListener('click', (e) => {
+            if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-scene-delete-close')) close();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+        });
+        okBtn.addEventListener('click', async () => {
+            if (!pending) return;
+            const { sceneIndex, sceneId } = pending;
+            okBtn.disabled = true;
+            try {
+                const resp = await fetch(`/job/${jobId}/scene/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_index: sceneIndex, scene_id: sceneId }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.ok) {
+                    throw new Error(data.error || `HTTP ${resp.status}`);
+                }
+                window.location.reload();
+            } catch (err) {
+                close();
+                openJobErrorModal(err && err.message ? err.message : String(err));
+            }
+        });
+    })();
 
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
     const BULK_START_INTERVAL_MS = {
@@ -2263,201 +2374,6 @@
         appendBulkLog(`Остановка: cancel для ${ids.length} задач (опрос на клиенте остановлен).`);
     });
 
-    (function sceneWhisperAlignUi() {
-        /** POST URL: сервер отдаёт url_for; если переменной нет — запасной путь с тем же job_id. */
-        const alignScenesPostUrl = {{ (whisper_align_scenes_url | default('/job/' ~ job_id ~ '/whisper/align-scenes', true)) | tojson }};
-        const stripScenesToVoiceLines = (raw) => {
-            const scenes = [];
-            let cur = null;
-            for (const line of (raw || '').split(/\r?\n/)) {
-                const t = line.trim();
-                if (!t) continue;
-                let o;
-                try {
-                    o = JSON.parse(t);
-                } catch {
-                    continue;
-                }
-                if (!o || typeof o !== 'object') continue;
-                if ('scene_id' in o) {
-                    if (cur) scenes.push(cur);
-                    cur = { scene_id: o.scene_id };
-                    continue;
-                }
-                if (!cur) continue;
-                if ('text' in o) cur.text = o.text;
-            }
-            if (cur) scenes.push(cur);
-            const out = [];
-            for (const s of scenes) {
-                out.push(JSON.stringify({ scene_id: String(s.scene_id || '') }));
-                if (s.text != null) out.push(JSON.stringify({ text: s.text }));
-                out.push('');
-            }
-            return out.join('\n').trim();
-        };
-        const btn = document.getElementById('scene-whisper-align-run');
-        const btnStop = document.getElementById('scene-whisper-align-stop');
-        const btnFromJson = document.getElementById('scene-whisper-align-from-json');
-        const btnFillWhisper = document.getElementById('scene-whisper-align-fill-whisper');
-        const btnStrip = document.getElementById('scene-whisper-align-strip-prompts');
-        const incPromptsEl = document.getElementById('scene-whisper-include-prompts-out');
-        const scenesTa = document.getElementById('scene-whisper-align-scenes');
-        const outTa = document.getElementById('scene-whisper-align-out');
-        const logEl = document.getElementById('scene-whisper-align-log');
-        const errEl = document.getElementById('scene-whisper-align-error');
-        const hintEl = document.getElementById('scene-whisper-align-hint');
-        const minRatioEl = document.getElementById('scene-whisper-min-ratio');
-        const anchorWEl = document.getElementById('scene-whisper-anchor-w');
-        const jsonInputEl = document.getElementById('json_input');
-        const whisperResultEl = document.getElementById('whisper-result')
-            || document.getElementById('whisper-align-whisper-json');
-        const whisperLast = {{ job.whisper_last_result | default(none) | tojson }};
-        let alignAbortController = null;
-        const appendAlignLog = (line) => {
-            if (!logEl) return;
-            const stamp = new Date().toLocaleTimeString('ru-RU', { hour12: false });
-            const msg = `[${stamp}] ${line}`;
-            if (logEl.textContent.trim() === 'Лог появится после запуска.') {
-                logEl.textContent = msg;
-            } else {
-                logEl.textContent += `\n${msg}`;
-            }
-            logEl.scrollTop = logEl.scrollHeight;
-        };
-
-        btnFromJson?.addEventListener('click', () => {
-            if (!scenesTa || !jsonInputEl) return;
-            scenesTa.value = jsonInputEl.value || '';
-        });
-
-        btnStrip?.addEventListener('click', () => {
-            if (!scenesTa) return;
-            scenesTa.value = stripScenesToVoiceLines(scenesTa.value);
-        });
-
-        btnFillWhisper?.addEventListener('click', () => {
-            const ta = whisperResultEl;
-            if (!ta) return;
-            const v = (ta.value || '').trim();
-            if (v) return;
-            if (whisperLast && typeof whisperLast === 'object') {
-                ta.value = JSON.stringify(whisperLast, null, 2);
-            }
-        });
-
-        btn?.addEventListener('click', async () => {
-            if (errEl) {
-                errEl.classList.add('hidden');
-                errEl.textContent = '';
-            }
-            if (hintEl) hintEl.textContent = '';
-            if (logEl) logEl.textContent = 'Лог появится после запуска.';
-            const whisperRaw = (whisperResultEl?.value || '').trim();
-            const scenesRaw = (scenesTa?.value || '').trim();
-            if (!whisperRaw) {
-                if (errEl) {
-                    errEl.textContent = 'Вставьте JSON Whisper (поле «Ответ Whisper») или сначала выполните распознавание.';
-                    errEl.classList.remove('hidden');
-                }
-                return;
-            }
-            if (!scenesRaw) {
-                if (errEl) {
-                    errEl.textContent = 'Заполните LDJSON сцен или нажмите «Взять из JSON-кода сцен».';
-                    errEl.classList.remove('hidden');
-                }
-                return;
-            }
-            let whisperObj = null;
-            try {
-                whisperObj = JSON.parse(whisperRaw);
-            } catch (e) {
-                if (errEl) {
-                    errEl.textContent = 'Некорректный JSON в ответе Whisper.';
-                    errEl.classList.remove('hidden');
-                }
-                return;
-            }
-            btn.disabled = true;
-            if (btnStop) btnStop.disabled = false;
-            alignAbortController = new AbortController();
-            try {
-                const minR = parseFloat(minRatioEl?.value || '0.52');
-                const aw = parseFloat(anchorWEl?.value || '0.42');
-                appendAlignLog('Старт сопоставления сцен с Whisper...');
-                appendAlignLog(`Параметры: min_ratio=${Number.isFinite(minR) ? minR : 0.52}, anchor_weight=${Number.isFinite(aw) ? aw : 0.42}`);
-                appendAlignLog(`Промпты в выводе: ${Boolean(incPromptsEl?.checked) ? 'ON' : 'OFF'}`);
-                const resp = await fetch(alignScenesPostUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: alignAbortController.signal,
-                    body: JSON.stringify({
-                        whisper_json: whisperObj,
-                        scenes_ldjson: scenesRaw,
-                        min_ratio: Number.isFinite(minR) ? minR : 0.52,
-                        anchor_weight: Number.isFinite(aw) ? aw : 0.42,
-                        include_prompts_in_output: Boolean(incPromptsEl?.checked),
-                    }),
-                });
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok || !data.ok) {
-                    let msg = data.error || `HTTP ${resp.status}`;
-                    if (resp.status === 404) {
-                        msg += ' — проверьте URL в DevTools (Network): должен совпадать с префиксом страницы /job/… Перезапустите сервис после обновления кода.';
-                    }
-                    appendAlignLog(`Ошибка HTTP: ${msg}`);
-                    throw new Error(msg);
-                }
-                if (outTa) outTa.value = data.ldjson || '';
-                const w = data.warnings || [];
-                const wc = Array.isArray(w) ? w.length : 0;
-                const wordsUsed = data.words_used ?? '?';
-                const scenesParsed = data.scenes_parsed ?? '?';
-                const matched = data.matched_count ?? '?';
-                const unmatched = data.unmatched_count ?? '?';
-                appendAlignLog(`Разобрано сцен: ${scenesParsed}`);
-                appendAlignLog(`Слов из Whisper: ${wordsUsed}`);
-                appendAlignLog(`Совпало: ${matched}, без совпадения: ${unmatched}`);
-                if (wc) {
-                    appendAlignLog(`Предупреждений: ${wc}`);
-                    const warnList = Array.isArray(w) ? w.slice(0, 10) : [];
-                    warnList.forEach((msg) => appendAlignLog(`⚠ ${msg}`));
-                    if (Array.isArray(w) && w.length > warnList.length) {
-                        appendAlignLog(`... и еще ${w.length - warnList.length} предупреждений`);
-                    }
-                } else {
-                    appendAlignLog('Предупреждений нет.');
-                }
-                if (hintEl) {
-                    hintEl.textContent = `Слов в Whisper: ${wordsUsed}. Сцен: ${scenesParsed}. Совпало: ${matched}.`
-                        + (wc ? ` Предупреждений: ${wc}.` : ' Все сцены сопоставлены.');
-                }
-            } catch (e) {
-                if (e?.name === 'AbortError') {
-                    appendAlignLog('Остановлено пользователем.');
-                    if (hintEl) hintEl.textContent = 'Сопоставление остановлено.';
-                    return;
-                }
-                if (errEl) {
-                    errEl.textContent = e?.message || String(e);
-                    errEl.classList.remove('hidden');
-                }
-                appendAlignLog(`Ошибка: ${e?.message || String(e)}`);
-            } finally {
-                alignAbortController = null;
-                btn.disabled = false;
-                if (btnStop) btnStop.disabled = true;
-            }
-        });
-
-        btnStop?.addEventListener('click', () => {
-            if (!alignAbortController) return;
-            alignAbortController.abort();
-            btnStop.disabled = true;
-        });
-    })();
-
     // Resume polling after page refresh for active tasks.
     document.querySelectorAll('.scenes-section .scene-slot[data-slot="start"], .scenes-section .scene-slot[data-slot="end"], .scenes-section .scene-slot[data-slot="video"]').forEach(slotEl => {
         const placeholder = slotEl.querySelector('.slot-placeholder');
@@ -2504,26 +2420,9 @@
         const timeCurrent = document.getElementById('tts-time-current');
         const timeTotal = document.getElementById('tts-time-total');
         const downloadBtn = document.getElementById('tts-download-btn');
-        const whisperBtn = document.getElementById('whisper-transcribe-run');
-        const whisperBusyEl = document.getElementById('whisper-busy');
-        const whisperErrEl = document.getElementById('whisper-error');
-        const whisperLogEl = document.getElementById('whisper-log');
-        const whisperResultEl = document.getElementById('whisper-result');
-        const whisperWordTsEl = document.getElementById('whisper-word-timestamps');
-        const whisperEngineEl = document.getElementById('whisper-engine');
-        const whisperFwModelEl = document.getElementById('whisper-fw-model');
-        const whisperFwComputeEl = document.getElementById('whisper-fw-compute');
-        const openaiKeySet = {{ openai_key_set | tojson }};
         let ttsDownloadFilename = 'tts.mp3';
         let currentAudioFilename = ttsLastAudioFilename || '';
         if (!modelSel || !voiceSel) return;
-        const syncWhisperEngineUi = () => {
-            const isFw = (whisperEngineEl?.value || 'openai') === 'faster-whisper';
-            if (whisperFwModelEl) whisperFwModelEl.disabled = !isFw;
-            if (whisperFwComputeEl) whisperFwComputeEl.disabled = !isFw;
-        };
-        whisperEngineEl?.addEventListener('change', syncWhisperEngineUi);
-        syncWhisperEngineUi();
 
         const sliderIds = {
             speed_pct: 'tts-speed',
@@ -2821,141 +2720,6 @@
             const s = sec % 60;
             return `${m}:${String(s).padStart(2, '0')}`;
         };
-        const appendWhisperLog = (line) => {
-            if (!whisperLogEl) return;
-            const stamp = new Date().toLocaleTimeString('ru-RU', { hour12: false });
-            whisperLogEl.textContent += (whisperLogEl.textContent ? '\n' : '') + `[${stamp}] ${line}`;
-            whisperLogEl.scrollTop = whisperLogEl.scrollHeight;
-        };
-        const setWhisperBusy = (msg, elapsedSec = null) => {
-            if (!whisperBusyEl) return;
-            const wait = Number.isFinite(elapsedSec) ? ` (ждём ${fmtHms(Number(elapsedSec))})` : '';
-            whisperBusyEl.textContent = `${msg || 'Запрос к Whisper…'}${wait}`;
-        };
-
-        whisperBtn?.addEventListener('click', async () => {
-            if (whisperErrEl) {
-                whisperErrEl.classList.add('hidden');
-                whisperErrEl.textContent = '';
-            }
-            if (whisperResultEl) whisperResultEl.value = '';
-            if (whisperLogEl) whisperLogEl.textContent = '';
-
-            if (!currentAudioFilename) {
-                const msg = 'Нет MP3 для транскрибации. Сначала сгенерируйте озвучку в ElevenLabs.';
-                if (whisperErrEl) {
-                    whisperErrEl.textContent = msg;
-                    whisperErrEl.classList.remove('hidden');
-                }
-                return;
-            }
-            const engine = (whisperEngineEl?.value || 'openai').trim();
-            if (engine === 'openai' && !openaiKeySet) {
-                const msg = 'OPENAI_API_KEY не задан. Переключите движок на faster-whisper или укажите ключ.';
-                if (whisperErrEl) {
-                    whisperErrEl.textContent = msg;
-                    whisperErrEl.classList.remove('hidden');
-                }
-                return;
-            }
-
-            whisperBtn.disabled = true;
-            whisperBusyEl?.classList.remove('hidden');
-            appendWhisperLog(`Старт транскрибации файла ${currentAudioFilename}`);
-            appendWhisperLog(`Движок: ${engine}`);
-            appendWhisperLog(
-                `Режим timestamps: ${whisperWordTsEl?.checked ? 'segment + word' : 'segment only'}`
-            );
-            setWhisperBusy('Подготовка запроса к Whisper…', 0);
-
-            try {
-                const resp = await fetch(`/job/${jobId}/whisper/transcribe/stream`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        filename: currentAudioFilename,
-                        engine,
-                        fw_model: whisperFwModelEl?.value || 'small',
-                        fw_device: 'cpu',
-                        fw_compute_type: whisperFwComputeEl?.value || 'int8',
-                        word_timestamps: Boolean(whisperWordTsEl?.checked),
-                    }),
-                });
-                if (!resp.ok) {
-                    let msg = `HTTP ${resp.status}`;
-                    try {
-                        const data = await resp.json();
-                        if (data?.error) msg = data.error;
-                    } catch (_) {}
-                    throw new Error(msg);
-                }
-                const reader = resp.body?.getReader();
-                if (!reader) throw new Error('Нет потокового ответа от сервера');
-
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-                let finalResponse = null;
-
-                const handleEvent = (ev) => {
-                    if (!ev || typeof ev !== 'object') return;
-                    const elapsed = Number(ev.elapsed_seconds);
-                    if (ev.type === 'status') {
-                        const msg = String(ev.message || 'Статус Whisper…');
-                        setWhisperBusy(msg, elapsed);
-                        appendWhisperLog(msg + (Number.isFinite(elapsed) ? ` · ${elapsed.toFixed(1)}с` : ''));
-                        return;
-                    }
-                    if (ev.type === 'error') {
-                        throw new Error(String(ev.error || 'Ошибка Whisper'));
-                    }
-                    if (ev.type === 'result') {
-                        const msg = String(ev.message || 'Whisper завершен');
-                        setWhisperBusy(msg, elapsed);
-                        appendWhisperLog(msg + (Number.isFinite(elapsed) ? ` · ${elapsed.toFixed(1)}с` : ''));
-                        finalResponse = ev.response || null;
-                        if (whisperResultEl) {
-                            whisperResultEl.value = JSON.stringify(finalResponse || {}, null, 2);
-                        }
-                    }
-                };
-
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    let nl = buffer.indexOf('\n');
-                    while (nl >= 0) {
-                        const line = buffer.slice(0, nl).trim();
-                        buffer = buffer.slice(nl + 1);
-                        if (line) {
-                            let ev = null;
-                            try { ev = JSON.parse(line); } catch (_) {}
-                            handleEvent(ev);
-                        }
-                        nl = buffer.indexOf('\n');
-                    }
-                }
-                buffer += decoder.decode();
-                const tail = buffer.trim();
-                if (tail) {
-                    try { handleEvent(JSON.parse(tail)); } catch (_) {}
-                }
-                if (!finalResponse) {
-                    throw new Error('Whisper не вернул итоговый JSON-ответ');
-                }
-            } catch (e) {
-                const msg = e?.message || String(e);
-                appendWhisperLog(`Ошибка: ${msg}`);
-                if (whisperErrEl) {
-                    whisperErrEl.textContent = msg;
-                    whisperErrEl.classList.remove('hidden');
-                }
-            } finally {
-                whisperBtn.disabled = false;
-                whisperBusyEl?.classList.add('hidden');
-            }
-        });
-
         fetch(`/job/${jobId}/elevenlabs/voices`)
             .then((r) => r.json())
             .then((data) => {

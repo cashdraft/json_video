@@ -2,7 +2,7 @@
   "rewrite_id": "rewrite_20260502_193251",
   "project_name": "ИТОГ",
   "created_at": "2026-05-02T19:32:51",
-  "updated_at": "2026-05-07T11:52:22",
+  "updated_at": "2026-05-07T17:54:39",
   "source_text": "You know what's strange? Some of the most intelligent, emotionally aware people you'll ever meet are also some of the most exhausted. Not from doing too much, but from thinking too much. They replay conversations that ended hours ago. They map out scenarios that may never happen. They lie awake at 2am, not because something went wrong, but because their brain refuses to stop asking, what if? And here's the psychological paradox at the heart of this. The very cognitive habit that makes someone thoughtful, careful, and empathetic is the same habit that quietly drains them. Today, we're going to explore the psychology of people who think too much. What's actually happening in their brain, why it develops, and what it really means about who they are. Let's start with what researchers actually call this pattern. Psychologists refer to it as maladaptive rumination, a tendency for the mind to circle back to the same thought loops repeatedly, especially around uncertainty, past events, or social situations. Studies out of Yale and the University of Michigan have consistently shown that people who ruminate aren't doing so because they're weak or anxious. In many cases, they're doing so because their brain is exceptionally good at pattern recognition. It's always scanning, always processing, always looking for meaning. The problem isn't the intelligence, it's that the system never gets a signal to stop. Neurologically, this comes down to a structure you've probably heard of, the prefrontal cortex. This is the part of your brain responsible for planning, analysis, and self-reflection. In overthinkers, this region tends to stay highly active, even during downtime. Meanwhile, the default mode network, which is the brain's background processing system, keeps generating internal monologue. The result is a mind that's essentially always online, always auditing, always drafting responses to conversations that haven't happened yet. What's fascinating is that this pattern usually doesn't start in adulthood. For a large number of overthinkers, the habit begins in childhood or adolescence, often in environments where outcomes felt unpredictable. When a child grows up in a household where moods shifted without warning, or where mistakes had disproportionate consequences, the young brain learns a very logical survival strategy. Think ahead. Anticipate everything. If you can predict what's coming, maybe you can protect yourself. Overthinking, in this light, isn't a flaw. It's an adaptation, a very smart nervous system doing exactly what it was trained to do. Now here's something interesting to pause on. Not all overthinking looks the same. Psychologists generally identify two distinct types. The first is reflective rumination, where the person turns inward to understand themselves, process emotions, and make sense of the world. This version, when balanced, can be a genuine strength. It's linked to higher emotional intelligence and deeper self-awareness. The second type is brooding rumination, a more passive, often distressing pattern.\n\nof dwelling on problems without moving toward resolution. This is where overthinking starts to cost people, in sleep quality, in decision paralysis, in social anxiety that builds from overanalyzing every interaction. The tricky thing is that most overthinkers oscillate between both. A single moment of reflection can slide, almost invisibly, into a spiral. And because the thinking feels productive, because the brain is actively engaged, it can be genuinely difficult to notice when you've crossed from processing to ruminating. Cognitive psychologists describe this as the illusion of mental progress. The mind feels like it's solving something, but it's actually just looping. And this is where dopamine becomes part of the picture. Your brain releases small amounts of dopamine during the act of problem-solving, even imagined problem-solving. So when an overthinker runs through a scenario, analyzing every angle, constructing mental arguments, the brain is partially being rewarded just for the activity itself, not for arriving at an answer, just for thinking. This is why telling someone to just stop thinking about it is neurologically naive. The brain has a chemical incentive to keep going. So what does this pattern actually reveal about a person? Here's what the research suggests, and it might not be what you expect. A 2013 study published in the journal Psychological Science found that people who reported higher levels of rumination also scored significantly higher on measures of cognitive empathy, the ability to understand and anticipate how others might think or feel. They are, on average, more sensitive to social nuance, more aware of how words land, more attuned to the unspoken emotional texture of a room. The very engine that makes overthinking so tiring is also what makes these people remarkably perceptive. But perception without resolution is exhausting, and that's the tension overthinkers live with. They notice everything. They feel the weight of possibilities. And yet, the more they think, the harder clarity seems to become. Because here's the quiet truth that psychology keeps circling back to. The mind cannot think its way out of every problem. Some things have to be felt, decided, or released, not solved. Therapists who work with chronic overthinkers often focus not on stopping the thoughts, but on changing the relationship to them. Acceptance and commitment therapy, for example, teaches a concept called cognitive diffusion, the practice of observing thoughts without fusing with them, of noticing the thought loop without being pulled into it. It's a subtle, but genuinely powerful shift. Instead of, this situation is dangerous and I need to figure it out, the reframe becomes, my brain is generating a concern right now. One pulls you in, the other gives you a fraction of distance. What all of this points to is something that matters far beyond the individual. Overthinking is not a personality defect. It is not evidence of instability or weakness. It is, at its core, a highly active mind that learned to stay alert in a world that once felt uncertain. The challenge isn't to stop the thinking entirely. The challenge is to teach that mind, gently and with patience.\n\nthat it is finally safe enough to rest, and maybe, that's the most human thing about all of this. We all carry cognitive patterns shaped by experiences we didn't choose. Understanding them doesn't erase them, but it does change how much power they have over us. And sometimes, that understanding is exactly where it begins.",
   "stages": {
     "voiceover_editor": {
@@ -26,187 +26,13 @@
       "user_prompt": "Разбей текст на сцены по правилам System Prompt.\n\nТребования:\n— используй весь текст без пропусков\n— не изменяй текст\n— 1 сцена = 1 законченная мысль (~8–20 слов)\n— длинные предложения разбивай, короткие можно объединять (до 2)\n\nФормат строго:\n\n{\"scene_id\":\"scene_001\"}\n{\"text\":\"...original text...\"}\n{\"text_ru\":\"Перевод original text на Русский язык\"}\n{\"start\":{\"prompt\":\"...\"}}\n{\"end\":{\"prompt\"}}\n{\"video\":{\"prompt\":\"...\"}}\n\n(пустая строка между сценами)\n\nНикакого текста вне JSON.",
       "style_prompt": "",
       "past_prompt": "",
-      "scene_writer_check": {
-        "blocks_info": [
-          {
-            "avg_scene_chars": 65.3,
-            "block_chars": 795,
-            "index": 1,
-            "ok": true,
-            "scenes": 12,
-            "with_end": 0,
-            "with_start": 12,
-            "with_video": 12
-          },
-          {
-            "avg_scene_chars": 60.3,
-            "block_chars": 857,
-            "index": 2,
-            "ok": true,
-            "scenes": 14,
-            "with_end": 0,
-            "with_start": 14,
-            "with_video": 14
-          },
-          {
-            "avg_scene_chars": 122,
-            "block_chars": 1106,
-            "index": 3,
-            "ok": true,
-            "scenes": 9,
-            "with_end": 0,
-            "with_start": 9,
-            "with_video": 9
-          },
-          {
-            "avg_scene_chars": 60.3,
-            "block_chars": 735,
-            "index": 4,
-            "ok": true,
-            "scenes": 12,
-            "with_end": 0,
-            "with_start": 12,
-            "with_video": 12
-          },
-          {
-            "avg_scene_chars": 84.9,
-            "block_chars": 944,
-            "index": 5,
-            "ok": true,
-            "scenes": 11,
-            "with_end": 0,
-            "with_start": 11,
-            "with_video": 11
-          },
-          {
-            "avg_scene_chars": 89.5,
-            "block_chars": 1176,
-            "index": 6,
-            "ok": true,
-            "scenes": 13,
-            "with_end": 0,
-            "with_start": 13,
-            "with_video": 13
-          },
-          {
-            "avg_scene_chars": 98.4,
-            "block_chars": 1589,
-            "index": 7,
-            "ok": true,
-            "scenes": 16,
-            "with_end": 0,
-            "with_start": 16,
-            "with_video": 16
-          },
-          {
-            "avg_scene_chars": 78.2,
-            "block_chars": 1267,
-            "index": 8,
-            "ok": true,
-            "scenes": 16,
-            "with_end": 0,
-            "with_start": 16,
-            "with_video": 16
-          },
-          {
-            "avg_scene_chars": 97.4,
-            "block_chars": 1574,
-            "index": 9,
-            "ok": true,
-            "scenes": 16,
-            "with_end": 0,
-            "with_start": 16,
-            "with_video": 16
-          },
-          {
-            "avg_scene_chars": 67.6,
-            "block_chars": 959,
-            "index": 10,
-            "ok": true,
-            "scenes": 14,
-            "with_end": 0,
-            "with_start": 14,
-            "with_video": 14
-          },
-          {
-            "avg_scene_chars": 61.5,
-            "block_chars": 874,
-            "index": 11,
-            "ok": true,
-            "scenes": 14,
-            "with_end": 0,
-            "with_start": 14,
-            "with_video": 14
-          },
-          {
-            "avg_scene_chars": 70,
-            "block_chars": 1135,
-            "index": 12,
-            "ok": true,
-            "scenes": 16,
-            "with_end": 0,
-            "with_start": 16,
-            "with_video": 16
-          },
-          {
-            "avg_scene_chars": 48.1,
-            "block_chars": 637,
-            "index": 13,
-            "ok": true,
-            "scenes": 13,
-            "with_end": 0,
-            "with_start": 13,
-            "with_video": 13
-          },
-          {
-            "avg_scene_chars": 61.9,
-            "block_chars": 754,
-            "index": 14,
-            "ok": true,
-            "scenes": 12,
-            "with_end": 0,
-            "with_start": 12,
-            "with_video": 12
-          },
-          {
-            "avg_scene_chars": 68.5,
-            "block_chars": 694,
-            "index": 15,
-            "ok": true,
-            "scenes": 10,
-            "with_end": 0,
-            "with_start": 10,
-            "with_video": 10
-          },
-          {
-            "avg_scene_chars": 72.1,
-            "block_chars": 657,
-            "index": 16,
-            "ok": true,
-            "scenes": 9,
-            "with_end": 0,
-            "with_start": 9,
-            "with_video": 9
-          }
-        ],
-        "summary": {
-          "avg_scene_chars": 75.2,
-          "blocks": 16,
-          "ok": true,
-          "responses": 16,
-          "scenes": 207,
-          "with_end": 0,
-          "with_start": 207,
-          "with_video": 207
-        },
-        "type": "scene_writer_check"
-      },
+      "scene_writer_check": null,
       "structure_splitter_check": null,
       "block_writer_check": null,
       "model": "gpt-4.1",
       "last_result": "",
       "prompt_locked": true,
-      "user_prompt_locked": false,
+      "user_prompt_locked": true,
       "style_prompt_locked": true,
       "past_prompt_locked": true,
       "scene_writer_live_check": null
@@ -490,67 +316,31 @@
       "scene_writer_live_check": null
     },
     "scene_writer_live": {
-      "prompt": "You are a video production assistant. You receive a list of scenes in JSON format (multiple lines per scene) and must decide which scenes to replace with real stock footage or stock photos.\n\nA scene is a good candidate for stock replacement if:\n- Visual prompts describe natural human behavior: person sitting, thinking, walking, talking, observing\n- Visual prompts describe real environments: office, park, room, street, nature\n- Visual prompts describe real objects, faces, hands, body language\n- The content can be captured by a real camera\n\nA scene is NOT suitable for stock replacement if:\n- Visual prompts describe animations, abstract effects, thought bubbles, swirling lines\n- Visual prompts describe brain diagrams, neural networks, glowing elements\n- Visual prompts describe overlapping images, composite visuals, conceptual metaphors\n- The word \"animated\" or \"animation\" appears in the prompts\n\nOutput rules — strictly follow this format:\n1. Return ALL scenes in the same JSON line format as received\n2. For scenes NOT selected for replacement: return them exactly as received, unchanged, line by line\n3. For scenes selected for replacement: \n   - Return the original scene with scene_id renamed to scene_XXX_1, everything else unchanged\n   - Immediately after, add a new block scene_XXX_2 with ONLY these lines:\n     {\"scene_id\":\"scene_XXX_2\"}\n     {\"text\":\"...same text as original...\"}\n     {\"text_ru\":\"Перевод original text на Русский  язык\"}\n     {\"content_type\":\"photo\" or \"video\"}\n     {\"keywords\":\"keyword 1\",\"keyword 2\",\"keyword 3\",\"keyword 4\"}\n4. No extra fields, no markdown, no explanation, no comments — only raw JSON lines",
-      "user_prompt": "I have  scenes below. Replace approximately  of them 10%.\n\nKeywords must be in English. Each keyword 2–4 words, optimized for Shutterstock/Getty/Pexels.\n\nSCENES:\n",
+      "prompt": "STOCK MEDIA MODE:\n\nThe user prompt will contain:\n\nSTOCK_MEDIA_MODE: photo\nor\nSTOCK_MEDIA_MODE: video\nor\nSTOCK_MEDIA_MODE: both\n\nFollow it strictly.\n\nIf STOCK_MEDIA_MODE is \"photo\":\n\n* every \"_2\" scene must use {\"content_type\":\"photo\"}\n\nIf STOCK_MEDIA_MODE is \"video\":\n\n* every \"_2\" scene must use {\"content_type\":\"video\"}\n\nIf STOCK_MEDIA_MODE is \"both\":\n\n* choose the best content_type for each scene\n\nUse \"photo\" for:\n\n* portraits\n* static emotions\n* thoughtful faces\n* loneliness\n* people sitting\n* quiet moments\n* close-ups\n* symbolic still shots\n\nUse \"video\" for:\n\n* walking\n* talking\n* gestures\n* crowds\n* office interaction\n* group movement\n* people entering/leaving\n* camera motion\n* environmental movement\n* scenes where body language changes over time\n\nSTOCK TARGET PERCENT:\n\nThe user prompt may contain:\n\nSTOCK_TARGET_PERCENT: 30\n\nThis means approximately 30% of input scenes should receive stock alternatives.\n\nFollow this as a soft limit.\n\nRules:\n\n* Do NOT apply stock alternatives to every scene.\n* Select only the best stock candidates.\n* Prefer quality over quantity.\n* If target percent is 30, choose roughly 3 scenes out of 10.\n* If target percent is 50, choose roughly 5 scenes out of 10.\n* If there are fewer good candidates than the target percent, select fewer.\n* Never force stock alternatives onto weak or abstract scenes just to reach the target.\n\nKEYWORD RULES:\n\nKeywords are for searching real stock libraries like Pexels, Shutterstock, Adobe Stock, Getty Images.\n\nKeywords must describe what is VISIBLY searchable.\n\nUse:\n\n* people type\n* action\n* emotion\n* location\n* camera/framing if useful\n* mood if visually clear\n\nGood keyword patterns:\n\n\"tired man, office, close up, stress, holding head\"\n\"woman alone, window light, thoughtful, apartment, solitude\"\n\"group discussion, office meeting, people talking, body language\"\n\"crowd walking, city street, busy people, urban life\"\n\"emotional portrait, serious face, soft light, neutral background\"\n\nAvoid:\n\n* abstract psychology terms\n* poetic descriptions\n* story explanations\n* invisible concepts\n* rare or overly specific phrases\n\nBad keywords:\n\n\"overthinking pattern\"\n\"mind never switches off\"\n\"existential awareness\"\n\"internal loop\"\n\"perceptive intelligence\"\n\nUse 5–9 keywords when possible.\n\nKeep keywords comma-separated in one string.\n\nDo not use hashtags.\n\nDo not use full sentences.\n\nPAIR FORMATTING RULES:\n\nIf you create a stock alternative for a scene, the original scene_id MUST get \"_1\".\n\nCorrect:\n\n{\"scene_id\":\"scene_001_1\"}\n{\"text\":\"...\"}\n{\"text_ru\":\"...\"}\n{\"start\":{\"prompt\":\"...\"}}\n{\"end\":{\"prompt\":null}}\n{\"video\":{\"prompt\":\"...\"}}\n\n{\"scene_id\":\"scene_001_2\"}\n{\"text\":\"...\"}\n{\"text_ru\":\"...\"}\n{\"content_type\":\"photo\"}\n{\"keywords\":\"keyword 1, keyword 2, keyword 3\"}\n\nWrong:\n\n{\"scene_id\":\"scene_001\"}\n...\n{\"scene_id\":\"scene_001_2\"}\n\nThere MUST be one blank line:\n\n* after every complete scene\n* between \"_1\" and \"_2\"\n* between scene groups\n\nOutput format:\n\nscene_001_1 block\n\nscene_001_2 block\n\nscene_002 unchanged block\n\nscene_003_1 block\n\nscene_003_2 block\n",
+      "user_prompt": "Transform these JSONL scenes.\n\nSTOCK_MEDIA_MODE: Photos\nSTOCK_TARGET_PERCENT: 100\n\nIf a scene can realistically use stock media:\n\n* convert original scene_id to \"_1\"\n* add a \"_2\" stock-search scene\n\nIf not:\n\n* keep scene unchanged\n\nPreserve exact JSONL formatting.\n\nINPUT:\n\n{{SCENES_JSONL}}\n",
       "style_prompt": "videos",
-      "past_prompt": "33",
+      "past_prompt": "38",
       "scene_writer_live_check": {
         "type": "scene_writer_live_check",
         "summary": {
-          "batches": 5,
-          "responses": 5,
+          "batches": 1,
+          "responses": 1,
           "ok": false,
-          "scenes_in": 207,
-          "scenes_out": 252,
-          "with_target_content": 157,
+          "scenes_in": 19,
+          "scenes_out": 38,
+          "with_target_content": 19,
           "content_type": "videos",
-          "target_percent": 33,
-          "avg_scene_chars": 58.5
+          "target_percent": 38,
+          "avg_scene_chars": 61.7
         },
         "batches_info": [
           {
             "index": 1,
-            "input_scenes": 50,
-            "output_scenes": 66,
-            "input_chars": 3685,
-            "output_chars": 992,
-            "with_target_content": 0,
-            "ok": false
-          },
-          {
-            "index": 2,
-            "input_scenes": 50,
-            "output_scenes": 61,
-            "input_chars": 4185,
-            "output_chars": 5111,
-            "with_target_content": 50,
-            "ok": false
-          },
-          {
-            "index": 3,
-            "input_scenes": 50,
-            "output_scenes": 56,
-            "input_chars": 4075,
-            "output_chars": 4430,
-            "with_target_content": 50,
-            "ok": false
-          },
-          {
-            "index": 4,
-            "input_scenes": 50,
-            "output_scenes": 59,
-            "input_chars": 3088,
-            "output_chars": 3473,
-            "with_target_content": 50,
-            "ok": false
-          },
-          {
-            "index": 5,
-            "input_scenes": 7,
-            "output_scenes": 10,
-            "input_chars": 529,
-            "output_chars": 745,
-            "with_target_content": 7,
+            "input_scenes": 19,
+            "output_scenes": 38,
+            "input_chars": 1172,
+            "output_chars": 2344,
+            "with_target_content": 19,
             "ok": false
           }
         ]
@@ -577,7 +367,7 @@
   "duration_minutes": 5,
   "hero_prompt": "HERO PROMPT — THE CLEAR THINKER\nThe hero is a calm, highly observant man aged 25–35.\nHe doesn’t look like an expert.\nHe doesn’t look like a psychologist.\nHe looks like an ordinary guy who just understands people unusually well.\nAppearance:\n\nNeutral and understated\nNeat and clean\nNo strong personal style or standout features\nBasic, clean clothing (t-shirt, sweatshirt, button-up shirt)\nCalm facial expression\nAttentive, sharp gaze\n\nHe should feel like:\n“The kind of person who is about to explain you to yourself.”\nEnergy:\nCalmness + Clarity + Precision\n\nVOICE PROMPT — PSYCHOLOGY CHANNEL\nYou explain why people behave the way they do.\nYou don’t motivate.\nYou don’t teach how to live.\nYou don’t give advice.\nYou show:\n— Why people act the way they do\n— What patterns lie behind their behavior\n— What they actually feel inside\nStyle:\n\nExtremely simple language\nShort sentences\nThe strong feeling of “This is about me”\nNo fluff, no filler\nNo academic tone\n\nYou speak as if you’re revealing the hidden mechanics of human behavior.\nYou don’t pressure.\nYou simply show the truth.",
   "chars_per_minute": 344,
-  "rewrite_template": "Base Template",
+  "rewrite_template": "Тест",
   "hero_prompt_locked": true,
   "audio_timing_locked": true,
   "youtube_url": "https://www.youtube.com/watch?v=La3WDl3WqjQ",

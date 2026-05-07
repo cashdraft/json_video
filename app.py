@@ -56,10 +56,6 @@ from flask import (
 )
 import requests
 from yt_dlp import YoutubeDL
-try:
-    from faster_whisper import WhisperModel as FasterWhisperModel
-except Exception:
-    FasterWhisperModel = None  # type: ignore[assignment]
 
 from image_templates import (
     IMAGE_TEMPLATES_DIR,
@@ -463,8 +459,6 @@ app.config["MAX_FORM_MEMORY_SIZE"] = 64 * 1024 * 1024
 # Если nginx не отдаёт /static/ с того же хоста: STATIC_STYLE_HREF=https://…/static/style.css
 app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
 GENERATION_TASKS: dict[str, dict] = {}
-_FW_MODEL_CACHE_LOCK = threading.Lock()
-_FW_MODEL_CACHE: dict[tuple[str, str, str], Any] = {}
 
 
 def public_base_url_for_kie() -> str:
@@ -683,8 +677,20 @@ def _scene_media_batch_check(
     out_chars = sum(len(str((s or {}).get("text") or "")) for s in (scenes_out or []))
     with_ct = 0
     for s in scenes_out:
-        slot = s.get("video") if content_type == "videos" else s.get("start")
-        if isinstance(slot, dict) and str(slot.get("prompt") or "").strip():
+        if content_type == "videos":
+            slot = s.get("video")
+            ok = isinstance(slot, dict) and bool(str(slot.get("prompt") or "").strip())
+        elif content_type == "mixed":
+            v = s.get("video")
+            st = s.get("start")
+            ok = (
+                (isinstance(v, dict) and bool(str(v.get("prompt") or "").strip()))
+                or (isinstance(st, dict) and bool(str(st.get("prompt") or "").strip()))
+            )
+        else:
+            slot = s.get("start")
+            ok = isinstance(slot, dict) and bool(str(slot.get("prompt") or "").strip())
+        if ok:
             with_ct += 1
     return {
         "index": idx,
@@ -815,6 +821,7 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
             current_scene = {
                 "scene_id": obj.get("scene_id"),
                 "text": None,
+                "text_ru": None,
                 "start": None,
                 "end": None,
                 "video": None,
@@ -828,6 +835,11 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
         # Блок text
         if "text" in obj:
             current_scene["text"] = obj.get("text")
+            continue
+
+        # Блок text_ru — русский перевод; необязательный, под текстом сцены.
+        if "text_ru" in obj:
+            current_scene["text_ru"] = obj.get("text_ru")
             continue
 
         # Блок start
@@ -907,10 +919,12 @@ def normalize_scene(scene_parts: dict) -> dict:
     return {
         "scene_id": scene_parts.get("scene_id", ""),
         "text": scene_parts.get("text") or "",
+        "text_ru": scene_parts.get("text_ru") or "",
         "content_type": scene_parts.get("content_type") or "",
         "keywords": scene_parts.get("keywords") or "",
         "excluded_keywords": scene_parts.get("excluded_keywords") if isinstance(scene_parts.get("excluded_keywords"), list) else [],
         "pexels_results": scene_parts.get("pexels_results") if isinstance(scene_parts.get("pexels_results"), list) else [],
+        "pexels_selected_indices": scene_parts.get("pexels_selected_indices") if isinstance(scene_parts.get("pexels_selected_indices"), list) else [],
         "start": scene_parts.get("start") or {"prompt": None},
         "end": scene_parts.get("end") or {"prompt": None},
         "video": scene_parts.get("video") or {"prompt": None},
@@ -1941,812 +1955,6 @@ def _rewrite_transcription_text(
         except OSError:
             pass
     return "\n\n".join(parts).strip(), None
-
-
-def _fw_get_model(model_name: str, device: str, compute_type: str):
-    if FasterWhisperModel is None:
-        raise RuntimeError("faster-whisper не установлен в окружении сервера.")
-    key = (model_name, device, compute_type)
-    with _FW_MODEL_CACHE_LOCK:
-        cached = _FW_MODEL_CACHE.get(key)
-        if cached is not None:
-            return cached
-        model = FasterWhisperModel(model_name, device=device, compute_type=compute_type)
-        _FW_MODEL_CACHE[key] = model
-        return model
-
-
-@app.route("/job/<job_id>/whisper/transcribe/stream", methods=["POST"])
-def job_whisper_transcribe_stream(job_id: str):
-    """Транскрибация последней TTS-озвучки через OpenAI Whisper или локальный faster-whisper."""
-    body = request.get_json(silent=True) or {}
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    raw_engine = str(body.get("engine") or "openai").strip().lower()
-    engine = "faster-whisper" if raw_engine in {"faster-whisper", "faster_whisper", "local"} else "openai"
-    fw_model_name = str(body.get("fw_model") or "small").strip() or "small"
-    fw_device = str(body.get("fw_device") or "cpu").strip().lower() or "cpu"
-    fw_compute = str(body.get("fw_compute_type") or "int8").strip().lower() or "int8"
-    raw_word_ts = body.get("word_timestamps", False)
-    if isinstance(raw_word_ts, str):
-        want_word_timestamps = raw_word_ts.strip().lower() in {"1", "true", "yes", "on"}
-    else:
-        want_word_timestamps = bool(raw_word_ts)
-
-    def _ev(payload: dict[str, Any]) -> str:
-        return json.dumps(payload, ensure_ascii=False) + "\n"
-
-    @stream_with_context
-    def gen():
-        started = time.monotonic()
-
-        def elapsed() -> float:
-            return round(max(0.0, time.monotonic() - started), 1)
-
-        if engine == "openai" and not api_key:
-            yield _ev({"type": "error", "error": "Не задан OPENAI_API_KEY в .env", "elapsed_seconds": elapsed()})
-            return
-
-        with _job_file_lock(job_id):
-            job = load_job(job_id)
-            if job is None:
-                yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
-                return
-
-        audio_dir = JOB_AUDIO_DIR / job_id
-        requested_name = str(body.get("filename") or "").strip()
-        audio_path: Path | None = None
-        if requested_name:
-            cand = (audio_dir / requested_name).resolve()
-            try:
-                cand.relative_to(audio_dir.resolve())
-                if cand.is_file() and cand.suffix.lower() == ".mp3":
-                    audio_path = cand
-            except Exception:
-                audio_path = None
-        if audio_path is None and audio_dir.is_dir():
-            mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if mp3s:
-                audio_path = mp3s[0]
-        if audio_path is None or not audio_path.is_file():
-            yield _ev(
-                {
-                    "type": "error",
-                    "error": "Не найден MP3 для транскрибации. Сначала сгенерируйте озвучку в блоке ElevenLabs.",
-                    "elapsed_seconds": elapsed(),
-                }
-            )
-            return
-
-        try:
-            src_bytes = int(audio_path.stat().st_size)
-        except OSError:
-            src_bytes = 0
-        src_duration = _probe_audio_duration_seconds(audio_path)
-        yield _ev(
-            {
-                "type": "status",
-                "phase": "source",
-                "filename": audio_path.name,
-                "file_bytes": src_bytes,
-                "duration_seconds": src_duration,
-                "message": f"Источник: {audio_path.name} ({src_bytes} байт).",
-                "elapsed_seconds": elapsed(),
-            }
-        )
-
-        if engine == "faster-whisper":
-            yield _ev(
-                {
-                    "type": "status",
-                    "phase": "plan",
-                    "engine": "faster-whisper",
-                    "message": (
-                        f"Локальный faster-whisper: model={fw_model_name}, device={fw_device}, compute_type={fw_compute}."
-                        + (" Таймкоды слов: ON." if want_word_timestamps else " Таймкоды слов: OFF.")
-                    ),
-                    "elapsed_seconds": elapsed(),
-                    "word_timestamps": want_word_timestamps,
-                }
-            )
-            try:
-                model = _fw_get_model(fw_model_name, fw_device, fw_compute)
-            except Exception as e:
-                yield _ev(
-                    {
-                        "type": "error",
-                        "error": f"Не удалось инициализировать faster-whisper ({fw_model_name}/{fw_device}/{fw_compute}): {e}",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-                return
-            try:
-                segments_iter, info = model.transcribe(
-                    str(audio_path),
-                    word_timestamps=want_word_timestamps,
-                    vad_filter=False,
-                )
-                all_segments: list[dict[str, Any]] = []
-                next_segment_id = 0
-                word_count = 0
-                text_parts: list[str] = []
-                for seg in segments_iter:
-                    txt = str(getattr(seg, "text", "") or "").strip()
-                    st = float(getattr(seg, "start", 0.0) or 0.0)
-                    en = float(getattr(seg, "end", st) or st)
-                    if en < st:
-                        en = st
-                    if not txt:
-                        continue
-                    norm_seg: dict[str, Any] = {
-                        "id": next_segment_id,
-                        "start": round(st, 3),
-                        "end": round(en, 3),
-                        "text": txt,
-                    }
-                    if want_word_timestamps:
-                        words_raw = getattr(seg, "words", None)
-                        if words_raw:
-                            words_norm: list[dict[str, Any]] = []
-                            for w in words_raw:
-                                wtxt = str(getattr(w, "word", "") or "").strip()
-                                if not wtxt:
-                                    continue
-                                wst = float(getattr(w, "start", st) or st)
-                                wen = float(getattr(w, "end", wst) or wst)
-                                if wen < wst:
-                                    wen = wst
-                                words_norm.append({"word": wtxt, "start": round(wst, 3), "end": round(wen, 3)})
-                            if words_norm:
-                                norm_seg["words"] = words_norm
-                                word_count += len(words_norm)
-                    all_segments.append(norm_seg)
-                    text_parts.append(txt)
-                    next_segment_id += 1
-                response_payload: dict[str, Any] = {
-                    "segments": all_segments,
-                    "text": " ".join(text_parts).strip(),
-                    "word_timestamps": want_word_timestamps,
-                    "word_count": word_count,
-                    "engine": "faster-whisper",
-                    "model": fw_model_name,
-                }
-                lang = str(getattr(info, "language", "") or "")
-                if lang:
-                    response_payload["language"] = lang
-                if want_word_timestamps and word_count == 0:
-                    response_payload["word_timestamps_warning"] = (
-                        "Word-level timestamps были запрошены, но faster-whisper не вернул words."
-                    )
-                    yield _ev(
-                        {
-                            "type": "status",
-                            "phase": "final_words_missing",
-                            "message": "Word-level timestamps запрошены, но words в ответе не получены.",
-                            "elapsed_seconds": elapsed(),
-                        }
-                    )
-                with _job_file_lock(job_id):
-                    job2 = load_job(job_id)
-                    if isinstance(job2, dict):
-                        job2["whisper_last_result"] = response_payload
-                        job2["whisper_last_audio"] = audio_path.name
-                        save_job(job_id, job2)
-                yield _ev(
-                    {
-                        "type": "result",
-                        "ok": True,
-                        "response": response_payload,
-                        "segments": len(all_segments),
-                        "chars": len(response_payload.get("text") or ""),
-                        "message": f"Готово: {len(all_segments)} сегментов (faster-whisper).",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-                return
-            except Exception as e:
-                yield _ev(
-                    {
-                        "type": "error",
-                        "error": f"Ошибка faster-whisper: {e}",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-                return
-
-        split_events: list[dict[str, Any]] = []
-
-        def _split_progress(ev: dict[str, Any]) -> None:
-            split_events.append(ev)
-
-        chunks = _split_audio_for_transcription(audio_path, segment_seconds=180, progress=_split_progress)
-        total = len(chunks)
-        for ev in split_events:
-            msg = str(ev.get("message") or "").strip()
-            if not msg:
-                continue
-            yield _ev(
-                {
-                    "type": "status",
-                    "phase": "split",
-                    "message": msg,
-                    "elapsed_seconds": elapsed(),
-                    "details": ev,
-                }
-            )
-        yield _ev(
-            {
-                "type": "status",
-                "phase": "plan",
-                "total_chunks": total,
-                "message": (
-                    ("Один запрос к Whisper API." if total == 1 else f"Будет {total} запросов к Whisper API (по одному на chunk).")
-                    + (" Таймкоды слов: ON." if want_word_timestamps else " Таймкоды слов: OFF.")
-                ),
-                "elapsed_seconds": elapsed(),
-                "word_timestamps": want_word_timestamps,
-            }
-        )
-
-        all_segments: list[dict[str, Any]] = []
-        full_text_parts: list[str] = []
-        cumulative_offset = 0.0
-        next_segment_id = 0
-        language = ""
-
-        total_words_returned = 0
-        for i, ch in enumerate(chunks, start=1):
-            try:
-                ch_bytes = int(ch.stat().st_size) if ch.is_file() else 0
-            except OSError:
-                ch_bytes = 0
-            chunk_started = time.monotonic()
-            payload: dict[str, Any] = {}
-            raw_segments: list[Any] = []
-            chunk_has_words = False
-            max_attempts = 2 if want_word_timestamps else 1
-            for attempt in range(1, max_attempts + 1):
-                attempt_note = f" (попытка {attempt}/{max_attempts})" if max_attempts > 1 else ""
-                yield _ev(
-                    {
-                        "type": "status",
-                        "phase": "chunk_request",
-                        "chunk_index": i,
-                        "total_chunks": total,
-                        "chunk_file": ch.name,
-                        "chunk_bytes": ch_bytes,
-                        "message": f"[{i}/{total}] Отправили chunk в Whisper: {ch_bytes} байт. Ожидание ответа…{attempt_note}",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-                try:
-                    with open(ch, "rb") as f:
-                        mime = mimetypes.guess_type(ch.name)[0] or "application/octet-stream"
-                        req_data: list[tuple[str, str]] = [
-                            ("model", "whisper-1"),
-                            ("response_format", "verbose_json"),
-                            ("timestamp_granularities[]", "segment"),
-                        ]
-                        if want_word_timestamps:
-                            req_data.append(("timestamp_granularities[]", "word"))
-                        r = requests.post(
-                            "https://api.openai.com/v1/audio/transcriptions",
-                            headers={"Authorization": f"Bearer {api_key}"},
-                            files={"file": (ch.name, f, mime)},
-                            data=req_data,
-                            timeout=900,
-                        )
-                except requests.RequestException as e:
-                    yield _ev({"type": "error", "error": f"Сеть/таймаут (chunk {i}/{total}): {e}", "elapsed_seconds": elapsed()})
-                    return
-
-                if not r.ok:
-                    try:
-                        err = (r.json().get("error") or {}).get("message") or ""
-                    except Exception:
-                        err = ""
-                    msg = err or (r.text or "")[:700] or f"HTTP {r.status_code}"
-                    yield _ev({"type": "error", "error": f"{msg} (chunk {i}/{total})", "elapsed_seconds": elapsed()})
-                    return
-
-                try:
-                    payload = r.json() or {}
-                except Exception:
-                    payload = {}
-
-                rs = payload.get("segments")
-                raw_segments = rs if isinstance(rs, list) else []
-                chunk_has_words = any(
-                    isinstance(seg, dict)
-                    and isinstance(seg.get("words"), list)
-                    and bool(seg.get("words"))
-                    for seg in raw_segments
-                )
-                if want_word_timestamps and (not chunk_has_words) and attempt < max_attempts:
-                    yield _ev(
-                        {
-                            "type": "status",
-                            "phase": "chunk_retry_no_words",
-                            "chunk_index": i,
-                            "total_chunks": total,
-                            "message": f"[{i}/{total}] Whisper не вернул words, повторяем chunk еще раз…",
-                            "elapsed_seconds": elapsed(),
-                        }
-                    )
-                    continue
-                break
-
-            if not language:
-                language = str(payload.get("language") or "")
-            chunk_text = str(payload.get("text") or "").strip()
-            if chunk_text:
-                full_text_parts.append(chunk_text)
-
-            if want_word_timestamps and not chunk_has_words:
-                yield _ev(
-                    {
-                        "type": "status",
-                        "phase": "chunk_words_missing",
-                        "chunk_index": i,
-                        "total_chunks": total,
-                        "message": f"[{i}/{total}] В ответе нет word timestamps: используем только segment timestamps.",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-
-            chunk_last_end = 0.0
-            normalized_segments: list[dict[str, Any]] = []
-            for seg in raw_segments:
-                if not isinstance(seg, dict):
-                    continue
-                txt = str(seg.get("text") or "").strip()
-                if not txt:
-                    continue
-                try:
-                    st = float(seg.get("start") or 0.0)
-                except (TypeError, ValueError):
-                    st = 0.0
-                try:
-                    en = float(seg.get("end") or st)
-                except (TypeError, ValueError):
-                    en = st
-                if en < st:
-                    en = st
-                chunk_last_end = max(chunk_last_end, en)
-                normalized_segments.append(
-                    {
-                        "id": next_segment_id,
-                        "start": round(cumulative_offset + st, 3),
-                        "end": round(cumulative_offset + en, 3),
-                        "text": txt,
-                    }
-                )
-                if want_word_timestamps:
-                    words_raw = seg.get("words")
-                    words_norm: list[dict[str, Any]] = []
-                    if isinstance(words_raw, list):
-                        for w in words_raw:
-                            if not isinstance(w, dict):
-                                continue
-                            wtxt = str(w.get("word") or "").strip()
-                            if not wtxt:
-                                continue
-                            try:
-                                wst = float(w.get("start") or 0.0)
-                            except (TypeError, ValueError):
-                                wst = 0.0
-                            try:
-                                wen = float(w.get("end") or wst)
-                            except (TypeError, ValueError):
-                                wen = wst
-                            if wen < wst:
-                                wen = wst
-                            words_norm.append(
-                                {
-                                    "word": wtxt,
-                                    "start": round(cumulative_offset + wst, 3),
-                                    "end": round(cumulative_offset + wen, 3),
-                                }
-                            )
-                    if words_norm:
-                        total_words_returned += len(words_norm)
-                        normalized_segments[-1]["words"] = words_norm
-                next_segment_id += 1
-
-            if not normalized_segments and chunk_text:
-                dur = _probe_audio_duration_seconds(ch) or 0.0
-                normalized_segments.append(
-                    {
-                        "id": next_segment_id,
-                        "start": round(cumulative_offset, 3),
-                        "end": round(cumulative_offset + max(0.0, dur), 3),
-                        "text": chunk_text,
-                    }
-                )
-                next_segment_id += 1
-                chunk_last_end = max(chunk_last_end, dur)
-
-            all_segments.extend(normalized_segments)
-            chunk_wait = round(max(0.0, time.monotonic() - chunk_started), 1)
-            yield _ev(
-                {
-                    "type": "status",
-                    "phase": "chunk_done",
-                    "chunk_index": i,
-                    "total_chunks": total,
-                    "chunk_wait_seconds": chunk_wait,
-                    "chunk_text_chars": len(chunk_text),
-                    "chunk_segments": len(normalized_segments),
-                    "message": f"[{i}/{total}] Ответ получен: {len(normalized_segments)} сегментов, {len(chunk_text)} символов.",
-                    "elapsed_seconds": elapsed(),
-                }
-            )
-            cumulative_offset += max(0.0, chunk_last_end)
-
-        if len(chunks) > 1:
-            for p in chunks:
-                try:
-                    p.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            try:
-                (audio_path.parent / "_transcribe_chunks").rmdir()
-            except OSError:
-                pass
-
-        response_payload: dict[str, Any] = {
-            "segments": all_segments,
-            "text": " ".join(part for part in full_text_parts if part).strip(),
-            "word_timestamps": want_word_timestamps,
-            "word_count": total_words_returned,
-        }
-        if language:
-            response_payload["language"] = language
-        if want_word_timestamps and total_words_returned == 0:
-            response_payload["word_timestamps_warning"] = (
-                "Word-level timestamps были запрошены, но API вернул только segments."
-            )
-            yield _ev(
-                {
-                    "type": "status",
-                    "phase": "final_words_missing",
-                    "message": "Word-level timestamps запрошены, но API вернул только segments.",
-                    "elapsed_seconds": elapsed(),
-                }
-            )
-
-        with _job_file_lock(job_id):
-            job2 = load_job(job_id)
-            if isinstance(job2, dict):
-                job2["whisper_last_result"] = response_payload
-                job2["whisper_last_audio"] = audio_path.name
-                save_job(job_id, job2)
-
-        yield _ev(
-            {
-                "type": "result",
-                "ok": True,
-                "response": response_payload,
-                "segments": len(all_segments),
-                "chars": len(response_payload.get("text") or ""),
-                "message": f"Готово: {len(all_segments)} сегментов.",
-                "elapsed_seconds": elapsed(),
-            }
-        )
-
-    return Response(gen(), mimetype="application/x-ndjson; charset=utf-8")
-
-
-def _align_norm_token(t: str) -> str:
-    s = (t or "").strip().lower()
-    while s and not (s[0].isalnum() or ("\u0400" <= s[0] <= "\u04ff")):
-        s = s[1:]
-    while s and not (s[-1].isalnum() or ("\u0400" <= s[-1] <= "\u04ff")):
-        s = s[:-1]
-    return s
-
-
-def _align_norm_phrase(s: str) -> str:
-    parts: list[str] = []
-    for w in (s or "").split():
-        nw = _align_norm_token(w)
-        if nw:
-            parts.append(nw)
-    return " ".join(parts)
-
-
-def _whisper_flat_words(segments: list[Any]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for seg in segments:
-        if not isinstance(seg, dict):
-            continue
-        try:
-            st = float(seg.get("start") or 0.0)
-        except (TypeError, ValueError):
-            st = 0.0
-        try:
-            en = float(seg.get("end") or st)
-        except (TypeError, ValueError):
-            en = st
-        if en < st:
-            en = st
-        words_raw = seg.get("words")
-        if isinstance(words_raw, list) and words_raw:
-            for w in words_raw:
-                if not isinstance(w, dict):
-                    continue
-                wtxt = str(w.get("word") or "").strip()
-                if not wtxt:
-                    continue
-                try:
-                    wst = float(w.get("start") or 0.0)
-                except (TypeError, ValueError):
-                    wst = st
-                try:
-                    wen = float(w.get("end") or wst)
-                except (TypeError, ValueError):
-                    wen = wst
-                if wen < wst:
-                    wen = wst
-                nt = _align_norm_token(wtxt)
-                if not nt:
-                    continue
-                out.append({"norm": nt, "start": wst, "end": wen, "raw": wtxt})
-            continue
-        txt = str(seg.get("text") or "").strip()
-        raw_parts = txt.split()
-        if not raw_parts:
-            continue
-        n = len(raw_parts)
-        dur = max(en - st, 0.0)
-        for i, rp in enumerate(raw_parts):
-            ws = st + dur * i / n
-            we = st + dur * (i + 1) / n
-            nt = _align_norm_token(rp)
-            if not nt:
-                continue
-            out.append({"norm": nt, "start": ws, "end": we, "raw": rp})
-    return out
-
-
-def _parse_scenes_ldjson(raw: str) -> list[dict[str, Any]]:
-    scenes: list[dict[str, Any]] = []
-    current: dict[str, Any] | None = None
-    for line in (raw or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(obj, dict):
-            continue
-        if "scene_id" in obj:
-            if current:
-                scenes.append(current)
-            current = {"scene_id": str(obj.get("scene_id") or "").strip()}
-        elif current is not None:
-            if "text" in obj:
-                current["text"] = obj.get("text")
-            if "start" in obj:
-                current["start"] = obj.get("start")
-            if "video" in obj:
-                current["video"] = obj.get("video")
-        else:
-            continue
-    if current:
-        scenes.append(current)
-    return scenes
-
-
-def _best_word_span_for_scene(
-    words: list[dict[str, Any]],
-    scene_norm: str,
-    scene_tokens: list[str],
-    search_from: int,
-    *,
-    min_ratio: float,
-    anchor_weight: float,
-) -> dict[str, Any] | None:
-    if not scene_norm or not scene_tokens or not words:
-        return None
-    n_words = len(words)
-    stoks = len(scene_tokens)
-    max_span = min(max(stoks * 8 + 80, stoks + 40), min(600, n_words))
-    best: tuple[float, int, int, float, float, float] | None = None
-
-    for i in range(search_from, n_words):
-        acc: list[str] = []
-        for j in range(i, min(i + max_span, n_words)):
-            acc.append(str(words[j].get("norm") or ""))
-            chunk = " ".join(acc)
-            if len(chunk) > len(scene_norm) * 3 + 60:
-                break
-            ratio = difflib.SequenceMatcher(None, chunk, scene_norm).ratio()
-            pref = (
-                difflib.SequenceMatcher(None, str(words[i].get("norm") or ""), scene_tokens[0]).ratio()
-                if scene_tokens
-                else 1.0
-            )
-            suff = (
-                difflib.SequenceMatcher(None, str(words[j].get("norm") or ""), scene_tokens[-1]).ratio()
-                if scene_tokens
-                else 1.0
-            )
-            score = ratio * (1.0 - anchor_weight) + (pref + suff) * 0.5 * anchor_weight
-            if best is None or score > best[0]:
-                best = (score, i, j, ratio, pref, suff)
-
-    if best is None:
-        return None
-    _sc, i, j, ratio, pref, suff = best
-    if ratio < min_ratio and max(pref, suff) < 0.35:
-        return None
-    if ratio < min_ratio * 0.75 and min(pref, suff) < 0.25:
-        return None
-    t0 = float(words[i].get("start") or 0.0)
-    t1 = float(words[j].get("end") or t0)
-    return {
-        "voice_start": round(t0, 3),
-        "voice_end": round(max(t1, t0), 3),
-        "match_ratio": round(float(ratio), 4),
-        "anchor_first": round(float(pref), 4),
-        "anchor_last": round(float(suff), 4),
-        "word_from": i,
-        "word_to": j,
-    }
-
-
-def align_whisper_scenes_payload(
-    whisper: dict[str, Any],
-    scenes_ldjson: str,
-    *,
-    min_ratio: float = 0.52,
-    anchor_weight: float = 0.42,
-    include_prompts_in_output: bool = False,
-) -> tuple[list[dict[str, Any]], str, list[str]]:
-    warnings: list[str] = []
-    segments = whisper.get("segments")
-    if not isinstance(segments, list):
-        segments = []
-    words = _whisper_flat_words(segments)
-    if not words and segments:
-        warnings.append("Нет слов для выравнивания: включите word-level timestamps или проверьте segments.")
-    scenes = _parse_scenes_ldjson(scenes_ldjson)
-    if not scenes:
-        warnings.append("Не удалось разобрать сценарий (LDJSON по строкам).")
-
-    items: list[dict[str, Any]] = []
-    ld_lines: list[str] = []
-    search_from = 0
-
-    for sc in scenes:
-        sid = str(sc.get("scene_id") or "").strip() or "?"
-        raw_text = sc.get("text")
-        text_val = raw_text if isinstance(raw_text, str) else ("" if raw_text is None else str(raw_text))
-        scene_norm = _align_norm_phrase(text_val)
-        scene_tokens = scene_norm.split()
-        entry: dict[str, Any] = {
-            "scene_id": sid,
-            "text": text_val,
-            "voice_start": None,
-            "voice_end": None,
-            "match_ratio": None,
-            "warning": None,
-        }
-        if not scene_norm:
-            entry["warning"] = "empty_text"
-            warnings.append(f"{sid}: пустой text.")
-        elif not words:
-            entry["warning"] = "no_whisper_words"
-        else:
-            span = _best_word_span_for_scene(
-                words,
-                scene_norm,
-                scene_tokens,
-                search_from,
-                min_ratio=min_ratio,
-                anchor_weight=anchor_weight,
-            )
-            if span:
-                entry["voice_start"] = span["voice_start"]
-                entry["voice_end"] = span["voice_end"]
-                entry["match_ratio"] = span["match_ratio"]
-                entry["anchors"] = {"first": span["anchor_first"], "last": span["anchor_last"]}
-                search_from = max(search_from, int(span["word_to"]) + 1)
-            else:
-                entry["warning"] = "no_match"
-                warnings.append(f'{sid}: низкое совпадение с Whisper (text: "{text_val[:48]}…").')
-
-        items.append(entry)
-
-        ld_lines.append(json.dumps({"scene_id": sid}, ensure_ascii=False))
-        ld_lines.append(json.dumps({"text": text_val}, ensure_ascii=False))
-        if entry["voice_start"] is not None and entry["voice_end"] is not None:
-            ld_lines.append(
-                json.dumps(
-                    {"voice_start": entry["voice_start"], "voice_end": entry["voice_end"]},
-                    ensure_ascii=False,
-                )
-            )
-            if entry.get("match_ratio") is not None:
-                ld_lines.append(json.dumps({"match_ratio": entry["match_ratio"]}, ensure_ascii=False))
-        else:
-            ld_lines.append(json.dumps({"voice_start": None, "voice_end": None}, ensure_ascii=False))
-        if entry.get("warning"):
-            ld_lines.append(json.dumps({"warning": entry["warning"]}, ensure_ascii=False))
-        if include_prompts_in_output:
-            sp = sc.get("start")
-            if isinstance(sp, dict):
-                ld_lines.append(json.dumps({"start": sp}, ensure_ascii=False))
-            vp = sc.get("video")
-            if isinstance(vp, dict):
-                ld_lines.append(json.dumps({"video": vp}, ensure_ascii=False))
-        ld_lines.append("")
-
-    return items, "\n".join(ld_lines).strip() + ("\n" if ld_lines else ""), warnings
-
-
-@app.route("/job/<job_id>/whisper/align-scenes", methods=["POST"])
-def job_whisper_align_scenes(job_id: str):
-    """Нечёткое сопоставление строк сцен с таймлайном Whisper (segments[].words)."""
-    if load_job(job_id) is None:
-        return jsonify({"ok": False, "error": "Job not found"}), 404
-    body = request.get_json(silent=True) or {}
-    raw_whisper = body.get("whisper_json") or body.get("whisper")
-    whisper: dict[str, Any] | None = None
-    if isinstance(raw_whisper, dict):
-        whisper = raw_whisper
-    elif isinstance(raw_whisper, str):
-        try:
-            w = json.loads(raw_whisper)
-            whisper = w if isinstance(w, dict) else None
-        except json.JSONDecodeError:
-            whisper = None
-    if whisper is None:
-        return jsonify({"ok": False, "error": "Нужен объект Whisper JSON (поле whisper_json)."}), 400
-
-    scenes_raw = body.get("scenes_ldjson") or body.get("scenes") or ""
-    if not isinstance(scenes_raw, str) or not scenes_raw.strip():
-        return jsonify({"ok": False, "error": "Нужен текст сценария (строки LDJSON, поле scenes_ldjson)."}), 400
-
-    try:
-        min_ratio = float(body.get("min_ratio", 0.52))
-    except (TypeError, ValueError):
-        min_ratio = 0.52
-    min_ratio = max(0.15, min(0.99, min_ratio))
-    try:
-        anchor_weight = float(body.get("anchor_weight", 0.42))
-    except (TypeError, ValueError):
-        anchor_weight = 0.42
-    anchor_weight = max(0.0, min(1.0, anchor_weight))
-    raw_inc = body.get("include_prompts_in_output", False)
-    if isinstance(raw_inc, str):
-        include_prompts = raw_inc.strip().lower() in {"1", "true", "yes", "on"}
-    else:
-        include_prompts = bool(raw_inc)
-
-    items, ldjson, warns = align_whisper_scenes_payload(
-        whisper,
-        scenes_raw,
-        min_ratio=min_ratio,
-        anchor_weight=anchor_weight,
-        include_prompts_in_output=include_prompts,
-    )
-    matched_count = sum(1 for it in items if it.get("voice_start") is not None and it.get("voice_end") is not None)
-    unmatched_count = max(0, len(items) - matched_count)
-    return jsonify(
-        {
-            "ok": True,
-            "items": items,
-            "ldjson": ldjson,
-            "warnings": warns,
-            "words_used": len(_whisper_flat_words(whisper.get("segments") or [])),
-            "scenes_parsed": len(items),
-            "matched_count": matched_count,
-            "unmatched_count": unmatched_count,
-        }
-    )
 
 
 def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
@@ -4258,17 +3466,12 @@ def rewrite_project_run(rewrite_id: str):
                     ensure_ascii=False,
                 ) + "\n"
                 return
-            try:
-                user_obj = json.loads(user_text or "{}")
-            except json.JSONDecodeError:
-                user_obj = {}
-            if not isinstance(user_obj, dict):
-                user_obj = {}
-            content_type = str(user_obj.get("content_type") or "photos").strip().lower()
-            if content_type not in ("photos", "videos"):
+            swl_cell = stages_snap.get("scene_writer_live") if isinstance(stages_snap.get("scene_writer_live"), dict) else {}
+            content_type = str((swl_cell or {}).get("style_prompt") or "photos").strip().lower()
+            if content_type not in ("photos", "videos", "mixed"):
                 content_type = "photos"
             try:
-                target_percent = int(user_obj.get("target_percent") or 50)
+                target_percent = int(str((swl_cell or {}).get("past_prompt") or "50").strip())
             except (TypeError, ValueError):
                 target_percent = 50
             target_percent = max(1, min(100, target_percent))
@@ -4286,8 +3489,6 @@ def rewrite_project_run(rewrite_id: str):
                         "batch_count": total_batches,
                         "scenes_offset_start": start + 1,
                         "scenes_offset_end": end,
-                        "content_type": content_type,
-                        "target_percent": target_percent,
                         "scenes_batch": chunk,
                     },
                     ensure_ascii=False,
@@ -4828,6 +4029,7 @@ def job_pexels_search(job_id: str):
             saved_items.append(row)
         sc2["pexels_results"] = saved_items
         sc2["excluded_keywords"] = excluded_keywords
+        sc2["pexels_selected_indices"] = []
         save_job(job_id, job2)
     return jsonify(
         {
@@ -4838,6 +4040,55 @@ def job_pexels_search(job_id: str):
             "excluded_keywords": excluded_keywords,
         }
     )
+
+
+@app.route("/job/<job_id>/pexels/select", methods=["POST"])
+def job_pexels_select(job_id: str):
+    """Сохраняет выбор пользователя из Pexels-результатов сцены: до 2 индексов."""
+    body = request.get_json(silent=True) or {}
+    try:
+        scene_index = int(body.get("scene_index"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Bad scene_index"}), 400
+    expected_id = str(body.get("scene_id") or "").strip()
+    raw_indices = body.get("selected_indices")
+    if not isinstance(raw_indices, list):
+        raw_indices = []
+
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+        scenes = job.get("scenes")
+        if not isinstance(scenes, list) or scene_index < 0 or scene_index >= len(scenes):
+            return jsonify({"ok": False, "error": "Scene index out of range"}), 400
+        scene = scenes[scene_index]
+        if not isinstance(scene, dict):
+            return jsonify({"ok": False, "error": "Scene is invalid"}), 400
+        if expected_id and expected_id != str(scene.get("scene_id") or "").strip():
+            return jsonify({"ok": False, "error": "scene_id mismatch"}), 409
+
+        results = scene.get("pexels_results")
+        n_results = len(results) if isinstance(results, list) else 0
+
+        seen: set[int] = set()
+        cleaned: list[int] = []
+        for x in raw_indices:
+            try:
+                v = int(x)
+            except (TypeError, ValueError):
+                continue
+            if v < 0 or v >= n_results or v in seen:
+                continue
+            seen.add(v)
+            cleaned.append(v)
+            if len(cleaned) >= 2:
+                break
+
+        scene["pexels_selected_indices"] = cleaned
+        save_job(job_id, job)
+
+    return jsonify({"ok": True, "selected_indices": cleaned})
 
 
 @app.route("/job/<job_id>/generate/start", methods=["POST"])
@@ -5431,6 +4682,47 @@ def update_job_scene_prompt(job_id: str):
         slot_obj["prompt"] = prompt
         save_job(job_id, job)
     return jsonify({"ok": True, "prompt": prompt})
+
+
+@app.route("/job/<job_id>/scene/delete", methods=["POST"])
+def delete_job_scene(job_id: str):
+    """Удаляет одну сцену из job по индексу. Подчищает локальные файлы Pexels этой сцены."""
+    body = request.get_json(silent=True) or {}
+    try:
+        scene_index = int(body.get("scene_index"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Bad scene_index"}), 400
+    expected_id = str(body.get("scene_id") or "").strip()
+
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+
+        scenes = job.get("scenes")
+        if not isinstance(scenes, list) or scene_index < 0 or scene_index >= len(scenes):
+            return jsonify({"ok": False, "error": "Scene index out of range"}), 400
+
+        scene = scenes[scene_index]
+        if not isinstance(scene, dict):
+            return jsonify({"ok": False, "error": "Scene is invalid"}), 400
+
+        actual_id = str(scene.get("scene_id") or "").strip()
+        if expected_id and expected_id != actual_id:
+            return jsonify({"ok": False, "error": "scene_id mismatch"}), 409
+
+        scenes.pop(scene_index)
+        save_job(job_id, job)
+
+    pdir = _job_pexels_dir(job_id)
+    if pdir.is_dir():
+        for fp in pdir.glob(f"s{scene_index:03d}_*"):
+            try:
+                fp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    return jsonify({"ok": True, "scene_id": actual_id})
 
 
 @app.route("/job/<job_id>/delete", methods=["POST"])
@@ -6446,11 +5738,6 @@ def job_page(job_id: str):
         if mp3s:
             tts_last_audio_name = mp3s[0].name
             tts_last_audio_href = url_for("job_audio_file", job_id=job_id, filename=mp3s[0].name)
-    try:
-        whisper_align_scenes_url = url_for("job_whisper_align_scenes", job_id=job_id)
-    except Exception:
-        root = ((request.script_root or "").rstrip("/")) if has_request_context() else ""
-        whisper_align_scenes_url = f"{root}/job/{job_id}/whisper/align-scenes"
     return render_template(
         "job.html",
         job_id=job_id,
@@ -6471,7 +5758,6 @@ def job_page(job_id: str):
         tts_defaults=job.get("tts_defaults") or {},
         tts_template_names=list_elevenlabs_template_names(),
         tts_template=(job.get("tts_template") or "Naomi"),
-        whisper_align_scenes_url=whisper_align_scenes_url,
     )
 
 

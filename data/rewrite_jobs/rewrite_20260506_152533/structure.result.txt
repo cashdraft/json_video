@@ -1,0 +1,589 @@
+{
+  "target_chars_total": 12000,
+  "narrative_arc": {
+    "opening_function": "Grab attention with a sharp contrast between the digital performance of social media and the authenticity of real presence, immediately reframing abstention as a conscious, powerful act.",
+    "middle_function": "Systematically unpack the psychological, neurological, and social mechanisms of social media, contrast user and abstainer experiences, and build a case for the benefits of opting out, using research, statistics, and narrative contrast.",
+    "ending_function": "Deliver a strong payoff by reframing abstention as a revolutionary, autonomous choice, raising the stakes around attention and authenticity, and closing with a concise affirmation of the core thesis.",
+    "arc_summary": "The script moves from a provocative opening that challenges assumptions about social media abstainers, through a layered exploration of the science and lived experience behind abstention, to a compelling conclusion that positions opting out as a legitimate, even radical, reclaiming of selfhood and presence."
+  },
+  "global_rules": {
+    "language": "English",
+    "voice_style": "for_voiceover",
+    "avoid_repetition": true,
+    "maintain_semantic_progression": true,
+    "hook_density": "controlled",
+    "tone_goal": "Analytical, motivational, and authoritative without casual or blog-style elements."
+  },
+  "blocks": [
+    {
+      "block_id": 1,
+      "block_name": "Digital Performance vs. Real Presence: The New Outlier",
+      "block_role": "hook",
+      "purpose": "Open with a striking contrast between the ubiquity of social media and the rare, radical act of abstention. Establish the premise that not using social media is both unusual and potentially wise.",
+      "target_chars_min": 800,
+      "target_chars_ideal": 1100,
+      "target_chars_max": 1300,
+      "must_cover": [
+        "4.9 billion people currently use social media.",
+        "Not using social media is seen as radical in today's world.",
+        "Frame abstainers as outliers, not outcasts."
+      ],
+      "must_not_cover": [
+        "Personal anecdotes",
+        "Direct audience address",
+        "Motivational reassurance"
+      ],
+      "source_mapping": {
+        "A": ["4.9 billion people currently use social media."],
+        "B": ["Social media exploits basic human psychology for engagement."],
+        "C": [],
+        "D": ["Opening hook and audience address."]
+      },
+      "hook_expectation": {
+        "opening_hook": true,
+        "mid_hooks": 0,
+        "open_loop": true
+      },
+      "next_block_hint": "Introduce the psychological and neurological mechanisms behind social media's addictiveness."
+    },
+    {
+      "block_id": 2,
+      "block_name": "The Engineered Addictiveness of Social Media",
+      "block_role": "explanation",
+      "purpose": "Explain how social media platforms are intentionally designed to exploit human psychology, focusing on dopamine-driven feedback loops and algorithmic manipulation.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Social media platforms are designed by engineers who studied behavioral psychology to maximize addictiveness.",
+        "Dopamine-driven design and social validation.",
+        "Algorithms manipulate emotions to keep users engaged."
+      ],
+      "must_not_cover": [
+        "Extended motivational language",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [
+          "Social media platforms are designed by engineers who studied behavioral psychology to maximize addictiveness."
+        ],
+        "B": [
+          "Social media exploits basic human psychology for engagement.",
+          "Algorithms manipulate emotions to keep users engaged."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Contrast extrinsic motivation of users with intrinsic motivation of abstainers, supported by research."
+    },
+    {
+      "block_id": 3,
+      "block_name": "Intrinsic vs. Extrinsic Motivation: The Psychological Divide",
+      "block_role": "contrast",
+      "purpose": "Contrast the extrinsic motivation and validation-seeking of social media users with the intrinsic motivation and self-sufficiency of abstainers, using research to support the distinction.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Research shows non-users' reward systems are less triggered by external validation and more by internal satisfaction.",
+        "Intrinsic motivation leads to greater well-being than extrinsic validation."
+      ],
+      "must_not_cover": [
+        "Repeat that abstainers are not antisocial",
+        "Personal testimonials"
+      ],
+      "source_mapping": {
+        "A": [
+          "Research shows non-users' reward systems are less triggered by external validation and more by internal satisfaction."
+        ],
+        "B": [
+          "Intrinsic motivation leads to greater well-being than extrinsic validation."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Present research and statistics on mental health impacts of social media use and abstention."
+    },
+    {
+      "block_id": 4,
+      "block_name": "Mental Health: The Hidden Cost of Comparison",
+      "block_role": "proof",
+      "purpose": "Present research and statistics on the mental health impacts of social media, highlighting increased anxiety, depression, and loneliness among users, and the benefits for abstainers.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "University of Pennsylvania study: Limiting social media to 30 minutes a day significantly reduced depression and loneliness.",
+        "Non-users showed even lower rates of anxiety and higher life satisfaction than limited users.",
+        "Social media fosters unhealthy comparison and mental health issues."
+      ],
+      "must_not_cover": [
+        "Extended motivational reassurance",
+        "Repeat that abstainers are not antisocial"
+      ],
+      "source_mapping": {
+        "A": [
+          "University of Pennsylvania study: Limiting social media to 30 minutes a day significantly reduced depression and loneliness.",
+          "Non-users showed even lower rates of anxiety and higher life satisfaction than limited users."
+        ],
+        "B": [
+          "Social media fosters unhealthy comparison and mental health issues."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Explain the cognitive and neurological effects of heavy social media use versus abstention."
+    },
+    {
+      "block_id": 5,
+      "block_name": "Attention, Focus, and the Brain",
+      "block_role": "explanation",
+      "purpose": "Describe the cognitive and neurological effects of social media, including erosion of attention span and prefrontal cortex activity, and contrast with the stronger focus of abstainers.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Heavy social media users show decreased activity in the prefrontal cortex (focus, decision-making, impulse control).",
+        "Abstainers maintain stronger attention spans and cognitive control."
+      ],
+      "must_not_cover": [
+        "Personal anecdotes",
+        "Motivational language"
+      ],
+      "source_mapping": {
+        "A": [
+          "Heavy social media users show decreased activity in the prefrontal cortex (focus, decision-making, impulse control)."
+        ],
+        "B": [
+          "Abstainers maintain stronger attention spans and cognitive control."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Address the distinction between intentional abstention and fear-based avoidance."
+    },
+    {
+      "block_id": 6,
+      "block_name": "Intentional Choice vs. Fear-Based Avoidance",
+      "block_role": "turn",
+      "purpose": "Clarify that not all social media avoidance is healthy, distinguishing between intentional, autonomous abstention and avoidance driven by fear or social anxiety.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Not all avoidance is healthy; intentionality matters.",
+        "Intentional solitude vs. fear-based avoidance."
+      ],
+      "must_not_cover": [
+        "Flat explanation",
+        "Padding"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Not all avoidance is healthy; intentionality matters."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Contrast performative online interaction with authentic offline connection."
+    },
+    {
+      "block_id": 7,
+      "block_name": "Performance Online vs. Authentic Connection Offline",
+      "block_role": "contrast",
+      "purpose": "Highlight the difference between performative, curated online interactions and the authenticity of offline relationships, emphasizing the depth and satisfaction found offline.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Offline relationships are deeper and more meaningful.",
+        "Social media interactions are often performative."
+      ],
+      "must_not_cover": [
+        "Repeat that abstainers are not antisocial",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Offline relationships are deeper and more meaningful."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Present evidence that abstainers have deeper, more meaningful relationships."
+    },
+    {
+      "block_id": 8,
+      "block_name": "The Depth of Fewer, Stronger Relationships",
+      "block_role": "proof",
+      "purpose": "Present research and evidence that abstainers invest in fewer but deeper relationships, leading to greater satisfaction and well-being.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Non-users invest in fewer but deeper relationships.",
+        "Greater satisfaction from quality over quantity."
+      ],
+      "must_not_cover": [
+        "Repeat that abstainers are not antisocial",
+        "Motivational padding"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Quantify time lost to social media and illustrate the payoff of reclaiming it."
+    },
+    {
+      "block_id": 9,
+      "block_name": "Time Reclaimed: The Real Payoff",
+      "block_role": "payoff",
+      "purpose": "Quantify the time lost to social media and illustrate the tangible benefits of reclaiming this time for meaningful activities, using strong statistics and real-world implications.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "Average person spends over 2.5 hours a day on social media.",
+        "2.5 hours a day equals 912 hours or 38 full days per year spent on social media.",
+        "Time reclaimed from abstaining is used for personal growth."
+      ],
+      "must_not_cover": [
+        "Personal anecdotes",
+        "Motivational language"
+      ],
+      "source_mapping": {
+        "A": [
+          "Average person spends over 2.5 hours a day on social media.",
+          "2.5 hours a day equals 912 hours or 38 full days per year spent on social media."
+        ],
+        "B": [
+          "Time reclaimed from abstaining is used for personal growth."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Explain the concept of continuous partial attention and how abstainers experience full presence."
+    },
+    {
+      "block_id": 10,
+      "block_name": "Continuous Partial Attention vs. Full Presence",
+      "block_role": "explanation",
+      "purpose": "Explain the phenomenon of continuous partial attention caused by social media and how abstainers experience greater presence and focus.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Continuous partial attention is a negative byproduct of social media.",
+        "Abstainers experience full presence."
+      ],
+      "must_not_cover": [
+        "Personal anecdotes",
+        "Motivational language"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Continuous partial attention is a negative byproduct of social media."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Address societal perception of abstainers and refute the idea that social media is necessary for connection."
+    },
+    {
+      "block_id": 11,
+      "block_name": "Challenging the Stigma: Abstainers Aren't Outcasts",
+      "block_role": "contrast",
+      "purpose": "Address and refute the societal perception that abstainers are odd or antisocial, emphasizing that social media is not necessary for real connection.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Abstainers are not outcasts or antisocial.",
+        "Social media is not necessary for connection."
+      ],
+      "must_not_cover": [
+        "Repeat the same reassurance multiple times",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Describe how creators benefit creatively from leaving social media."
+    },
+    {
+      "block_id": 12,
+      "block_name": "Creativity and Self-Expression Beyond Social Media",
+      "block_role": "proof",
+      "purpose": "Describe how creators and individuals report improved creativity and authenticity after leaving social media.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Creators benefit creatively from leaving social media.",
+        "Improved quality and authenticity in work."
+      ],
+      "must_not_cover": [
+        "Personal testimonials",
+        "Motivational language"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Creators benefit creatively from leaving social media."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Discuss FOMO and how abstainers realize most digital content is meaningless."
+    },
+    {
+      "block_id": 13,
+      "block_name": "FOMO and the Illusion of Missing Out",
+      "block_role": "explanation",
+      "purpose": "Discuss the fear of missing out (FOMO) and how abstainers come to realize that most digital content is meaningless noise.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "FOMO is largely about meaningless digital content.",
+        "Abstainers realize what is missed is not valuable."
+      ],
+      "must_not_cover": [
+        "Motivational padding",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "FOMO is largely about meaningless digital content."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Explain algorithmic manipulation and its impact on self-worth."
+    },
+    {
+      "block_id": 14,
+      "block_name": "Algorithmic Manipulation and Self-Worth",
+      "block_role": "proof",
+      "purpose": "Explain how social media algorithms are designed to trigger negative emotions and undermine self-esteem, reinforcing the value of abstention.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Algorithms manipulate emotions to keep users engaged.",
+        "Social media undermines self-esteem."
+      ],
+      "must_not_cover": [
+        "Motivational language",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Algorithms manipulate emotions to keep users engaged."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Describe how documenting for social media impairs memory and experience."
+    },
+    {
+      "block_id": 15,
+      "block_name": "Memory, Experience, and the Cost of Documentation",
+      "block_role": "explanation",
+      "purpose": "Describe how documenting life for social media impairs memory formation and experience, and how abstainers build richer, more vivid memories.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Studies show documenting moments for social media impairs memory clarity.",
+        "Abstainers build richer, more vivid memories."
+      ],
+      "must_not_cover": [
+        "Personal anecdotes",
+        "Motivational language"
+      ],
+      "source_mapping": {
+        "A": [
+          "Studies show documenting moments for social media impairs memory clarity."
+        ],
+        "B": [
+          "Documenting for social media impairs real experience and memory."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Clarify that the argument is about conscious choice and autonomy, not anti-technology."
+    },
+    {
+      "block_id": 16,
+      "block_name": "Autonomy, Choice, and the True Meaning of Abstention",
+      "block_role": "turn",
+      "purpose": "Clarify that abstention is not about moral superiority or anti-technology sentiment, but about conscious choice, autonomy, and reclaiming attention.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Conscious choice and autonomy are central to abstaining.",
+        "Abstainers are not morally superior; it's a different, intentional choice."
+      ],
+      "must_not_cover": [
+        "Motivational padding",
+        "Personal asides"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Conscious choice and autonomy are central to abstaining."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Deliver the final payoff: reclaiming attention as a revolutionary act and affirming the legitimacy of abstention."
+    },
+    {
+      "block_id": 17,
+      "block_name": "Reclaiming Attention: The Revolutionary Payoff",
+      "block_role": "payoff",
+      "purpose": "Deliver the final payoff by framing the act of reclaiming attention and presence as a revolutionary, authentic choice in a distracted world.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "Reclaiming attention is a powerful and authentic act.",
+        "Abstainers are living authentically and reclaiming their attention."
+      ],
+      "must_not_cover": [
+        "Extended motivational reassurance",
+        "Casual noise"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Reclaiming attention as a revolutionary act."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Concise conclusion affirming the legitimacy and value of abstention."
+    },
+    {
+      "block_id": 18,
+      "block_name": "Conclusion: The Legitimacy of Opting Out",
+      "block_role": "conclusion",
+      "purpose": "Concise, authoritative conclusion affirming that abstaining from social media is a legitimate, empowering, and revolutionary choice, summarizing the core thesis and promise.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Abstaining from social media is a legitimate and empowering choice.",
+        "Reiterate the psychological, neurological, and social advantages."
+      ],
+      "must_not_cover": [
+        "Motivational padding",
+        "Casual or informal language"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 0,
+        "open_loop": false
+      },
+      "next_block_hint": "End of script."
+    }
+  ]
+}
