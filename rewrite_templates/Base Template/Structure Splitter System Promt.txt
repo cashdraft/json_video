@@ -103,3 +103,4 @@ DO NOT:
 — output explanations  
 — output markdown  
 — output anything except JSON
+Пиши текст на английском языке

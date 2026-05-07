@@ -15,7 +15,7 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — целевой объём в символах 500–40 000, шаг 500 (см. parse_template_config; старые chars/duration тоже читаются)
   Hero Prompt, Master Prompt
-  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», continuity_editor: «Сontinuity Editor Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», voice_flow_editor: «Voice Flow Editor …», title_strategist: «Title Strategist …», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt», youtube_packaging: «YouTube packaging …»)
+  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», title_strategist: «Title Strategist …», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt», youtube_packaging: «YouTube packaging …»)
 """
 
 from __future__ import annotations
@@ -60,11 +60,6 @@ _STEM_TO_TARGET: dict[str, str] = {
     "block writer system prompt": "stage:draft1",
     "block writer user promt": "stage_user:draft1",
     "block writer user prompt": "stage_user:draft1",
-    "continuity editor prompt": "stage:continuity_editor",
-    "continuity editor system promt": "stage:continuity_editor",
-    "continuity editor system prompt": "stage:continuity_editor",
-    "continuity editor user promt": "stage_user:continuity_editor",
-    "continuity editor user prompt": "stage_user:continuity_editor",
     "retention editor prompt": "stage:retention_editor",
     "retention editor system promt": "stage:retention_editor",
     "retention editor system prompt": "stage:retention_editor",
@@ -90,11 +85,6 @@ _STEM_TO_TARGET: dict[str, str] = {
     "voiceover editor system prompt": "stage:voiceover_editor",
     "voiceover editor user promt": "stage_user:voiceover_editor",
     "voiceover editor user prompt": "stage_user:voiceover_editor",
-    "voice flow editor prompt": "stage:voice_flow_editor",
-    "voice flow editor system promt": "stage:voice_flow_editor",
-    "voice flow editor system prompt": "stage:voice_flow_editor",
-    "voice flow editor user promt": "stage_user:voice_flow_editor",
-    "voice flow editor user prompt": "stage_user:voice_flow_editor",
     "title strategist prompt": "stage:title_strategist",
     "title strategist system promt": "stage:title_strategist",
     "title strategist system prompt": "stage:title_strategist",
@@ -154,8 +144,6 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:structure": "Architect User Promt.txt",
     "stage:draft1": "Block Writer System Promt.txt",
     "stage_user:draft1": "Block Writer User Promt.txt",
-    "stage:continuity_editor": "Сontinuity Editor System Promt.txt",
-    "stage_user:continuity_editor": "Сontinuity Editor User Promt.txt",
     "stage:retention_editor": "Retention Editor System Promt.txt",
     "stage_user:retention_editor": "Retention Editor User Promt.txt",
     "stage:hook_editor": "Hook Editor System Promt.txt",
@@ -166,8 +154,6 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:persona_editor": "Persona Editor User Promt.txt",
     "stage:voiceover_editor": "Voiceover Editor System Promt.txt",
     "stage_user:voiceover_editor": "Voiceover Editor User Promt.txt",
-    "stage:voice_flow_editor": "Voice Flow Editor System Promt.txt",
-    "stage_user:voice_flow_editor": "Voice Flow Editor User Promt.txt",
     "stage:title_strategist": "Title Strategist System Promt.txt",
     "stage_user:title_strategist": "Title Strategist User Promt.txt",
     "stage:structure_splitter": "Structure Splitter System Promt.txt",
@@ -188,13 +174,11 @@ _STAGE_TARGETS: dict[str, str] = {
     "analysis": "Analysis",
     "structure": "Architect",
     "draft1": "Block Writer",
-    "continuity_editor": "Сontinuity Editor",
     "retention_editor": "Retention Editor",
     "hook_editor": "Hook Editor",
     "flow_editor": "Flow Editor",
     "persona_editor": "Persona Editor",
     "voiceover_editor": "Voiceover Editor",
-    "voice_flow_editor": "Voice Flow Editor",
     "title_strategist": "Title Strategist",
     "structure_splitter": "Structure Splitter",
     "scene_writer": "Scene Writer",

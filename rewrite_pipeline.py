@@ -1,6 +1,6 @@
 """
 ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → редакторы
-(Continuity → Retention → Hook → Flow → Persona → Voiceover → Structure Splitter → Scene Writer).
+(Retention → Hook → Flow → Persona → Voiceover → Title Strategist / Structure Splitter → Scene Writer).
 """
 
 from __future__ import annotations
@@ -189,27 +189,6 @@ def build_draft1_rewriter_user_message(
     )
 
 
-def build_continuity_editor_system_prompt(
-    continuity_editor_prompt: str,
-) -> str:
-    """Этап continuity_editor: в system только Continuity Editor System Promt."""
-    return (continuity_editor_prompt or "").strip()
-
-
-def build_continuity_editor_user_message(
-    continuity_editor_user_prompt: str,
-    block_writer_full_text: str = "",
-) -> str:
-    """User для continuity_editor: User Promt + full_text.txt."""
-    up = (continuity_editor_user_prompt or "").strip()
-    ft = str(block_writer_full_text or "")
-    payload: dict[str, Any] = {
-        "continuity_editor_user_promt": up or "",
-        "full_text.txt": ft,
-    }
-    return _json_user_message(payload)
-
-
 def build_retention_editor_system_prompt(
     retention_editor_prompt: str,
 ) -> str:
@@ -219,14 +198,14 @@ def build_retention_editor_system_prompt(
 
 def build_retention_editor_user_message(
     retention_editor_user_prompt: str,
-    edited_text: str = "",
+    block_writer_full_text: str = "",
 ) -> str:
-    """User для retention_editor: User Promt + edited_text."""
+    """User для retention_editor: User Promt + full_text.txt из Block Writer."""
     up = (retention_editor_user_prompt or "").strip()
-    et = _extract_edited_text(edited_text)
+    ft = str(block_writer_full_text or "")
     payload: dict[str, Any] = {
         "retention_editor_user_promt": up or "",
-        "edited_text": et,
+        "full_text.txt": ft,
     }
     return _json_user_message(payload)
 
@@ -318,40 +297,34 @@ def build_voiceover_editor_user_message(
     return _json_user_message(payload)
 
 
-def build_voice_flow_editor_system_prompt(
-    voice_flow_editor_prompt: str,
+def build_title_strategist_system_prompt(
+    title_strategist_prompt: str,
 ) -> str:
-    """Этап voice_flow_editor: в system только Voice Flow Editor System Promt."""
-    return (voice_flow_editor_prompt or "").strip()
+    """Этап title_strategist: в system только Title Strategist System Promt."""
+    return (title_strategist_prompt or "").strip()
 
 
-def build_voice_flow_editor_user_message(
-    voice_flow_editor_user_prompt: str,
+def build_title_strategist_user_message(
+    title_strategist_user_prompt: str,
     edited_text: str = "",
     *,
-    user_promt_field: str = "voice_flow_editor_user_promt",
-    original_title: str | None = None,
+    original_title: str = "",
 ) -> str:
-    """User для voice_flow_editor / title_strategist: User Promt + edited_text из Voiceover Editor.
+    """User для title_strategist: original_title + User Promt + edited_text из Voiceover Editor.
 
-    Для title_strategist передайте original_title (строка из поля «Исходное название»); для voice_flow_editor
-    оставьте original_title=None — ключ в JSON не попадёт.
     В user JSON поле original_title идёт первым (удобно в экспорте). В тексте user-promt подставляется
     плейсхолдер {{ORIGINAL_TITLE}}, если он есть в шаблоне.
     """
-    up = (voice_flow_editor_user_prompt or "").strip()
+    up = (title_strategist_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    key = (user_promt_field or "voice_flow_editor_user_promt").strip() or "voice_flow_editor_user_promt"
-    if original_title is not None and key == "title_strategist_user_promt":
-        tit = (original_title or "").strip()
-        repl = tit if tit else "(пусто)"
-        up = up.replace("{{ORIGINAL_TITLE}}", repl)
-    payload: dict[str, Any] = {}
-    if original_title is not None:
-        ot = (original_title or "").strip()
-        payload["original_title"] = ot if ot else "(пусто)"
-    payload[key] = up or ""
-    payload["edited_text"] = et
+    tit = (original_title or "").strip()
+    repl = tit if tit else "(пусто)"
+    up = up.replace("{{ORIGINAL_TITLE}}", repl)
+    payload: dict[str, Any] = {
+        "original_title": repl,
+        "title_strategist_user_promt": up or "",
+        "edited_text": et,
+    }
     return _json_user_message(payload)
 
 
@@ -427,13 +400,11 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("analysis", "Analysis"),
     ("structure", "Architect"),
     ("draft1", "Block Writer"),
-    ("continuity_editor", "Сontinuity Editor"),
     ("retention_editor", "Retention Editor"),
     ("hook_editor", "Hook Editor"),
     ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
-    ("voice_flow_editor", "Voice Flow Editor"),
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
@@ -461,13 +432,9 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из architect.json "
         "и только после accept запускается следующий."
     ),
-    "continuity_editor": (
-        "Отправляем. В System: Сontinuity Editor System Promt. "
-        "В User (по порядку): Сontinuity Editor User Promt, full_text.txt."
-    ),
     "retention_editor": (
         "Отправляем. В System: Retention Editor System Promt. "
-        "В User (по порядку): Retention Editor User Promt, edited_text."
+        "В User (по порядку): Retention Editor User Promt, full_text.txt из Block Writer."
     ),
     "hook_editor": (
         "Отправляем. В System: Hook Editor System Promt. "
@@ -484,10 +451,6 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     "voiceover_editor": (
         "Отправляем. В System: Voiceover Editor System Promt. "
         "В User (по порядку): Voiceover Editor User Promt, edited_text."
-    ),
-    "voice_flow_editor": (
-        "Отправляем. В System: Voice Flow Editor System Promt. "
-        "В User (по порядку): Voice Flow Editor User Promt, edited_text из Voiceover Editor."
     ),
     "title_strategist": (
         "Отправляем. В System: Title Strategist System Promt. "
@@ -513,29 +476,105 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     ),
 }
 
+# Краткие подзаголовки под названием этапа (мутный серый под заголовком в карточке).
+REWRITE_STAGE_SUBTITLES: dict[str, str] = {
+    "analysis": "Агент-аналитик YouTube-сценариев",
+    "structure": "Агент-архитектор структуры YouTube-сценария",
+    "draft1": "Агент-сценарист одного блока",
+    "retention_editor": "Агент-редактор удержания",
+    "hook_editor": "Агент-редактор хуков",
+    "flow_editor": "Агент-редактор потока",
+    "persona_editor": "Агент-редактор персонажа",
+    "voiceover_editor": "Агент-редактор войсовера",
+    "title_strategist": "Агент-стратег заголовков",
+    "structure_splitter": "Агент-сплиттер текста",
+    "scene_writer": "",
+    "scene_writer_live": "",
+    "youtube_packaging": "",
+}
+
 REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
     "analysis": (
-        "Этот агент не пишет сценарий. Он делает только одно: разбирает исходный текст "
-        "на смысловые компоненты, чтобы дальше Architect и Block Writer могли нормально работать. "
-        "Он должен понять: о чём текст на самом деле; какие там главные идеи; какие факты и цифры "
-        "нельзя терять; что в тексте слабое; что можно адаптировать; что нужно переписать заново; "
-        "какая логика движения у исходника."
+        "Этот агент глубоко разбирает исходный текст YouTube-ролика и превращает его "
+        "в структурированную аналитическую основу для написания нового сценария. "
+        "Он не пересказывает и не переписывает — он извлекает главный тезис, ключевые идеи, "
+        "факты и числа, логику аргументации, а также выявляет слабые места, чужой голос "
+        "и возможности для удержания внимания. На выходе — детальный JSON-отчёт "
+        "с классификацией каждого элемента текста по принципу "
+        "«сохранить точно / сохранить смысл / адаптировать / переписать»."
     ),
     "structure": (
-        "Да. Второй агент — это Architect, то есть агент, который не пишет текст, "
-        "а разбивает материал на блоки и строит структуру ролика на основе analysis.json. "
-        "Именно он превращает сырой анализ в будущий каркас сценария."
+        "Этот агент принимает на вход готовый analysis.json от первого агента и строит "
+        "из него детальный структурный план будущего длинного ролика. Он не пишет текст — "
+        "только проектирует: определяет общую нарративную дугу, оптимальное количество "
+        "смысловых блоков, роль и цель каждого блока, лимиты символов, что обязательно "
+        "покрыть, а что запрещено, и где нужны хуки или re-hooks. "
+        "На выходе — JSON-скелет, по которому следующий агент сможет писать сценарий поблочно."
     ),
-    "draft1": "Это главный агент, который уже пишет сам текст блоков.",
-    "continuity_editor": "Редактирует связность целого текста на основе полного full_text.txt.",
-    "retention_editor": "Усиливает удержание на основе уже отредактированного edited_text.",
-    "hook_editor": "Дорабатывает hooks на основе уже отредактированного edited_text.",
-    "flow_editor": "Правит поток и переходы на основе уже отредактированного edited_text.",
-    "persona_editor": "Уточняет персонализацию и тон героя на основе edited_text и Hero Prompt.",
-    "voiceover_editor": "Правит текст под озвучку на основе edited_text после Persona Editor.",
-    "voice_flow_editor": "Финально выравнивает voice flow на основе edited_text после Voiceover Editor.",
-    "title_strategist": "Как Voice Flow: edited_text = результат Voiceover Editor. В user JSON первым идёт original_title («Исходное название»); в шаблоне User Promt можно {{ORIGINAL_TITLE}} — подставится то же значение.",
-    "structure_splitter": "Разбивает полный текст после Voiceover Editor на структурные части.",
+    "draft1": (
+        "Этот агент получает задание на конкретный блок из архитектурного плана и пишет "
+        "только его — ничего лишнего. Он учитывает предыдущий контекст, строго соблюдает "
+        "лимиты символов, цель блока и ограничения на содержание, пишет живым разговорным "
+        "языком под войсовер. На выходе — JSON с готовым текстом блока, его длиной "
+        "и кратким смысловым резюме, которое помогает следующему агенту не повторяться."
+    ),
+    "retention_editor": (
+        "Этот агент берёт уже логически выверенный сценарий и точечно усиливает удержание "
+        "внимания — находит от 3 до 10 зон, где зритель рискует отвалиться, и исправляет "
+        "только их: вставляет re-hooks, усиливает stakes, добавляет контраст и смысловое "
+        "движение вперёд. Глобальную логику, стиль героя и continuity он не трогает. "
+        "На выходе — полный обновлённый текст и список конкретных правок с объяснением, "
+        "почему каждая из них удерживает внимание лучше."
+    ),
+    "hook_editor": (
+        "Этот агент получает сценарий после логической и retention-редактуры и точечно "
+        "усиливает только хуки — opening hook, curiosity, contrast, stakes, re-hooks, "
+        "open loops и payoff bridges. Он не переписывает стиль, не трогает логику "
+        "и не перегружает текст манипуляциями — только находит реально слабые hook-зоны "
+        "(обычно 3–8 мест) и исправляет их так, чтобы хук усиливал смысл, а не заменял его. "
+        "На выходе — полный обновлённый текст и список конкретных hook-правок."
+    ),
+    "flow_editor": (
+        "Этот агент берёт сценарий после всех предыдущих редакторов и устраняет "
+        "исключительно flow-проблемы: слабые переходы между блоками, резкие смысловые "
+        "скачки, сломанные мосты между абзацами и ощущение склейки отдельных кусков. "
+        "Он не трогает логику, хуки, стиль или voiceover — только добавляет точечные "
+        "bridge-фразы или сглаживает переходы там, где текст ощущается как набор "
+        "несвязанных фрагментов. На выходе — полный текст с естественным движением "
+        "и список конкретных flow-правок."
+    ),
+    "persona_editor": (
+        "Этот агент финально приводит сценарий к чистому и стабильному голосу героя — "
+        "в данном случае Naomi, аналитичного финансового рассказчика с умным, спокойным "
+        "и слегка сухим стилем. Он вычищает чужой голос, блогерские вставки, лишнюю "
+        "эмоциональность и «нейросеточную стерильность» — но не трогает смысл, структуру "
+        "и логику. На выходе — полный текст, звучащий как живой человек с характером, "
+        "и список точечных правок с объяснением, почему каждая из них усиливает соответствие герою."
+    ),
+    "voiceover_editor": (
+        "Этот агент берёт финально отредактированный сценарий и адаптирует его под живую "
+        "озвучку: разбивает слишком длинные предложения, убирает перегруженные конструкции, "
+        "добавляет паузы и выстраивает ритм по принципу «короткое → среднее → короткое → удар». "
+        "Смысл, структуру и стиль героя он не трогает — только делает так, чтобы текст "
+        "легко ложился в дыхание и естественно звучал вслух. На выходе — полный текст, "
+        "готовый к записи, и список точечных правок."
+    ),
+    "title_strategist": (
+        "Этот агент анализирует готовый сценарий и извлекает из него структурированную "
+        "стратегию для создания сильных YouTube-заголовков — но сами заголовки не генерирует. "
+        "Он определяет core topic, боль зрителя, эмоциональное напряжение, парадокс, "
+        "сильнейшие углы подачи, curiosity gaps и SEO-ключи, а также разбирает оригинальный "
+        "заголовок по формуле: что в нём работает, что сохранить, что не копировать. "
+        "На выходе — JSON-стратегия, которую следующий агент использует для генерации заголовков."
+    ),
+    "structure_splitter": (
+        "Этот агент берёт длинный готовый текст и разбивает его на логические блоки — "
+        "без единого изменения формулировок. Он ориентируется на смысловые сдвиги: смену "
+        "темы, новый аргумент, переход нарратива или изменение тона. Каждый блок содержит "
+        "точный оригинальный текст без купюр, получает короткое название и описание своей "
+        "роли в повествовании. На выходе — JSON-массив блоков, покрывающий весь исходный "
+        "текст без пропусков и перекрытий."
+    ),
     "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
     "scene_writer_live": "Берёт Result из Scene Writer и пакетно (по 50 сцен) дополняет сцены media-полями.",
     "youtube_packaging": (
@@ -570,6 +609,18 @@ def new_stages_dict() -> dict[str, dict[str, Any]]:
 def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     """Приводит job к схеме с source_text и stages; миграция со старых полей."""
     job.setdefault("source_text", "")
+    job.setdefault("source_text_ru", "")
+    job["source_text_ru"] = str(job.get("source_text_ru") or "")
+    job.setdefault("source_text_ru_locked", False)
+    job["source_text_ru_locked"] = bool(job.get("source_text_ru_locked"))
+    job.setdefault("voiceover_final_text", "")
+    job["voiceover_final_text"] = str(job.get("voiceover_final_text") or "")
+    job.setdefault("voiceover_final_locked", True)
+    job["voiceover_final_locked"] = bool(job.get("voiceover_final_locked", True))
+    job.setdefault("voiceover_final_text_ru", "")
+    job["voiceover_final_text_ru"] = str(job.get("voiceover_final_text_ru") or "")
+    job.setdefault("voiceover_final_text_ru_locked", False)
+    job["voiceover_final_text_ru_locked"] = bool(job.get("voiceover_final_text_ru_locked"))
     if not (job.get("source_text") or "").strip():
         legacy = (job.get("last_text") or "").strip()
         if legacy:
@@ -638,27 +689,13 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(e.get("block_writer_check"), dict):
             e["block_writer_check"] = None
 
-    # Миграция: новый этап Voice Flow по умолчанию наследует промпты Voiceover для старых проектов.
-    vfe = stages.get("voice_flow_editor") if isinstance(stages.get("voice_flow_editor"), dict) else None
     voe = stages.get("voiceover_editor") if isinstance(stages.get("voiceover_editor"), dict) else None
-    if isinstance(vfe, dict) and isinstance(voe, dict):
-        if not str(vfe.get("prompt") or "").strip() and str(voe.get("prompt") or "").strip():
-            vfe["prompt"] = str(voe.get("prompt") or "")
-        if not str(vfe.get("user_prompt") or "").strip() and str(voe.get("user_prompt") or "").strip():
-            vfe["user_prompt"] = str(voe.get("user_prompt") or "")
-
     ts_st = stages.get("title_strategist") if isinstance(stages.get("title_strategist"), dict) else None
-    if isinstance(ts_st, dict) and isinstance(vfe, dict) and isinstance(voe, dict):
-        if not str(ts_st.get("prompt") or "").strip():
-            if str(vfe.get("prompt") or "").strip():
-                ts_st["prompt"] = str(vfe.get("prompt") or "")
-            elif str(voe.get("prompt") or "").strip():
-                ts_st["prompt"] = str(voe.get("prompt") or "")
-        if not str(ts_st.get("user_prompt") or "").strip():
-            if str(vfe.get("user_prompt") or "").strip():
-                ts_st["user_prompt"] = str(vfe.get("user_prompt") or "")
-            elif str(voe.get("user_prompt") or "").strip():
-                ts_st["user_prompt"] = str(voe.get("user_prompt") or "")
+    if isinstance(ts_st, dict) and isinstance(voe, dict):
+        if not str(ts_st.get("prompt") or "").strip() and str(voe.get("prompt") or "").strip():
+            ts_st["prompt"] = str(voe.get("prompt") or "")
+        if not str(ts_st.get("user_prompt") or "").strip() and str(voe.get("user_prompt") or "").strip():
+            ts_st["user_prompt"] = str(voe.get("user_prompt") or "")
 
     for dead in list(stages.keys()):
         if dead not in REWRITE_STAGE_KEYS:
@@ -793,11 +830,8 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
         return None
     for i in range(idx):
         pk, plabel = REWRITE_STAGES[i]
-        if stage_key in ("structure_splitter", "scene_writer") and pk in (
-            "voice_flow_editor",
-            "title_strategist",
-        ):
-            # Voice Flow и Title Strategist не обязательны для downstream-логики.
+        if stage_key in ("structure_splitter", "scene_writer") and pk == "title_strategist":
+            # Title Strategist не обязателен для structure_splitter / scene_writer.
             continue
         if stage_key == "youtube_packaging" and pk == "scene_writer_live":
             # YouTube packaging не зависит от Scene Writer Live.
@@ -822,7 +856,6 @@ def compose_rewrite_openai_request_body(
     hero_prompt: str,
     target_chars: int,
     block_writer_full_text: str = "",
-    continuity_editor_text: str = "",
     retention_editor_text: str = "",
     hook_editor_text: str = "",
     flow_editor_text: str = "",
@@ -838,13 +871,11 @@ def compose_rewrite_openai_request_body(
         return None, "Неизвестный этап."
     if stage_key not in (
         "structure",
-        "continuity_editor",
         "retention_editor",
         "hook_editor",
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
-        "voice_flow_editor",
         "title_strategist",
         "structure_splitter",
         "scene_writer",
@@ -890,21 +921,13 @@ def compose_rewrite_openai_request_body(
             str(cell.get("user_prompt") or ""),
             hero_prompt,
         )
-    elif stage_key == "continuity_editor":
-        prompt = build_continuity_editor_system_prompt(
-            str(cell.get("prompt") or ""),
-        )
-        user_text = build_continuity_editor_user_message(
-            str(cell.get("user_prompt") or ""),
-            block_writer_full_text,
-        )
     elif stage_key == "retention_editor":
         prompt = build_retention_editor_system_prompt(
             str(cell.get("prompt") or ""),
         )
         user_text = build_retention_editor_user_message(
             str(cell.get("user_prompt") or ""),
-            continuity_editor_text,
+            block_writer_full_text,
         )
     elif stage_key == "hook_editor":
         prompt = build_hook_editor_system_prompt(
@@ -939,23 +962,13 @@ def compose_rewrite_openai_request_body(
             str(cell.get("user_prompt") or ""),
             persona_editor_text,
         )
-    elif stage_key == "voice_flow_editor":
-        prompt = build_voice_flow_editor_system_prompt(
-            str(cell.get("prompt") or ""),
-        )
-        user_text = build_voice_flow_editor_user_message(
-            str(cell.get("user_prompt") or ""),
-            voiceover_editor_text,
-            user_promt_field="voice_flow_editor_user_promt",
-        )
     elif stage_key == "title_strategist":
-        prompt = build_voice_flow_editor_system_prompt(
+        prompt = build_title_strategist_system_prompt(
             str(cell.get("prompt") or ""),
         )
-        user_text = build_voice_flow_editor_user_message(
+        user_text = build_title_strategist_user_message(
             str(cell.get("user_prompt") or ""),
             voiceover_editor_text,
-            user_promt_field="title_strategist_user_promt",
             original_title=original_title,
         )
     elif stage_key == "structure_splitter":
@@ -1011,13 +1024,11 @@ def compose_rewrite_openai_request_body(
     prompt = (prompt or "").strip()
     user_text = (user_text or "").strip()
     if stage_key not in (
-        "continuity_editor",
         "retention_editor",
         "hook_editor",
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
-        "voice_flow_editor",
         "title_strategist",
         "structure_splitter",
         "scene_writer",

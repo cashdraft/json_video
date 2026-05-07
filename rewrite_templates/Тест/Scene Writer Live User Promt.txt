@@ -1,7 +1,7 @@
 Transform these JSONL scenes.
 
-STOCK_MEDIA_MODE: Video
-STOCK_TARGET_PERCENT: 50
+STOCK_MEDIA_MODE: Photos
+STOCK_TARGET_PERCENT: 100
 
 If a scene can realistically use stock media:
 

@@ -1,19 +1,5 @@
-Transform these JSONL scenes.
+I have  scenes below. Replace approximately  of them 10%.
 
-STOCK_MEDIA_MODE: Video
-STOCK_TARGET_PERCENT: 50
+Keywords must be in English. Each keyword 2–4 words, optimized for Shutterstock/Getty/Pexels.
 
-If a scene can realistically use stock media:
-
-* convert original scene_id to "_1"
-* add a "_2" stock-search scene
-
-If not:
-
-* keep scene unchanged
-
-Preserve exact JSONL formatting.
-
-INPUT:
-
-{{SCENES_JSONL}}
+SCENES:

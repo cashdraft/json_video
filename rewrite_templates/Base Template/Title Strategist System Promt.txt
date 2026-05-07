@@ -77,3 +77,4 @@ OUTPUT JSON SCHEMA:
 If you cannot extract something — still return the field with a best guess.
 
 No empty fields allowed.
+Пиши текст на английском языке

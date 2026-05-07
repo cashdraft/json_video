@@ -700,6 +700,12 @@ textarea::placeholder {
     margin-bottom: 1rem;
 }
 
+.scene-card.rewrite-pipeline-runner.rewrite-pipeline-runner--centered {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
 .rewrite-pipeline-runner__head {
     display: flex;
     flex-wrap: wrap;
@@ -737,6 +743,11 @@ textarea::placeholder {
     flex-shrink: 0;
 }
 
+.rewrite-pipeline-runner--centered .rewrite-pipeline-runner__actions {
+    justify-content: center;
+    margin-bottom: 0.75rem;
+}
+
 .rewrite-pipeline-runner__log {
     margin: 0;
     padding: 0.65rem 0.75rem;
@@ -750,7 +761,7 @@ textarea::placeholder {
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--text-muted);
-    background: var(--bg-input);
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 8px;
     border: 1px solid var(--border);
 }
@@ -1040,6 +1051,7 @@ textarea::placeholder {
 }
 
 .rewrite-source-title-field {
+    margin-top: 0.25rem;
     margin-bottom: 0.6rem;
 }
 
@@ -1056,13 +1068,14 @@ textarea::placeholder {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    padding: 0.45rem 0.6rem;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--bg-input, rgba(255, 255, 255, 0.04));
+    /* Совпадает с .slot-placeholder у textarea «Исходный текст» */
+    padding: 0.55rem 0.65rem;
+    border-radius: 4px;
+    border: 1px dashed var(--border);
+    background: var(--bg-input);
     color: var(--text);
     font-size: 0.85rem;
-    line-height: 1.4;
+    line-height: 1.45;
     font-family: inherit;
 }
 
@@ -1160,15 +1173,123 @@ textarea::placeholder {
     }
 }
 
+.rewrite-stages-collapse-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.rewrite-stages-collapse-bar__label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.rewrite-stages-collapse-bar__actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-collapsible-inner {
+    display: none;
+}
+
+/* Свёрнутый этап: оставляем только номер, название и значок «?» — остальное прячем. */
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    justify-content: center;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-subtitle,
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-api-export {
+    display: none;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .scene-header {
+    margin-bottom: 0;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-header-row,
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-header-top {
+    margin: 0;
+}
+
 .rewrite-stage-card {
     display: flex;
     flex-direction: column;
     min-width: 0;
     height: 100%;
+    /* Раскладка Model | System | User и отступ подзаголовка считаем по ширине карточки, а не viewport:
+       иначе в сетке 2–3 колонки карточки узкие, а правила срабатывают как на «широком экране» — подзаголовок уезжает вправо, Model визуально в «блоке агента». */
+    container-type: inline-size;
+    container-name: rewrite-stage;
 }
 
 .rewrite-stage-card--full {
     grid-column: 1 / -1;
+}
+
+.rewrite-voiceover-final-card .rewrite-stage-subtitle {
+    padding-left: 0;
+    color: var(--text-muted);
+    opacity: 0.95;
+    margin-top: 0.2rem;
+}
+
+.rewrite-voiceover-final-card .rewrite-stage-subtitle code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3em;
+}
+
+.rewrite-voiceover-final-slot {
+    min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
+}
+
+.rewrite-voiceover-final-textarea {
+    width: 100%;
+    min-height: calc(5 * 1.45em + 1.1rem);
+    flex: 0 0 auto;
+    resize: vertical;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+#rewrite-voiceover-final-text-ru {
+    min-height: calc(5 * 1.45em + 1.1rem);
+    flex: 0 0 auto;
+}
+
+.rewrite-voiceover-final-counts {
+    margin-left: auto;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.rewrite-voiceover-final-copy {
+    margin-left: auto;
+}
+
+.rewrite-voiceover-final-card .rewrite-stage-header-tools {
+    margin-left: auto;
+    gap: 0.5rem;
 }
 
 .rewrite-stage-card--no-index .rewrite-stage-index {
@@ -1179,21 +1300,13 @@ textarea::placeholder {
     margin-bottom: 0.85rem;
 }
 
-.rewrite-stage-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
 .rewrite-stage-help {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    margin-left: 0.1rem;
+    margin-left: 0;
 }
 
 .rewrite-stage-help__icon {
@@ -1233,6 +1346,11 @@ textarea::placeholder {
     z-index: 20;
 }
 
+.rewrite-stage-header-tools .rewrite-stage-help__tip {
+    left: auto;
+    right: 0;
+}
+
 .rewrite-stage-help:hover .rewrite-stage-help__tip,
 .rewrite-stage-help:focus-within .rewrite-stage-help__tip {
     opacity: 1;
@@ -1257,29 +1375,62 @@ textarea::placeholder {
     line-height: 1;
 }
 
-.rewrite-stage-heading__body {
-    flex: 1;
-    min-width: 0;
-}
-
-.rewrite-stage-heading__body .scene-id {
-    margin-bottom: 0;
+.rewrite-stage-subtitle {
+    margin-top: 0.1rem;
+    color: var(--muted, #8a8f99);
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    opacity: 0.85;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .rewrite-stage-header-row {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.5rem 0.75rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.2rem;
     margin-bottom: 0.35rem;
 }
 
-.rewrite-stage-header-row .scene-id {
-    margin-bottom: 0;
+.rewrite-stage-header-top {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
-.rewrite-stage-header-row .rewrite-stage-api-export {
+.rewrite-stage-title-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.rewrite-stage-title-row .scene-id,
+.rewrite-stage-title-text {
+    margin-bottom: 0;
+    min-width: 0;
+}
+
+.rewrite-stage-header-tools {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.rewrite-stage-header-tools .rewrite-stage-api-export {
     flex-shrink: 0;
 }
 
@@ -1336,6 +1487,35 @@ textarea::placeholder {
     padding-bottom: 0.55rem;
     margin-bottom: 0.2rem;
     border-bottom: 1px solid var(--border);
+}
+
+/* Обычные этапы: один ряд Model | System | User только если сама карточка достаточно широкая */
+@container rewrite-stage (min-width: 28rem) {
+    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-row--controls {
+        grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
+        display: flex;
+    }
+
+    /* Совпадает с левым краем колонки System при трёхколоночной сетке */
+    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-subtitle {
+        padding-left: calc(9.5rem + 1rem);
+    }
+}
+
+/* Браузеры без container queries: широкий viewport — прежняя сетка, без отступа подзаголовка (он ломает узкие карточки в сетке 3×N). */
+@supports not (container-type: inline-size) {
+    @media (min-width: 42.0625rem) {
+        .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-row--controls {
+            grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+        }
+
+        .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
+            display: flex;
+        }
+    }
 }
 
 /* Scene Writer: System / User / Style в один ряд */
@@ -1901,6 +2081,22 @@ textarea::placeholder {
     display: none;
 }
 
+/* Подсветка статуса этапа: зелёная — генерация, красная — ошибка. Видно и в свёрнутом, и в развёрнутом виде. */
+.rewrite-stage-card.rewrite-stage-card--running {
+    border-color: #2f9e54;
+    box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.55), 0 0 12px rgba(52, 199, 89, 0.18);
+}
+
+.rewrite-stage-card.rewrite-stage-card--error {
+    border-color: #b3404a;
+    box-shadow: 0 0 0 1px rgba(240, 113, 120, 0.55), 0 0 12px rgba(240, 113, 120, 0.18);
+}
+
+.rewrite-stage-card.rewrite-stage-card--running.rewrite-stage-card--error {
+    border-color: #2f9e54;
+    box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.55), 0 0 12px rgba(52, 199, 89, 0.18);
+}
+
 /* Пока идёт запуск этапа — в плейсхолдере один блок статуса; без calc()+margin, иначе колонка flex
    оставляет лишний зазор вправо и «окно» визуально съезжает. */
 .rewrite-stage-card--running .rewrite-slot--stage-result {
@@ -1917,8 +2113,9 @@ textarea::placeholder {
     padding: 0;
 }
 
+/* Исходный текст: стартовая высота ≈ 5 строк (поле можно растянуть за уголок) */
 .rewrite-slot--source {
-    min-height: 10rem;
+    min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
 }
 
 .rewrite-source-textarea--locked {
@@ -1949,6 +2146,49 @@ textarea::placeholder {
 .rewrite-source-textarea {
     min-height: 8rem;
     font-size: 0.85rem;
+}
+
+#rewrite-source-text {
+    min-height: calc(5 * 1.45em + 1.1rem);
+    flex: 0 0 auto;
+}
+
+.rewrite-source-translate-block {
+    margin-top: 0.45rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.rewrite-source-translate-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0;
+}
+
+/* Если показан статус или поле перевода — добавляем отступ под кнопкой; иначе кнопка липнет ближе к низу карточки */
+.rewrite-source-translate-block:has(.rewrite-source-translate-ru-status-wrap:not(.hidden)) .rewrite-source-translate-actions,
+.rewrite-source-translate-block:has(.rewrite-slot--source-ru-wrap:not(.hidden)) .rewrite-source-translate-actions {
+    margin-bottom: 0.6rem;
+}
+
+.rewrite-source-translate-ru-status-wrap {
+    margin-bottom: 0.6rem;
+}
+
+.rewrite-slot--source-ru {
+    min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
+}
+
+/* Карточка исходного текста: меньше нижнего паддинга, когда перевод ещё не сгенерирован */
+.rewrite-source-card--body:has(.rewrite-slot--source-ru-wrap.hidden):has(.rewrite-source-translate-ru-status-wrap.hidden) {
+    padding-bottom: 0.85rem;
+}
+
+#rewrite-source-text-ru {
+    min-height: calc(5 * 1.45em + 1.1rem);
+    flex: 0 0 auto;
 }
 
 .rewrite-slot-select {

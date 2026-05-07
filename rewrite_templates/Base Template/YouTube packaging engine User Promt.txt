@@ -1,19 +1,1 @@
-Generate YouTube packaging based on the provided strategy JSON.
 
-Requirements:
-
-- Generate EXACTLY 25 titles
-- Translate each title into Russian
-- Assign angle to each title
-- Score each title (1–10)
-- Provide reason (EN + RU) for each
-- Select EXACTLY 5 top titles
-- Generate ONE structured description (EN + RU)
-- Generate 3–5 hashtags
-- Generate EXACTLY 5 thumbnail options
-- Follow JSON schema strictly
-
-Return ONLY valid JSON.
-
-STRATEGY JSON:
-{{STRATEGY_JSON}}

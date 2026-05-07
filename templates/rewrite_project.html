@@ -97,13 +97,12 @@
             </div>
 
             <div class="scene-card rewrite-source-card rewrite-source-card--body">
-                <div class="rewrite-source-title-field">
-                    <label for="rewrite-source-title" class="rewrite-source-title-field__label">Исходное название</label>
-                    <input type="text" id="rewrite-source-title" class="rewrite-source-title-input{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
-                </div>
                 <div class="rewrite-source-body-header">
                     <div class="scene-id rewrite-source-body-title">Исходный текст</div>
                     <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
+                </div>
+                <div class="rewrite-source-title-field">
+                    <input type="text" id="rewrite-source-title" class="rewrite-source-title-input{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
                 </div>
                 <div class="rewrite-source-toolbar slot-header">
                     <span class="slot-badge badge-yes">Source</span>
@@ -111,11 +110,42 @@
                         <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                         <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                     </button>
+                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-source-copy-btn" id="rewrite-source-copy-btn" title="Копировать исходный текст в буфер обмена" aria-label="Копировать исходный текст">
+                        <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
                     <span id="rewrite-busy" class="tts-busy hidden">Идёт запрос…</span>
                     <span class="rewrite-source-counts" id="rewrite-source-counts" aria-live="polite"></span>
                 </div>
                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
-                    <textarea id="rewrite-source-text" class="rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="9" placeholder="Вставьте текст…" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %}>{{ rw.source_text or rw.last_text or '' }}</textarea>
+                    <textarea id="rewrite-source-text" class="rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Вставьте текст…" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %}>{{ rw.source_text or rw.last_text or '' }}</textarea>
+                </div>
+                <div class="rewrite-source-translate-block">
+                    <div class="rewrite-source-translate-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="rewrite-source-translate-ru-btn" {% if not openai_key_set %}disabled{% endif %}>Перевести на русский</button>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-source-translate-ru-status-wrap" aria-hidden="true">
+                        <div class="slot-status-row">
+                            <span class="slot-status slot-status-with-spinner" id="rewrite-source-translate-ru-status" aria-live="polite"></span>
+                            <button type="button" class="btn-cancel-generation" id="rewrite-source-translate-ru-cancel">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="rewrite-slot--source-ru-wrap{% if not (rw.source_text_ru or '')|trim %} hidden{% endif %}" id="rewrite-source-text-ru-wrap"{% if not (rw.source_text_ru or '')|trim %} aria-hidden="true"{% endif %}>
+                        {% set ru_locked = rw.source_text_ru_locked|default(false) %}
+                        <div class="rewrite-source-toolbar slot-header">
+                            <span class="slot-badge badge-yes">Russian</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon{% if ru_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-ru-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-source-ru-copy-btn" id="rewrite-source-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
+                                <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                            </button>
+                            <span class="rewrite-source-counts" id="rewrite-source-ru-counts" aria-live="polite"></span>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--source-ru">
+                            <textarea id="rewrite-source-text-ru" class="rewrite-source-textarea{% if ru_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Появится после нажатия «Перевести на русский»…" {% if not openai_key_set %}disabled{% elif ru_locked %}readonly{% endif %}>{{ rw.source_text_ru or '' }}</textarea>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -206,19 +236,25 @@
                 </div>
             </div>
 
-            <section class="scene-card rewrite-pipeline-runner" aria-label="Запуск всей цепочки этапов">
-                <div class="rewrite-pipeline-runner__head">
-                    <div>
-                        <div class="scene-id rewrite-pipeline-runner__title">Конвейер</div>
-                        <p class="scene-text rewrite-pipeline-runner__lead">По очереди: Analysis → Architect → Block Writer → Сontinuity Editor → Retention Editor → Hook Editor → Flow Editor → Persona Editor → Voiceover Editor → Voice Flow Editor → Title Strategist → Structure Splitter → Scene Writer → YouTube packaging engine. Журнал ниже; карточки этапов обновляются так же, как при ручном запуске.</p>
-                    </div>
-                    <div class="rewrite-pipeline-runner__actions">
-                        <button type="button" class="btn btn-secondary btn-sm" id="rewrite-pipeline-run-btn" {% if not openai_key_set %}disabled{% endif %}>Сгенерировать</button>
-                        <button type="button" class="btn btn-danger btn-sm" id="rewrite-pipeline-stop-btn" disabled>Остановить</button>
-                    </div>
+            <section class="scene-card rewrite-pipeline-runner rewrite-pipeline-runner--centered" aria-label="Запуск всей цепочки этапов">
+                <div class="rewrite-pipeline-runner__actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-pipeline-run-btn" {% if not openai_key_set %}disabled{% endif %}>Сгенерировать</button>
+                    <button type="button" class="btn btn-danger btn-sm" id="rewrite-pipeline-stop-btn" disabled>Остановить</button>
                 </div>
                 <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — все этапы конвейера по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
             </section>
+
+            {% set collapsible_pipeline_stages = [] %}
+            {% for _pair in rewrite_stages[:10] %}
+            {% if collapsible_pipeline_stages.append(_pair[0]) %}{% endif %}
+            {% endfor %}
+            <div class="rewrite-stages-collapse-bar" role="toolbar" aria-label="Сворачивание этапов 1–10">
+                <span class="rewrite-stages-collapse-bar__label">Этапы 1–10: Analysis — Structure Splitter</span>
+                <div class="rewrite-stages-collapse-bar__actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-stages-collapse-all-btn">Свернуть все</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-stages-expand-all-btn">Развернуть все</button>
+                </div>
+            </div>
 
             <div class="scenes-grid rewrite-stages-list">
             {% for stage_key, stage_label in rewrite_stages %}
@@ -234,22 +270,30 @@
             {% set past_prompt_locked = cell.past_prompt_locked|default(true) %}
             {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_key in collapsible_pipeline_stages %} rewrite-stage-card--collapsible{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
-                            <div class="rewrite-stage-heading">
-                                <span class="rewrite-stage-index" aria-label="Этап {{ loop.index }}">{{ loop.index }}</span>
-                                <div class="rewrite-stage-heading__body">
-                                    <div class="scene-id">{{ stage_label }}</div>
+                            <div class="rewrite-stage-header-top">
+                                <div class="rewrite-stage-title-row">
+                                    <span class="rewrite-stage-index" aria-label="Этап {{ loop.index }}">{{ loop.index }}</span>
+                                    <div class="scene-id rewrite-stage-title-text">{{ stage_label }}</div>
                                 </div>
-                                <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
-                                    <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
-                                    <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
+                                <div class="rewrite-stage-header-tools">
+                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
+                                    <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
+                                        <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
+                                        <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
+                                    </div>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
+                            {% if rewrite_stage_subtitles[stage_key] %}
+                            <div class="rewrite-stage-subtitle">{{ rewrite_stage_subtitles[stage_key] }}</div>
+                            {% endif %}
                         </div>
                     </div>
+                    {% if stage_key in collapsible_pipeline_stages %}
+                    <div class="rewrite-stage-collapsible-inner">
+                    {% endif %}
                     <div class="rewrite-stage-stack">
                         <div class="rewrite-stage-row rewrite-stage-row--controls">
                             <div class="rewrite-stage-model-cell">
@@ -274,7 +318,7 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'continuity_editor' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'voice_flow_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_user_prompt else 'no' }} rewrite-stage-user-prompt-badge">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
@@ -380,12 +424,72 @@
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
                             {% endif %}
-                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'continuity_editor', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'voice_flow_editor', 'title_strategist'] %}
+                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist'] %}
                             <div class="rewrite-scene-writer-check" data-editor-check></div>
                             {% endif %}
                         </div>
                     </div>
+                    {% if stage_key in collapsible_pipeline_stages %}
+                    </div>
+                    {% endif %}
                 </article>
+                {% if stage_key == 'structure_splitter' %}
+                {% set vf_locked = rw.voiceover_final_locked|default(true) %}
+                {% set vfr_locked = rw.voiceover_final_text_ru_locked|default(false) %}
+                <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index rewrite-voiceover-final-card rewrite-source-card--body" id="rewrite-voiceover-final-card" aria-label="Итоговый текст для озвучки">
+                    <div class="scene-header">
+                        <div class="rewrite-stage-header-row">
+                            <div class="rewrite-stage-header-top">
+                                <div class="rewrite-stage-title-row">
+                                    <div class="scene-id rewrite-stage-title-text">Итоговый текст</div>
+                                </div>
+                            </div>
+                            <div class="rewrite-stage-subtitle">Готовый текст для озвучки. Берётся из поля <code>edited_text</code> результата Voiceover Editor (без служебных <code>\n</code> и экранирования).</div>
+                        </div>
+                    </div>
+                    <div class="rewrite-source-toolbar slot-header">
+                        <span class="slot-badge badge-yes">Result</span>
+                        <button type="button" class="rewrite-lock-toggle btn-icon{% if vf_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-voiceover-final-copy-btn" id="rewrite-voiceover-final-copy-btn" title="Копировать текст в буфер обмена" aria-label="Копировать текст">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-source-counts" id="rewrite-voiceover-final-counts" aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-voiceover-final-slot">
+                        <textarea id="rewrite-voiceover-final-textarea" class="rewrite-source-textarea rewrite-voiceover-final-textarea{% if vf_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" {% if vf_locked %}readonly{% endif %} placeholder="Сначала получите Result в Voiceover Editor." {% if not openai_key_set %}disabled{% endif %}>{{ voiceover_final_text }}</textarea>
+                    </div>
+                    <div class="rewrite-source-translate-block">
+                        <div class="rewrite-source-translate-actions">
+                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-voiceover-final-translate-ru-btn" {% if not openai_key_set %}disabled{% endif %}>Перевести на русский</button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-voiceover-final-translate-ru-status-wrap" aria-hidden="true">
+                            <div class="slot-status-row">
+                                <span class="slot-status slot-status-with-spinner" id="rewrite-voiceover-final-translate-ru-status" aria-live="polite"></span>
+                                <button type="button" class="btn-cancel-generation" id="rewrite-voiceover-final-translate-ru-cancel">Cancel</button>
+                            </div>
+                        </div>
+                        <div class="rewrite-slot--source-ru-wrap{% if not (rw.voiceover_final_text_ru or '')|trim %} hidden{% endif %}" id="rewrite-voiceover-final-text-ru-wrap"{% if not (rw.voiceover_final_text_ru or '')|trim %} aria-hidden="true"{% endif %}>
+                            <div class="rewrite-source-toolbar slot-header">
+                                <span class="slot-badge badge-yes">Russian</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon{% if vfr_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-ru-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-voiceover-final-ru-copy-btn" id="rewrite-voiceover-final-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
+                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                </button>
+                                <span class="rewrite-source-counts" id="rewrite-voiceover-final-ru-counts" aria-live="polite"></span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--source-ru">
+                                <textarea id="rewrite-voiceover-final-text-ru" class="rewrite-source-textarea{% if vfr_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Появится после нажатия «Перевести на русский»…" {% if not openai_key_set %}disabled{% elif vfr_locked %}readonly{% endif %}>{{ rw.voiceover_final_text_ru or '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+                {% endif %}
             {% endfor %}
             </div>
         </section>
@@ -483,6 +587,8 @@
     const blockWriterCheckUrl = {{ url_for('rewrite_block_writer_check_get', rewrite_id=rw.rewrite_id) | tojson }};
     const openaiExportRewriteId = {{ rw.rewrite_id | tojson }};
     const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
+    const translateRuUrl = {{ url_for('rewrite_translate_source_ru', rewrite_id=rw.rewrite_id) | tojson }};
+    const translateVoFinalRuUrl = {{ url_for('rewrite_translate_voiceover_final_ru', rewrite_id=rw.rewrite_id) | tojson }};
     const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadStreamUrl = {{ url_for('rewrite_youtube_download_stream', rewrite_id=rw.rewrite_id) | tojson }};
@@ -491,20 +597,34 @@
     const ytTranscriptUrl = {{ url_for('rewrite_youtube_transcript_get', rewrite_id=rw.rewrite_id) | tojson }};
     const busy = document.getElementById('rewrite-busy');
     const sourceEl = document.getElementById('rewrite-source-text');
+    const sourceRuEl = document.getElementById('rewrite-source-text-ru');
+    const sourceRuWrap = document.getElementById('rewrite-source-text-ru-wrap');
+    const translateRuBtn = document.getElementById('rewrite-source-translate-ru-btn');
+    const translateRuStatusEl = document.getElementById('rewrite-source-translate-ru-status');
+    const translateRuStatusWrap = document.getElementById('rewrite-source-translate-ru-status-wrap');
+    const translateRuCancelBtn = document.getElementById('rewrite-source-translate-ru-cancel');
     const sourceTitleEl = document.getElementById('rewrite-source-title');
     const sourceCountsEl = document.getElementById('rewrite-source-counts');
+    const sourceRuToggleBtn = document.getElementById('rewrite-source-ru-toggle');
+    const sourceRuCountsEl = document.getElementById('rewrite-source-ru-counts');
     const masterEl = document.getElementById('rewrite-master-prompt');
     const masterToggleBtn = document.getElementById('rewrite-master-toggle');
     const sourceToggleBtn = document.getElementById('rewrite-source-toggle');
     const heroToggleBtn = document.getElementById('rewrite-hero-toggle');
     const audioToggleBtn = document.getElementById('rewrite-audio-toggle');
     let sourceLocked = {{ rw.source_locked|default(false)|tojson }};
+    let sourceRuLocked = {{ rw.source_text_ru_locked|default(false)|tojson }};
+    let voiceoverFinalLocked = {{ rw.voiceover_final_locked|default(true)|tojson }};
+    let voiceoverFinalTextRuLocked = {{ rw.voiceover_final_text_ru_locked|default(false)|tojson }};
     let masterLocked = {{ rw.master_prompt_locked|default(false)|tojson }};
     let heroLocked = {{ rw.hero_prompt_locked|default(false)|tojson }};
     let audioTimingLocked = {{ rw.audio_timing_locked|default(false)|tojson }};
     const openaiOk = document.body.getAttribute('data-openai-key') === '1';
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
+    const COLLAPSIBLE_PIPELINE_STAGE_KEYS = {{ collapsible_pipeline_stages | tojson }};
+    const rewriteIdForStageCollapse = {{ rw.rewrite_id | tojson }};
+    const REWRITE_STAGE_COLLAPSE_LS = 'jsonVideoRewriteStageCollapseV1';
     const targetCharsRangeEl = document.getElementById('rewrite-target-chars');
     const targetCharsValEl = document.getElementById('rewrite-target-chars-val');
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
@@ -994,7 +1114,7 @@
         if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) return true;
         try {
             var snap = collectSnapshot();
-            var r = await fetch(rewriteTemplateSaveDiskUrl(name), {
+            var r = await _fetchWithRetry(rewriteTemplateSaveDiskUrl(name), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1003,16 +1123,36 @@
                     target_chars: snap.target_chars,
                     stages: snap.stages
                 })
-            });
+            }, 3);
             var data = await r.json().catch(function () { return {}; });
             return r.ok && !!data.ok;
         } catch (e) {
+            console.warn('trySyncRewriteTemplateToDisk failed:', e);
             return false;
         }
     }
 
+    var _templateSyncWarnedAt = 0;
     function alertTemplateSyncFailed() {
-        alert('Проект сохранён, но не удалось записать файлы шаблона в rewrite_templates/ (сеть, права или папка).');
+        // Project save already succeeded — это резервная синхронизация на диск.
+        // Не блокируем UI модалкой на каждый чих; сетевой сбой устранится со следующим автосейвом.
+        console.warn('Проект сохранён, но синхронизация шаблона на диск не прошла (сеть/права/папка). Будет повтор на следующем сохранении.');
+        var now = Date.now();
+        if (now - _templateSyncWarnedAt < 60000) return;
+        _templateSyncWarnedAt = now;
+        var note = document.getElementById('rewrite-template-sync-toast');
+        if (!note) {
+            note = document.createElement('div');
+            note.id = 'rewrite-template-sync-toast';
+            note.style.cssText = 'position:fixed;right:16px;bottom:16px;max-width:360px;padding:10px 14px;background:#332b1a;color:#ffd58a;border:1px solid #6b5224;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.35);font:13px/1.4 system-ui,sans-serif;z-index:9999;opacity:0;transition:opacity .25s;';
+            document.body.appendChild(note);
+        }
+        note.textContent = 'Проект сохранён. Резервная запись файлов шаблона не прошла — будет повторена автоматически.';
+        note.style.opacity = '1';
+        clearTimeout(window.__rewriteTemplateSyncToastTimer);
+        window.__rewriteTemplateSyncToastTimer = setTimeout(function () {
+            note.style.opacity = '0';
+        }, 4000);
     }
 
     function renderSceneWriterCheck(block, payload) {
@@ -1738,13 +1878,11 @@
             return;
         }
         var strictEditorStages = {
-            continuity_editor: true,
             retention_editor: true,
             hook_editor: true,
             flow_editor: true,
             persona_editor: true,
             voiceover_editor: true,
-            voice_flow_editor: true,
             title_strategist: true
         };
         if (strictEditorStages[stageKey]) {
@@ -1868,6 +2006,20 @@
         if (sourceToggleBtn) sourceToggleBtn.disabled = false;
     }
 
+    function applySourceRuLockUI() {
+        if (!sourceRuEl) return;
+        if (!openaiOk) {
+            sourceRuEl.disabled = true;
+            if (sourceRuToggleBtn) sourceRuToggleBtn.disabled = true;
+            return;
+        }
+        sourceRuEl.disabled = false;
+        sourceRuEl.readOnly = sourceRuLocked;
+        sourceRuEl.classList.toggle('rewrite-source-textarea--locked', sourceRuLocked);
+        styleToggleBtn(sourceRuToggleBtn, sourceRuLocked);
+        if (sourceRuToggleBtn) sourceRuToggleBtn.disabled = false;
+    }
+
     function stageResultNonEmpty(block) {
         const ta = block.querySelector('.rewrite-stage-result');
         if (!ta) return false;
@@ -1896,7 +2048,7 @@
             let ok = true;
             for (let i = 0; i < idx; i++) {
                 const prevKey = STAGE_KEYS_ORDER[i];
-                if ((sk === 'structure_splitter' || sk === 'scene_writer') && (prevKey === 'voice_flow_editor' || prevKey === 'title_strategist')) {
+                if ((sk === 'structure_splitter' || sk === 'scene_writer') && prevKey === 'title_strategist') {
                     continue;
                 }
                 if (sk === 'youtube_packaging' && prevKey === 'scene_writer_live') {
@@ -1930,6 +2082,7 @@
         applyAudioLockUI();
         applyMasterLockUI();
         applySourceLockUI();
+        applySourceRuLockUI();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             applyPromptLockUI(block);
             applyAnalysisUserPromptLockUI(block);
@@ -1956,17 +2109,222 @@
         sourceCountsEl.textContent = chars + ' симв. · ' + words + ' сл.';
     }
 
+    function updateSourceRuCounts() {
+        if (!sourceRuCountsEl || !sourceRuEl) return;
+        var text = sourceRuEl.value;
+        var chars = text.length;
+        var words = countWords(text);
+        sourceRuCountsEl.textContent = chars + ' симв. · ' + words + ' сл.';
+    }
+
     if (sourceEl) {
         sourceEl.addEventListener('input', updateSourceCounts);
         sourceEl.addEventListener('input', function () { scheduleAutosave(500); });
         sourceEl.addEventListener('change', updateSourceCounts);
         sourceEl.addEventListener('change', function () { scheduleAutosave(0); });
     }
+
+    var sourceCopyBtn = document.getElementById('rewrite-source-copy-btn');
+    if (sourceCopyBtn && sourceEl) {
+        sourceCopyBtn.addEventListener('click', function () {
+            var raw = sourceEl.value || '';
+            var prevTitle = sourceCopyBtn.getAttribute('title') || 'Копировать исходный текст в буфер обмена';
+            function flashTitle(t) {
+                sourceCopyBtn.setAttribute('title', t);
+                setTimeout(function () { sourceCopyBtn.setAttribute('title', prevTitle); }, 1500);
+            }
+            if (!raw) { flashTitle('Нет текста для копирования'); return; }
+            function fallback() {
+                try {
+                    sourceEl.removeAttribute('readonly');
+                    var prevDisabled = sourceEl.disabled;
+                    sourceEl.disabled = false;
+                    sourceEl.focus();
+                    sourceEl.select();
+                    document.execCommand('copy');
+                    sourceEl.disabled = prevDisabled;
+                    if (sourceLocked) sourceEl.setAttribute('readonly', '');
+                    flashTitle('Скопировано');
+                } catch (e) { flashTitle('Не удалось скопировать'); }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(raw)
+                    .then(function () { flashTitle('Скопировано'); })
+                    .catch(fallback);
+            } else { fallback(); }
+        });
+    }
+
+    var sourceRuCopyBtn = document.getElementById('rewrite-source-ru-copy-btn');
+    if (sourceRuCopyBtn && sourceRuEl) {
+        sourceRuCopyBtn.addEventListener('click', function () {
+            var raw = sourceRuEl.value || '';
+            var prevTitle = sourceRuCopyBtn.getAttribute('title') || 'Копировать перевод в буфер обмена';
+            function flashTitle(t) {
+                sourceRuCopyBtn.setAttribute('title', t);
+                setTimeout(function () { sourceRuCopyBtn.setAttribute('title', prevTitle); }, 1500);
+            }
+            if (!raw) { flashTitle('Нет текста для копирования'); return; }
+            function fallback() {
+                try {
+                    sourceRuEl.removeAttribute('readonly');
+                    var prevDisabled = sourceRuEl.disabled;
+                    sourceRuEl.disabled = false;
+                    sourceRuEl.focus();
+                    sourceRuEl.select();
+                    document.execCommand('copy');
+                    sourceRuEl.disabled = prevDisabled;
+                    if (sourceRuLocked) sourceRuEl.setAttribute('readonly', '');
+                    flashTitle('Скопировано');
+                } catch (e) { flashTitle('Не удалось скопировать'); }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(raw)
+                    .then(function () { flashTitle('Скопировано'); })
+                    .catch(fallback);
+            } else { fallback(); }
+        });
+    }
     if (sourceTitleEl) {
         sourceTitleEl.addEventListener('input', function () { scheduleAutosave(500); });
         sourceTitleEl.addEventListener('change', function () { scheduleAutosave(0); });
     }
+    if (sourceRuEl) {
+        sourceRuEl.addEventListener('input', updateSourceRuCounts);
+        sourceRuEl.addEventListener('input', function () { scheduleAutosave(500); });
+        sourceRuEl.addEventListener('change', updateSourceRuCounts);
+        sourceRuEl.addEventListener('change', function () { scheduleAutosave(0); });
+    }
     updateSourceCounts();
+    updateSourceRuCounts();
+
+    if (translateRuBtn && translateRuUrl) {
+        let translateRuAbort = null;
+        let translateRuRunning = false;
+
+        function setTranslateRuBusy(on) {
+            translateRuRunning = !!on;
+            if (translateRuBtn) translateRuBtn.disabled = on || !openaiOk;
+            if (translateRuStatusWrap) {
+                if (on) {
+                    translateRuStatusWrap.classList.remove('hidden');
+                    translateRuStatusWrap.removeAttribute('aria-hidden');
+                    translateRuStatusWrap.setAttribute('data-status', 'generating');
+                } else {
+                    translateRuStatusWrap.classList.add('hidden');
+                    translateRuStatusWrap.setAttribute('aria-hidden', 'true');
+                    translateRuStatusWrap.removeAttribute('data-status');
+                }
+            }
+            if (translateRuCancelBtn) {
+                translateRuCancelBtn.disabled = !on;
+            }
+        }
+
+        function setTranslateRuStatus(text) {
+            if (translateRuStatusEl) translateRuStatusEl.textContent = text || '';
+        }
+
+        function showTranslateRuResultBlock(show) {
+            if (!sourceRuWrap) return;
+            if (show) {
+                sourceRuWrap.classList.remove('hidden');
+                sourceRuWrap.removeAttribute('aria-hidden');
+            } else {
+                sourceRuWrap.classList.add('hidden');
+                sourceRuWrap.setAttribute('aria-hidden', 'true');
+            }
+        }
+
+        if (translateRuCancelBtn) {
+            translateRuCancelBtn.addEventListener('click', function () {
+                if (translateRuAbort) {
+                    try { translateRuAbort.abort(); } catch (e) {}
+                }
+            });
+        }
+
+        translateRuBtn.addEventListener('click', async function () {
+            if (!openaiOk || translateRuRunning) return;
+            var raw = sourceEl ? (sourceEl.value || '') : '';
+            if (!raw.trim()) {
+                setTranslateRuBusy(true);
+                setTranslateRuStatus('Сначала вставьте исходный текст.');
+                setTimeout(function () { setTranslateRuBusy(false); }, 1800);
+                return;
+            }
+            showTranslateRuResultBlock(false);
+            setTranslateRuBusy(true);
+            setTranslateRuStatus('Подготовка запроса…');
+
+            translateRuAbort = ('AbortController' in window) ? new AbortController() : null;
+            var translatedText = '';
+            var hadError = false;
+            try {
+                var modelVal = globalModelEl ? (globalModelEl.value || '').trim() : '';
+                var resp = await fetch(translateRuUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_text: raw, model: modelVal }),
+                    signal: translateRuAbort ? translateRuAbort.signal : undefined
+                });
+                if (!resp.body) {
+                    setTranslateRuStatus('Ошибка: сервер не отдал поток.');
+                    return;
+                }
+                var reader = resp.body.getReader();
+                var dec = new TextDecoder('utf-8');
+                var buf = '';
+                while (true) {
+                    var rd = await reader.read();
+                    if (rd.done) break;
+                    buf += dec.decode(rd.value, { stream: true });
+                    var idx;
+                    while ((idx = buf.indexOf('\n')) !== -1) {
+                        var line = buf.slice(0, idx);
+                        buf = buf.slice(idx + 1);
+                        if (!line.trim()) continue;
+                        var ev = null;
+                        try { ev = JSON.parse(line); } catch (e2) { continue; }
+                        var msg = String((ev && ev.message) || '');
+                        if (ev && ev.type === 'status') {
+                            setTranslateRuStatus(msg);
+                        } else if (ev && ev.type === 'error') {
+                            hadError = true;
+                            setTranslateRuStatus('Ошибка: ' + msg);
+                        } else if (ev && ev.type === 'result') {
+                            translatedText = String(ev.content || '');
+                        }
+                    }
+                }
+                if (hadError && !translatedText) {
+                    return;
+                }
+                if (sourceRuEl) sourceRuEl.value = translatedText;
+                sourceRuLocked = true;
+                showTranslateRuResultBlock(true);
+                applySourceRuLockUI();
+                updateSourceRuCounts();
+                scheduleAutosave(0);
+            } catch (e) {
+                if (e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1)) {
+                    setTranslateRuStatus('Отменено.');
+                } else {
+                    setTranslateRuStatus('Ошибка сети: ' + String(e));
+                }
+            } finally {
+                translateRuAbort = null;
+                if (!hadError) {
+                    setTranslateRuBusy(false);
+                } else {
+                    if (translateRuBtn) translateRuBtn.disabled = !openaiOk;
+                    translateRuRunning = false;
+                    if (translateRuCancelBtn) translateRuCancelBtn.disabled = true;
+                    setTimeout(function () { setTranslateRuBusy(false); }, 3500);
+                }
+            }
+        });
+    }
 
     if (targetCharsRangeEl && targetCharsValEl) {
         targetCharsRangeEl.addEventListener('input', function () {
@@ -2021,7 +2379,7 @@
                             syncPromptBadge(block);
                         }
                     }
-                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
+                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
                         var uta = block.querySelector('.rewrite-stage-user-prompt');
                         if (uta) {
                             uta.value = cell.user_prompt;
@@ -2058,7 +2416,7 @@
                         if (tv) tv.textContent = String(n);
                     }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
+                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
@@ -2447,8 +2805,14 @@
         });
         return {
             source_text: sourceEl ? sourceEl.value : '',
+            source_text_ru: sourceRuEl ? sourceRuEl.value : '',
             source_title: sourceTitleEl ? sourceTitleEl.value : '',
             source_locked: sourceLocked,
+            source_text_ru_locked: sourceRuLocked,
+            voiceover_final_text: (function () { var el = document.getElementById('rewrite-voiceover-final-textarea'); return el ? (el.value || '') : ''; })(),
+            voiceover_final_locked: voiceoverFinalLocked,
+            voiceover_final_text_ru: (function () { var el = document.getElementById('rewrite-voiceover-final-text-ru'); return el ? (el.value || '') : ''; })(),
+            voiceover_final_text_ru_locked: voiceoverFinalTextRuLocked,
             master_prompt: masterEl ? masterEl.value : '',
             master_prompt_locked: masterLocked,
             target_chars: targetCharsRangeEl ? clampTargetChars(targetCharsRangeEl.value) : 1500,
@@ -2460,12 +2824,30 @@
         };
     }
 
+    async function _fetchWithRetry(url, init, attempts) {
+        var max = Math.max(1, Number(attempts || 3));
+        var lastErr = null;
+        for (var i = 0; i < max; i++) {
+            try {
+                return await fetch(url, init);
+            } catch (e) {
+                lastErr = e;
+                // TypeError: Failed to fetch — транзиентный сетевой сбой/расширение/перезагрузка сервера.
+                if (i < max - 1) {
+                    await new Promise(function (res) { setTimeout(res, 400 * (i + 1)); });
+                    continue;
+                }
+            }
+        }
+        throw lastErr || new Error('fetch failed');
+    }
+
     async function saveToServer() {
-        const r = await fetch(saveUrl, {
+        const r = await _fetchWithRetry(saveUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(collectSnapshot())
-        });
+        }, 3);
         return r.ok;
     }
 
@@ -2560,6 +2942,15 @@
         focusEl: sourceEl
     });
 
+    if (sourceRuToggleBtn) {
+        wireTextLockToggle(sourceRuToggleBtn, {
+            get: function () { return sourceRuLocked; },
+            set: function (v) { sourceRuLocked = v; },
+            apply: applySourceRuLockUI,
+            focusEl: sourceRuEl
+        });
+    }
+
     wireTextLockToggle(heroToggleBtn, {
         get: function () { return heroLocked; },
         set: function (v) { heroLocked = v; },
@@ -2603,7 +2994,7 @@
     function applyAnalysisUserPromptLockUI(block) {
         if (!block) return;
         var sk = block.getAttribute('data-stage-key');
-        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'continuity_editor' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'voice_flow_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
+        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
         const locked = block.getAttribute('data-user-prompt-locked') === '1';
         const ta = block.querySelector('.rewrite-stage-user-prompt');
         const toggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
@@ -2784,7 +3175,7 @@
         const dis = on || !openaiOk;
         if (pipelineRunBtn) pipelineRunBtn.disabled = dis;
         syncPipelineStopButton();
-        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn)').forEach(function (b) { b.disabled = dis; });
+        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
@@ -2811,6 +3202,10 @@
             sourceTitleEl.disabled = !openaiOk;
             sourceTitleEl.readOnly = dis || sourceLocked;
         }
+        if (sourceRuEl) {
+            sourceRuEl.disabled = !openaiOk;
+            sourceRuEl.readOnly = dis || sourceRuLocked;
+        }
         if (templateSelectEl) templateSelectEl.disabled = dis;
         if (templateCreateBtn) templateCreateBtn.disabled = dis;
         if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
@@ -2824,7 +3219,7 @@
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
             }
-            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'continuity_editor' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'voice_flow_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
+            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
                 const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
                 const uTa = block.querySelector('.rewrite-stage-user-prompt');
                 if (uTa) {
@@ -2866,6 +3261,16 @@
         if (el.getAttribute('data-copy-hold') === '1') return;
         var text = ta.value || '';
         el.textContent = text.length + ' симв. · ' + countWords(text) + ' сл.';
+    }
+
+    function syncStageErrorBorder(block) {
+        if (!block) return;
+        if (block.classList.contains('rewrite-stage-card--running')) return;
+        var ta = block.querySelector('.rewrite-stage-result');
+        var v = ta ? (ta.value || '') : '';
+        var isErr = /^\s*Ошибка:/.test(v);
+        block.classList.toggle('rewrite-stage-card--error', isErr);
+        if (ta) ta.classList.toggle('rewrite-stage-result--error', isErr);
     }
 
     function copyStageResult(block) {
@@ -2918,6 +3323,7 @@
     function resetStageRunUi(block) {
         const ta = block.querySelector('.rewrite-stage-result');
         if (ta) ta.classList.remove('rewrite-stage-result--error');
+        if (block) block.classList.remove('rewrite-stage-card--error');
     }
 
     function setStageStatusUi(block, text, canCancel, onCancel) {
@@ -2937,6 +3343,7 @@
         cancelBtn.disabled = !canCancel;
         cancelBtn.onclick = canCancel && typeof cancelHandler === 'function' ? cancelHandler : null;
         block.classList.toggle('rewrite-stage-card--running', visible);
+        if (visible) block.classList.remove('rewrite-stage-card--error');
         if (resultWrap) {
             if (visible) resultWrap.setAttribute('data-status', 'generating');
             else resultWrap.removeAttribute('data-status');
@@ -2969,6 +3376,7 @@
         resTextarea.classList.remove('rewrite-stage-result--busy');
         resTextarea.classList.add('rewrite-stage-result--error');
         clearStageStatusUi(block);
+        block.classList.add('rewrite-stage-card--error');
         updateResultCounts(block);
         syncStageRunButtons();
         if (pipelineStatusForward) {
@@ -3341,6 +3749,12 @@
             });
         }
         updateResultCounts(block);
+        syncStageErrorBorder(block);
+        var resTaForErr = block.querySelector('.rewrite-stage-result');
+        if (resTaForErr) {
+            resTaForErr.addEventListener('input', function () { syncStageErrorBorder(block); });
+            resTaForErr.addEventListener('change', function () { syncStageErrorBorder(block); });
+        }
     });
 
     async function runStage(stageKey, block, options) {
@@ -3841,7 +4255,284 @@
             voiceoverResultElInit.addEventListener('change', recheck2);
         }
     }
-    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="voice_flow_editor"], .rewrite-stage-card[data-stage-key="title_strategist"], .rewrite-stage-card[data-stage-key="scene_writer_live"]').forEach(function (block) {
+
+    (function voiceoverFinalCard() {
+        var ta = document.getElementById('rewrite-voiceover-final-textarea');
+        if (!ta) return;
+        var counts = document.getElementById('rewrite-voiceover-final-counts');
+        var toggleBtn = document.getElementById('rewrite-voiceover-final-toggle');
+        var copyBtn = document.getElementById('rewrite-voiceover-final-copy-btn');
+        var voEditorTa = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-result');
+
+        function normalizeEditedText(raw) {
+            var txt = String(raw || '');
+            txt = txt.replace(/\\+r\\+n/g, '\n');
+            txt = txt.replace(/\\+n/g, '\n');
+            txt = txt.replace(/\\+r/g, '\n');
+            txt = txt.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n');
+            txt = txt.replace(/\n{3,}/g, '\n\n');
+            return txt.trim();
+        }
+        function extractEdited(raw) {
+            var s = String(raw || '').trim();
+            if (!s) return '';
+            try {
+                var obj = JSON.parse(s);
+                if (obj && typeof obj === 'object' && typeof obj.edited_text === 'string') {
+                    return normalizeEditedText(obj.edited_text);
+                }
+            } catch (e) {}
+            return normalizeEditedText(s);
+        }
+        function updateCounts() {
+            if (!counts) return;
+            var v = ta.value || '';
+            counts.textContent = v.length + ' симв. · ' + countWords(v) + ' сл.';
+        }
+        function applyVfLockUI() {
+            if (!ta) return;
+            if (!openaiOk) {
+                ta.disabled = true;
+                if (toggleBtn) toggleBtn.disabled = true;
+                return;
+            }
+            ta.disabled = false;
+            ta.readOnly = !!voiceoverFinalLocked;
+            ta.classList.toggle('rewrite-source-textarea--locked', !!voiceoverFinalLocked);
+            if (toggleBtn) {
+                styleToggleBtn(toggleBtn, !!voiceoverFinalLocked);
+                toggleBtn.disabled = false;
+            }
+        }
+        function refreshFromVoiceover() {
+            if (!voiceoverFinalLocked) return;
+            if (!voEditorTa) return;
+            var fresh = extractEdited(voEditorTa.value || '');
+            var current = ta.value || '';
+            if (fresh && fresh !== current) {
+                ta.value = fresh;
+                updateCounts();
+                scheduleAutosave(500);
+            }
+        }
+        if (voEditorTa) {
+            voEditorTa.addEventListener('input', refreshFromVoiceover);
+            voEditorTa.addEventListener('change', refreshFromVoiceover);
+        }
+        ta.addEventListener('input', function () { updateCounts(); scheduleAutosave(500); });
+        ta.addEventListener('change', function () { updateCounts(); scheduleAutosave(0); });
+        updateCounts();
+        applyVfLockUI();
+
+        if (toggleBtn) {
+            wireTextLockToggle(toggleBtn, {
+                get: function () { return voiceoverFinalLocked; },
+                set: function (v) { voiceoverFinalLocked = v; },
+                apply: applyVfLockUI,
+                focusEl: ta
+            });
+        }
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async function () {
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(ta.value || '');
+                    } else {
+                        var wasReadonly = ta.hasAttribute('readonly');
+                        ta.removeAttribute('readonly');
+                        ta.select();
+                        document.execCommand('copy');
+                        if (wasReadonly) ta.setAttribute('readonly', '');
+                    }
+                    if (counts) {
+                        var prev = counts.textContent;
+                        counts.textContent = 'Скопировано';
+                        setTimeout(function () { counts.textContent = prev; updateCounts(); }, 900);
+                    }
+                } catch (e) {}
+            });
+        }
+
+        // === Перевод на русский ===
+        var ruTa = document.getElementById('rewrite-voiceover-final-text-ru');
+        var ruWrap = document.getElementById('rewrite-voiceover-final-text-ru-wrap');
+        var ruToggle = document.getElementById('rewrite-voiceover-final-ru-toggle');
+        var ruCopyBtn = document.getElementById('rewrite-voiceover-final-ru-copy-btn');
+        var ruCounts = document.getElementById('rewrite-voiceover-final-ru-counts');
+        var trBtn = document.getElementById('rewrite-voiceover-final-translate-ru-btn');
+        var trStatusEl = document.getElementById('rewrite-voiceover-final-translate-ru-status');
+        var trStatusWrap = document.getElementById('rewrite-voiceover-final-translate-ru-status-wrap');
+        var trCancelBtn = document.getElementById('rewrite-voiceover-final-translate-ru-cancel');
+
+        function applyVfrLockUI() {
+            if (!ruTa) return;
+            if (!openaiOk) {
+                ruTa.disabled = true;
+                if (ruToggle) ruToggle.disabled = true;
+                return;
+            }
+            ruTa.disabled = false;
+            ruTa.readOnly = !!voiceoverFinalTextRuLocked;
+            ruTa.classList.toggle('rewrite-source-textarea--locked', !!voiceoverFinalTextRuLocked);
+            if (ruToggle) {
+                styleToggleBtn(ruToggle, !!voiceoverFinalTextRuLocked);
+                ruToggle.disabled = false;
+            }
+        }
+        function updateVfrCounts() {
+            if (!ruCounts || !ruTa) return;
+            var t = ruTa.value || '';
+            ruCounts.textContent = t.length + ' симв. · ' + countWords(t) + ' сл.';
+        }
+        if (ruTa) {
+            ruTa.addEventListener('input', function () { updateVfrCounts(); scheduleAutosave(500); });
+            ruTa.addEventListener('change', function () { updateVfrCounts(); scheduleAutosave(0); });
+            updateVfrCounts();
+        }
+        applyVfrLockUI();
+        if (ruToggle) {
+            wireTextLockToggle(ruToggle, {
+                get: function () { return voiceoverFinalTextRuLocked; },
+                set: function (v) { voiceoverFinalTextRuLocked = v; },
+                apply: applyVfrLockUI,
+                focusEl: ruTa
+            });
+        }
+        if (ruCopyBtn && ruTa) {
+            ruCopyBtn.addEventListener('click', async function () {
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(ruTa.value || '');
+                    } else {
+                        var wasRO = ruTa.hasAttribute('readonly');
+                        ruTa.removeAttribute('readonly');
+                        ruTa.select();
+                        document.execCommand('copy');
+                        if (wasRO) ruTa.setAttribute('readonly', '');
+                    }
+                    if (ruCounts) {
+                        var prev = ruCounts.textContent;
+                        ruCounts.textContent = 'Скопировано';
+                        setTimeout(function () { ruCounts.textContent = prev; updateVfrCounts(); }, 900);
+                    }
+                } catch (e) {}
+            });
+        }
+
+        if (trBtn) {
+            var trAbort = null;
+            var trRunning = false;
+            function setTrBusy(on) {
+                trRunning = !!on;
+                if (trBtn) trBtn.disabled = on || !openaiOk;
+                if (trStatusWrap) {
+                    if (on) {
+                        trStatusWrap.classList.remove('hidden');
+                        trStatusWrap.removeAttribute('aria-hidden');
+                        trStatusWrap.setAttribute('data-status', 'generating');
+                    } else {
+                        trStatusWrap.classList.add('hidden');
+                        trStatusWrap.setAttribute('aria-hidden', 'true');
+                        trStatusWrap.removeAttribute('data-status');
+                    }
+                }
+                if (trCancelBtn) trCancelBtn.disabled = !on;
+            }
+            function setTrStatus(text) {
+                if (trStatusEl) trStatusEl.textContent = text || '';
+            }
+            function showTrResultBlock(show) {
+                if (!ruWrap) return;
+                if (show) { ruWrap.classList.remove('hidden'); ruWrap.removeAttribute('aria-hidden'); }
+                else { ruWrap.classList.add('hidden'); ruWrap.setAttribute('aria-hidden', 'true'); }
+            }
+            if (trCancelBtn) {
+                trCancelBtn.addEventListener('click', function () {
+                    if (trAbort) { try { trAbort.abort(); } catch (e) {} }
+                });
+            }
+            trBtn.addEventListener('click', async function () {
+                if (!openaiOk || trRunning) return;
+                var raw = ta ? (ta.value || '') : '';
+                if (!raw.trim()) {
+                    setTrBusy(true);
+                    setTrStatus('Сначала получите итоговый текст в Voiceover Editor.');
+                    setTimeout(function () { setTrBusy(false); }, 1800);
+                    return;
+                }
+                showTrResultBlock(false);
+                setTrBusy(true);
+                setTrStatus('Подготовка запроса…');
+
+                trAbort = ('AbortController' in window) ? new AbortController() : null;
+                var translatedText = '';
+                var hadError = false;
+                try {
+                    var modelVal = '';
+                    try { var gm = document.getElementById('rewrite-global-model'); modelVal = gm ? (gm.value || '') : ''; } catch (e0) {}
+                    var resp = await fetch(translateVoFinalRuUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: raw, model: modelVal }),
+                        signal: trAbort ? trAbort.signal : undefined
+                    });
+                    if (!resp.body) {
+                        setTrStatus('Ошибка: сервер не отдал поток.');
+                        return;
+                    }
+                    var reader = resp.body.getReader();
+                    var dec = new TextDecoder('utf-8');
+                    var buf = '';
+                    while (true) {
+                        var rd = await reader.read();
+                        if (rd.done) break;
+                        buf += dec.decode(rd.value, { stream: true });
+                        var idx;
+                        while ((idx = buf.indexOf('\n')) !== -1) {
+                            var line = buf.slice(0, idx);
+                            buf = buf.slice(idx + 1);
+                            if (!line.trim()) continue;
+                            var ev = null;
+                            try { ev = JSON.parse(line); } catch (e2) { continue; }
+                            var msg = String((ev && ev.message) || '');
+                            if (ev && ev.type === 'status') {
+                                setTrStatus(msg);
+                            } else if (ev && ev.type === 'error') {
+                                hadError = true;
+                                setTrStatus('Ошибка: ' + msg);
+                            } else if (ev && ev.type === 'result') {
+                                translatedText = String(ev.content || '');
+                            }
+                        }
+                    }
+                    if (hadError && !translatedText) return;
+                    if (ruTa) ruTa.value = translatedText;
+                    voiceoverFinalTextRuLocked = true;
+                    showTrResultBlock(true);
+                    applyVfrLockUI();
+                    updateVfrCounts();
+                    scheduleAutosave(0);
+                } catch (e) {
+                    if (e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1)) {
+                        setTrStatus('Отменено.');
+                    } else {
+                        setTrStatus('Ошибка сети: ' + String(e));
+                    }
+                } finally {
+                    trAbort = null;
+                    if (!hadError) {
+                        setTrBusy(false);
+                    } else {
+                        if (trBtn) trBtn.disabled = !openaiOk;
+                        trRunning = false;
+                        if (trCancelBtn) trCancelBtn.disabled = true;
+                        setTimeout(function () { setTrBusy(false); }, 3500);
+                    }
+                }
+            });
+        }
+    })();
+    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="title_strategist"], .rewrite-stage-card[data-stage-key="scene_writer_live"]').forEach(function (block) {
         renderEditorCheck(block);
         var ta = block.querySelector('.rewrite-stage-result');
         if (ta) {
@@ -3876,6 +4567,55 @@
     document.querySelectorAll('.rewrite-stage-content-type').forEach(function (el) {
         el.addEventListener('change', function () { scheduleAutosave(0); });
     });
+
+    (function initRewritePipelineStageCollapse() {
+        function loadCollapseStoreAll() {
+            try {
+                var raw = localStorage.getItem(REWRITE_STAGE_COLLAPSE_LS);
+                var o = raw ? JSON.parse(raw) : {};
+                return (o && typeof o === 'object') ? o : {};
+            } catch (e) {
+                return {};
+            }
+        }
+        function saveCollapseStoreAll(all) {
+            try {
+                localStorage.setItem(REWRITE_STAGE_COLLAPSE_LS, JSON.stringify(all || {}));
+            } catch (e) {}
+        }
+        function loadProjectCollapseMap() {
+            var all = loadCollapseStoreAll();
+            var m = all[rewriteIdForStageCollapse];
+            return (m && typeof m === 'object') ? m : {};
+        }
+        function saveProjectCollapseMap(map) {
+            var all = loadCollapseStoreAll();
+            all[rewriteIdForStageCollapse] = map;
+            saveCollapseStoreAll(all);
+        }
+        function applyCardCollapsed(card, collapsed) {
+            card.classList.toggle('rewrite-stage-card--body-collapsed', !!collapsed);
+        }
+        function setAllCollapsed(collapsed) {
+            var map = {};
+            COLLAPSIBLE_PIPELINE_STAGE_KEYS.forEach(function (sk) { map[sk] = !!collapsed; });
+            saveProjectCollapseMap(map);
+            document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
+                applyCardCollapsed(card, !!collapsed);
+            });
+        }
+        var collapseAllBtn = document.getElementById('rewrite-stages-collapse-all-btn');
+        var expandAllBtn = document.getElementById('rewrite-stages-expand-all-btn');
+        if (collapseAllBtn) collapseAllBtn.addEventListener('click', function () { setAllCollapsed(true); });
+        if (expandAllBtn) expandAllBtn.addEventListener('click', function () { setAllCollapsed(false); });
+
+        var saved = loadProjectCollapseMap();
+        document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
+            var sk = card.getAttribute('data-stage-key') || '';
+            var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
+            applyCardCollapsed(card, collapsed);
+        });
+    })();
 })();
     </script>
 </body>

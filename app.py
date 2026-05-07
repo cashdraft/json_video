@@ -99,7 +99,9 @@ from rewrite_pipeline import (
     REWRITE_STAGE_HELP_HINTS,
     REWRITE_STAGE_KEYS,
     REWRITE_STAGE_SEND_HINTS,
+    REWRITE_STAGE_SUBTITLES,
     REWRITE_STAGES,
+    _extract_edited_text,
     any_stage_has_result,
     clamp_target_chars,
     apply_title_strategist_original_title_to_user_json,
@@ -1127,6 +1129,86 @@ def _rewrite_legacy_filepath(rewrite_id: str) -> Path:
     return REWRITE_JOBS_DIR / f"{rewrite_id}.json"
 
 
+# System prompt for «Перевести на русский» (исходный текст, батчи ~5000 симв.).
+REWRITE_SOURCE_RU_TRANSLATE_SYSTEM_PROMPT = """Ты — профессиональный переводчик и редактор русского языка.
+
+Твоя задача — перевести входной текст на русский язык максимально естественно, понятно и живо.
+
+КРИТИЧЕСКИЕ ПРАВИЛА:
+
+— Сохраняй исходный смысл на 100%
+— Не сокращай текст
+— Не добавляй новую информацию
+— Не меняй факты, цифры, даты и имена
+— Не упрощай смысл
+— Не делай пересказ
+— Не цензурируй эмоциональность автора
+
+СТИЛЬ ПЕРЕВОДА:
+
+— Русский текст должен звучать естественно для носителя языка
+— Избегай дословного "машинного" перевода
+— Сохраняй ритм и эмоциональную подачу оригинала
+— Если в тексте есть сарказм, напряжение, ирония или агрессия — сохраняй это
+— Если текст разговорный — перевод тоже должен быть разговорным
+— Если текст экспертный — сохраняй экспертную подачу
+
+ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА:
+
+— Числа и факты сохраняй точно
+— Денежные суммы не искажай
+— Термины переводи корректно по контексту
+— Английские названия брендов, компаний и сервисов не переводи без необходимости
+— Сохраняй структуру абзацев
+
+ФОРМАТ ОТВЕТА:
+
+Верни ТОЛЬКО готовый перевод на русском языке.
+Без комментариев.
+Без пояснений.
+Без оригинального текста."""
+
+
+def _split_text_into_translation_batches(text: str, max_chars: int = 5000) -> list[str]:
+    """Делит текст на части ≤ max_chars, стараясь резать по абзацам/строкам/пробелам."""
+    if not (text or "").strip():
+        return []
+    t = str(text)
+    if len(t) <= max_chars:
+        return [t]
+    batches: list[str] = []
+    start = 0
+    n = len(t)
+    lookback = min(1600, max_chars // 2)
+    while start < n:
+        if n - start <= max_chars:
+            batches.append(t[start:])
+            break
+        chunk = t[start : start + max_chars]
+        split_off = len(chunk)
+        tail = chunk[max(0, len(chunk) - lookback) :]
+        for sep in ("\n\n", "\n"):
+            p = tail.rfind(sep)
+            if p != -1:
+                split_off = max(0, len(chunk) - len(tail)) + p + len(sep)
+                break
+        else:
+            p2 = tail.rfind(". ")
+            if p2 != -1:
+                split_off = max(0, len(chunk) - len(tail)) + p2 + 2
+            else:
+                p3 = chunk.rfind(" ")
+                if p3 != -1 and p3 > max_chars // 3:
+                    split_off = p3 + 1
+        part = t[start : start + split_off].rstrip("\n")
+        if part:
+            batches.append(part)
+        start = start + split_off
+        while start < n and t[start] in "\n\r \t":
+            start += 1
+    return batches
+
+
 def _rewrite_stage_result_path(rewrite_id: str, stage_key: str) -> Path:
     return _rewrite_project_dir(rewrite_id) / f"{stage_key}.result.txt"
 
@@ -1972,6 +2054,11 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "last_text": "",
         "last_result": "",
         "source_locked": False,
+        "source_text_ru_locked": False,
+        "voiceover_final_text": "",
+        "voiceover_final_locked": True,
+        "voiceover_final_text_ru": "",
+        "voiceover_final_text_ru_locked": False,
         "master_prompt": "",
         "master_prompt_locked": False,
         "target_chars": clamp_target_chars(5 * 344),
@@ -2304,6 +2391,11 @@ def rewrite_project_page(rewrite_id: str):
         sk: stage_run_prerequisites_met(sk, st) for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
+    voiceover_final_text = str(rw.get("voiceover_final_text") or "")
+    if not voiceover_final_text.strip():
+        voiceover_final_text = _extract_edited_text(
+            str(((st.get("voiceover_editor") or {}).get("last_result")) or "")
+        )
     try:
         resp = make_response(
             render_template(
@@ -2312,11 +2404,13 @@ def rewrite_project_page(rewrite_id: str):
                 rewrite_stages=REWRITE_STAGES,
                 rewrite_stage_send_hints=REWRITE_STAGE_SEND_HINTS,
                 rewrite_stage_help_hints=REWRITE_STAGE_HELP_HINTS,
+                rewrite_stage_subtitles=REWRITE_STAGE_SUBTITLES,
                 rewrite_stage_run_ok=rewrite_stage_run_ok,
                 rewrite_stage_key_order=rewrite_stage_key_order,
                 rewrite_models=REWRITE_MODELS,
                 rewrite_template_names=list_rewrite_template_names(),
                 openai_key_set=key_set,
+                voiceover_final_text=voiceover_final_text,
             )
         )
     except Exception:
@@ -2495,6 +2589,21 @@ def rewrite_project_save(rewrite_id: str):
         rw["source_text"] = str(body.get("source_text") or "")
     if "source_title" in body:
         rw["source_title"] = str(body.get("source_title") or "")
+    if "source_text_ru" in body:
+        rw["source_text_ru"] = str(body.get("source_text_ru") or "")
+    ru_lock_in = body.get("source_text_ru_locked") if "source_text_ru_locked" in body else None
+    if ru_lock_in is not None:
+        rw["source_text_ru_locked"] = bool(ru_lock_in)
+    if "voiceover_final_text" in body:
+        rw["voiceover_final_text"] = str(body.get("voiceover_final_text") or "")
+    vf_lock_in = body.get("voiceover_final_locked") if "voiceover_final_locked" in body else None
+    if vf_lock_in is not None:
+        rw["voiceover_final_locked"] = bool(vf_lock_in)
+    if "voiceover_final_text_ru" in body:
+        rw["voiceover_final_text_ru"] = str(body.get("voiceover_final_text_ru") or "")
+    vfr_lock_in = body.get("voiceover_final_text_ru_locked") if "voiceover_final_text_ru_locked" in body else None
+    if vfr_lock_in is not None:
+        rw["voiceover_final_text_ru_locked"] = bool(vfr_lock_in)
     if locked_in_body is not None:
         rw["source_locked"] = bool(locked_in_body)
     m_lock_in = body.get("master_prompt_locked") if "master_prompt_locked" in body else None
@@ -2541,6 +2650,227 @@ def rewrite_project_save(rewrite_id: str):
         rw["last_result"] = str(body.get("last_result") or "")
     save_rewrite_job(rewrite_id, rw)
     return jsonify({"ok": True})
+
+
+@app.route("/rewrite/<rewrite_id>/translate-source-ru", methods=["POST"])
+def rewrite_translate_source_ru(rewrite_id: str):
+    """Перевод исходного текста на русский (батчи ~5000 симв., OpenAI). Ответ — NDJSON стрим."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    source_text = str(body.get("source_text") if "source_text" in body else rw.get("source_text") or "")
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+    ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
+    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
+    batches = _split_text_into_translation_batches(source_text, 5000)
+
+    def gen():
+        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        if not source_text.strip():
+            yield json.dumps({"type": "error", "message": "Нет текста для перевода."}, ensure_ascii=False) + "\n"
+            return
+        if not api_key_present or not api_key:
+            yield json.dumps({"type": "error", "message": "Не задан OPENAI_API_KEY."}, ensure_ascii=False) + "\n"
+            return
+        if not batches:
+            yield json.dumps({"type": "error", "message": "Нет текста для перевода."}, ensure_ascii=False) + "\n"
+            return
+        nb = len(batches)
+        yield json.dumps(
+            {
+                "type": "status",
+                "message": f"Разбиение текста на батчи готово: {nb} шт. (≤5000 симв./батч).",
+            },
+            ensure_ascii=False,
+        ) + "\n"
+        yield json.dumps({"type": "status", "message": f"Модель: {model}"}, ensure_ascii=False) + "\n"
+        parts: list[str] = []
+        for bi, chunk in enumerate(batches):
+            tag = f"[Батч {bi + 1}/{nb}, {len(chunk)} симв.] "
+            yield json.dumps(
+                {"type": "status", "message": tag + "Старт перевода батча…"},
+                ensure_ascii=False,
+            ) + "\n"
+            user_msg = "ТЕКСТ ДЛЯ ПЕРЕВОДА:\n\n" + chunk
+            got_result = False
+            err_text: str | None = None
+            for ev in iter_rewrite_completion(
+                api_key,
+                model,
+                REWRITE_SOURCE_RU_TRANSLATE_SYSTEM_PROMPT,
+                user_msg,
+            ):
+                etype = str(ev.get("type") or "")
+                if etype == "status":
+                    yield json.dumps(
+                        {"type": "status", "message": tag + str(ev.get("message") or "")},
+                        ensure_ascii=False,
+                    ) + "\n"
+                elif etype == "error":
+                    err_text = str(ev.get("message") or "Ошибка OpenAI")
+                    break
+                elif etype == "result":
+                    parts.append(str(ev.get("content") or ""))
+                    got_result = True
+                    yield json.dumps(
+                        {
+                            "type": "status",
+                            "message": tag + f"Готово: получено {len(parts[-1])} симв.",
+                        },
+                        ensure_ascii=False,
+                    ) + "\n"
+            if err_text is not None:
+                yield json.dumps({"type": "error", "message": tag + err_text}, ensure_ascii=False) + "\n"
+                return
+            if not got_result:
+                yield json.dumps(
+                    {"type": "error", "message": tag + "Пустой ответ модели."},
+                    ensure_ascii=False,
+                ) + "\n"
+                return
+        combined = "".join(parts).strip()
+        try:
+            rw["source_text_ru"] = combined
+            save_rewrite_job(rewrite_id, rw)
+            yield json.dumps(
+                {"type": "status", "message": "Сохранено в project.json (поле source_text_ru)."},
+                ensure_ascii=False,
+            ) + "\n"
+        except Exception as e:
+            yield json.dumps(
+                {"type": "status", "message": f"Не удалось сохранить project.json: {e}"},
+                ensure_ascii=False,
+            ) + "\n"
+        yield json.dumps(
+            {
+                "type": "result",
+                "content": combined,
+                "batches": nb,
+                "chars": len(combined),
+            },
+            ensure_ascii=False,
+        ) + "\n"
+
+    return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
+
+
+@app.route("/rewrite/<rewrite_id>/translate-voiceover-final-ru", methods=["POST"])
+def rewrite_translate_voiceover_final_ru(rewrite_id: str):
+    """Перевод «Итогового текста» (Voiceover final) на русский. NDJSON-стрим, та же логика, что и у Source."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    src_text_in = str(body.get("text") or "")
+    if not src_text_in.strip():
+        src_text_in = str(rw.get("voiceover_final_text") or "")
+    if not src_text_in.strip():
+        st_local = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+        ve = st_local.get("voiceover_editor") if isinstance(st_local.get("voiceover_editor"), dict) else {}
+        raw = str(ve.get("last_result") or "")
+        if not raw.strip():
+            p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
+            if p.exists():
+                try:
+                    raw = p.read_text(encoding="utf-8")
+                except OSError:
+                    raw = ""
+        src_text_in = _extract_edited_text(raw)
+    stages_dict = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+    ana = stages_dict.get("analysis") if isinstance(stages_dict.get("analysis"), dict) else {}
+    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
+    batches = _split_text_into_translation_batches(src_text_in, 5000)
+
+    def gen():
+        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        if not src_text_in.strip():
+            yield json.dumps(
+                {"type": "error", "message": "Нет итогового текста. Сначала получите Result в Voiceover Editor."},
+                ensure_ascii=False,
+            ) + "\n"
+            return
+        if not api_key_present or not api_key:
+            yield json.dumps({"type": "error", "message": "Не задан OPENAI_API_KEY."}, ensure_ascii=False) + "\n"
+            return
+        if not batches:
+            yield json.dumps({"type": "error", "message": "Нет текста для перевода."}, ensure_ascii=False) + "\n"
+            return
+        nb = len(batches)
+        yield json.dumps(
+            {
+                "type": "status",
+                "message": f"Разбиение текста на батчи готово: {nb} шт. (≤5000 симв./батч).",
+            },
+            ensure_ascii=False,
+        ) + "\n"
+        yield json.dumps({"type": "status", "message": f"Модель: {model}"}, ensure_ascii=False) + "\n"
+        parts: list[str] = []
+        for bi, chunk in enumerate(batches):
+            tag = f"[Батч {bi + 1}/{nb}, {len(chunk)} симв.] "
+            yield json.dumps(
+                {"type": "status", "message": tag + "Старт перевода батча…"},
+                ensure_ascii=False,
+            ) + "\n"
+            user_msg = "ТЕКСТ ДЛЯ ПЕРЕВОДА:\n\n" + chunk
+            got_result = False
+            err_text: str | None = None
+            for ev in iter_rewrite_completion(
+                api_key,
+                model,
+                REWRITE_SOURCE_RU_TRANSLATE_SYSTEM_PROMPT,
+                user_msg,
+            ):
+                etype = str(ev.get("type") or "")
+                if etype == "status":
+                    yield json.dumps(
+                        {"type": "status", "message": tag + str(ev.get("message") or "")},
+                        ensure_ascii=False,
+                    ) + "\n"
+                elif etype == "error":
+                    err_text = str(ev.get("message") or "Ошибка OpenAI")
+                    break
+                elif etype == "result":
+                    parts.append(str(ev.get("content") or ""))
+                    got_result = True
+                    yield json.dumps(
+                        {
+                            "type": "status",
+                            "message": tag + f"Готово: получено {len(parts[-1])} симв.",
+                        },
+                        ensure_ascii=False,
+                    ) + "\n"
+            if err_text is not None:
+                yield json.dumps({"type": "error", "message": tag + err_text}, ensure_ascii=False) + "\n"
+                return
+            if not got_result:
+                yield json.dumps(
+                    {"type": "error", "message": tag + "Пустой ответ модели."},
+                    ensure_ascii=False,
+                ) + "\n"
+                return
+        combined = "".join(parts).strip()
+        try:
+            rw["voiceover_final_text_ru"] = combined
+            rw["voiceover_final_text_ru_locked"] = True
+            save_rewrite_job(rewrite_id, rw)
+            yield json.dumps(
+                {"type": "status", "message": "Сохранено в project.json (поле voiceover_final_text_ru)."},
+                ensure_ascii=False,
+            ) + "\n"
+        except Exception as e:
+            yield json.dumps(
+                {"type": "status", "message": f"Не удалось сохранить project.json: {e}"},
+                ensure_ascii=False,
+            ) + "\n"
+        yield json.dumps(
+            {"type": "result", "content": combined, "batches": nb, "chars": len(combined)},
+            ensure_ascii=False,
+        ) + "\n"
+
+    return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
 
 
 @app.route("/rewrite/<rewrite_id>/youtube/verify", methods=["POST"])
@@ -3156,13 +3486,11 @@ def rewrite_project_run(rewrite_id: str):
             return
         if stage_key not in (
             "structure",
-            "continuity_editor",
             "retention_editor",
             "hook_editor",
             "flow_editor",
             "persona_editor",
             "voiceover_editor",
-            "voice_flow_editor",
             "title_strategist",
             "structure_splitter",
             "scene_writer",
@@ -3175,21 +3503,13 @@ def rewrite_project_run(rewrite_id: str):
             ) + "\n"
             return
         block_writer_full_text = ""
-        if stage_key == "continuity_editor":
+        if stage_key == "retention_editor":
             full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
             if full_text_path.exists():
                 try:
                     block_writer_full_text = full_text_path.read_text(encoding="utf-8")
                 except OSError:
                     block_writer_full_text = ""
-        continuity_editor_text = ""
-        if stage_key == "retention_editor":
-            p = _rewrite_stage_result_path(rewrite_id, "continuity_editor")
-            if p.exists():
-                try:
-                    continuity_editor_text = p.read_text(encoding="utf-8")
-                except OSError:
-                    continuity_editor_text = ""
         retention_editor_text = ""
         if stage_key == "hook_editor":
             p = _rewrite_stage_result_path(rewrite_id, "retention_editor")
@@ -3223,7 +3543,7 @@ def rewrite_project_run(rewrite_id: str):
                 except OSError:
                     persona_editor_text = ""
         voiceover_editor_text = ""
-        if stage_key in ("voice_flow_editor", "title_strategist", "structure_splitter"):
+        if stage_key in ("title_strategist", "structure_splitter"):
             voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
             if not voiceover_editor_text.strip():
                 p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
@@ -3271,7 +3591,6 @@ def rewrite_project_run(rewrite_id: str):
             hero_prompt=hero_prompt,
             target_chars=target_chars,
             block_writer_full_text=block_writer_full_text,
-            continuity_editor_text=continuity_editor_text,
             retention_editor_text=retention_editor_text,
             hook_editor_text=hook_editor_text,
             flow_editor_text=flow_editor_text,
@@ -3559,13 +3878,11 @@ def rewrite_project_run(rewrite_id: str):
                 if (
                     stage_key
                     in (
-                        "continuity_editor",
                         "retention_editor",
                         "hook_editor",
                         "flow_editor",
                         "persona_editor",
                         "voiceover_editor",
-                        "voice_flow_editor",
                         "title_strategist",
                         "youtube_packaging",
                     )
@@ -3596,21 +3913,13 @@ def rewrite_project_api_payload(rewrite_id: str):
     master_prompt = snapshot_master_prompt_from_body(body)
     hero_prompt, target_chars = snapshot_pipeline_extras_from_body(body)
     block_writer_full_text = ""
-    if stage_key == "continuity_editor":
+    if stage_key == "retention_editor":
         full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
         if full_text_path.exists():
             try:
                 block_writer_full_text = full_text_path.read_text(encoding="utf-8")
             except OSError:
                 block_writer_full_text = ""
-    continuity_editor_text = ""
-    if stage_key == "retention_editor":
-        p = _rewrite_stage_result_path(rewrite_id, "continuity_editor")
-        if p.exists():
-            try:
-                continuity_editor_text = p.read_text(encoding="utf-8")
-            except OSError:
-                continuity_editor_text = ""
     retention_editor_text = ""
     if stage_key == "hook_editor":
         p = _rewrite_stage_result_path(rewrite_id, "retention_editor")
@@ -3644,7 +3953,7 @@ def rewrite_project_api_payload(rewrite_id: str):
             except OSError:
                 persona_editor_text = ""
     voiceover_editor_text = ""
-    if stage_key in ("voice_flow_editor", "title_strategist", "structure_splitter"):
+    if stage_key in ("title_strategist", "structure_splitter"):
         voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
         if not voiceover_editor_text.strip():
             p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
@@ -3692,7 +4001,6 @@ def rewrite_project_api_payload(rewrite_id: str):
         hero_prompt=hero_prompt,
         target_chars=target_chars,
         block_writer_full_text=block_writer_full_text,
-        continuity_editor_text=continuity_editor_text,
         retention_editor_text=retention_editor_text,
         hook_editor_text=hook_editor_text,
         flow_editor_text=flow_editor_text,
