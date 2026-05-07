@@ -234,7 +234,7 @@
             {% set past_prompt_locked = cell.past_prompt_locked|default(true) %}
             {% set result_locked = cell.result_locked|default(true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}" data-stage-key="{{ stage_key }}" data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-heading">
@@ -262,7 +262,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="rewrite-stage-prompt-cell">
+                            <div class="rewrite-stage-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-system-cell{% endif %}">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">System Promt: {{ 'YES' if has_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-prompt-toggle{% if prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
@@ -274,8 +274,8 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'continuity_editor' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'voice_flow_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %}
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'continuity_editor' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'voice_flow_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_user_prompt else 'no' }} rewrite-stage-user-prompt-badge">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-user-prompt-toggle{% if user_prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
@@ -314,6 +314,30 @@
                                 </div>
                             </div>
                             {% endif %}
+                            {% if stage_key == 'scene_writer_live' %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell rewrite-stage-swl-content-cell">
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge badge-yes">Content Type</span>
+                                </div>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt">
+                                    {% set media_type = ((cell.style_prompt or 'photos')|trim|lower) %}
+                                    <select class="tts-select rewrite-stage-content-type">
+                                        <option value="photos" {% if media_type != 'videos' %}selected{% endif %}>photos</option>
+                                        <option value="videos" {% if media_type == 'videos' %}selected{% endif %}>videos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell rewrite-stage-swl-target-cell">
+                                {% set target_pct = (cell.past_prompt or '50')|trim %}
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar rewrite-stage-target-toolbar">
+                                    <span class="slot-badge badge-yes">Target</span>
+                                    <span class="rewrite-stage-target-range__value"><span class="rewrite-stage-target-range__num">{{ target_pct if target_pct else '50' }}</span>%</span>
+                                </div>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt">
+                                    <input type="range" class="rewrite-stage-target-range" min="1" max="100" step="1" value="{{ target_pct if target_pct else '50' }}">
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                         <div class="rewrite-stage-row rewrite-stage-row--result">
                             <div class="slot-header rewrite-stage-result-toolbar">
@@ -341,6 +365,9 @@
                             {% endif %}
                             {% if stage_key == 'scene_writer' %}
                             <div class="rewrite-scene-writer-check" data-scene-writer-check></div>
+                            {% endif %}
+                            {% if stage_key == 'scene_writer_live' %}
+                            <div class="rewrite-scene-writer-check" data-scene-media-check></div>
                             {% endif %}
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
@@ -1028,6 +1055,54 @@
         wrap.innerHTML = html;
     }
 
+    function renderSceneMediaCheck(block, payload) {
+        if (!block) return;
+        var wrap = block.querySelector('[data-scene-media-check]');
+        if (!wrap) return;
+        if (!payload || !payload.summary) {
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer Live</strong> <span class="rewrite-scene-writer-check__wait">ожидание данных</span></div>';
+            return;
+        }
+        var s = payload.summary || {};
+        var rows = Array.isArray(payload.batches_info) ? payload.batches_info : [];
+        var okClass = s.ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
+        var html = '';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer Live</strong> <span class="' + okClass + '">' + (s.ok ? 'OK' : 'NO') + '</span></div>';
+        html += '<div class="rewrite-scene-writer-check__hint">';
+        html += 'Батчей: <strong>' + String(s.batches || 0) + '</strong> | ';
+        html += 'Ответов: <strong>' + String(s.responses || 0) + '</strong> | ';
+        html += 'Сцен IN: <strong>' + String(s.scenes_in || 0) + '</strong> | ';
+        html += 'Сцен OUT: <strong>' + String(s.scenes_out || 0) + '</strong> | ';
+        html += 'Тип: <strong>' + String(s.content_type || 'photos') + '</strong> | ';
+        html += 'Target: <strong>' + String(s.target_percent || 0) + '%</strong>';
+        html += '</div>';
+        html += '<div class="rewrite-scene-writer-check__hint">С target-content: <strong>' + String(s.with_target_content || 0) + '</strong> | Средняя длина сцены: <strong>' + String(s.avg_scene_chars || 0) + '</strong> симв.</div>';
+        html += '<div class="rewrite-scene-writer-check__divider"></div>';
+        if (rows.length) {
+            var colCount = 3;
+            var perCol = Math.ceil(rows.length / colCount);
+            html += '<div class="rewrite-scene-writer-check__blocks-grid">';
+            for (var c = 0; c < colCount; c += 1) {
+                var start = c * perCol;
+                var end = Math.min(start + perCol, rows.length);
+                html += '<div class="rewrite-scene-writer-check__blocks-col">';
+                for (var i = start; i < end; i += 1) {
+                    var r = rows[i] || {};
+                    html += '<div class="rewrite-scene-writer-check__block-item">';
+                    html += '<span>Batch ' + String(r.index || (i + 1)) + '</span>';
+                    html += '<span>IN: ' + String(r.input_scenes || 0) + '</span>';
+                    html += '<span>OUT: ' + String(r.output_scenes || 0) + '</span>';
+                    html += '<span>chars: ' + String(r.output_chars || 0) + '</span>';
+                    html += '<span class="' + (r.ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (r.ok ? 'OK' : 'NO') + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+        wrap.innerHTML = html;
+    }
+
     function renderStructureSplitterCheck(block, payload) {
         if (!block) return;
         var wrap = block.querySelector('[data-structure-splitter-check]');
@@ -1073,6 +1148,13 @@
     function readSceneWriterCheckFromBlock(block) {
         if (!block) return null;
         var raw = block.getAttribute('data-scene-writer-check-json');
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+
+    function readSceneMediaCheckFromBlock(block) {
+        if (!block) return null;
+        var raw = block.getAttribute('data-scene-media-check-json');
         if (!raw) return null;
         try { return JSON.parse(raw); } catch (e) { return null; }
     }
@@ -1809,6 +1891,9 @@
                 if ((sk === 'structure_splitter' || sk === 'scene_writer') && (prevKey === 'voice_flow_editor' || prevKey === 'title_strategist')) {
                     continue;
                 }
+                if (sk === 'youtube_packaging' && prevKey === 'scene_writer_live') {
+                    continue;
+                }
                 const prev = byKey[prevKey];
                 if (!stageResultNonEmpty(prev)) {
                     ok = false;
@@ -1927,7 +2012,7 @@
                             syncPromptBadge(block);
                         }
                     }
-                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
+                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
                         var uta = block.querySelector('.rewrite-stage-user-prompt');
                         if (uta) {
                             uta.value = cell.user_prompt;
@@ -1948,8 +2033,19 @@
                             syncPastPromptBadge(block);
                         }
                     }
+                    if (key === 'scene_writer_live') {
+                        var cte = block.querySelector('.rewrite-stage-content-type');
+                        if (cte) cte.value = (String((cell && cell.style_prompt) || '').trim().toLowerCase() === 'videos') ? 'videos' : 'photos';
+                        var tre = block.querySelector('.rewrite-stage-target-range');
+                        var tv = block.querySelector('.rewrite-stage-target-range__num');
+                        var n = parseInt(String((cell && cell.past_prompt) || '50'), 10);
+                        if (isNaN(n)) n = 50;
+                        n = Math.max(1, Math.min(100, n));
+                        if (tre) tre.value = String(n);
+                        if (tv) tv.textContent = String(n);
+                    }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'youtube_packaging') {
+                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'continuity_editor' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'voice_flow_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
@@ -2313,13 +2409,20 @@
             const key = block.getAttribute('data-stage-key');
             const promptEl = block.querySelector('.rewrite-stage-prompt');
             const resEl = block.querySelector('.rewrite-stage-result');
+            const contentTypeEl = block.querySelector('.rewrite-stage-content-type');
+            const targetRangeEl = block.querySelector('.rewrite-stage-target-range');
             stages[key] = {
                 model: globalModel,
                 prompt: promptEl ? promptEl.value : '',
                 user_prompt: ((block.querySelector('.rewrite-stage-user-prompt') || {}).value || ''),
-                style_prompt: ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || ''),
-                past_prompt: ((block.querySelector('.rewrite-stage-past-prompt') || {}).value || ''),
+                style_prompt: (key === 'scene_writer_live'
+                    ? ((contentTypeEl && contentTypeEl.value) || 'photos')
+                    : ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || '')),
+                past_prompt: (key === 'scene_writer_live'
+                    ? String((targetRangeEl && targetRangeEl.value) || '50')
+                    : ((block.querySelector('.rewrite-stage-past-prompt') || {}).value || '')),
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
+                scene_writer_live_check: (key === 'scene_writer_live' ? readSceneMediaCheckFromBlock(block) : null),
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
                 last_result: resEl ? (resEl.value || '') : '',
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
@@ -3079,6 +3182,9 @@
                 } else if (sk === 'scene_writer') {
                     block.setAttribute('data-scene-writer-check-json', '');
                     renderSceneWriterCheck(block, null);
+                } else if (sk === 'scene_writer_live') {
+                    block.setAttribute('data-scene-media-check-json', '');
+                    renderSceneMediaCheck(block, null);
                 } else if (sk === 'youtube_packaging') {
                     renderYoutubePackagingPreview(block);
                 } else if (sk === 'draft1') {
@@ -3097,6 +3203,9 @@
                 } else if (sk === 'scene_writer') {
                     block.setAttribute('data-scene-writer-check-json', '');
                     renderSceneWriterCheck(block, null);
+                } else if (sk === 'scene_writer_live') {
+                    block.setAttribute('data-scene-media-check-json', '');
+                    renderSceneMediaCheck(block, null);
                 } else if (sk === 'youtube_packaging') {
                     renderYoutubePackagingPreview(block);
                 } else if (sk === 'draft1') {
@@ -3168,11 +3277,16 @@
         const resTextarea = block.querySelector('.rewrite-stage-result');
         const resultBadge = block.querySelector('.rewrite-stage-result-badge');
         const sceneWriterCheckWrap = block.querySelector('[data-scene-writer-check]');
+        const sceneMediaCheckWrap = block.querySelector('[data-scene-media-check]');
         const structureSplitterCheckWrap = block.querySelector('[data-structure-splitter-check]');
         const savedBeforeRun = resTextarea ? resTextarea.value : '';
         if (stageKey === 'scene_writer' && sceneWriterCheckWrap) {
             block.setAttribute('data-scene-writer-check-json', '');
             sceneWriterCheckWrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer</strong> <span class="rewrite-scene-writer-check__wait">в процессе...</span></div>';
+        }
+        if (stageKey === 'scene_writer_live' && sceneMediaCheckWrap) {
+            block.setAttribute('data-scene-media-check-json', '');
+            sceneMediaCheckWrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer Live</strong> <span class="rewrite-scene-writer-check__wait">в процессе...</span></div>';
         }
         if (stageKey === 'structure_splitter' && structureSplitterCheckWrap) {
             block.setAttribute('data-structure-splitter-check-json', '');
@@ -3295,6 +3409,9 @@
                     } else if (ev.type === 'scene_writer_check' && stageKey === 'scene_writer') {
                         block.setAttribute('data-scene-writer-check-json', JSON.stringify(ev));
                         renderSceneWriterCheck(block, ev);
+                    } else if (ev.type === 'scene_writer_live_check' && stageKey === 'scene_writer_live') {
+                        block.setAttribute('data-scene-media-check-json', JSON.stringify(ev));
+                        renderSceneMediaCheck(block, ev);
                     } else if (ev.type === 'structure_splitter_check' && stageKey === 'structure_splitter') {
                         block.setAttribute('data-structure-splitter-check-json', JSON.stringify(ev));
                         renderStructureSplitterCheck(block, ev);
@@ -3607,6 +3724,10 @@
     if (sceneWriterBlockInit) {
         renderSceneWriterCheck(sceneWriterBlockInit, readSceneWriterCheckFromBlock(sceneWriterBlockInit));
     }
+    var sceneMediaBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer_live"]');
+    if (sceneMediaBlockInit) {
+        renderSceneMediaCheck(sceneMediaBlockInit, readSceneMediaCheckFromBlock(sceneMediaBlockInit));
+    }
     var youtubePackagingBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
     if (youtubePackagingBlockInit) {
         renderYoutubePackagingPreview(youtubePackagingBlockInit);
@@ -3636,7 +3757,7 @@
             voiceoverResultElInit.addEventListener('change', recheck2);
         }
     }
-    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="voice_flow_editor"], .rewrite-stage-card[data-stage-key="title_strategist"]').forEach(function (block) {
+    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="continuity_editor"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="voice_flow_editor"], .rewrite-stage-card[data-stage-key="title_strategist"], .rewrite-stage-card[data-stage-key="scene_writer_live"]').forEach(function (block) {
         renderEditorCheck(block);
         var ta = block.querySelector('.rewrite-stage-result');
         if (ta) {
@@ -3653,6 +3774,23 @@
                 prevTa.addEventListener('change', function () { renderEditorCheck(block); });
             }
         }
+    });
+    document.querySelectorAll('.rewrite-stage-target-range').forEach(function (el) {
+        var block = el.closest('.rewrite-stage-card');
+        var valEl = block ? block.querySelector('.rewrite-stage-target-range__num') : null;
+        var onUpd = function () {
+            var n = parseInt(String(el.value || '50'), 10);
+            if (isNaN(n)) n = 50;
+            n = Math.max(1, Math.min(100, n));
+            el.value = String(n);
+            if (valEl) valEl.textContent = String(n);
+        };
+        el.addEventListener('input', function () { onUpd(); scheduleAutosave(500); });
+        el.addEventListener('change', function () { onUpd(); scheduleAutosave(0); });
+        onUpd();
+    });
+    document.querySelectorAll('.rewrite-stage-content-type').forEach(function (el) {
+        el.addEventListener('change', function () { scheduleAutosave(0); });
     });
 })();
     </script>

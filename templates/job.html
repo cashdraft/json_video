@@ -441,6 +441,7 @@
                 {% set has_start_prompt = scene.start.prompt|default('', true) %}
                 {% set has_end_prompt = scene.end.prompt|default('', true) %}
                 {% set has_video_prompt = scene.video.prompt|default('', true) %}
+                {% set has_live_media = (scene.content_type|default('', true) and scene.keywords|default('', true)) %}
                 {% set start_ready = scene.start.image_url|default('', true) %}
                 {% set end_ready = scene.end.image_url|default('', true) %}
                 {% set video_ready = (not has_start_prompt or start_ready) and (not has_end_prompt or end_ready) %}
@@ -455,6 +456,64 @@
                         <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
                     </div>
                     <div class="scene-slots">
+                        {% if has_live_media %}
+                        {% set pexels_items = scene.pexels_results if scene.pexels_results is defined and scene.pexels_results else [] %}
+                        {% set excluded_keywords = scene.excluded_keywords if scene.excluded_keywords is defined and scene.excluded_keywords else [] %}
+                        <div class="scene-slot scene-slot--pexels" data-slot="pexels" data-excluded-keywords-json="{{ excluded_keywords|tojson|forceescape }}">
+                            <div class="slot-header">
+                                <span class="slot-badge badge-yes">Live media: {{ (scene.content_type or 'photos')|lower }}</span>
+                                <span class="slot-header-meta">Keywords:</span>
+                                <div class="live-keywords-wrap">
+                                    {% for kw_raw in (scene.keywords or '').split(',') %}
+                                    {% set kw = kw_raw|trim %}
+                                    {% if kw %}
+                                    {% set ns_kw = namespace(excl=false) %}
+                                    {% for ex in excluded_keywords %}
+                                        {% if ex|trim|lower|replace('-', ' ') == kw|trim|lower|replace('-', ' ') %}
+                                            {% set ns_kw.excl = true %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% set kw_excluded = ns_kw.excl %}
+                                    <span class="live-keyword-chip{{ ' live-keyword-chip--excluded' if kw_excluded else '' }}" data-keyword="{{ kw }}">
+                                        <span>{{ kw }}</span>
+                                        <button type="button" class="live-keyword-chip__remove" title="Исключить из поиска" aria-label="Исключить {{ kw }}">×</button>
+                                    </span>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn-regenerate btn-pexels-search"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    title="Найти 8 материалов в Pexels"
+                                >↻</button>
+                            </div>
+                            <div class="slot-placeholder slot-placeholder--pexels" data-status="{{ 'done' if pexels_items else 'pending' }}" data-content-type="{{ (scene.content_type or 'photos')|lower }}">
+                                {% if pexels_items %}
+                                <div class="pexels-slots-grid">
+                                    {% for it in pexels_items[:8] %}
+                                    <div class="scene-slot pexels-slot-item">
+                                        <div class="slot-placeholder" data-status="done">
+                                            {% if (scene.content_type or '')|lower in ['video', 'videos'] %}
+                                            <video src="{{ it.local_url or it.media_url or '' }}" class="slot-image" muted playsinline preload="metadata" controls></video>
+                                            {% else %}
+                                            <img src="{{ it.local_url or it.thumbnail_url or it.media_url or '' }}" alt="Pexels result" class="slot-image">
+                                            {% endif %}
+                                        </div>
+                                        <div class="pexels-item-meta">
+                                            <span class="pexels-meta-left">{{ 'Video' if (scene.content_type or '')|lower in ['video', 'videos'] else 'Photo' }}</span>
+                                            <span class="pexels-meta-center">{{ it.found_by_keyword or it.search_keywords or scene.keywords or '—' }}</span>
+                                            <span class="pexels-meta-right">{{ (it.width or 0) }}x{{ (it.height or 0) }}</span>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <span class="slot-status">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% else %}
                         <div class="scene-slot" data-slot="start">
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
@@ -629,6 +688,7 @@
                                 {% endif %}
                             </div>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -1893,6 +1953,170 @@
         btn.addEventListener('click', async function() {
             await startGenerationForButton(this);
         });
+    });
+
+    const renderPexelsResults = (slotPlaceholder, contentType, items) => {
+        if (!slotPlaceholder) return;
+        const ct = String(contentType || 'photos').toLowerCase();
+        if (!Array.isArray(items) || items.length === 0) {
+            slotPlaceholder.dataset.status = 'pending';
+            slotPlaceholder.innerHTML = '<span class="slot-status">Pending</span>';
+            return;
+        }
+        let html = '<div class="pexels-slots-grid">';
+        items.slice(0, 8).forEach((it) => {
+            const srcLink = String((it && (it.source_url || '')) || '').trim();
+            const thumb = String((it && (it.local_url || it.thumbnail_url || it.media_url)) || '').trim();
+            const media = String((it && (it.local_url || it.media_url || '')) || '').trim();
+            const kw = String((it && (it.found_by_keyword || it.search_keywords || '')) || '').trim();
+            const w = Number((it && it.width) || 0);
+            const h = Number((it && it.height) || 0);
+            if (!thumb && !media) return;
+            html += '<div class="scene-slot pexels-slot-item">';
+            html += '<div class="slot-placeholder" data-status="done">';
+            if (ct === 'videos' || ct === 'video') {
+                html += `<video src="${media}" class="slot-image" muted playsinline preload="metadata" controls></video>`;
+            } else {
+                html += `<img src="${thumb}" alt="Pexels result" class="slot-image">`;
+            }
+            html += '</div>';
+            html += '<div class="pexels-item-meta">';
+            html += `<span class="pexels-meta-left">${(ct === 'videos' || ct === 'video') ? 'Video' : 'Photo'}</span>`;
+            html += `<span class="pexels-meta-center">${kw || '—'}</span>`;
+            html += `<span class="pexels-meta-right">${w || 0}x${h || 0}</span>`;
+            html += '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+        slotPlaceholder.dataset.status = 'done';
+        slotPlaceholder.innerHTML = html;
+    };
+
+    /** Как на сервере _norm_kw_key: дефисы/пробелы не ломают exclude ↔ chip. */
+    const normKey = (s) =>
+        String(s || '')
+            .trim()
+            .toLowerCase()
+            .replace(/-/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    const readExcludedKeywords = (pexelsSlot) => {
+        if (!pexelsSlot) return [];
+        const raw = pexelsSlot.getAttribute('data-excluded-keywords-json') || '[]';
+        try {
+            const arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr.map((x) => String(x || '').trim()).filter(Boolean) : [];
+        } catch (_) {
+            return [];
+        }
+    };
+
+    const writeExcludedKeywords = (pexelsSlot, arr) => {
+        if (!pexelsSlot) return;
+        const list = Array.isArray(arr) ? arr.map((x) => String(x || '').trim()).filter(Boolean) : [];
+        pexelsSlot.setAttribute('data-excluded-keywords-json', JSON.stringify(list));
+    };
+
+    const syncKeywordChipsVisibility = (pexelsSlot) => {
+        if (!pexelsSlot) return;
+        const ex = new Set(readExcludedKeywords(pexelsSlot).map(normKey));
+        pexelsSlot.querySelectorAll('.live-keyword-chip').forEach((chip) => {
+            const kwRaw = String(chip.getAttribute('data-keyword') || '').trim();
+            const excluded = kwRaw && ex.has(normKey(kwRaw));
+            chip.classList.toggle('live-keyword-chip--excluded', !!excluded);
+        });
+    };
+
+    const rebuildExcludedFromDom = (pexelsSlot) => {
+        if (!pexelsSlot) return [];
+        const byNorm = new Map();
+        pexelsSlot.querySelectorAll('.live-keyword-chip.live-keyword-chip--excluded').forEach((chip) => {
+            const kw = String(chip.getAttribute('data-keyword') || '').trim();
+            if (!kw) return;
+            const n = normKey(kw);
+            if (!byNorm.has(n)) byNorm.set(n, kw);
+        });
+        return Array.from(byNorm.values());
+    };
+
+    document.querySelectorAll('.btn-pexels-search').forEach((btn) => {
+        btn.addEventListener('click', async function () {
+            const sceneIndex = Number.parseInt(String(this.dataset.sceneIndex || ''), 10);
+            if (!Number.isFinite(sceneIndex) || sceneIndex < 0) return;
+            const sceneCard = this.closest('.scene-card');
+            const pexelsSlot = sceneCard ? sceneCard.querySelector('.scene-slot[data-slot="pexels"]') : null;
+            const placeholder = pexelsSlot ? pexelsSlot.querySelector('.slot-placeholder--pexels') : null;
+            const sceneId = sceneCard?.querySelector('.scene-id')?.textContent?.trim() || `scene#${sceneIndex}`;
+            if (!placeholder) return;
+            this.disabled = true;
+            placeholder.dataset.status = 'generating';
+            placeholder.innerHTML = '<span class="slot-status slot-status-with-spinner">Searching Pexels…</span>';
+            try {
+                const excludedKeywords = readExcludedKeywords(pexelsSlot);
+                const resp = await fetch(`/job/${jobId}/pexels/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_index: sceneIndex, excluded_keywords: excludedKeywords })
+                });
+                const data = await parseJsonOrThrow(resp, 'Pexels');
+                if (!resp.ok || !data.ok) {
+                    throw new Error(data.error || 'Pexels search failed');
+                }
+                writeExcludedKeywords(pexelsSlot, data.excluded_keywords || excludedKeywords);
+                syncKeywordChipsVisibility(pexelsSlot);
+                renderPexelsResults(placeholder, data.content_type, data.items || []);
+                appendBulkLog(`✓ ${sceneId} · pexels: найдено ${Array.isArray(data.items) ? data.items.length : 0}`);
+            } catch (e) {
+                const msg = e && e.message ? e.message : String(e);
+                showPlaceholderError(placeholder, msg);
+                openJobErrorModal(msg);
+            } finally {
+                this.disabled = false;
+            }
+        });
+    });
+
+    document.querySelectorAll('.scene-slot[data-slot="pexels"]').forEach((slot) => {
+        syncKeywordChipsVisibility(slot);
+    });
+
+    document.querySelector('section.scenes-section')?.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest ? e.target.closest('.live-keyword-chip__remove') : null;
+        if (!btn) return;
+        const slot = btn.closest('.scene-slot[data-slot="pexels"]');
+        if (!slot) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const chip = btn.closest('.live-keyword-chip');
+        if (!chip) return;
+        const kw = String(chip.getAttribute('data-keyword') || '').trim();
+        if (!kw) return;
+        const n = normKey(kw);
+        const isExcludedNow = chip.classList.contains('live-keyword-chip--excluded');
+        const activeNorms = new Set();
+        slot.querySelectorAll('.live-keyword-chip').forEach((c) => {
+            if (c.classList.contains('live-keyword-chip--excluded')) return;
+            const raw = String(c.getAttribute('data-keyword') || '').trim();
+            if (raw) activeNorms.add(normKey(raw));
+        });
+        if (isExcludedNow) {
+            slot.querySelectorAll('.live-keyword-chip').forEach((c) => {
+                const raw = String(c.getAttribute('data-keyword') || '').trim();
+                if (raw && normKey(raw) === n) c.classList.remove('live-keyword-chip--excluded');
+            });
+            writeExcludedKeywords(slot, rebuildExcludedFromDom(slot));
+            return;
+        }
+        if (activeNorms.size <= 1 && activeNorms.has(n)) {
+            openJobErrorModal('Нельзя удалить последний ключевик. Оставьте хотя бы один keyword для поиска.');
+            return;
+        }
+        slot.querySelectorAll('.live-keyword-chip').forEach((c) => {
+            const raw = String(c.getAttribute('data-keyword') || '').trim();
+            if (raw && normKey(raw) === n) c.classList.add('live-keyword-chip--excluded');
+        });
+        writeExcludedKeywords(slot, rebuildExcludedFromDom(slot));
     });
 
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);

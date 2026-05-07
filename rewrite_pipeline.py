@@ -437,6 +437,7 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
+    ("scene_writer_live", "Scene Writer Live"),
     ("youtube_packaging", "YouTube packaging engine"),
 ]
 
@@ -501,6 +502,10 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем block-by-block. В System: Scene Writer System Promt. "
         "В User: Scene Writer User Promt, Scene Writer Style Promt, параметры длины сцены и текущий block."
     ),
+    "scene_writer_live": (
+        "Отправляем batch-by-batch по 50 сцен. В System: Scene Writer Live System Promt. "
+        "В User: Scene Writer Live User Promt, content_type, target_percent, Result этапа Scene Writer и текущий batch."
+    ),
     "youtube_packaging": (
         "Отправляем один POST. В System: YouTube packaging System Promt. "
         "В User: YouTube packaging User Promt и поле title_strategist_result (Result этапа Title Strategist). "
@@ -532,6 +537,7 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
     "title_strategist": "Как Voice Flow: edited_text = результат Voiceover Editor. В user JSON первым идёт original_title («Исходное название»); в шаблоне User Promt можно {{ORIGINAL_TITLE}} — подставится то же значение.",
     "structure_splitter": "Разбивает полный текст после Voiceover Editor на структурные части.",
     "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
+    "scene_writer_live": "Берёт Result из Scene Writer и пакетно (по 50 сцен) дополняет сцены media-полями.",
     "youtube_packaging": (
         "Собирает заголовки, описание, хештеги и идеи превью для YouTube из готового вывода Scene Writer."
     ),
@@ -544,6 +550,7 @@ def default_stage_entry() -> dict[str, Any]:
         "user_prompt": "",
         "style_prompt": "",
         "past_prompt": "",
+        "scene_writer_live_check": None,
         "scene_writer_check": None,
         "structure_splitter_check": None,
         "block_writer_check": None,
@@ -583,6 +590,16 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             else:
                 stages["title_strategist"] = old_v2
 
+    # Миграция: scene_media_planner → scene_writer_live.
+    if "scene_media_planner" in stages:
+        old_swl = stages.pop("scene_media_planner")
+        if isinstance(old_swl, dict):
+            cur = stages.get("scene_writer_live")
+            if isinstance(cur, dict):
+                cur.update(old_swl)
+            else:
+                stages["scene_writer_live"] = old_swl
+
     for key in REWRITE_STAGE_KEYS:
         if key not in stages or not isinstance(stages[key], dict):
             stages[key] = default_stage_entry()
@@ -611,6 +628,11 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             e["past_prompt_locked"] = True
         if not isinstance(e.get("scene_writer_check"), dict):
             e["scene_writer_check"] = None
+        if not isinstance(e.get("scene_writer_live_check"), dict):
+            e["scene_writer_live_check"] = None
+        if isinstance(e.get("scene_media_check"), dict) and not isinstance(e.get("scene_writer_live_check"), dict):
+            e["scene_writer_live_check"] = e.get("scene_media_check")
+        e.pop("scene_media_check", None)
         if not isinstance(e.get("structure_splitter_check"), dict):
             e["structure_splitter_check"] = None
         if not isinstance(e.get("block_writer_check"), dict):
@@ -733,6 +755,12 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         if "scene_writer_check" in sv:
             v = sv.get("scene_writer_check")
             e["scene_writer_check"] = v if isinstance(v, dict) else None
+        if "scene_writer_live_check" in sv:
+            v = sv.get("scene_writer_live_check")
+            e["scene_writer_live_check"] = v if isinstance(v, dict) else None
+        if "scene_media_check" in sv and "scene_writer_live_check" not in sv:
+            v = sv.get("scene_media_check")
+            e["scene_writer_live_check"] = v if isinstance(v, dict) else None
         if "structure_splitter_check" in sv:
             v = sv.get("structure_splitter_check")
             e["structure_splitter_check"] = v if isinstance(v, dict) else None
@@ -771,6 +799,9 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
         ):
             # Voice Flow и Title Strategist не обязательны для downstream-логики.
             continue
+        if stage_key == "youtube_packaging" and pk == "scene_writer_live":
+            # YouTube packaging не зависит от Scene Writer Live.
+            continue
         prev = stages.get(pk) or {}
         if not str(prev.get("last_result") or "").strip():
             return f"Сначала выполните этап «{plabel}» — нет сохранённого результата."
@@ -799,6 +830,7 @@ def compose_rewrite_openai_request_body(
     voiceover_editor_text: str = "",
     structure_splitter_text: str = "",
     title_strategist_result_text: str = "",
+    scene_writer_result_text: str = "",
     original_title: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
@@ -816,6 +848,7 @@ def compose_rewrite_openai_request_body(
         "title_strategist",
         "structure_splitter",
         "scene_writer",
+        "scene_writer_live",
         "youtube_packaging",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
@@ -951,6 +984,28 @@ def compose_rewrite_openai_request_body(
             str(cell.get("user_prompt") or ""),
             ts,
         )
+    elif stage_key == "scene_writer_live":
+        prompt = (str(cell.get("prompt") or "") or "").strip()
+        up = str(cell.get("user_prompt") or "").strip()
+        ct = (str(cell.get("style_prompt") or "photos") or "photos").strip().lower()
+        if ct not in ("photos", "videos"):
+            ct = "photos"
+        try:
+            target = int(str(cell.get("past_prompt") or "50").strip())
+        except (TypeError, ValueError):
+            target = 50
+        target = max(1, min(100, target))
+        sw = str(scene_writer_result_text or "").strip()
+        if not sw:
+            return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
+        user_text = _json_user_message(
+            {
+                "scene_writer_live_user_promt": up,
+                "content_type": ct,
+                "target_percent": target,
+                "scene_writer_result": sw,
+            }
+        )
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -976,6 +1031,7 @@ def compose_rewrite_openai_request_body(
         "title_strategist",
         "structure_splitter",
         "scene_writer",
+        "scene_writer_live",
         "youtube_packaging",
     ):
         dur_payload = build_duration_length_spec_payload(
@@ -1054,6 +1110,7 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "style_prompt": str(cell.get("style_prompt") or ""),
             "past_prompt": str(cell.get("past_prompt") or ""),
             "scene_writer_check": cell.get("scene_writer_check") if isinstance(cell.get("scene_writer_check"), dict) else None,
+            "scene_writer_live_check": cell.get("scene_writer_live_check") if isinstance(cell.get("scene_writer_live_check"), dict) else None,
             "structure_splitter_check": cell.get("structure_splitter_check") if isinstance(cell.get("structure_splitter_check"), dict) else None,
             "block_writer_check": cell.get("block_writer_check") if isinstance(cell.get("block_writer_check"), dict) else None,
             "model": normalize_rewrite_model(str(cell.get("model") or "")),

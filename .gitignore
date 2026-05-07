@@ -35,6 +35,14 @@ data/image_templates/*
 data/job_audio/*
 !data/job_audio/.gitkeep
 
+# Per-job Pexels cached media
+data/job_pexels/
+
+# Per-job locks / tmp atomic write files
+data/jobs/*.lock
+data/jobs/*.tmp
+data/jobs/*.json.*.tmp
+
 # Keep folder structure
 !data/jobs/.gitkeep
 !data/rewrite_jobs/.gitkeep

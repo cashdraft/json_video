@@ -1343,6 +1343,51 @@ textarea::placeholder {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* Scene Writer Live: like Hero/Master + Model/Duration layout */
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-row--controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem 1rem;
+}
+
+/* For Scene Writer Live we don't need per-stage model cell here. */
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-model-cell {
+    display: none;
+}
+
+.rewrite-stage-target-range {
+    width: 100%;
+}
+
+.rewrite-stage-target-range__value {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.rewrite-stage-target-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-prompt-cell .rewrite-slot-textarea {
+    min-height: 96px;
+}
+
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-user-prompt {
+    min-height: 96px;
+}
+
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-content-type {
+    min-height: 46px;
+}
+
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-system-cell { grid-column: 1; }
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-user-cell { grid-column: 2; }
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-content-cell { grid-column: 3; }
+.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-target-cell { grid-column: 3; }
+
 .rewrite-scene-writer-check {
     margin-top: 0.45rem;
     border: 1px dashed var(--border);
@@ -1947,6 +1992,10 @@ textarea::placeholder {
     }
 
     .rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-row--controls {
+        grid-template-columns: 1fr;
+    }
+
+    .rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-row--controls {
         grid-template-columns: 1fr;
     }
 
@@ -2817,6 +2866,10 @@ button.job-download-all-link {
     min-width: 0;
 }
 
+.scene-slot--pexels {
+    grid-column: 1 / -1;
+}
+
 .slot-prompt-editor-wrap {
     display: none;
 }
@@ -3095,6 +3148,106 @@ button.job-download-all-link {
     min-height: 0 !important;
     max-width: 100%;
     max-height: 100%;
+}
+
+.slot-placeholder--pexels {
+    aspect-ratio: auto;
+    min-height: 0;
+    padding: 0.35rem;
+    display: block;
+    align-items: initial;
+    justify-content: initial;
+}
+
+.pexels-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.55rem;
+    width: 100%;
+}
+
+.pexels-slot-item .slot-placeholder {
+    aspect-ratio: var(--slot-aspect-ratio, 16 / 9);
+}
+
+.pexels-slot-item .slot-image {
+    object-fit: cover;
+}
+
+.pexels-item-meta {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.22rem 0.35rem;
+    font-size: 0.64rem;
+    line-height: 1.2;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 1100px) {
+    .pexels-slots-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .pexels-slots-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.pexels-meta-left {
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.pexels-meta-center {
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pexels-meta-right {
+    justify-self: end;
+    white-space: nowrap;
+}
+
+.live-keywords-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.live-keyword-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.22rem;
+    padding: 0.08rem 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.live-keyword-chip__remove {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 0;
+}
+
+.live-keyword-chip--excluded {
+    opacity: 0.45;
+    text-decoration: line-through;
 }
 
 .slot-status-error {
