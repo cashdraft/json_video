@@ -2,129 +2,133 @@
   "blocks": [
     {
       "block_index": 1,
-      "block_name": "The Overthinking Paradox: Why the Smartest Minds Struggle",
-      "target_chars_min": 700,
-      "target_chars_ideal": 900,
-      "target_chars_max": 1100,
-      "actual_chars": 1332,
+      "block_name": "The Overthinking Paradox",
+      "target_chars_min": 350,
+      "target_chars_ideal": 450,
+      "target_chars_max": 550,
+      "actual_chars": 950,
       "short_summary": [
-        "Интеллектуальные и эмпатичные люди часто страдают от переосмысления",
-        "Переосмысление — не слабость, а защитная привычка ума",
-        "Внешне это выглядит как осторожность, но внутри — постоянная усталость"
+        "Overthinking is both a strength and a weakness",
+        "It’s linked to high perception and empathy",
+        "The same traits that help also exhaust",
+        "Overthinking is an adaptation, not a flaw"
       ],
-      "block_text": "There’s a strange pattern that shows up in people who seem to notice everything. The ones who read between the lines, who sense the mood in a room before anyone else. These are often the people others call smart, or even gifted. But behind that sharp awareness, there’s a hidden cost. Their minds never really switch off. Even in quiet moments, thoughts keep circling—analyzing, replaying, predicting. It’s not about doing too much. It’s about thinking too much. And it’s exhausting in a way that’s hard to explain. \n\nThis isn’t rare. In fact, it’s everywhere. People who care deeply, who understand others quickly, often find themselves trapped in their own heads. They replay conversations, imagine every possible outcome, and try to prepare for things that might never happen. To the outside world, it looks like caution or even wisdom. But inside, it feels like being stuck in a loop that never ends. \n\nOverthinking isn’t a flaw. It’s not a sign of weakness. It’s an old habit the mind uses to try to stay safe. For some, it’s almost like the brain is always online, scanning for danger, searching for answers, never letting its guard down. This constant mental activity can wear a person down, even if they never show it. \n\nMost people misunderstand what’s really happening. They see someone who’s thoughtful, maybe a bit reserved, and assume they’re just careful. But the reality is more complicated. The very traits that make someone perceptive and empathetic can also make them vulnerable to this silent exhaustion. And the more they notice, the harder it is to switch off. \n\nThere’s a reason why this pattern repeats itself in so many intelligent, sensitive people. The mind’s drive to understand and predict is powerful. But when it turns inward, it can become a trap. The question is—what’s actually going on inside when overthinking takes over?"
+      "block_text": "There’s a strange tension inside the mind that overthinks. On one side, it’s a mind that notices everything. It picks up on small changes in someone’s tone, remembers details others forget, and runs through every possible outcome before most people have even reacted. This isn’t a flaw. It’s a sign of a brain that’s highly tuned to its surroundings—a mind built for pattern recognition, for empathy, for seeing what others miss. But the same mind that can spot danger before it arrives, or sense what someone else is feeling without a word, is also the mind that can’t switch off. It replays conversations late at night. It imagines problems that haven’t happened yet. It tries to solve everything, all at once, until the simplest decision feels exhausting. This is the paradox: the very thing that makes a person perceptive, thoughtful, and aware is also what drains them. Overthinking isn’t a defect. It’s an adaptation. But it comes with a cost—a mind that’s always online, always searching, never quite at rest. And for many, this is the invisible struggle behind every interaction, every choice, every quiet moment."
     },
     {
       "block_index": 2,
-      "block_name": "What Is Overthinking? The Science of Maladaptive Rumination",
-      "target_chars_min": 1000,
-      "target_chars_ideal": 1300,
-      "target_chars_max": 1500,
-      "actual_chars": 1482,
+      "block_name": "What Is Overthinking? (Maladaptive Rumination)",
+      "target_chars_min": 400,
+      "target_chars_ideal": 500,
+      "target_chars_max": 600,
+      "actual_chars": 888,
       "short_summary": [
-        "Маладэптивная руминация — это зацикленные, повторяющиеся мысли",
-        "Фокус на неопределённости, особенно в социальных ситуациях",
-        "Это не помогает, а только усиливает тревогу и сомнения"
+        "Maladaptive rumination is repetitive, passive, and negative",
+        "It involves mental loops without resolution",
+        "Linked to brain networks for self-reflection and emotion"
       ],
-      "block_text": "Psychologists use a specific term for the kind of overthinking that drains people from the inside: maladaptive rumination. It’s not just thinking a lot. It’s a mental loop that keeps replaying the same worries, doubts, or regrets—without ever reaching a solution. The mind gets stuck, circling around the same questions: “Did I say the wrong thing?” “What if I made a mistake?” “Why did that happen?”\n\nMaladaptive rumination has a few clear features. First, it’s repetitive. The same thoughts come back again and again, almost like a song stuck on repeat. Second, it’s usually focused on uncertainty—especially about social situations or the future. The mind tries to find clarity, but instead, it gets lost in endless analysis. Third, these thought loops don’t actually help. They don’t lead to new insights or real decisions. Instead, they create more confusion and self-doubt.\n\nThis is different from normal reflection. Healthy thinking helps people learn from experience or plan for what’s next. Maladaptive rumination, on the other hand, is like being trapped in a maze with no exit. The more someone tries to think their way out, the deeper they get pulled in. Psychologists see this as a pattern where the brain’s problem-solving system gets hijacked. Instead of moving forward, it keeps circling the same track.\n\nThere’s a reason this pattern often centers on social situations. Human brains are wired to care about what others think. When something feels unresolved—an awkward conversation, a strange look, a missed signal—the mind tries to replay it, searching for answers. But with maladaptive rumination, the replay never ends. The uncertainty just grows.\n\nThis isn’t a rare glitch. It’s a well-studied mental habit. Researchers have mapped out how these loops form, and why they’re so hard to break. The term “maladaptive” means the process doesn’t actually help the person adapt or cope. It just keeps the mind busy, but stuck.\n\nSo, when psychologists talk about overthinking, they’re not talking about being thoughtful or careful. They’re describing a specific mental trap—a loop that feels like thinking, but actually blocks real understanding. The next question is: why does the brain fall into this pattern in the first place?"
+      "block_text": "Overthinking isn’t just thinking a lot. In psychology, it’s called maladaptive rumination. This means getting stuck in a loop of thoughts that don’t lead anywhere useful. You replay the same worries, doubts, or regrets over and over. It feels like you’re searching for answers, but you never find relief. \n\nMaladaptive rumination has a few key features. First, it’s repetitive. The same thoughts circle back, again and again. Second, it’s passive. You’re not solving a problem—you’re just turning it over in your mind. Third, it’s negative. The focus is usually on what went wrong, what could go wrong, or what you wish you’d done differently. \n\nScientifically, this pattern is linked to increased activity in certain brain networks, especially those involved in self-reflection and emotional processing. Researchers use terms like “perseverative cognition” to describe this mental stuckness. It’s not just being thoughtful or careful. It’s a mental habit that can drain your energy and mood, even when nothing is actually happening around you."
     },
     {
       "block_index": 3,
-      "block_name": "Inside the Overthinker's Brain: Neurological and Developmental Roots",
-      "target_chars_min": 1400,
-      "target_chars_ideal": 1700,
-      "target_chars_max": 2000,
-      "actual_chars": 1807,
+      "block_name": "The Brain on Overthinking",
+      "target_chars_min": 500,
+      "target_chars_ideal": 600,
+      "target_chars_max": 700,
+      "actual_chars": 1127,
       "short_summary": [
-        "Префронтальная кора и default mode network поддерживают руминацию",
-        "Детство в непредсказуемой среде усиливает склонность к переосмыслению",
-        "Мозг тренируется искать паттерны, что закрепляется на уровне нейронных связей"
+        "Prefrontal cortex analyzes and plans during overthinking",
+        "Default mode network activates in mental loops",
+        "Yale and Michigan studies show increased DMN activity",
+        "Both regions drive pattern recognition in overthinking"
       ],
-      "block_text": "Чтобы понять, почему одни люди застревают в бесконечных мысленных циклах, а другие нет, нужно посмотреть внутрь их мозга. Здесь ключевую роль играют две системы: префронтальная кора и так называемая сеть пассивного режима работы мозга — default mode network. Префронтальная кора — это участок, который отвечает за планирование, анализ, контроль импульсов. Она как внутренний режиссёр: постоянно оценивает, что происходит, что может случиться, и как лучше поступить. Но если эта система работает слишком активно, человек начинает прокручивать одни и те же сценарии снова и снова, пытаясь всё предусмотреть.\n\nВторая система — default mode network. Это сеть, которая включается, когда человек не занят конкретной задачей. Она отвечает за внутренний диалог, воспоминания, фантазии, размышления о себе и других. У склонных к переосмыслению людей эта сеть часто работает на повышенных оборотах. Мозг буквально не может «замолчать» даже в покое. Исследования показывают: у таких людей default mode network активируется чаще и дольше, чем у тех, кто не склонен к руминации.\n\nНо почему мозг вообще так устроен? Здесь вступает в игру детство. Если ребёнок растёт в среде, где многое непредсказуемо — например, взрослые часто меняют настроение, правила постоянно меняются, или в семье много скрытых конфликтов — мозг учится быть настороже. Он начинает искать закономерности, чтобы хоть как-то предсказать, что будет дальше. Это неосознанная адаптация: если ты не можешь контролировать внешнее, ты пытаешься контролировать хотя бы свои мысли.\n\nИсследования Йельского университета и Университета Мичигана показывают: у людей, выросших в нестабильных условиях, особенно развит навык поиска скрытых паттернов. Их мозг буквально тренируется замечать малейшие намёки, чтобы не пропустить угрозу или перемену. С одной стороны, это делает их более внимательными к деталям и нюансам. С другой — приводит к тому, что они начинают видеть связи даже там, где их нет. Мозг постоянно строит гипотезы, анализирует, сравнивает, возвращается к одним и тем же мыслям, чтобы не упустить ничего важного.\n\nВ итоге, привычка к переосмыслению — это не просто черта характера. Это результат того, как мозг учился выживать в условиях неопределённости. Это невидимая настройка, которая формируется годами и закрепляется на уровне нейронных связей. И чем больше человек сталкивался с непредсказуемостью в детстве или подростковом возрасте, тем выше шанс, что его мозг будет склонен к бесконечному анализу и внутренним диалогам.\n\nНо важно понимать: не вся руминация одинакова. Дальше мы разберём, какие бывают виды зацикленных мыслей и почему одни из них особенно разрушительны."
+      "block_text": "Let’s look at what actually happens in the brain when someone overthinks. Two main areas are involved: the prefrontal cortex and the default mode network. The prefrontal cortex sits right behind your forehead. It’s the part that plans, analyzes, and weighs options. When you’re stuck in thought loops, this area is working overtime—constantly searching for patterns, trying to predict what might happen next.\n\nBut it doesn’t work alone. The default mode network, or DMN, is a set of brain regions that switches on when your mind wanders or turns inward. It’s active when you’re replaying conversations, imagining different outcomes, or just lost in thought. Researchers at Yale found that people who ruminate a lot show more activity in this network, especially when they’re not focused on a task. The University of Michigan’s studies back this up: their scans show that the DMN lights up during overthinking, almost like the brain is rehearsing possible scenarios on repeat.\n\nHere’s the interesting part. Both the prefrontal cortex and the DMN are built for pattern recognition. They’re always looking for connections, even when there aren’t any. That’s why overthinking can feel endless—it’s the brain’s way of searching for meaning, trying to solve problems that might not have a clear answer. This isn’t just a random glitch. It’s a deep, automatic process, wired into how we make sense of the world."
     },
     {
       "block_index": 4,
-      "block_name": "Two Faces of Rumination: Reflective vs. Brooding",
-      "target_chars_min": 900,
-      "target_chars_ideal": 1200,
-      "target_chars_max": 1400,
-      "actual_chars": 1292,
+      "block_name": "Origins: Why Overthinking Develops",
+      "target_chars_min": 400,
+      "target_chars_ideal": 500,
+      "target_chars_max": 600,
+      "actual_chars": 1088,
       "short_summary": [
-        "Рефлексивная руминация — поиск смысла, движение к пониманию",
-        "Брудинг — застревание в одних и тех же мыслях, усиление тревоги",
-        "Главное отличие — наличие движения и результата"
+        "Overthinking often develops in unpredictable childhoods",
+        "It’s an adaptive response to instability or high stakes",
+        "The habit forms as mental self-protection",
+        "It persists even after the original threat is gone"
       ],
-      "block_text": "Руминация — это не всегда плохо. На самом деле, у неё есть две стороны. Первая — рефлексивная. Это когда человек возвращается к прошлому событию, чтобы понять, что именно произошло. Он ищет смысл, анализирует, что можно было бы сделать иначе. Такой процесс похож на внутренний разбор полётов. Здесь есть движение: человек задаёт себе вопросы, ищет ответы, иногда даже находит новые решения. Это похоже на то, как если бы вы разбирали сложный узел — шаг за шагом, спокойно, без спешки. Рефлексивная руминация может даже помочь. Она даёт шанс увидеть свои ошибки, понять чужие мотивы, сделать выводы. После такого размышления часто приходит облегчение или хотя бы ощущение, что ситуация стала чуть более понятной.\n\nНо есть и другая сторона — брудинг. Это когда мысли крутятся по кругу, но ничего не меняется. Человек снова и снова возвращается к одной и той же боли, к одной и той же обиде, к одному и тому же страху. Здесь нет поиска смысла — есть только повторение. Внутри всё застревает. Вместо того чтобы распутывать узел, человек просто тянет за один и тот же конец, и узел становится только туже. Брудинг не даёт облегчения. Он только усиливает тревогу, раздражение, чувство вины. После такого размышления становится тяжелее, а не легче.\n\nГлавное отличие между этими двумя типами — движение. Рефлексивная руминация ведёт к пониманию, даже если это сложно и неприятно. Брудинг — это топтание на месте. Он не даёт ни новых идей, ни выхода. Только усталость и ощущение, что всё зашло в тупик.\n\nИногда грань между этими состояниями почти незаметна. Человек может начать с попытки разобраться, а потом незаметно для себя перейти в застревание. Почему это происходит — и почему это так опасно — мы сейчас разберём."
+      "block_text": "Overthinking doesn’t just appear out of nowhere. It usually starts early—often in childhood or adolescence. Imagine a kid growing up in a home where things are unpredictable. Maybe the rules change from day to day. Maybe the adults are sometimes calm, sometimes angry, and you never know which version you’ll get. In that kind of environment, being able to predict what might happen next isn’t just useful—it’s necessary. The mind learns to scan for patterns, to replay conversations, to imagine every possible outcome. This isn’t pointless worry. It’s a way to stay safe. \n\nEven later, in school or with friends, if someone’s world feels unstable or high-stakes, the brain keeps sharpening this habit. Overthinking becomes a tool for survival. It helps you spot danger before it arrives. It helps you prepare for disappointment, or avoid making mistakes that could cost you. In a way, it’s like mental armor. The more unpredictable the world, the more valuable this armor feels. \n\nBut here’s the twist: what starts as a smart adaptation can stick around, even when life gets calmer. The mind keeps running those same calculations, even if the threat is gone. That’s why overthinking feels so automatic. It’s not a random flaw—it’s a skill that once made perfect sense."
     },
     {
       "block_index": 5,
-      "block_name": "The Trap: When Reflection Becomes a Loop",
-      "target_chars_min": 900,
-      "target_chars_ideal": 1100,
-      "target_chars_max": 1300,
-      "actual_chars": 1202,
+      "block_name": "Reflective vs. Brooding Rumination",
+      "target_chars_min": 400,
+      "target_chars_ideal": 500,
+      "target_chars_max": 600,
+      "actual_chars": 1026,
       "short_summary": [
-        "Рефлексия превращается в зацикленное повторение без результата",
-        "Возникает ощущение ложного прогресса",
-        "Дофамин подкрепляет повтор мыслей, формируя замкнутый цикл"
+        "There are two main types of rumination: reflective and brooding",
+        "Reflective rumination seeks understanding and can be helpful",
+        "Brooding rumination is repetitive, negative, and unproductive",
+        "The impact of each type is very different"
       ],
-      "block_text": "Вот что происходит незаметно для большинства людей. Сначала размышления кажутся полезными. Мы ищем причину, анализируем детали, пытаемся понять, что пошло не так. Это похоже на внутренний диалог, который должен привести к какому-то выводу. Но в какой-то момент этот процесс перестаёт двигаться вперёд. Мы начинаем крутить одни и те же мысли по кругу. Вроде бы что-то обдумываем, но на самом деле просто повторяем старое.\n\nЗдесь появляется иллюзия прогресса. Кажется, что если ещё немного подумать — вот-вот появится ответ. Мозг подкидывает знакомое ощущение: \"Я почти нащупал суть\". Но это ловушка. На самом деле мы топчемся на месте. Каждый новый виток размышлений не даёт ничего нового, только усиливает усталость и тревогу.\n\nПочему так происходит? Дело не только в привычке. В этот момент включается дофамин. Обычно дофамин — это про удовольствие и мотивацию. Но здесь он работает иначе. Каждый раз, когда мы возвращаемся к знакомой мысли, мозг получает маленькую дозу дофамина. Это как будто внутреннее поощрение: \"Ты на правильном пути, продолжай думать\". Но никакого пути уже нет. Просто повторение одного и того же.\n\nТак формируется замкнутый цикл. Мозг сам подкрепляет зацикленность, потому что получает за это награду. Мы чувствуем, что делаем что-то важное, хотя на самом деле просто застряли. И чем дольше это длится, тем труднее выйти из этого состояния. \n\nНо почему именно одни люди попадают в такие ловушки чаще других? И как это связано с их способностью чувствовать других людей?"
+      "block_text": "Not all rumination is the same. There are actually two main types, and they work very differently inside us. The first is called reflective rumination. This is when someone turns a problem over in their mind, looking for understanding or a solution. It’s focused, almost like quietly asking yourself, “What happened? Why did I react that way? What can I learn from this?” Reflective rumination can sometimes help people process events and move forward. It’s uncomfortable, but it has a direction.\n\nThe second type is brooding rumination. This one feels heavier. Instead of searching for answers, the mind circles around the same negative thoughts. It’s more like, “Why does this always happen to me? What’s wrong with me?” There’s no real movement—just a sense of being stuck. Brooding rumination doesn’t lead to insight. It just deepens the feeling of helplessness and keeps old wounds open.\n\nHere’s the difference: Reflective rumination can sometimes help us grow. Brooding rumination almost always makes us feel worse. Most people don’t notice when they’ve slipped from one into the other. But the impact is huge. One can help us understand ourselves. The other quietly drains our energy and hope."
     },
     {
       "block_index": 6,
-      "block_name": "The Empathy Connection: Why Overthinkers Feel More",
-      "target_chars_min": 900,
-      "target_chars_ideal": 1100,
-      "target_chars_max": 1300,
-      "actual_chars": 1576,
+      "block_name": "The Illusion of Progress: Dopamine and Loops",
+      "target_chars_min": 400,
+      "target_chars_ideal": 500,
+      "target_chars_max": 600,
+      "actual_chars": 1082,
       "short_summary": [
-        "Переосмысливающие люди обладают более высокой когнитивной эмпатией",
-        "Они чувствительнее к эмоциям и настроениям окружающих",
-        "Социальная чувствительность — обратная сторона руминации"
+        "Overthinking feels productive but rarely leads to real change",
+        "Dopamine rewards reinforce the cycle of mental loops",
+        "The brain craves the illusion of progress, making the habit hard to break"
       ],
-      "block_text": "Есть одна особенность, которую редко замечают у людей, склонных к переосмыслению. Они не просто много думают — они часто гораздо сильнее чувствуют. И это не случайность. В 2013 году в журнале Psychological Science вышло исследование: учёные сравнили людей с разной склонностью к руминации и обнаружили, что те, кто чаще застревает в мыслях, показывают более высокий уровень так называемой когнитивной эмпатии. Это не про сочувствие или жалость. Когнитивная эмпатия — это способность точно понимать, что чувствует и думает другой человек, даже если он ничего не говорит напрямую.\n\nПочему так происходит? Когда человек склонен к переосмыслению, его мозг постоянно анализирует детали: слова, интонации, жесты, даже паузы в разговоре. Он замечает то, что другие пропускают. Это не всегда осознанно. Просто внимание автоматически цепляется за нюансы. В результате — человек быстрее улавливает перемены в настроении собеседника, замечает скрытые эмоции, чувствует напряжение в воздухе, даже если никто ничего не сказал.\n\nИсследования показывают: у таких людей выше социальная чувствительность. Им проще понять, когда кто-то расстроен, даже если тот пытается это скрыть. Они быстрее замечают, если в компании что-то не так, если кто-то выпал из разговора или если атмосфера стала напряжённой. Это не магия — это результат постоянной внутренней работы мозга, который привык искать смысл и связи.\n\nНо есть и обратная сторона. Такая чувствительность делает человека уязвимым к чужим эмоциям. Он не просто понимает, что кто-то рядом расстроен — он начинает это чувствовать на себе. Иногда даже сильнее, чем сам источник эмоции. Это не выбор, а побочный эффект той самой склонности к переосмыслению. Мозг, который всё время анализирует, не умеет выключаться, когда речь идёт о чувствах других людей.\n\nВ итоге, переосмысливающий человек часто оказывается в роли \"эмоционального барометра\" — он первым замечает перемены, первым чувствует напряжение, первым начинает беспокоиться за других. Это может казаться даром, но на самом деле — это просто ещё одна сторона того же механизма, который заставляет его застревать в мыслях."
+      "block_text": "Here’s where it gets tricky. When you’re deep in overthinking, it feels like you’re making progress. You replay conversations, imagine outcomes, weigh every detail. It’s exhausting, but it gives a sense of movement—like you’re working toward a solution. But most of the time, nothing actually changes. The same thoughts circle back, just with new details or slightly different angles. This is the illusion of mental progress. \n\nWhat keeps you stuck in this loop? Dopamine. Each time you land on a new theory or a possible answer, your brain gives you a tiny reward. It’s the same chemical that fires when you check your phone and see a new message. That little hit makes you feel like you’ve uncovered something important, even if it’s just another version of the same worry. So you keep going, chasing the next insight, the next explanation. The loop feeds itself. \n\nThis is why overthinking is so hard to break. It’s not just a habit—it’s a cycle that feels productive, but rarely is. And the more you chase that feeling of progress, the deeper you get pulled in. The stakes aren’t just about wasted time. They’re about how your mind learns to crave the loop itself."
     },
     {
       "block_index": 7,
-      "block_name": "The Cost: Exhaustion and the Limits of Thinking",
-      "target_chars_min": 1000,
-      "target_chars_ideal": 1300,
-      "target_chars_max": 1500,
-      "actual_chars": 1442,
+      "block_name": "Empathy, Perception, and the Overthinker",
+      "target_chars_min": 350,
+      "target_chars_ideal": 450,
+      "target_chars_max": 550,
+      "actual_chars": 1052,
       "short_summary": [
-        "Переосмысливание приводит к хронической усталости и напряжению",
-        "Мозг не отдыхает даже ночью, мысли не дают расслабиться",
-        "Не все проблемы решаются мышлением, возникает замкнутый круг"
+        "Overthinkers show higher cognitive empathy",
+        "They are highly sensitive to social cues and moods",
+        "This sensitivity is both a burden and a hidden strength"
       ],
-      "block_text": "Переосмысливание кажется чем-то полезным — будто ты постоянно ищешь решение, не даёшь себе расслабиться, пока не разберёшься. Но у этого процесса есть цена, которую редко замечают сразу. Постоянное напряжение. Мозг работает без остановки, даже когда ты просто идёшь по улице или пытаешься заснуть. Внутри — ощущение, будто ты всё время держишь тяжёлый груз, который нельзя ни сбросить, ни передать другому. \n\nСо стороны это выглядит как обычная усталость. Но внутри — это не просто физическая усталость, а особый вид изнеможения. Ты просыпаешься уже уставшим, потому что ночью твой мозг продолжал крутить одни и те же мысли. Днём — ощущение, что ты постоянно на взводе, даже если ничего не происходит. Всё время кажется, что что-то не додумал, что-то упустил, что-то не так понял. \n\nПарадокс в том, что чем больше ты думаешь, тем меньше сил остаётся на реальные действия. В какой-то момент мысли начинают мешать жить. Ты не отдыхаешь даже тогда, когда вроде бы ничего не делаешь. В голове — постоянный шум, который невозможно выключить. Это не просто раздражает. Это истощает. \n\nИ вот тут проявляется главный предел мышления. Не все проблемы можно решить, просто думая о них. Есть ситуации, которые не меняются от того, что ты их прокручиваешь по кругу. Есть вопросы, на которые нет ответа, как бы ты ни старался его найти. Но мозг всё равно не сдаётся — он продолжает искать, надеясь, что на этот раз получится. \n\nВ результате — замкнутый круг. Чем больше ты пытаешься всё продумать, тем сильнее устаёшь. Чем сильнее устаёшь, тем сложнее остановиться. Потому что кажется: если перестанешь думать — что-то важное упустишь. Но на самом деле, чем дольше продолжается этот процесс, тем меньше в нём смысла и тем больше — усталости. \n\nИ вот здесь возникает вопрос: а что делать, если думать больше не помогает? Как выйти из этого круга, если привычка всё анализировать уже стала частью тебя? Ответ на этот вопрос — не в том, чтобы думать ещё больше. Но как именно это работает — разберём дальше."
+      "block_text": "But here’s something most people miss: overthinkers aren’t just stuck in their own heads. Research shows they’re often unusually tuned in to others. A 2013 study in Psychological Science found that people who ruminate—especially those who reflect deeply—score higher on cognitive empathy. That means they’re better at imagining what someone else is thinking or feeling. It’s not just about worrying; it’s about picking up on tiny social cues, reading between the lines, and noticing shifts in mood that others might miss. \n\nThis social sensitivity isn’t random. It’s like the mind is always scanning for signals, trying to predict what might happen next. Overthinkers often sense tension in a room before anyone says a word. They notice when someone’s tone changes, or when a friend’s smile doesn’t quite reach their eyes. \n\nThis isn’t always comfortable. Sometimes, it means feeling other people’s stress almost as if it’s your own. But it’s also a kind of hidden strength. The same mental habits that make overthinking exhausting can also make someone deeply perceptive. And that’s why understanding this pattern matters—because it’s not just a flaw. It’s a double-edged trait, shaping how overthinkers move through the world."
     },
     {
       "block_index": 8,
-      "block_name": "A New Approach: Changing the Relationship to Thoughts",
-      "target_chars_min": 1100,
-      "target_chars_ideal": 1400,
-      "target_chars_max": 1600,
-      "actual_chars": 1377,
+      "block_name": "Changing the Relationship: Therapy and Cognitive Diffusion",
+      "target_chars_min": 400,
+      "target_chars_ideal": 500,
+      "target_chars_max": 600,
+      "actual_chars": 1012,
       "short_summary": [
-        "ACT и когнитивная диффузия — подходы, меняющие отношение к мыслям",
-        "Суть — наблюдать мысли, а не бороться с ними",
-        "Мысли перестают быть абсолютной истиной и теряют власть"
+        "ACT focuses on accepting thoughts, not fighting them",
+        "Cognitive diffusion means observing thoughts without getting caught up",
+        "Therapy aims to change your relationship to thoughts, not erase them"
       ],
-      "block_text": "Есть подходы, которые предлагают не бороться с мыслями, а изменить к ним отношение. Один из таких — ACT, или терапия принятия и ответственности. В чем суть? Вместо того чтобы пытаться выгнать навязчивые мысли, человек учится смотреть на них со стороны. Не спорить, не доказывать себе, что они неправильные. Просто замечать: вот эта мысль пришла — и она есть. \n\nВ ACT это называют «когнитивной диффузией». Представьте: мысли — как облака на небе. Они появляются, проходят мимо, исчезают. Вы не обязаны цепляться за каждое облако. Не обязаны верить каждой мысли, которая приходит в голову. \n\nЭто не про то, чтобы перестать думать. И не про то, чтобы убедить себя, что мысли не важны. Это про то, чтобы перестать с ними сливаться. Когда человек застревает в переосмыслении, он буквально срастается с потоком мыслей. Кажется, что это и есть он сам. Но если сделать шаг назад — можно увидеть: мысли идут своим чередом, а вы — это не они. \n\nВ терапии часто используют простые упражнения. Например: мысленно назвать мысль вслух — «Сейчас у меня мысль, что я не справлюсь». Или представить, что мысль написана на листке бумаги, который плывет по реке. Это не магия. Это способ научиться замечать: мысль — это просто событие в голове, а не абсолютная истина. \n\nВ чем разница с привычным подходом? Обычно мы пытаемся спорить с мыслями, доказывать себе обратное, искать аргументы. Но чем больше споришь, тем сильнее мысль возвращается. ACT предлагает не спорить, а наблюдать. Не бороться, а отпускать. \n\nЭто не значит, что мысли исчезнут. Они будут приходить. Но если не цепляться за каждую, не пытаться их контролировать, они теряют власть. Человек начинает видеть: не все, что приходит в голову, требует реакции. Не все мысли — руководство к действию. \n\nЭтот подход не делает мысли врагами. Он учит видеть их такими, какие они есть — просто мыслями. И это меняет многое."
+      "block_text": "So, what actually helps when your mind just won’t let go? Modern therapy doesn’t try to force you to stop overthinking. Instead, it shifts the focus. One of the main approaches here is Acceptance and Commitment Therapy, or ACT. The idea isn’t to fight your thoughts or push them away. It’s to notice them, let them be, and see them for what they are—just thoughts, not facts or commands.\n\nA key tool in ACT is something called cognitive diffusion. This means learning to step back from your thoughts, almost like watching them from a distance. You don’t argue with them. You don’t try to prove them wrong. You just see them as mental events passing through your mind. For example, instead of thinking, “I’m going to fail,” you might notice, “I’m having the thought that I’m going to fail.”\n\nThis small shift changes everything. The thought loses its grip. It’s still there, but it doesn’t control you. Therapy here isn’t about deleting thoughts. It’s about changing your relationship with them. You become less tangled up, less reactive. And that’s often the real turning point for people who overthink."
     },
     {
       "block_index": 9,
-      "block_name": "Reframing Overthinking: From Flaw to Adaptation",
-      "target_chars_min": 1200,
-      "target_chars_ideal": 1700,
-      "target_chars_max": 2000,
-      "actual_chars": 1877,
+      "block_name": "Reframing Overthinking: The Path Forward",
+      "target_chars_min": 400,
+      "target_chars_ideal": 500,
+      "target_chars_max": 600,
+      "actual_chars": 1056,
       "short_summary": [
-        "Переосмысливание — это адаптация, а не дефект",
-        "Мозг пытается защитить, а не навредить",
-        "Сдвиг фокуса: учиться показывать уму безопасность и отпускать контроль"
+        "Overthinking is an adaptive response, not a defect",
+        "Recognizing patterns reduces self-blame",
+        "Awareness leads to healthier mental habits"
       ],
-      "block_text": "Let’s look at overthinking from a different angle. Most people see it as a flaw—something broken that needs to be fixed. But that’s not what’s really happening. Overthinking is an adaptation. It’s the mind’s way of trying to keep you safe. When you overthink, your brain is scanning for threats, replaying situations, searching for patterns. It’s not a sign of weakness. It’s a sign that your mind is trying to protect you from uncertainty, from mistakes, from pain. \n\nThink about it: the same brain that keeps you up at night with endless thoughts is the one that notices tiny shifts in people’s moods, that picks up on details others miss. This sensitivity isn’t random. It’s a system built for survival. In the past, being alert to every possible danger was useful. Today, that same system can get stuck in overdrive. But the core mechanism is the same: your mind is trying to help.\n\nSo, what does this mean for you? First, it means you’re not broken. You’re not less than anyone else. Your mind is doing exactly what it was designed to do—just a little too well. The key isn’t to fight your thoughts or force yourself to stop thinking. The key is to teach your mind that it’s safe to rest. That not every problem needs to be solved right now. That you can notice a thought, and let it pass, without chasing it down every rabbit hole.\n\nHere’s a shift you can try: when you catch yourself spiraling, pause and ask, “What is my mind trying to protect me from right now?” Just that question can change the whole tone. Instead of seeing your thoughts as enemies, you start to see them as signals. Signals that you care, that you want to get things right, that you’re tuned in. But also signals that sometimes, it’s okay to step back.\n\nAnother perspective: overthinking is a habit, not a life sentence. Habits can be changed—not by force, but by gentle retraining. When you notice your mind racing, try grounding yourself in the present. Notice your breath, the feeling of your feet on the floor, the sounds around you. This isn’t about escaping your thoughts. It’s about showing your mind, over and over, that you’re safe right now. That you don’t need to be on high alert all the time.\n\nSo, overthinking isn’t a defect. It’s an old adaptation running on new software. The more you recognize this, the less power those thoughts have over you. You can start to shift from fighting your mind to working with it. And that’s where real change begins."
+      "block_text": "Overthinking isn’t a flaw. It’s the mind’s way of adapting to a world that feels unpredictable. When someone overthinks, their brain is trying to protect them—by scanning for risks, replaying conversations, or preparing for every possible outcome. This habit forms because, at some point, it worked. It helped avoid mistakes or social pain. But over time, the same pattern can become exhausting. \n\nThe path forward isn’t about shutting down these thoughts. It’s about seeing them for what they are: old strategies that once made sense. When you recognize this, the pressure to “fix” yourself fades. Instead, you start to notice the patterns—how certain triggers set off the loops, how your mind tries to keep you safe. This awareness is the turning point. \n\nHealthier mental habits grow from understanding, not from force. When you see overthinking as an adaptation, you can respond with curiosity instead of frustration. The mind learns new ways to handle uncertainty. It becomes possible to pause, to step back, and to let thoughts come and go without getting stuck. That’s the real shift: not fighting your mind, but understanding how it works—and letting that knowledge change the way you move through the world."
     }
   ]
 }

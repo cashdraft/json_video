@@ -1,14 +1,15 @@
 {
   "block_index": 5,
-  "block_name": "The Trap: When Reflection Becomes a Loop",
-  "target_chars_min": 900,
-  "target_chars_ideal": 1100,
-  "target_chars_max": 1300,
-  "actual_chars": 1202,
+  "block_name": "Reflective vs. Brooding Rumination",
+  "target_chars_min": 400,
+  "target_chars_ideal": 500,
+  "target_chars_max": 600,
+  "actual_chars": 1026,
   "short_summary": [
-    "Рефлексия превращается в зацикленное повторение без результата",
-    "Возникает ощущение ложного прогресса",
-    "Дофамин подкрепляет повтор мыслей, формируя замкнутый цикл"
+    "There are two main types of rumination: reflective and brooding",
+    "Reflective rumination seeks understanding and can be helpful",
+    "Brooding rumination is repetitive, negative, and unproductive",
+    "The impact of each type is very different"
   ],
-  "block_text": "Вот что происходит незаметно для большинства людей. Сначала размышления кажутся полезными. Мы ищем причину, анализируем детали, пытаемся понять, что пошло не так. Это похоже на внутренний диалог, который должен привести к какому-то выводу. Но в какой-то момент этот процесс перестаёт двигаться вперёд. Мы начинаем крутить одни и те же мысли по кругу. Вроде бы что-то обдумываем, но на самом деле просто повторяем старое.\n\nЗдесь появляется иллюзия прогресса. Кажется, что если ещё немного подумать — вот-вот появится ответ. Мозг подкидывает знакомое ощущение: \"Я почти нащупал суть\". Но это ловушка. На самом деле мы топчемся на месте. Каждый новый виток размышлений не даёт ничего нового, только усиливает усталость и тревогу.\n\nПочему так происходит? Дело не только в привычке. В этот момент включается дофамин. Обычно дофамин — это про удовольствие и мотивацию. Но здесь он работает иначе. Каждый раз, когда мы возвращаемся к знакомой мысли, мозг получает маленькую дозу дофамина. Это как будто внутреннее поощрение: \"Ты на правильном пути, продолжай думать\". Но никакого пути уже нет. Просто повторение одного и того же.\n\nТак формируется замкнутый цикл. Мозг сам подкрепляет зацикленность, потому что получает за это награду. Мы чувствуем, что делаем что-то важное, хотя на самом деле просто застряли. И чем дольше это длится, тем труднее выйти из этого состояния. \n\nНо почему именно одни люди попадают в такие ловушки чаще других? И как это связано с их способностью чувствовать других людей?"
+  "block_text": "Not all rumination is the same. There are actually two main types, and they work very differently inside us. The first is called reflective rumination. This is when someone turns a problem over in their mind, looking for understanding or a solution. It’s focused, almost like quietly asking yourself, “What happened? Why did I react that way? What can I learn from this?” Reflective rumination can sometimes help people process events and move forward. It’s uncomfortable, but it has a direction.\n\nThe second type is brooding rumination. This one feels heavier. Instead of searching for answers, the mind circles around the same negative thoughts. It’s more like, “Why does this always happen to me? What’s wrong with me?” There’s no real movement—just a sense of being stuck. Brooding rumination doesn’t lead to insight. It just deepens the feeling of helplessness and keeps old wounds open.\n\nHere’s the difference: Reflective rumination can sometimes help us grow. Brooding rumination almost always makes us feel worse. Most people don’t notice when they’ve slipped from one into the other. But the impact is huge. One can help us understand ourselves. The other quietly drains our energy and hope."
 }

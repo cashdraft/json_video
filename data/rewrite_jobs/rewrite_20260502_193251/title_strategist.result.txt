@@ -1,95 +1,96 @@
 {
-  "core_topic": "overthinking and its psychological roots",
-  "one_sentence_video_promise": "Reveal why some people can't switch off their minds, the hidden costs of overthinking, and how to break free from mental loops.",
+  "core_topic": "Overthinking and maladaptive rumination",
+  "one_sentence_video_promise": "Understand why overthinking happens, how it drains your energy, and what psychology reveals about breaking the cycle.",
   "original_title_analysis": {
-    "original_title": "People Who Think Too Much",
-    "title_formula": "[Group Identity] Who [Behavior/Struggle]",
+    "original_title": "People Who Think Too Much | Psychology explain",
+    "title_formula": "People Who [Do X] | Psychology explain",
     "why_it_works": [
-      "Directly names the target audience",
-      "Creates instant self-recognition",
-      "Implies a shared struggle",
-      "Simple and relatable language"
+      "Directly addresses a relatable trait",
+      "Uses simple, broad language for wide appeal",
+      "Promises psychological insight",
+      "Creates self-recognition for viewers"
     ],
     "what_to_preserve": [
-      "Clear audience targeting",
-      "Simplicity and relatability",
-      "Focus on the behavior (thinking too much)"
+      "Direct address to a specific type of person",
+      "Clear connection to psychology",
+      "Implied promise of explanation or insight"
     ],
     "what_to_avoid_copying": [
-      "Overly generic phrasing",
-      "Lack of emotional or curiosity hook",
-      "Absence of a promise or solution"
+      "Generic phrasing ('People Who Think Too Much')",
+      "Overly broad or unspecific language",
+      "Awkward grammar ('Psychology explain')"
     ]
   },
   "target_viewer": {
-    "primary_identity": "overthinkers",
-    "secondary_identity": "highly sensitive and perceptive people",
+    "primary_identity": "Overthinkers",
+    "secondary_identity": "Sensitive, empathetic, or self-aware individuals",
     "viewer_self_recognition_phrases": [
-      "my mind never switches off",
-      "I replay conversations in my head",
-      "I notice subtle changes in others",
-      "I feel mentally exhausted for no clear reason"
+      "I can't stop replaying conversations",
+      "I notice every small change in others",
+      "My mind never shuts off",
+      "I feel mentally drained for no clear reason"
     ]
   },
-  "main_pain": "Feeling trapped in endless mental loops that cause exhaustion and anxiety.",
-  "emotional_tension": "The more you think, the more tired and stuck you feel, yet you can't stop searching for answers.",
-  "core_paradox": "The same mental habits that make you perceptive and empathetic also trap you in exhausting overthinking.",
+  "main_pain": "Feeling mentally exhausted and stuck due to constant overthinking and rumination.",
+  "emotional_tension": "The same mental habits that make you empathetic and insightful also leave you feeling drained and trapped in your own thoughts.",
+  "core_paradox": "Overthinking is both a strength (pattern recognition, empathy) and a source of suffering (mental fatigue, anxiety).",
   "psychological_mechanism": [
-    "maladaptive rumination",
-    "default mode network overactivity",
-    "childhood adaptation to unpredictability",
-    "dopamine reinforcement of thought loops",
-    "cognitive empathy leading to emotional overload"
+    "Maladaptive rumination",
+    "Reward cycle of problem-solving",
+    "Cognitive empathy leading to mental fatigue",
+    "Default mode network overactivity",
+    "Learned adaptation from unpredictable environments"
   ],
   "strongest_angles": [
     {
       "angle_id": "1",
-      "angle_name": "The Hidden Cost of Perceptiveness",
-      "why_it_clicks": "Reframes overthinking as a side effect of a positive trait, reducing shame and increasing self-understanding."
+      "angle_name": "Hidden Cost of Overthinking",
+      "why_it_clicks": "Reveals an invisible struggle many experience but can't name, creating instant self-recognition and curiosity."
     },
     {
       "angle_id": "2",
-      "angle_name": "The Science Behind Endless Thought Loops",
-      "why_it_clicks": "Offers a scientific explanation, satisfying curiosity and validating the viewer's experience."
+      "angle_name": "The Paradox of Empathy and Exhaustion",
+      "why_it_clicks": "Validates viewers' sensitivity as a strength while explaining why it also causes pain, reducing shame."
     },
     {
       "angle_id": "3",
-      "angle_name": "How to Break Free from Overthinking",
-      "why_it_clicks": "Promises actionable solutions, appealing to viewers desperate for relief."
+      "angle_name": "Psychology’s Explanation for Mental Fatigue",
+      "why_it_clicks": "Promises scientific answers and practical understanding, appealing to viewers seeking validation and solutions."
     }
   ],
   "curiosity_gaps": [
-    "Why do some people get stuck in thought loops while others don't?",
-    "What is really happening in the brain during overthinking?",
-    "Is there a way to stop overthinking without fighting your thoughts?",
-    "How does childhood unpredictability shape adult thinking patterns?"
+    "Why does overthinking make you tired?",
+    "What is the real cause of mental exhaustion?",
+    "How can empathy and insight backfire?",
+    "What does psychology say about breaking the overthinking cycle?",
+    "Is overthinking a flaw or an adaptation?"
   ],
   "seo_keywords": [
     "overthinking",
     "rumination",
     "mental exhaustion",
-    "cognitive empathy",
-    "default mode network",
-    "how to stop overthinking",
-    "psychology of overthinking"
+    "psychology of overthinking",
+    "maladaptive rumination",
+    "empathy and fatigue",
+    "how to stop overthinking"
   ],
   "title_style_recommendations": [
-    "Directly address the viewer's experience",
-    "Imply a hidden truth or surprising cause",
-    "Promise relief or a solution",
-    "Use emotionally resonant language",
-    "Balance relatability with intrigue"
+    "Directly address the viewer’s experience",
+    "Highlight the paradox or hidden cost",
+    "Use clear, relatable language",
+    "Promise psychological insight or explanation",
+    "Imply practical value or relief"
   ],
   "thumbnail_text_directions": [
-    "Stuck in Your Head?",
-    "Can't Switch Off",
-    "The Overthinker's Trap",
-    "Why Your Mind Won't Rest"
+    "Why Am I So Tired?",
+    "The Overthinker’s Trap",
+    "Stuck in My Head",
+    "Not Broken—Just Overthinking"
   ],
   "avoid_in_titles": [
-    "Overly clinical or technical language",
     "Generic or vague phrasing",
-    "Titles that blame or shame the viewer",
-    "Overpromising instant solutions"
+    "Overly clinical language",
+    "Awkward grammar",
+    "Titles that blame or shame the viewer"
   ]
 }

@@ -1,14 +1,15 @@
 {
   "block_index": 4,
-  "block_name": "Two Faces of Rumination: Reflective vs. Brooding",
-  "target_chars_min": 900,
-  "target_chars_ideal": 1200,
-  "target_chars_max": 1400,
-  "actual_chars": 1292,
+  "block_name": "Origins: Why Overthinking Develops",
+  "target_chars_min": 400,
+  "target_chars_ideal": 500,
+  "target_chars_max": 600,
+  "actual_chars": 1088,
   "short_summary": [
-    "Рефлексивная руминация — поиск смысла, движение к пониманию",
-    "Брудинг — застревание в одних и тех же мыслях, усиление тревоги",
-    "Главное отличие — наличие движения и результата"
+    "Overthinking often develops in unpredictable childhoods",
+    "It’s an adaptive response to instability or high stakes",
+    "The habit forms as mental self-protection",
+    "It persists even after the original threat is gone"
   ],
-  "block_text": "Руминация — это не всегда плохо. На самом деле, у неё есть две стороны. Первая — рефлексивная. Это когда человек возвращается к прошлому событию, чтобы понять, что именно произошло. Он ищет смысл, анализирует, что можно было бы сделать иначе. Такой процесс похож на внутренний разбор полётов. Здесь есть движение: человек задаёт себе вопросы, ищет ответы, иногда даже находит новые решения. Это похоже на то, как если бы вы разбирали сложный узел — шаг за шагом, спокойно, без спешки. Рефлексивная руминация может даже помочь. Она даёт шанс увидеть свои ошибки, понять чужие мотивы, сделать выводы. После такого размышления часто приходит облегчение или хотя бы ощущение, что ситуация стала чуть более понятной.\n\nНо есть и другая сторона — брудинг. Это когда мысли крутятся по кругу, но ничего не меняется. Человек снова и снова возвращается к одной и той же боли, к одной и той же обиде, к одному и тому же страху. Здесь нет поиска смысла — есть только повторение. Внутри всё застревает. Вместо того чтобы распутывать узел, человек просто тянет за один и тот же конец, и узел становится только туже. Брудинг не даёт облегчения. Он только усиливает тревогу, раздражение, чувство вины. После такого размышления становится тяжелее, а не легче.\n\nГлавное отличие между этими двумя типами — движение. Рефлексивная руминация ведёт к пониманию, даже если это сложно и неприятно. Брудинг — это топтание на месте. Он не даёт ни новых идей, ни выхода. Только усталость и ощущение, что всё зашло в тупик.\n\nИногда грань между этими состояниями почти незаметна. Человек может начать с попытки разобраться, а потом незаметно для себя перейти в застревание. Почему это происходит — и почему это так опасно — мы сейчас разберём."
+  "block_text": "Overthinking doesn’t just appear out of nowhere. It usually starts early—often in childhood or adolescence. Imagine a kid growing up in a home where things are unpredictable. Maybe the rules change from day to day. Maybe the adults are sometimes calm, sometimes angry, and you never know which version you’ll get. In that kind of environment, being able to predict what might happen next isn’t just useful—it’s necessary. The mind learns to scan for patterns, to replay conversations, to imagine every possible outcome. This isn’t pointless worry. It’s a way to stay safe. \n\nEven later, in school or with friends, if someone’s world feels unstable or high-stakes, the brain keeps sharpening this habit. Overthinking becomes a tool for survival. It helps you spot danger before it arrives. It helps you prepare for disappointment, or avoid making mistakes that could cost you. In a way, it’s like mental armor. The more unpredictable the world, the more valuable this armor feels. \n\nBut here’s the twist: what starts as a smart adaptation can stick around, even when life gets calmer. The mind keeps running those same calculations, even if the threat is gone. That’s why overthinking feels so automatic. It’s not a random flaw—it’s a skill that once made perfect sense."
 }
