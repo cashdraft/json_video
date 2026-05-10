@@ -1,194 +1,243 @@
 {
-  "target_chars_total": 4500,
+  "target_chars_total": 11000,
   "narrative_arc": {
-    "opening_function": "Frame the paradox of overthinking as both a cognitive strength and a source of exhaustion, immediately establishing stakes and curiosity.",
-    "middle_function": "Systematically unpack the psychological, neurological, and developmental roots of overthinking, clarify its dual nature, and introduce research-backed contrasts and mechanisms.",
-    "ending_function": "Reframe overthinking as an adaptive trait, not a flaw, and provide a research-based path toward healthier mental habits and self-understanding.",
-    "arc_summary": "The script begins by challenging the common view of overthinking as a weakness, then explores its scientific and developmental roots, distinguishes its forms, reveals why it persists, and concludes by empowering viewers to change their relationship with their thoughts."
+    "opening_function": "Establish the central paradox in the first 15 seconds: the people who think most deeply are the most depleted — not from action, but from the machinery of thought itself. Anchor the viewer's own experience before naming what it is.",
+    "middle_function": "Systematically dismantle the 'flaw' interpretation through four interlocking explanations — scientific definition, neurological mechanics, developmental origins, and typological distinction — each layer deepening the reframe. Build toward the empathy reveal as the pivotal proof point.",
+    "ending_function": "Pivot from diagnosis to orientation: name the core tension (perception without resolution), introduce cognitive defusion as a concrete usable tool, and land on a closing reframe that replaces self-blame with understanding. End active, not atmospheric.",
+    "arc_summary": "A viewer who enters feeling defective exits understanding that their mind is working exactly as it was trained to — and that the path forward is not to silence thought, but to change their relationship to it."
   },
   "global_rules": {
-    "language": "neutral, precise, educational",
+    "language": "Russian",
     "voice_style": "for_voiceover",
     "avoid_repetition": true,
     "maintain_semantic_progression": true,
     "hook_density": "controlled",
-    "tone_goal": "analytical yet empathetic"
+    "tone_goal": "Analytically warm — authoritative enough to be trusted, precise enough to feel evidence-based, and human enough to feel personally relevant. No blogger warmth, no therapeutic softness, no first-person-plural inclusivity."
   },
   "blocks": [
     {
       "block_id": 1,
-      "block_name": "The Overthinking Paradox",
+      "block_name": "Парадокс на входе",
       "block_role": "hook",
-      "purpose": "Establish the central paradox: overthinking is both a sign of intelligence/empathy and a source of exhaustion. Immediately engage the audience by reframing a familiar struggle.",
-      "target_chars_min": 350,
-      "target_chars_ideal": 450,
-      "target_chars_max": 550,
+      "purpose": "Немедленно захватить внимание через парадокс: самые думающие люди — самые опустошённые. Создать мгновенное узнавание без затяжного разогрева. Задать ставки ролика до первых 30 секунд.",
+      "target_chars": 900,
       "must_cover": [
-        "Paradox of overthinking as strength and weakness",
-        "Immediate framing of stakes"
+        "Парадокс: интеллектуальная глубина и хроническая усталость как две стороны одного паттерна",
+        "Образ мысли как источника истощения — не действие, а непрекращающаяся обработка",
+        "Конкретный чувственный якорь: ночь, петля 'а вдруг', невозможность выключиться",
+        "Открытый вопрос или противоречие, которое тянет дальше"
       ],
       "must_not_cover": [
-        "Direct audience address",
-        "Casual rhetorical questions",
-        "Personal anecdotes"
+        "Определения и термины — они идут в блоке 2",
+        "Нейробиология — блок 3",
+        "Детство и происхождение паттерна — блок 4",
+        "Тёплые обращения к аудитории в стиле донора ('Вы знаете, что странно?')",
+        "Любые переходные фразы-заглушки"
       ],
       "source_mapping": {
         "A": [],
-        "B": ["Overthinking as an adaptive, not defective, trait"],
-        "C": ["Metaphors about the mind being 'always online'"],
-        "D": []
+        "B": [
+          "Overthinking as cognitive pattern that both makes someone perceptive and drains them",
+          "Core tension: high perception without resolution leads to exhaustion"
+        ],
+        "C": [
+          "The 2am 'what if' scenario as illustrative anchor",
+          "The framing of the mind as 'always online, always auditing, always drafting'"
+        ],
+        "D": [
+          "Opening hook ('You know what's strange?') — must be replaced with direct paradox entry",
+          "Extended opening warmup before paradox lands"
+        ]
       },
       "hook_expectation": {
         "opening_hook": true,
         "mid_hooks": 0,
         "open_loop": true
       },
-      "next_block_hint": "Define overthinking and introduce its scientific terminology."
+      "next_block_hint": "Перейти от личного образа к клиническому имени паттерна: 'у этого есть точное название'"
     },
     {
       "block_id": 2,
-      "block_name": "What Is Overthinking? (Maladaptive Rumination)",
-      "block_role": "setup|explanation",
-      "purpose": "Provide a precise definition of overthinking as maladaptive rumination, introduce its main features, and set up the scientific context.",
-      "target_chars_min": 400,
-      "target_chars_ideal": 500,
-      "target_chars_max": 600,
+      "block_name": "Клиническая легитимация",
+      "block_role": "setup",
+      "purpose": "Назвать паттерн точно — maladaptive rumination — и немедленно снять стигму через исследовательские данные. Установить научный авторитет ролика до того, как пойдут объяснения. Зафиксировать рефрейм: это не слабость, это высокое распознавание паттернов.",
+      "target_chars": 1000,
       "must_cover": [
-        "Definition of maladaptive rumination",
-        "Key psychological features",
-        "Scientific terminology"
+        "Клинический термин: maladaptive rumination — определение, не пересказ",
+        "Исследования Yale и University of Michigan: руминация связана с высоким pattern-recognition, не с тревожностью",
+        "Прямой рефрейм: это не дефект — это когнитивная особенность с измеримыми коррелятами",
+        "Двойственная природа паттерна как несущая идея, которая пройдёт через весь ролик"
       ],
       "must_not_cover": [
-        "Extended illustrative examples",
-        "Therapeutic solutions"
-      ],
-      "source_mapping": {
-        "A": ["Definition of maladaptive rumination"],
-        "B": [],
-        "C": ["Examples of overthinking (replaying conversations, lying awake at night)"],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 1,
-        "open_loop": false
-      },
-      "next_block_hint": "Explain the neurological mechanisms underlying overthinking."
-    },
-    {
-      "block_id": 3,
-      "block_name": "The Brain on Overthinking",
-      "block_role": "explanation|proof",
-      "purpose": "Describe the neurological basis of overthinking, focusing on the prefrontal cortex and default mode network, and cite research linking these mechanisms to pattern recognition.",
-      "target_chars_min": 500,
-      "target_chars_ideal": 600,
-      "target_chars_max": 700,
-      "must_cover": [
-        "Role of prefrontal cortex and default mode network",
-        "Research findings from Yale and University of Michigan",
-        "Link to pattern recognition"
-      ],
-      "must_not_cover": [
-        "Therapeutic approaches",
-        "Personal stories"
+        "Нейробиологические механизмы — они в блоке 3",
+        "Детские истоки — блок 4",
+        "Советы и инструменты — блоки 7–8",
+        "Личные ремарки и обращения донора"
       ],
       "source_mapping": {
         "A": [
-          "Research findings from Yale and University of Michigan",
-          "Role of prefrontal cortex and default mode network"
+          "Clinical term: maladaptive rumination",
+          "Yale and University of Michigan studies linking rumination to pattern-recognition ability, not weakness"
         ],
-        "B": [],
+        "B": [
+          "Core paradox framing: strength + burden of the same cognitive pattern"
+        ],
         "C": [],
-        "D": []
+        "D": [
+          "Transitions like 'Let's start with...' — replace with structural logic connectors"
+        ]
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 1,
-        "open_loop": false
+        "open_loop": true
       },
-      "next_block_hint": "Explore how overthinking develops as an adaptive response."
+      "next_block_hint": "После того как паттерн назван и легитимирован — спуститься внутрь: почему мозг физически не может остановиться"
+    },
+    {
+      "block_id": 3,
+      "block_name": "Нейробиология: мозг, который не выключается",
+      "block_role": "explanation",
+      "purpose": "Объяснить нейробиологический механизм как единую связанную систему: PFC + DMN + дофамин. Показать, почему 'просто перестань думать' — это нейробиологически несостоятельный совет. Превратить абстрактный опыт в конкретную механику мозга.",
+      "target_chars": 1600,
+      "must_cover": [
+        "Префронтальная кора: гиперактивность даже в состоянии покоя — планирование, анализ, саморефлексия",
+        "Default Mode Network: фоновый внутренний монолог, мозг 'онлайн' всегда",
+        "Дофамин: химическое вознаграждение за воображаемое решение проблем — петля без завершения",
+        "Почему волевое усилие ('просто остановись') нейробиологически не работает",
+        "Иллюзия прогресса: ощущение продуктивности при фактическом зацикливании"
+      ],
+      "must_not_cover": [
+        "Детские истоки — следующий блок",
+        "Два типа руминации — блок 5",
+        "Конкретные инструменты работы — блоки 7–8",
+        "Повторное введение термина maladaptive rumination — уже был в блоке 2"
+      ],
+      "source_mapping": {
+        "A": [
+          "Neurological structures named: prefrontal cortex, default mode network"
+        ],
+        "B": [
+          "Dopamine is released during imagined problem-solving, creating a chemical incentive — making 'just stop' neurologically invalid",
+          "The illusion of mental progress: thinking feels productive but is looping, not solving"
+        ],
+        "C": [
+          "The framing of the mind as 'always online, always auditing'"
+        ],
+        "D": [
+          "Dopamine paragraph — underdeveloped in source, needs concrete behavioral scenario"
+        ]
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 2,
+        "open_loop": true
+      },
+      "next_block_hint": "После нейробиологии — задать вопрос о происхождении: когда и почему мозг научился работать именно так"
     },
     {
       "block_id": 4,
-      "block_name": "Origins: Why Overthinking Develops",
-      "block_role": "setup|explanation",
-      "purpose": "Explain the developmental origins of overthinking, emphasizing its adaptive value in unpredictable or high-stakes environments.",
-      "target_chars_min": 400,
-      "target_chars_ideal": 500,
-      "target_chars_max": 600,
+      "block_name": "Детские истоки: адаптация, а не поломка",
+      "block_role": "explanation",
+      "purpose": "Показать, что хроническое обдумывание — это не врождённый дефект, а умная адаптация нервной системы к непредсказуемой среде. Это эмоционально наиболее резонирующий блок. Здесь происходит ключевой личный рефрейм для зрителя.",
+      "target_chars": 1400,
       "must_cover": [
-        "Developmental origins in childhood/adolescence",
-        "Adaptive value in unpredictable environments"
+        "Непредсказуемые детские среды: волатильность, непропорциональные последствия ошибок",
+        "Логика адаптации: молодой мозг учится предвосхищать всё, чтобы оставаться в безопасности",
+        "Рефрейм: это было умным решением нервной системы, а не дисфункцией",
+        "Паттерн сформировался в условиях, которые человек не выбирал"
       ],
       "must_not_cover": [
-        "Therapeutic solutions",
-        "Contrast between rumination types"
-      ],
-      "source_mapping": {
-        "A": [],
-        "B": ["Developmental origins in unpredictable environments"],
-        "C": ["Descriptions of childhood environments"],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 1,
-        "open_loop": false
-      },
-      "next_block_hint": "Differentiate between reflective and brooding rumination."
-    },
-    {
-      "block_id": 5,
-      "block_name": "Reflective vs. Brooding Rumination",
-      "block_role": "contrast",
-      "purpose": "Clarify the two main types of rumination, highlight their different impacts, and use contrast to re-engage the audience.",
-      "target_chars_min": 400,
-      "target_chars_ideal": 500,
-      "target_chars_max": 600,
-      "must_cover": [
-        "Distinction between reflective and brooding rumination",
-        "Impacts of each type"
-      ],
-      "must_not_cover": [
-        "Therapeutic solutions",
-        "Neurological mechanisms"
-      ],
-      "source_mapping": {
-        "A": ["Distinction between reflective and brooding rumination"],
-        "B": [],
-        "C": ["Illustrative contrasts between types of rumination"],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 1,
-        "open_loop": false
-      },
-      "next_block_hint": "Reveal why overthinking feels productive and why it persists."
-    },
-    {
-      "block_id": 6,
-      "block_name": "The Illusion of Progress: Dopamine and Loops",
-      "block_role": "turn|explanation",
-      "purpose": "Reveal the illusion of mental progress in overthinking, explain the dopamine reward mechanism, and use this as a re-hook to escalate stakes.",
-      "target_chars_min": 400,
-      "target_chars_ideal": 500,
-      "target_chars_max": 600,
-      "must_cover": [
-        "Illusion of mental progress",
-        "Dopamine's role in reinforcing overthinking"
-      ],
-      "must_not_cover": [
-        "Therapeutic solutions",
-        "Empathy research"
+        "Нейробиологические структуры — уже покрыты в блоке 3",
+        "Два типа руминации — следующий блок",
+        "Терапевтические инструменты — блоки 7–8",
+        "Личные ремарки донора, обращения 'мы все' (we all carry...)"
       ],
       "source_mapping": {
         "A": [],
         "B": [
-          "Dopamine's role in reinforcing overthinking",
-          "Illusion of mental progress"
+          "Overthinking as childhood survival adaptation in unpredictable environments"
+        ],
+        "C": [
+          "The metaphor of the nervous system being 'trained' like a system"
+        ],
+        "D": [
+          "Transition from neurological section to childhood origins — needs explicit bridge logic"
+        ]
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "После рефрейма происхождения — ввести re-hook: не всё обдумывание одинаково. Разделение на два типа"
+    },
+    {
+      "block_id": 5,
+      "block_name": "Два типа: рефлексия против пережёвывания",
+      "block_role": "contrast",
+      "purpose": "Создать чёткое, визуально ощутимое разграничение между reflective и brooding rumination. Показать, что один тип — потенциальная сила, второй — измеримый источник вреда. Перейти от абстракции к конкретным сценариям.",
+      "target_chars": 1300,
+      "must_cover": [
+        "Два клинически различимых типа: reflective (рефлексивный) и brooding (навязчивое пережёвывание)",
+        "Reflective: внутренняя обработка, эмоциональное осмысление — связь с эмоциональным интеллектом",
+        "Brooding: пассивное застревание без разрешения — нарушение сна, паралич решений, социальная тревога",
+        "Конкретные контрастные сценарии, демонстрирующие каждый тип в действии",
+        "Большинство людей осциллирует между обоими"
+      ],
+      "must_not_cover": [
+        "Дофаминовый механизм — уже в блоке 3",
+        "Детские истоки — уже в блоке 4",
+        "Исследование по эмпатии — это payoff следующего блока",
+        "Терапевтические инструменты"
+      ],
+      "source_mapping": {
+        "A": [
+          "Two types: reflective rumination vs. brooding rumination"
+        ],
+        "B": [
+          "Reflective rumination linked to emotional intelligence; brooding rumination linked to sleep disruption, decision paralysis, social anxiety"
         ],
         "C": [],
+        "D": [
+          "Two-types section — abstract in source, needs concrete scenarios"
+        ]
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 2,
+        "open_loop": true
+      },
+      "next_block_hint": "После разграничения типов — подвести к вопросу: что всё это думание говорит о человеке? Открыть петлю перед исследовательским payoff"
+    },
+    {
+      "block_id": 6,
+      "block_name": "Что это говорит о тебе: эмпатический payoff",
+      "block_role": "proof",
+      "purpose": "Предъявить кульминационный научный факт ролика: тот же механизм, что истощает, делает человека значительно более эмпатичным. Оформить как reveal, не как лекцию. Это поворотный момент — от 'что со мной не так' к 'что во мне особенного'.",
+      "target_chars": 1100,
+      "must_cover": [
+        "Исследование 2013 года, Psychological Science: высокие руминаторы значительно превосходят по когнитивной эмпатии",
+        "Прямое следствие: те же нейронные паттерны, что производят истощение, производят социальную чуткость",
+        "Рефрейм через данные: стоимость и дар — одно и то же",
+        "Tension-building перед цифрами: вопрос, который открывает петлю"
+      ],
+      "must_not_cover": [
+        "Терапевтические инструменты и советы — это финальные блоки",
+        "Повторение определения maladaptive rumination",
+        "Повторение детских истоков",
+        "Поэтические формулировки в стиле донора ('the most human thing about all of this')"
+      ],
+      "source_mapping": {
+        "A": [
+          "2013 Psychological Science study: high ruminators score significantly higher on cognitive empathy"
+        ],
+        "B": [
+          "Core tension: high perception without resolution leads to exhaustion — more thinking produces less clarity"
+        ],
+        "C": [
+          "The framing of overthinkers as those who 'notice everything and feel the weight of possibilities'"
+        ],
         "D": []
       },
       "hook_expectation": {
@@ -196,96 +245,120 @@
         "mid_hooks": 1,
         "open_loop": false
       },
-      "next_block_hint": "Present research linking overthinking to empathy and perception."
+      "next_block_hint": "После payoff — pivot: если мышление само по себе не решает проблему, что тогда меняет ситуацию? Вход в практическую часть"
     },
     {
       "block_id": 7,
-      "block_name": "Empathy, Perception, and the Overthinker",
-      "block_role": "proof|explanation",
-      "purpose": "Present research showing overthinkers' heightened empathy and social sensitivity, reinforcing the adaptive side and raising the stakes for self-understanding.",
-      "target_chars_min": 350,
-      "target_chars_ideal": 450,
-      "target_chars_max": 550,
+      "block_name": "Центральное противоречие: восприятие без разрешения",
+      "block_role": "turn",
+      "purpose": "Чётко сформулировать ключевое противоречие как точку разворота нарратива: видеть всё — и при этом не решать ничего. Не повторять ранее сказанное, а поднять ставки: почему дальнейшее думание не выход. Подготовить почву для инструмента.",
+      "target_chars": 800,
       "must_cover": [
-        "Research on rumination and cognitive empathy",
-        "Social sensitivity in overthinkers"
+        "Формулировка центрального тупика: больше мышления не даёт больше ясности",
+        "Разрыв между высоким восприятием и отсутствием завершённости как источник истощения",
+        "Тезис: некоторые вещи нельзя продумать — их нужно почувствовать, решить или отпустить",
+        "Переход-ставка: традиционные советы ('думай меньше', 'расслабься') игнорируют механику"
       ],
       "must_not_cover": [
-        "Therapeutic solutions",
-        "Personal stories"
-      ],
-      "source_mapping": {
-        "A": ["2013 Psychological Science study on rumination and cognitive empathy"],
-        "B": [],
-        "C": [],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 1,
-        "open_loop": false
-      },
-      "next_block_hint": "Introduce therapeutic approaches and the concept of cognitive diffusion."
-    },
-    {
-      "block_id": 8,
-      "block_name": "Changing the Relationship: Therapy and Cognitive Diffusion",
-      "block_role": "turn|explanation",
-      "purpose": "Introduce therapeutic approaches (especially ACT and cognitive diffusion), emphasizing changing one's relationship to thoughts rather than stopping them.",
-      "target_chars_min": 400,
-      "target_chars_ideal": 500,
-      "target_chars_max": 600,
-      "must_cover": [
-        "Acceptance and Commitment Therapy (ACT)",
-        "Cognitive diffusion",
-        "Therapeutic focus on relationship to thoughts"
-      ],
-      "must_not_cover": [
-        "Emotional or poetic generalizations",
-        "Personal anecdotes"
-      ],
-      "source_mapping": {
-        "A": ["Acceptance and Commitment Therapy (ACT) and cognitive diffusion"],
-        "B": ["Therapeutic focus on changing relationship to thoughts"],
-        "C": [],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 1,
-        "open_loop": false
-      },
-      "next_block_hint": "Reframe overthinking as an adaptation and deliver the final payoff."
-    },
-    {
-      "block_id": 9,
-      "block_name": "Reframing Overthinking: The Path Forward",
-      "block_role": "payoff|conclusion",
-      "purpose": "Deliver the final payoff: overthinking is an adaptation, not a defect. Summarize the path to healthier mental habits and reinforce the core promise.",
-      "target_chars_min": 400,
-      "target_chars_ideal": 500,
-      "target_chars_max": 600,
-      "must_cover": [
-        "Reframing overthinking as adaptation",
-        "Path to healthier mental habits",
-        "Importance of understanding cognitive patterns"
-      ],
-      "must_not_cover": [
-        "Emotional or poetic closing statements",
-        "Direct audience address"
+        "Повторное введение empathy research — уже в блоке 6",
+        "Детали нейробиологии — уже в блоке 3",
+        "Конкретный инструмент — это следующий блок",
+        "Размытые заключения в духе 'всё в нас'",
+        "Переходные фразы-заглушки донора"
       ],
       "source_mapping": {
         "A": [],
-        "B": [],
+        "B": [
+          "The core tension: high perception without resolution leads to exhaustion — more thinking produces less clarity",
+          "The therapeutic goal is not to stop thoughts, but to change relationship to them"
+        ],
         "C": [],
-        "D": []
+        "D": [
+          "Paragraph 'But perception without resolution is exhausting' — restates rather than deepens; needs new logical content"
+        ]
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Ввести конкретный инструмент как прямой ответ на озвученный тупик"
+    },
+    {
+      "block_id": 8,
+      "block_name": "Когнитивное расщепление: инструмент, а не совет",
+      "block_role": "payoff",
+      "purpose": "Предъявить технику cognitive defusion из ACT как конкретный, применимый инструмент. Показать механику на контрастном примере. Не давать общие рекомендации — дать одну чёткую операцию мышления, которую зритель может использовать.",
+      "target_chars": 1400,
+      "must_cover": [
+        "ACT: название техники — cognitive defusion",
+        "Принцип: наблюдать мысли, не сливаясь с ними — дистанция, не подавление",
+        "Конкретный контраст: 'эта ситуация опасна' → 'мой мозг сейчас генерирует опасение'",
+        "Почему это работает на уровне нейробиологии (связь с дофаминовой петлей из блока 3)",
+        "Разграничение: цель не тишина, а изменение отношения к мысли"
+      ],
+      "must_not_cover": [
+        "Общие советы по снижению тревоги не из ACT-фрейма",
+        "Повторение исследований — уже использованы",
+        "Тёплые закрывающие фразы донора ('и, возможно, это самое человеческое')",
+        "Переход к новым идеям — этот блок завершает практическую часть"
+      ],
+      "source_mapping": {
+        "A": [
+          "ACT technique name: cognitive defusion"
+        ],
+        "B": [
+          "The therapeutic goal is not to stop thoughts, but to change relationship to them (distance, not suppression)"
+        ],
+        "C": [
+          "The shift example: 'this situation is dangerous' → 'my brain is generating a concern right now'"
+        ],
+        "D": [
+          "Cognitive defusion lands weakly in source — needs contrast or demonstration to strengthen"
+        ]
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 1,
         "open_loop": false
       },
-      "next_block_hint": "End of script."
+      "next_block_hint": "После инструмента — финальная переоценка: чем является этот паттерн теперь, когда зритель понимает его природу"
+    },
+    {
+      "block_id": 9,
+      "block_name": "Финальный рефрейм: безопасность, а не тишина",
+      "block_role": "conclusion",
+      "purpose": "Завершить нарратив активным рефреймом, а не атмосферным угасанием. Дать зрителю переоценку: паттерн был выучен в условиях, которые он не выбирал. Понимание этого меняет не только мышление о себе, но и отношение к самому мышлению.",
+      "target_chars": 500,
+      "must_cover": [
+        "Рефрейм: overthinking — выученный ответ на условия, которые человек не выбирал",
+        "Понимание механики снижает власть паттерна над поведением",
+        "Цель: не остановить мышление, а научить ум, что он достаточно в безопасности, чтобы отдыхать",
+        "Финальная фраза — конкретная, активная, не размытая"
+      ],
+      "must_not_cover": [
+        "Введение новых идей или исследований",
+        "Повторение техники defusion — уже в блоке 8",
+        "Soft, meandering close ('we all carry...', 'most human thing')",
+        "Первое лицо множественного числа в стиле терапевтического обращения"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "The therapeutic goal is not to stop thoughts, but to change relationship to them"
+        ],
+        "C": [],
+        "D": [
+          "Closing paragraph — vague and meandering, needs compression and stronger landing",
+          "The phrase 'and maybe, that's the most human thing about all of this' — must be replaced"
+        ]
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 0,
+        "open_loop": false
+      },
+      "next_block_hint": "Нет следующего блока — это финал"
     }
   ]
 }

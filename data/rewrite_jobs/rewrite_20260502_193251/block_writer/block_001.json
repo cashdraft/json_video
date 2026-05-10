@@ -1,15 +1,15 @@
 {
   "block_index": 1,
-  "block_name": "The Overthinking Paradox",
-  "target_chars_min": 350,
-  "target_chars_ideal": 450,
-  "target_chars_max": 550,
-  "actual_chars": 950,
+  "block_name": "Парадокс на входе",
+  "target_chars_min": 720,
+  "target_chars_ideal": 900,
+  "target_chars_max": 1080,
+  "actual_chars": 1049,
   "short_summary": [
-    "Overthinking is both a strength and a weakness",
-    "It’s linked to high perception and empathy",
-    "The same traits that help also exhaust",
-    "Overthinking is an adaptation, not a flaw"
+    "Парадокс: глубокое мышление и хроническое истощение — одно и то же явление",
+    "Образ: ночная петля 'а вдруг' как чувственный якорь паттерна",
+    "Истощение идёт не от действий, а от непрекращающейся обработки информации",
+    "Открытый вопрос: почему так происходит и можно ли это изменить — ведёт в блок 2"
   ],
-  "block_text": "There’s a strange tension inside the mind that overthinks. On one side, it’s a mind that notices everything. It picks up on small changes in someone’s tone, remembers details others forget, and runs through every possible outcome before most people have even reacted. This isn’t a flaw. It’s a sign of a brain that’s highly tuned to its surroundings—a mind built for pattern recognition, for empathy, for seeing what others miss. But the same mind that can spot danger before it arrives, or sense what someone else is feeling without a word, is also the mind that can’t switch off. It replays conversations late at night. It imagines problems that haven’t happened yet. It tries to solve everything, all at once, until the simplest decision feels exhausting. This is the paradox: the very thing that makes a person perceptive, thoughtful, and aware is also what drains them. Overthinking isn’t a defect. It’s an adaptation. But it comes with a cost—a mind that’s always online, always searching, never quite at rest. And for many, this is the invisible struggle behind every interaction, every choice, every quiet moment."
+  "block_text": "Чем умнее человек — тем чаще он не может просто лечь и уснуть.\n\nНе потому что у него проблемы. Не потому что что-то случилось. А потому что голова не выключается. Она анализирует то, что уже произошло. Прокручивает то, что ещё не случилось. Строит сценарии, проверяет их, отбрасывает — и строит снова.\n\nДва часа ночи. Завтра рано вставать. Но мозг уже где-то в разговоре, который был три дня назад — и думает: а вдруг я сказал не то? А вдруг они поняли иначе? А вдруг это изменит что-то, что я пока не вижу?\n\nЭта петля не останавливается сама. Она останавливается только от усталости — но даже усталость не даёт покоя, потому что мозг начинает думать о том, почему он такой уставший.\n\nВот в чём парадокс.\n\nСамые наблюдательные люди — самые истощённые. Те, кто видит больше, чувствует тоньше, замечает то, что другие пропускают — платят за это хронической внутренней нагрузкой. Не от действий. От мышления. Голова работает как система, которую никто не научил выключаться.\n\nИ вопрос не в том, слабость это или сила. Вопрос в том — почему так происходит. И можно ли это вообще изменить."
 }

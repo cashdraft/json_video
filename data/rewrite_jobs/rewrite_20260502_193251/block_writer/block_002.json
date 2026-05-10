@@ -1,14 +1,15 @@
 {
   "block_index": 2,
-  "block_name": "What Is Overthinking? (Maladaptive Rumination)",
-  "target_chars_min": 400,
-  "target_chars_ideal": 500,
-  "target_chars_max": 600,
-  "actual_chars": 888,
+  "block_name": "Клиническая легитимация",
+  "target_chars_min": 800,
+  "target_chars_ideal": 1000,
+  "target_chars_max": 1200,
+  "actual_chars": 1312,
   "short_summary": [
-    "Maladaptive rumination is repetitive, passive, and negative",
-    "It involves mental loops without resolution",
-    "Linked to brain networks for self-reflection and emotion"
+    "Введён клинический термин: maladaptive rumination — навязчивое обдумывание без выхода к решению",
+    "Исследования Yale и Michigan: руминация связана с высоким pattern-recognition, а не с тревожностью",
+    "Центральный рефрейм зафиксирован: это не слабость, а когнитивная особенность с двойственной природой",
+    "Открытый вопрос в финале: почему мозг не может остановиться — ведёт в блок 3 (нейробиология)"
   ],
-  "block_text": "Overthinking isn’t just thinking a lot. In psychology, it’s called maladaptive rumination. This means getting stuck in a loop of thoughts that don’t lead anywhere useful. You replay the same worries, doubts, or regrets over and over. It feels like you’re searching for answers, but you never find relief. \n\nMaladaptive rumination has a few key features. First, it’s repetitive. The same thoughts circle back, again and again. Second, it’s passive. You’re not solving a problem—you’re just turning it over in your mind. Third, it’s negative. The focus is usually on what went wrong, what could go wrong, or what you wish you’d done differently. \n\nScientifically, this pattern is linked to increased activity in certain brain networks, especially those involved in self-reflection and emotional processing. Researchers use terms like “perseverative cognition” to describe this mental stuckness. It’s not just being thoughtful or careful. It’s a mental habit that can drain your energy and mood, even when nothing is actually happening around you."
+  "block_text": "У этого есть название. Maladaptive rumination — дезадаптивная руминация. Это не бытовое слово и не метафора. Это клинический термин, который описывает конкретный когнитивный процесс: навязчивое, повторяющееся обдумывание событий, которое не приводит к решению и не прекращается само по себе.\n\nИ вот здесь начинается самое важное.\n\nИсследователи из Йельского университета и Университета Мичигана изучали людей с выраженной руминацией — и обнаружили кое-что неожиданное. Эти люди не отличались повышенной тревожностью как таковой. Они отличались чем-то другим: аномально высокой способностью к распознаванию паттернов. Их мозг буквально лучше видит связи, структуры, скрытые закономерности — там, где большинство людей видят просто набор событий.\n\nЭто не дефект. Это измеримая когнитивная особенность с конкретными коррелятами.\n\nПроблема не в том, что такой мозг работает плохо. Проблема в том, что он работает слишком хорошо — и не знает, когда остановиться.\n\nВот в чём парадокс, который пройдёт через весь этот разбор: одна и та же способность, которая делает человека глубоким и точным — одновременно превращает его голову в машину, которая не выключается. Сила и груз — не два разных явления. Это одно и то же явление, смотрящее в разные стороны.\n\nИ если это так — возникает вопрос: почему мозг физически не может остановить этот процесс, даже когда сам человек этого хочет?"
 }

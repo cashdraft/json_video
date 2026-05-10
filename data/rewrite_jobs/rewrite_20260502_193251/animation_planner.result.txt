@@ -16,13 +16,13 @@
 {"text":"People who notice a lot, who are tuned in to others, often say they feel drained—even though they spend most of their time in their own heads."}
 {"text_ru":"Люди, которые много замечают и чутко относятся к другим, часто говорят, что чувствуют себя опустошёнными — даже если большую часть времени проводят в своих мыслях."}
 {"animation":{
-  "visual_modes":["kinetic_typography","arrows","shapes","people_silhouettes"],
-  "motion_styles":["slide","highlight_sweep","focus_shift"],
+  "visual_modes":["kinetic_typography","text","emoji"],
+  "motion_styles":["slide","pop","word_by_word"],
   "score":8,
-  "screen":"Несколько силуэтов людей, один выделен цветом и стрелкой, вокруг него всплывают слова 'drained', 'tuned in', 'in their own heads'.",
-  "motion":"Силуэты появляются слева направо, выделенный человек подсвечивается, стрелка указывает на него, ключевые слова всплывают и подсвечиваются поочередно.",
-  "focus":"Показать контраст между внимательным человеком и остальными, визуализировать внутреннее состояние.",
-  "mood":"быстро, акцентно, с фокусом на внутреннем напряжении"
+  "screen":"Крупные слова «notice a lot», «tuned in», «drained», «own heads» появляются поочередно, сопровождаясь подходящими emoji (глаз, ухо, батарейка, голова).",
+  "motion":"Фразы въезжают и появляются с pop-эффектом, ключевые слова выделяются word_by_word, emoji всплывают рядом с текстом.",
+  "focus":"Показать внутренний конфликт между внимательностью к другим и усталостью.",
+  "mood":"быстро, энергично, с акцентом на контраст"
 }}
 
 {"scene_id":"scene_003_1"}
@@ -36,41 +36,41 @@
 {"text":"The tiredness doesn’t come from outside. It comes from the mind itself."}
 {"text_ru":"Усталость приходит не извне. Она исходит из самого разума."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","arrows"],
-  "motion_styles":["slide","arrow_draw","glow_pulse"],
+  "visual_modes":["kinetic_typography","text"],
+  "motion_styles":["fade","slide","highlight_sweep"],
   "score":8,
-  "screen":"Слева появляется слово 'outside' с перечёркнутой стрелкой, справа — голова с закрученными линиями внутри.",
-  "motion":"Слово 'outside' въезжает и перечёркивается стрелкой, затем камера смещается к голове, внутри которой линии начинают пульсировать.",
+  "screen":"Фраза разбита на две части: «The tiredness doesn’t come from outside.» и «It comes from the mind itself.» Первая часть появляется слева, вторая — справа.",
+  "motion":"Первая часть плавно появляется слева, затем вторая часть въезжает справа. Highlight-свеча проходит по словам «outside» и «mind itself».",
   "focus":"Контраст между внешним и внутренним источником усталости.",
-  "mood":"динамично, с акцентом на внутреннем напряжении"
+  "mood":"чётко, с акцентом на противопоставление"
 }}
 
-{"scene_id":"scene_004_1"}
+{"scene_id":"scene_004"}
 {"text":"Always working. Always circling."}
 {"text_ru":"Постоянно работает. Постоянно кружится."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: внутри головы круговые стрелки, символизирующие непрерывную работу разума, прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Стрелки внутри головы медленно вращаются по кругу, подчеркивая бесконечный процесс."}}
 
-{"scene_id":"scene_004_2"}
-{"text":"Always working. Always circling."}
-{"text_ru":"Постоянно работает. Постоянно кружится."}
-{"animation":{
-  "visual_modes":["kinetic_typography","arrows","shapes"],
-  "motion_styles":["loop_motion","rotation","highlight_sweep"],
-  "score":7,
-  "screen":"Крупный текст 'Always working.' — стрелка по кругу внутри головы, затем смена на 'Always circling.'",
-  "motion":"Текст появляется поочередно, стрелка внутри головы крутится по кругу в бесконечном цикле, слова подсвечиваются.",
-  "focus":"Визуализировать бесконечную работу разума.",
-  "mood":"циклично, монотонно, с акцентом на повторяемость"
-}}
-
-{"scene_id":"scene_005"}
+{"scene_id":"scene_005_1"}
 {"text":"These are the people who pick up on every small change, sense every shift in mood, and replay conversations long after they’re over."}
 {"text_ru":"Это те люди, которые замечают каждое малейшее изменение, чувствуют каждое изменение настроения и прокручивают разговоры задним числом, даже после их окончания."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: человек с внимательным взглядом, вокруг головы маленькие значки — стрелки, облака, лица с разными эмоциями, прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Значки вокруг головы слегка двигаются: стрелки указывают на перемены, лица меняют выражения, облака появляются и исчезают."}}
+
+{"scene_id":"scene_005_2"}
+{"text":"These are the people who pick up on every small change, sense every shift in mood, and replay conversations long after they’re over."}
+{"text_ru":"Это те люди, которые замечают каждое малейшее изменение, чувствуют каждое изменение настроения и прокручивают разговоры задним числом, даже после их окончания."}
+{"animation":{
+  "visual_modes":["lists","text","emoji"],
+  "motion_styles":["pop","slide","highlight_sweep"],
+  "score":8,
+  "screen":"Три пункта списка: «small change», «shift in mood», «replay conversations» — каждый с соответствующим emoji (стрелка, лицо, облако).",
+  "motion":"Пункты появляются по одному с pop-эффектом, ключевые слова выделяются highlight_sweep, emoji всплывают рядом.",
+  "focus":"Показать внимательность к деталям и внутреннюю работу ума.",
+  "mood":"быстро, структурировано, с акцентом на детали"
+}}
 
 {"scene_id":"scene_006"}
 {"text":"Their reactions aren’t quick or impulsive."}
@@ -97,13 +97,13 @@
 {"text":"They try to predict what might happen and weigh different outcomes."}
 {"text_ru":"Они пытаются предсказать, что может произойти, и взвешивают разные варианты развития событий."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","icons","comparisons"],
-  "motion_styles":["comparison_motion","scale","highlight_sweep"],
-  "score":8,
-  "screen":"В центре экрана весы: на одной чаше — знак вопроса, на другой — восклицательный знак. Над каждой чашей появляется короткий текст.",
-  "motion":"Чаши весов поочередно опускаются и поднимаются, текст над ними появляется с эффектом pop, ключевые слова подсвечиваются.",
-  "focus":"Визуализировать процесс взвешивания разных исходов.",
-  "mood":"быстро, чётко, с акцентом на выборе"
+  "visual_modes":["text","emoji"],
+  "motion_styles":["slide","pop","scale"],
+  "score":7,
+  "screen":"Фраза разбита на две части: «predict what might happen» (с emoji вопроса) и «weigh different outcomes» (с emoji весов).",
+  "motion":"Первая часть въезжает слева, вторая — справа, emoji появляются с pop-эффектом, слова слегка увеличиваются при акценте.",
+  "focus":"Показать процесс предсказания и взвешивания вариантов.",
+  "mood":"динамично, с акцентом на размышление"
 }}
 
 {"scene_id":"scene_009"}
@@ -124,13 +124,13 @@
 {"text":"This creates a kind of paradox."}
 {"text_ru":"Это создаёт своего рода парадокс."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","abstract_fx"],
-  "motion_styles":["rotation","glow_pulse","text_scramble"],
+  "visual_modes":["kinetic_typography","text"],
+  "motion_styles":["text_scramble","pop","rotation"],
   "score":7,
-  "screen":"Крупный текст 'paradox' появляется на фоне вращающегося знака бесконечности внутри головы.",
-  "motion":"Слово 'paradox' собирается из разбросанных букв (scramble), знак бесконечности вращается и пульсирует светом.",
-  "focus":"Визуализировать ощущение парадокса и бесконечного цикла.",
-  "mood":"странно, загадочно, с лёгким сюрреализмом"
+  "screen":"Крупное слово «paradox» появляется в центре, буквы сначала перемешаны, затем собираются в правильном порядке.",
+  "motion":"Сначала текст собирается из хаоса (text_scramble), затем появляется с pop-эффектом, слово слегка вращается.",
+  "focus":"Визуализировать ощущение парадокса и внутреннего противоречия.",
+  "mood":"энергично, с элементом неожиданности"
 }}
 
 {"scene_id":"scene_011"}
@@ -140,12 +140,25 @@
 {"end":{"prompt":null}}
 {"video":{"prompt":"Знак плюс над головой появляется и слегка светится, подчеркивая положительный смысл."}}
 
-{"scene_id":"scene_012"}
+{"scene_id":"scene_012_1"}
 {"text":"In fact, it often means someone is smart and empathetic. The same things that help them understand others also make them more likely to get mentally tired."}
 {"text_ru":"На самом деле это часто означает, что человек умен и эмпатичен. То, что помогает им понимать других, также делает их более склонными к умственной усталости."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: человек с добрым взглядом, вокруг головы маленькие значки — лампочка (ум), сердце (эмпатия), прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Лампочка и сердце вокруг головы поочередно загораются, затем тускнеют, символизируя ум и эмпатию, а также усталость."}}
+
+{"scene_id":"scene_012_2"}
+{"text":"In fact, it often means someone is smart and empathetic. The same things that help them understand others also make them more likely to get mentally tired."}
+{"text_ru":"На самом деле это часто означает, что человек умен и эмпатичен. То, что помогает им понимать других, также делает их более склонными к умственной усталости."}
+{"animation":{
+  "visual_modes":["lists","text","emoji"],
+  "motion_styles":["pop","fade","highlight_sweep"],
+  "score":7,
+  "screen":"Два пункта: «smart» (emoji лампочка), «empathetic» (emoji сердце), затем появляется фраза о ментальной усталости.",
+  "motion":"Пункты появляются с pop-эффектом, ключевые слова выделяются highlight_sweep, финальная фраза плавно появляется и слегка тускнеет.",
+  "focus":"Показать двойственность: достоинства и их цена.",
+  "mood":"быстро, с акцентом на смысл"
+}}
 
 {"scene_id":"scene_013_1"}
 {"text":"The cost isn’t obvious. It doesn’t look like stress or burnout. It’s more subtle—a slow, steady drain. Over time, even simple decisions can start to feel heavy."}
@@ -158,13 +171,13 @@
 {"text":"The cost isn’t obvious. It doesn’t look like stress or burnout. It’s more subtle—a slow, steady drain. Over time, even simple decisions can start to feel heavy."}
 {"text_ru":"Цена этого неочевидна. Это не выглядит как стресс или выгорание. Это более тонко — медленный, постоянный отток сил. Со временем даже простые решения начинают казаться тяжёлыми."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","icons"],
-  "motion_styles":["fade","slow_drift","highlight_sweep"],
+  "visual_modes":["kinetic_typography","text"],
+  "motion_styles":["fade","line_reveal","scale"],
   "score":8,
-  "screen":"Крупный текст 'not obvious' постепенно исчезает, появляется капля, которая медленно стекает вниз, затем появляется слово 'drain'.",
-  "motion":"Текст растворяется, капля медленно движется вниз, слово 'drain' появляется с эффектом fade, ключевые слова подсвечиваются.",
-  "focus":"Показать незаметность и постепенность внутренней усталости.",
-  "mood":"медленно, тягуче, с акцентом на скрытую тяжесть"
+  "screen":"Ключевые фразы («not obvious», «not stress», «slow drain», «feel heavy») появляются поочередно, каждая с разным акцентом.",
+  "motion":"Фразы появляются с fade и line_reveal, слова «drain» и «heavy» увеличиваются для акцента.",
+  "focus":"Передать постепенность и незаметность внутренней усталости.",
+  "mood":"быстро, но с ощущением нарастающей тяжести"
 }}
 
 {"scene_id":"scene_014"}
@@ -185,13 +198,13 @@
 {"text":"People often think exhaustion comes from doing too much or from outside pressure."}
 {"text_ru":"Люди часто думают, что усталость возникает из-за того, что они делают слишком много или из-за внешнего давления."}
 {"animation":{
-  "visual_modes":["kinetic_typography","arrows","shapes"],
-  "motion_styles":["arrow_draw","shake_impact","highlight_sweep"],
-  "score":7,
-  "screen":"В центре человек, на него со всех сторон направлены стрелки с подписями 'too much', 'outside pressure'.",
-  "motion":"Стрелки быстро прорисовываются и слегка дрожат, текст появляется с эффектом highlight, человек в центре слегка сжимается под давлением.",
-  "focus":"Визуализировать внешнее давление и ошибочное представление о причинах усталости.",
-  "mood":"динамично, с акцентом на давлении"
+  "visual_modes":["kinetic_typography","arrows","text"],
+  "motion_styles":["slide","pop","scale"],
+  "score":8,
+  "screen":"Фраза разбита: «doing too much» и «outside pressure» появляются поочередно, вокруг них появляются стрелки.",
+  "motion":"Текст въезжает с двух сторон, стрелки появляются с pop-эффектом и слегка увеличиваются, усиливая давление.",
+  "focus":"Показать ошибочное представление о причинах усталости.",
+  "mood":"динамично, с акцентом на внешние факторы"
 }}
 
 {"scene_id":"scene_016_1"}
@@ -205,13 +218,13 @@
 {"text":"But for many, the real weight is inside: thoughts that don’t stop, a mind that’s always on, always looking for meaning, always preparing for what might come next."}
 {"text_ru":"Но для многих настоящий груз внутри: мысли, которые не останавливаются, ум, который всегда включен, всегда ищет смысл, всегда готовится к тому, что может произойти дальше."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","abstract_fx"],
-  "motion_styles":["text_scramble","loop_motion","glow_pulse"],
+  "visual_modes":["lists","text"],
+  "motion_styles":["slide","fade","typewriter"],
   "score":8,
-  "screen":"Голова, внутри которой хаотично движутся линии и слова: 'thoughts', 'always on', 'meaning', 'preparing'.",
-  "motion":"Слова появляются внутри головы с эффектом scramble, линии двигаются по кругу, отдельные слова подсвечиваются пульсацией.",
-  "focus":"Показать внутренний нескончаемый поток мыслей.",
-  "mood":"интенсивно, с ощущением перегруженности"
+  "screen":"Список из четырёх пунктов: «thoughts that don’t stop», «mind always on», «looking for meaning», «preparing for what’s next».",
+  "motion":"Пункты появляются поочередно с эффектом typewriter и fade, каждый въезжает с небольшой задержкой.",
+  "focus":"Показать внутреннюю активность и постоянную работу ума.",
+  "mood":"быстро, с нарастающим ощущением перегруженности"
 }}
 
 {"scene_id":"scene_017"}
@@ -239,13 +252,13 @@
 {"text":"This is the hidden cost of overthinking."}
 {"text_ru":"Это скрытая цена чрезмерного обдумывания."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","comparisons"],
-  "motion_styles":["comparison_motion","scale","highlight_sweep"],
-  "score":8,
-  "screen":"Весы: на одной чаше мозг, на другой — слово 'cost'. Крупный текст 'hidden cost' появляется сверху.",
-  "motion":"Чаша с мозгом медленно опускается, слово 'cost' подсвечивается, текст 'hidden cost' появляется с эффектом highlight.",
-  "focus":"Визуализировать идею скрытой цены чрезмерного мышления.",
-  "mood":"чётко, с акцентом на балансе и тяжести"
+  "visual_modes":["kinetic_typography","text"],
+  "motion_styles":["pop","scale","fade"],
+  "score":7,
+  "screen":"Крупная фраза «hidden cost» появляется в центре, затем слово «overthinking» появляется снизу меньшим размером.",
+  "motion":"Фраза появляется с pop-эффектом, «hidden cost» увеличивается, затем fade-эффект на «overthinking».",
+  "focus":"Сделать акцент на цене и скрытости процесса.",
+  "mood":"резко, с ощущением важности"
 }}
 
 {"scene_id":"scene_020"}
@@ -255,25 +268,12 @@
 {"end":{"prompt":null}}
 {"video":{"prompt":"Камера медленно отъезжает, показывая, что таких людей много, облака мыслей слегка движутся."}}
 
-{"scene_id":"scene_021_1"}
+{"scene_id":"scene_021"}
 {"text":"Psychologists call this pattern “maladaptive rumination.”"}
 {"text_ru":"Психологи называют этот шаблон «дезадаптивной руминацией»."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Крупный план: на прозрачном фоне карандашный набросок силуэта головы человека, внутри которой закрученная спираль, символизирующая мысли. Минимум деталей, черный цвет."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Легкое мерцание спирали внутри головы, чтобы подчеркнуть внутреннее движение мыслей."}}
-
-{"scene_id":"scene_021_2"}
-{"text":"Psychologists call this pattern “maladaptive rumination.”"}
-{"text_ru":"Психологи называют этот шаблон «дезадаптивной руминацией»."}
-{"animation":{
-  "visual_modes":["text","kinetic_typography","shapes"],
-  "motion_styles":["pop","slide","glow_pulse"],
-  "score":8,
-  "screen":"На экране крупно появляется фраза «maladaptive rumination» в центре, вокруг — закрученная спираль как графический элемент.",
-  "motion":"Текст появляется с pop-эффектом, спираль быстро прорисовывается и пульсирует легким свечением.",
-  "focus":"Выделить термин и его необычность, визуально связать с образом спирали.",
-  "mood":"научно, современно, акцентно"
-}}
 
 {"scene_id":"scene_022_1"}
 {"text":"It’s not just thinking a lot. It’s going over the same worries, doubts, or regrets again and again."}
@@ -286,81 +286,55 @@
 {"text":"It’s not just thinking a lot. It’s going over the same worries, doubts, or regrets again and again."}
 {"text_ru":"Это не просто много думать. Это снова и снова прокручивать одни и те же тревоги, сомнения или сожаления."}
 {"animation":{
-  "visual_modes":["kinetic_typography","shapes","arrows"],
-  "motion_styles":["loop_motion","slide","highlight_sweep"],
+  "visual_modes":["kinetic_typography","text","emoji"],
+  "motion_styles":["slide","pop","word_by_word","highlight_sweep"],
   "score":9,
-  "screen":"Фраза разбита на две части: слева — «not just thinking a lot», справа — «again and again», между ними петля или круговая стрелка.",
-  "motion":"Текст появляется по частям, стрелка или петля анимируется по кругу, слова «again and again» подсвечиваются по кругу.",
+  "screen":"Крупные слова «worries», «doubts», «regrets» появляются по очереди, повторяются, вокруг — стрелки по кругу и небольшие emoji (😟, 🤔, 😞).",
+  "motion":"Фразы появляются по словам, затем слова повторяются по кругу с эффектом slide, отдельные слова подсвечиваются highlight_sweep.",
   "focus":"Показать зацикленность и повторяемость мыслей.",
-  "mood":"быстро, навязчиво, визуально понятно"
+  "mood":"быстро, навязчиво, акцентно"
 }}
 
-{"scene_id":"scene_023_1"}
+{"scene_id":"scene_023"}
 {"text":"Someone might replay a conversation from last week, analyzing every word."}
 {"text_ru":"Кто-то может прокручивать в голове разговор прошлой недели, анализируя каждое слово."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: силуэт человека, над головой облако мыслей с фрагментами диалога, отдельные слова выделены. Минимум элементов, прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Слова в облаке мыслей поочередно подсвечиваются, как будто человек анализирует каждое из них."}}
 
-{"scene_id":"scene_023_2"}
-{"text":"Someone might replay a conversation from last week, analyzing every word."}
-{"text_ru":"Кто-то может прокручивать в голове разговор прошлой недели, анализируя каждое слово."}
-{"animation":{
-  "visual_modes":["text","quotes","shapes"],
-  "motion_styles":["highlight_sweep","slide","focus_shift"],
-  "score":8,
-  "screen":"На экране облако с фрагментами диалога, отдельные слова выделяются по очереди.",
-  "motion":"Слова появляются по одному, каждое подсвечивается sweep-эффектом, камера смещает фокус с одного слова на другое.",
-  "focus":"Показать анализ каждого слова и внутренний диалог.",
-  "mood":"вдумчиво, быстро, с акцентами"
-}}
-
-{"scene_id":"scene_024_1"}
+{"scene_id":"scene_024"}
 {"text":"Or imagine every possible problem that could come up tomorrow."}
 {"text_ru":"Или представлять себе все возможные проблемы, которые могут возникнуть завтра."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: силуэт головы, из которой выходят маленькие облачка с иконками проблем (например, знак вопроса, молния, часы). Минимализм, прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Облачка с иконками проблем появляются одно за другим вокруг головы."}}
 
-{"scene_id":"scene_024_2"}
-{"text":"Or imagine every possible problem that could come up tomorrow."}
-{"text_ru":"Или представлять себе все возможные проблемы, которые могут возникнуть завтра."}
-{"animation":{
-  "visual_modes":["icons","emoji","shapes"],
-  "motion_styles":["pop","slide","particle_burst"],
-  "score":8,
-  "screen":"Вокруг головы появляются облачка с иконками проблем: вопрос, молния, часы и др.",
-  "motion":"Облачка и иконки появляются с pop-эффектом одно за другим, легкий particle burst при появлении каждого.",
-  "focus":"Показать разнообразие и количество тревожных мыслей.",
-  "mood":"быстро, тревожно, визуально насыщенно"
-}}
-
-{"scene_id":"scene_025"}
+{"scene_id":"scene_025_1"}
 {"text":"It feels like searching for answers, but it rarely brings relief."}
 {"text_ru":"Это ощущается как поиск ответов, но редко приносит облегчение."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: человек с лупой, ищущий что-то внутри своей головы, но внутри пустота или запутанные линии. Минимум деталей, прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Лупа медленно двигается по голове, но ничего не находит, линии внутри головы слегка колышутся."}}
 
-{"scene_id":"scene_026_1"}
+{"scene_id":"scene_025_2"}
+{"text":"It feels like searching for answers, but it rarely brings relief."}
+{"text_ru":"Это ощущается как поиск ответов, но редко приносит облегчение."}
+{"animation":{
+  "visual_modes":["kinetic_typography","text","emoji"],
+  "motion_styles":["typewriter","fade","pop"],
+  "score":8,
+  "screen":"Фраза разбита на две части: «searching for answers» и «rarely brings relief», между ними — emoji 🔍 и 😕.",
+  "motion":"Первая часть появляется эффектом typewriter, затем быстро fade появляется вторая часть с emoji, слово «relief» появляется с pop, но сразу тускнеет.",
+  "focus":"Контраст между поиском и отсутствием результата.",
+  "mood":"быстро, с акцентом на разочарование"
+}}
+
+{"scene_id":"scene_026"}
 {"text":"This isn’t rare. Studies show almost everyone ruminates sometimes."}
 {"text_ru":"Это не редкость. Исследования показывают, что почти все иногда склонны к руминации."}
 {"start":{"prompt":"Бери нашего героя, если указан человек Карандашный набросок: группа разных людей, у каждого над головой небольшое облако мыслей. Минимализм, прозрачный фон."}}
 {"end":{"prompt":null}}
 {"video":{"prompt":"Облака мыслей появляются поочередно над головами людей, подчеркивая распространенность явления."}}
-
-{"scene_id":"scene_026_2"}
-{"text":"This isn’t rare. Studies show almost everyone ruminates sometimes."}
-{"text_ru":"Это не редкость. Исследования показывают, что почти все иногда склонны к руминации."}
-{"animation":{
-  "visual_modes":["numbers","text","people_silhouettes","shapes"],
-  "motion_styles":["counter","pop","slide"],
-  "score":7,
-  "screen":"Появляется число «почти все» (например, 90%), под ним — силуэты людей, над каждым облако мыслей.",
-  "motion":"Силуэты появляются по одному, облака pop-эффектом, число увеличивается counter-анимацией.",
-  "focus":"Показать массовость явления и статистику.",
-  "mood":"научно, быстро, массово"
-}}
 
 {"scene_id":"scene_027_1"}
 {"text":"But for about 20% of people, it becomes a regular pattern."}
@@ -373,13 +347,13 @@
 {"text":"But for about 20% of people, it becomes a regular pattern."}
 {"text_ru":"Но примерно у 20% людей это становится регулярной привычкой."}
 {"animation":{
-  "visual_modes":["numbers","people_silhouettes","shapes"],
-  "motion_styles":["counter","highlight_sweep","comparison_motion"],
-  "score":8,
-  "screen":"Толпа силуэтов, у 20% облака мыслей становятся больше и темнее, появляется число 20%.",
-  "motion":"Облака у части людей увеличиваются и темнеют с sweep-эффектом, число 20% появляется с counter-анимацией.",
-  "focus":"Визуально выделить меньшинство с проблемой.",
-  "mood":"контрастно, быстро, акцентировано"
+  "visual_modes":["numbers","text","kinetic_typography"],
+  "motion_styles":["counter","scale","pop"],
+  "score":9,
+  "screen":"Крупная цифра «20%» появляется, рядом — слово «people», затем слово «regular pattern» выделяется.",
+  "motion":"Сначала быстро растёт счётчик до 20%, затем слова появляются с pop и scale, «regular pattern» выделяется увеличением.",
+  "focus":"Подчеркнуть значимость и частоту явления.",
+  "mood":"динамично, акцентно, быстро"
 }}
 
 {"scene_id":"scene_028_1"}
@@ -393,11 +367,11 @@
 {"text":"That matters. Maladaptive rumination is linked to higher rates of anxiety, depression, and even physical health problems."}
 {"text_ru":"Это важно. Дезадаптивная руминация связана с более высоким уровнем тревожности, депрессии и даже физическими проблемами со здоровьем."}
 {"animation":{
-  "visual_modes":["text","icons","emoji","shapes"],
-  "motion_styles":["pop","slide","shake_impact"],
+  "visual_modes":["text","kinetic_typography","emoji","numbers"],
+  "motion_styles":["pop","fade","highlight_sweep"],
   "score":8,
-  "screen":"В центре — темное облако мыслей, вокруг появляются иконки тревоги, депрессии, здоровья.",
-  "motion":"Иконки появляются с pop-эффектом, облако слегка дрожит (shake_impact), текст появляется снизу.",
-  "focus":"Показать негативные последствия руминации.",
-  "mood":"серьёзно, тревожно, быстро"
+  "screen":"Фраза разбита на части: «anxiety», «depression», «physical health problems» появляются по очереди, рядом — emoji 😰, 😔, 🩺, цифры растут.",
+  "motion":"Каждая проблема появляется с pop и fade, слова подсвечиваются highlight_sweep, цифры быстро увеличиваются рядом.",
+  "focus":"Показать серьёзность и последствия руминации.",
+  "mood":"быстро, тревожно, акцентно"
 }}

@@ -29,6 +29,7 @@ import zipfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from collections.abc import Iterator
 from typing import Any, Callable
 from urllib.parse import urlparse
 
@@ -133,6 +134,16 @@ from rewrite_templates import (
     load_rewrite_template,
     save_rewrite_template_to_disk,
 )
+from claude_kie import strip_markdown_code_fence
+from task_manager import (
+    cancel_task as _tm_cancel_task,
+    get_active_task as _tm_get_active_task,
+    get_task_meta as _tm_get_task_meta,
+    list_active_tasks_for_project as _tm_list_active_tasks_for_project,
+    mark_orphan_running_as_interrupted as _tm_mark_orphan_running_as_interrupted,
+    start_task as _tm_start_task,
+    subscribe_events as _tm_subscribe_events,
+)
 
 # --- Paths ---
 JOBS_DIR = BASE_DIR / "data" / "jobs"
@@ -199,18 +210,19 @@ def load_style_pack_for_template(template_name: str) -> tuple[dict | None, str]:
         return None, raw
 
 
+_ANIM_INTERNAL_KEYS = {"end_agent", "video_render"}
+
+
 def _scene_payload_for_anim_agent(scene: dict[str, Any]) -> dict[str, Any]:
-    """Минимальный JSON сцены для Animation Designer агента — text/text_ru + animation."""
+    """Минимальный JSON сцены для Animation Designer агента — только scene_id + animation (без внутренних полей)."""
     out: dict[str, Any] = {
         "scene_id": str(scene.get("scene_id") or "").strip(),
     }
-    if scene.get("text"):
-        out["text"] = scene.get("text")
-    if scene.get("text_ru"):
-        out["text_ru"] = scene.get("text_ru")
     anim = scene.get("animation")
     if isinstance(anim, dict) and anim:
-        out["animation"] = anim
+        clean = {k: v for k, v in anim.items() if k not in _ANIM_INTERNAL_KEYS}
+        if clean:
+            out["animation"] = clean
     return out
 
 
@@ -3782,13 +3794,17 @@ def rewrite_youtube_state_get(rewrite_id: str):
     )
 
 
-@app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
-def rewrite_project_run(rewrite_id: str):
-    """Стрим NDJSON: отдельная сборка для structure и draft1; остальные — общая."""
+def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iterator[str]:
+    """Module-level generator: тот же gen(), что был внутри rewrite_project_run,
+    но вынесен наружу — чтобы можно было запускать его как из обычного NDJSON-стрима,
+    так и из фоновой задачи (task_manager).
+
+    Yields NDJSON-строки (json + '\\n').
+    """
     rw_job = load_rewrite_job(rewrite_id)
     if rw_job is None:
-        return jsonify({"error": "not_found"}), 404
-    body = request.get_json(silent=True) or {}
+        yield json.dumps({"type": "error", "message": "not_found"}, ensure_ascii=False) + "\n"
+        return
     original_title = snapshot_original_title_from_body(body, rw_job)
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
@@ -4254,9 +4270,11 @@ def rewrite_project_run(rewrite_id: str):
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
-                if (
-                    stage_key
-                    in (
+                t_item = str(item.get("type") or "")
+                if t_item == "result" and isinstance(item.get("content"), str):
+                    item = dict(item)
+                    item["content"] = strip_markdown_code_fence(str(item.get("content") or ""))
+                    if stage_key in (
                         "retention_editor",
                         "hook_editor",
                         "flow_editor",
@@ -4264,19 +4282,150 @@ def rewrite_project_run(rewrite_id: str):
                         "voiceover_editor",
                         "title_strategist",
                         "youtube_packaging",
-                    )
-                    and str(item.get("type") or "") == "result"
-                    and isinstance(item.get("content"), str)
-                ):
-                    item = dict(item)
-                    item["content"] = _sanitize_editor_result_json(str(item.get("content") or ""))
+                    ):
+                        item["content"] = _sanitize_editor_result_json(str(item.get("content") or ""))
                 yield json.dumps(item, ensure_ascii=False) + "\n"
 
+    # Финальный фильтр: для любого result-события снимаем markdown-обёртку
+    # (Claude часто оборачивает ответ в ```json … ```). Для не-result строк
+    # пропускаем как есть, без overhead на лишний JSON-roundtrip.
+    for _line in gen():
+        try:
+            _ev = json.loads(_line.rstrip("\n"))
+        except (json.JSONDecodeError, ValueError, TypeError):
+            yield _line
+            continue
+        if (
+            isinstance(_ev, dict)
+            and _ev.get("type") == "result"
+            and isinstance(_ev.get("content"), str)
+        ):
+            _orig = _ev["content"]
+            _stripped = strip_markdown_code_fence(_orig)
+            if _stripped != _orig:
+                _ev = dict(_ev)
+                _ev["content"] = _stripped
+                yield json.dumps(_ev, ensure_ascii=False) + "\n"
+                continue
+        yield _line
+
+
+def _stage_run_target_factory(rewrite_id: str):
+    """Factory: возвращает TaskTarget (emit, cancel_event, payload) → None для
+    запуска одного этапа ReWrite в фоновой задаче (без HTTP-стрима браузеру)."""
+    def target(emit, cancel_event, payload):
+        cancelled_local = {"v": False}
+        for line in _iter_stage_run_event_strings(rewrite_id, payload):
+            if cancel_event.is_set() and not cancelled_local["v"]:
+                cancelled_local["v"] = True
+                emit({"type": "status", "message": "Отмена пользователем — задача будет остановлена после ближайшего ответа модели."})
+            try:
+                ev = json.loads(line.rstrip("\n"))
+            except (json.JSONDecodeError, ValueError, TypeError):
+                ev = {"type": "status", "message": str(line).strip()}
+            if not isinstance(ev, dict):
+                ev = {"type": "status", "message": str(ev)}
+            emit(ev)
+            if cancelled_local["v"]:
+                # Прерываем текущий пайплайн, как только успели сообщить об отмене.
+                emit({"type": "error", "message": "Задача отменена пользователем."})
+                return
+    return target
+
+
+@app.route("/rewrite/<rewrite_id>/run", methods=["POST"])
+def rewrite_project_run(rewrite_id: str):
+    """Старый стрим NDJSON: оставлен для обратной совместимости (UI давно мигрирует на /run/start)."""
+    rw_job = load_rewrite_job(rewrite_id)
+    if rw_job is None:
+        return jsonify({"error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
     return Response(
-        stream_with_context(gen()),
+        stream_with_context(_iter_stage_run_event_strings(rewrite_id, body)),
         mimetype="application/x-ndjson",
         headers={"X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/rewrite/<rewrite_id>/run/start", methods=["POST"])
+def rewrite_project_run_start(rewrite_id: str):
+    """Браузер-независимый запуск этапа: создаёт фоновую задачу и возвращает task_id.
+
+    Body — тот же snapshot формы, что и у legacy /run.
+    """
+    rw_job = load_rewrite_job(rewrite_id)
+    if rw_job is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    stage_key = str(body.get("stage") or "").strip().lower()
+    if stage_key not in REWRITE_STAGE_KEYS:
+        return jsonify({"ok": False, "error": "unknown_stage"}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    meta = _tm_start_task(
+        proj_dir,
+        kind="stage",
+        ref_id=stage_key,
+        target=_stage_run_target_factory(rewrite_id),
+        request_payload=body,
+    )
+    return jsonify({"ok": True, "task": meta})
+
+
+@app.route("/rewrite/<rewrite_id>/tasks/active", methods=["GET"])
+def rewrite_project_tasks_active(rewrite_id: str):
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    if not proj_dir.is_dir():
+        return jsonify({"ok": True, "tasks": []})
+    tasks = _tm_list_active_tasks_for_project(proj_dir)
+    return jsonify({"ok": True, "tasks": tasks})
+
+
+@app.route("/rewrite/<rewrite_id>/tasks/<task_id>/meta", methods=["GET"])
+def rewrite_project_task_meta(rewrite_id: str, task_id: str):
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    meta = _tm_get_task_meta(proj_dir, task_id)
+    if not meta:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "task": meta})
+
+
+@app.route("/rewrite/<rewrite_id>/tasks/<task_id>/events", methods=["GET"])
+def rewrite_project_task_events(rewrite_id: str, task_id: str):
+    """NDJSON-поток событий задачи: история (seq > since) + live tail.
+
+    Query: since=<int>  (default -1, т.е. с самого начала).
+    """
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    try:
+        since = int(request.args.get("since", "-1"))
+    except (TypeError, ValueError):
+        since = -1
+
+    def gen_events():
+        for ev in _tm_subscribe_events(proj_dir, task_id, since_seq=since):
+            yield json.dumps(ev, ensure_ascii=False) + "\n"
+
+    return Response(
+        stream_with_context(gen_events()),
+        mimetype="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/rewrite/<rewrite_id>/tasks/<task_id>/cancel", methods=["POST"])
+def rewrite_project_task_cancel(rewrite_id: str, task_id: str):
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    ok = _tm_cancel_task(proj_dir, task_id)
+    return jsonify({"ok": bool(ok)})
 
 
 @app.route("/rewrite/<rewrite_id>/api-payload", methods=["POST"])
@@ -6821,6 +6970,20 @@ def job_page(job_id: str):
         anim_agent_style_pack_present=bool(anim_style_pack),
         anim_agent_template_name=anim_template_name,
     )
+
+
+try:
+    _orphan_count = _tm_mark_orphan_running_as_interrupted(REWRITE_JOBS_DIR)
+    if _orphan_count:
+        try:
+            print(f"[task_manager] marked {_orphan_count} orphan running task(s) as interrupted on startup")
+        except Exception:
+            pass
+except Exception as _e:  # noqa: BLE001
+    try:
+        print(f"[task_manager] startup recovery error: {_e}")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

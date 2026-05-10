@@ -46,6 +46,9 @@ data/jobs/*.lock
 data/jobs/*.tmp
 data/jobs/*.json.*.tmp
 
+# Background task manager runtime state per rewrite project
+data/rewrite_jobs/*/_tasks/
+
 # Keep folder structure
 !data/jobs/.gitkeep
 !data/rewrite_jobs/.gitkeep

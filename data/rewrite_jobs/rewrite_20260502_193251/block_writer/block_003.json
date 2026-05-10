@@ -1,15 +1,15 @@
 {
   "block_index": 3,
-  "block_name": "The Brain on Overthinking",
-  "target_chars_min": 500,
-  "target_chars_ideal": 600,
-  "target_chars_max": 700,
-  "actual_chars": 1127,
+  "block_name": "Нейробиология: мозг, который не выключается",
+  "target_chars_min": 1280,
+  "target_chars_ideal": 1600,
+  "target_chars_max": 1920,
+  "actual_chars": 1893,
   "short_summary": [
-    "Prefrontal cortex analyzes and plans during overthinking",
-    "Default mode network activates in mental loops",
-    "Yale and Michigan studies show increased DMN activity",
-    "Both regions drive pattern recognition in overthinking"
+    "Префронтальная кора гиперактивна даже в покое — мозг не переходит в режим отдыха",
+    "Default Mode Network создаёт постоянный внутренний монолог — нет состояния 'офлайн'",
+    "Дофамин выбрасывается при воображаемом решении — химическая петля без завершения",
+    "Открытый вопрос в финале: когда мозг научился так работать — ведёт в блок о происхождении паттерна"
   ],
-  "block_text": "Let’s look at what actually happens in the brain when someone overthinks. Two main areas are involved: the prefrontal cortex and the default mode network. The prefrontal cortex sits right behind your forehead. It’s the part that plans, analyzes, and weighs options. When you’re stuck in thought loops, this area is working overtime—constantly searching for patterns, trying to predict what might happen next.\n\nBut it doesn’t work alone. The default mode network, or DMN, is a set of brain regions that switches on when your mind wanders or turns inward. It’s active when you’re replaying conversations, imagining different outcomes, or just lost in thought. Researchers at Yale found that people who ruminate a lot show more activity in this network, especially when they’re not focused on a task. The University of Michigan’s studies back this up: their scans show that the DMN lights up during overthinking, almost like the brain is rehearsing possible scenarios on repeat.\n\nHere’s the interesting part. Both the prefrontal cortex and the DMN are built for pattern recognition. They’re always looking for connections, even when there aren’t any. That’s why overthinking can feel endless—it’s the brain’s way of searching for meaning, trying to solve problems that might not have a clear answer. This isn’t just a random glitch. It’s a deep, automatic process, wired into how we make sense of the world."
+  "block_text": "Вот что реально происходит внутри.\n\nУ людей с руминативным мышлением префронтальная кора — часть мозга, отвечающая за планирование, анализ и саморефлексию — остаётся гиперактивной даже в состоянии покоя. Большинство людей, когда не делают ничего конкретного, просто... отдыхают. Их мозг снижает активность. Но не у тебя. У тебя он продолжает работать. Продолжает анализировать. Продолжает строить сценарии.\n\nЭто не метафора. Это измеримая нейронная активность.\n\nЕсть структура, которая называется Default Mode Network — сеть пассивного режима мозга. Она активируется, когда ты не занят внешней задачей. У большинства людей она работает умеренно — фоновый шум. У людей с высоким уровнем руминации она не просто активна — она постоянно генерирует внутренний монолог. Твой мозг буквально не знает состояния «офлайн». Он всегда на связи. Всегда что-то обрабатывает. Всегда проверяет, не упустил ли ты что-то важное.\n\nИ вот тут начинается самая интересная часть.\n\nКаждый раз, когда ты мысленно прокручиваешь проблему и воображаешь возможное решение — даже если это решение никогда не реализуется — мозг выбрасывает дофамин. Тот самый нейромедиатор, который связан с вознаграждением. Ты ещё ничего не сделал. Ты просто подумал. Но химически — мозг получил сигнал: «хорошая работа, продолжай».\n\nЭто и есть петля. Думаешь — получаешь микровознаграждение — думаешь снова. Проблема не решена, но ощущение такое, будто ты над ней работаешь. Будто ты продвигаешься. Это иллюзия прогресса — и она химически подкреплена.\n\nВот почему совет «просто перестань думать» — это не просто бесполезно. Это нейробиологически несостоятельно. Ты не можешь волевым усилием отключить структуру, которая работает автономно и получает химическое подкрепление за каждый цикл. Это всё равно что сказать человеку с постоянно активной пожарной сигнализацией: «просто не обращай внимания на звук».\n\nМозг не ломается. Он делает именно то, на что настроен.\n\nВопрос в другом: когда и почему он настроился именно так?"
 }

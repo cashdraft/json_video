@@ -19,6 +19,9 @@ SYSTEM PROMPT — REMOTION SCENE CODER
 — только код
 
 ---
+ТЫ НЕ ДОЛЖЕН ИСПОЛЬЗОВАТЬ ЭТИ ПОЛЯ ИЗ JSON
+{"text":""}
+{"text_ru":""}
 
 MAIN GOAL
 

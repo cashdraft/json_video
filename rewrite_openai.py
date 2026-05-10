@@ -14,11 +14,21 @@ from typing import Any
 
 import requests
 
+from claude_kie import (
+    CLAUDE_MODELS,
+    claude_messages_wire_payload,
+    is_claude_model,
+    iter_claude_completion,
+    iter_claude_completion_stream,
+    post_claude_messages_sync,
+)
+
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 REWRITE_MODELS: list[dict[str, str]] = [
     {"id": "gpt-4.1", "label": "GPT-4.1"},
     {"id": "gpt-5.4", "label": "GPT-5.4"},
+    *CLAUDE_MODELS,
 ]
 
 REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}
@@ -84,8 +94,14 @@ def rewrite_chat_completion_wire_payload(
     system_prompt: str,
     user_content: str,
 ) -> dict[str, Any]:
-    """Тело POST /v1/chat/completions (без stream) — как в iter_rewrite_completion."""
+    """Тело POST для текущего движка (OpenAI или Claude через Kie.ai) — как в iter_rewrite_completion.
+
+    Для OpenAI — POST /v1/chat/completions (messages: system + user, temperature).
+    Для Claude — POST /claude/v1/messages (system отдельным полем, messages: только user, max_tokens).
+    """
     model = normalize_rewrite_model(model)
+    if is_claude_model(model):
+        return claude_messages_wire_payload(model, system_prompt, user_content)
     return {
         "model": model,
         "messages": [
@@ -104,7 +120,10 @@ def _draft1_wire_payload_for_block(
     b: dict[str, Any],
     short_summaries_before: list[list[str]],
 ) -> dict[str, Any]:
-    """Один POST Block Writer для блока b; short_summaries_before — уже завершённые блоки (до 3 последних в user)."""
+    """Один POST Block Writer для блока b; short_summaries_before — уже завершённые блоки (до 3 последних в user).
+
+    Возвращает payload в формате текущего движка: OpenAI Chat Completions либо Claude messages (Kie.ai).
+    """
     model = normalize_rewrite_model(model)
     idx = int(b["index"])
     name = str(b["block_name"])
@@ -127,6 +146,8 @@ def _draft1_wire_payload_for_block(
         ],
     }
     user_msg = _sanitize_for_openai_json(json.dumps(user_payload, ensure_ascii=False, indent=2))
+    if is_claude_model(model):
+        return claude_messages_wire_payload(model, system_prompt_sanitized, user_msg)
     return {
         "model": model,
         "messages": [
@@ -178,6 +199,17 @@ def list_draft1_wire_chat_payloads_for_export(
 
 
 def _post_chat_completion(api_key: str, payload: dict[str, Any], timeout: int, out: queue.Queue) -> None:
+    """POST в фоновом потоке. Если payload — для Claude (модель в CLAUDE_MODEL_IDS),
+    результат складывается как ('claude_text', text|err_msg, ok_bool); иначе как ('ok', requests.Response)
+    или ('err', exception).
+    """
+    if is_claude_model(str(payload.get("model") or "")):
+        text, err = post_claude_messages_sync(payload, timeout)
+        if err:
+            out.put(("claude_err", err))
+        else:
+            out.put(("claude_ok", text or ""))
+        return
     try:
         body = _openai_chat_json_body_bytes(payload)
         r = requests.post(
@@ -211,6 +243,10 @@ def iter_rewrite_completion(
     prompt_st = (prompt or "").strip()
     text_st = (text or "").strip()
 
+    if is_claude_model(model):
+        yield from iter_claude_completion(model, prompt_st, text_st, timeout=timeout)
+        return
+
     yield {"type": "status", "message": "Проверка ввода…"}
     if not api_key.strip():
         yield {"type": "error", "message": "Не задан OPENAI_API_KEY в .env"}
@@ -228,10 +264,6 @@ def iter_rewrite_completion(
     payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st)
 
     yield {"type": "status", "message": "Отправка chat/completions на api.openai.com…"}
-    yield {
-        "type": "status",
-        "message": "Пока OpenAI считает ответ, статус будет обновляться каждые ~8 с (это не зависание).",
-    }
 
     out: queue.Queue = queue.Queue(maxsize=1)
     th = threading.Thread(
@@ -259,10 +291,7 @@ def iter_rewrite_completion(
             wait_round += 1
             yield {
                 "type": "status",
-                "message": (
-                    f"Ожидание ответа OpenAI… ~{wait_round * 8} с. "
-                    "Тяжёлые модели могут отвечать несколько минут."
-                ),
+                "message": "Ожидание ответа OpenAI…",
             }
 
     if kind == "err":
@@ -316,6 +345,10 @@ def iter_rewrite_completion_stream(
         timeout = _chat_timeout_seconds()
     prompt_st = (prompt or "").strip()
     text_st = (text or "").strip()
+
+    if is_claude_model(model):
+        yield from iter_claude_completion_stream(model, prompt_st, text_st, timeout=timeout)
+        return
 
     yield {"type": "status", "message": "Проверка ввода…"}
     if not api_key.strip():
@@ -393,6 +426,13 @@ def _post_chat_completion_sync(
     payload: dict[str, Any],
     timeout: int,
 ) -> tuple[str | None, str | None]:
+    """Sync POST → (content_text, err) для текущего движка.
+
+    Тип движка определяется по содержимому payload: если есть top-level "system"
+    и "max_tokens" — это Claude через Kie.ai, иначе OpenAI Chat Completions.
+    """
+    if is_claude_model(str(payload.get("model") or "")):
+        return post_claude_messages_sync(payload, timeout)
     try:
         body = _openai_chat_json_body_bytes(payload)
         r = requests.post(
@@ -484,14 +524,46 @@ def _parse_single_block(raw: str, expected_idx: int, expected_name: str) -> tupl
     return body, None
 
 
+def _extract_json_object_from_text(raw: str) -> str | None:
+    """Достаёт JSON-объект из ответа модели, если он завёрнут в markdown
+    или окружён пояснительным текстом. Возвращает строку JSON или None.
+
+    Пробуем по очереди:
+      1) ```json ... ``` (или ``` ... ```);
+      2) подстрока от первой '{' до последней '}'.
+    """
+    if not raw:
+        return None
+    s = raw.strip()
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", s, flags=re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        return fence_match.group(1).strip()
+    first = s.find("{")
+    last = s.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        return s[first : last + 1].strip()
+    return None
+
+
 def _parse_block_writer_json_response(raw: str) -> tuple[dict[str, Any] | None, str | None]:
     txt = (raw or "").strip()
     if not txt:
         return None, "Пустой ответ модели."
+    obj: Any = None
     try:
         obj = json.loads(txt)
     except (json.JSONDecodeError, TypeError, ValueError):
-        return None, "Block Writer должен вернуть JSON."
+        # Fallback: модели (особенно Claude) часто оборачивают JSON в ```json ... ```
+        # или добавляют пояснительный текст до/после. Пробуем извлечь JSON-объект
+        # и распарсить ещё раз.
+        candidate = _extract_json_object_from_text(txt)
+        if candidate:
+            try:
+                obj = json.loads(candidate)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                obj = None
+        if obj is None:
+            return None, "Block Writer должен вернуть JSON."
     if not isinstance(obj, dict):
         return None, "Block Writer должен вернуть JSON-объект."
     block_text = str(obj.get("text") or obj.get("block_text") or "").strip()
@@ -609,7 +681,14 @@ def iter_draft1_blockwise_completion(
             b,
             short_summaries,
         )
-        user_msg = str((payload.get("messages") or [{}])[1].get("content") or "")
+        # Длина user-сообщения для статус-логов; payload может быть OpenAI-формата
+        # (messages=[system,user]) либо Claude-формата (messages=[user] + top-level system).
+        _msgs_for_log = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+        user_msg = ""
+        for _m in _msgs_for_log:
+            if isinstance(_m, dict) and str(_m.get("role") or "").lower() == "user":
+                user_msg = str(_m.get("content") or "")
+                break
         architect_block_json = json.dumps(
             {
                 "index": idx,
@@ -630,10 +709,11 @@ def iter_draft1_blockwise_completion(
                 f"architect_block chars={len(architect_block_json)}."
             ),
         }
+        provider_label = "Kie.ai (Claude)" if is_claude_model(model) else "OpenAI"
         yield {
             "type": "status",
             "message": (
-                f"[Block Writer] Блок {idx}/{len(blocks)}: отправка POST в OpenAI "
+                f"[Block Writer] Блок {idx}/{len(blocks)}: отправка POST в {provider_label} "
                 f"(user JSON chars={len(user_msg)})."
             ),
         }
@@ -849,7 +929,7 @@ def iter_draft1_blockwise_completion_legacy(
                     yield {
                         "type": "status",
                         "message": (
-                            f"Блок {idx}: ожидание ответа OpenAI… ~{wait_round * 8} с "
+                            f"Блок {idx}: ожидание ответа OpenAI… "
                             f"(попытка {attempt}/{max_attempts_per_block})."
                         ),
                     }

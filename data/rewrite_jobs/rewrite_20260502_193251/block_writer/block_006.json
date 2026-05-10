@@ -1,14 +1,15 @@
 {
   "block_index": 6,
-  "block_name": "The Illusion of Progress: Dopamine and Loops",
-  "target_chars_min": 400,
-  "target_chars_ideal": 500,
-  "target_chars_max": 600,
-  "actual_chars": 1082,
+  "block_name": "Что это говорит о тебе: эмпатический payoff",
+  "target_chars_min": 880,
+  "target_chars_ideal": 1100,
+  "target_chars_max": 1320,
+  "actual_chars": 1274,
   "short_summary": [
-    "Overthinking feels productive but rarely leads to real change",
-    "Dopamine rewards reinforce the cycle of mental loops",
-    "The brain craves the illusion of progress, making the habit hard to break"
+    "Исследование 2013 года (Psychological Science): высокие руминаторы значительно превосходят по когнитивной эмпатии",
+    "Механизм один: те же паттерны, что истощают, производят точное считывание людей — дар и цена неотделимы",
+    "Рефрейм завершён: не дефект, а особый способ обработки социальной информации с реальными измеримыми последствиями",
+    "Открытый вопрос в финале: если мышление само не решает проблему — что тогда меняет ситуацию? Вход в практику"
   ],
-  "block_text": "Here’s where it gets tricky. When you’re deep in overthinking, it feels like you’re making progress. You replay conversations, imagine outcomes, weigh every detail. It’s exhausting, but it gives a sense of movement—like you’re working toward a solution. But most of the time, nothing actually changes. The same thoughts circle back, just with new details or slightly different angles. This is the illusion of mental progress. \n\nWhat keeps you stuck in this loop? Dopamine. Each time you land on a new theory or a possible answer, your brain gives you a tiny reward. It’s the same chemical that fires when you check your phone and see a new message. That little hit makes you feel like you’ve uncovered something important, even if it’s just another version of the same worry. So you keep going, chasing the next insight, the next explanation. The loop feeds itself. \n\nThis is why overthinking is so hard to break. It’s not just a habit—it’s a cycle that feels productive, but rarely is. And the more you chase that feeling of progress, the deeper you get pulled in. The stakes aren’t just about wasted time. They’re about how your mind learns to crave the loop itself."
+  "block_text": "Вот вопрос, который редко задают в этом контексте.\n\nЕсли твой мозг постоянно моделирует ситуации — просчитывает реакции, перебирает варианты, воспроизводит чужие слова — что происходит с твоей способностью понимать других людей?\n\nВ 2013 году в журнале Psychological Science вышло исследование. Учёные сравнивали людей с высоким и низким уровнем руминации по нескольким показателям. Один из них — когнитивная эмпатия: способность точно считывать внутреннее состояние другого человека.\n\nРезультат оказался однозначным. Высокие руминаторы значительно превосходили контрольную группу. Не немного. Значительно.\n\nИ вот в чём суть.\n\nТе же нейронные паттерны, которые производят истощение — постоянная активация сетей социального моделирования, непрерывная работа с чужими состояниями и мотивами — они же производят необычно точное понимание людей.\n\nЭто не два разных процесса. Это один и тот же.\n\nТы платишь энергией за то, что твой мозг непрерывно обрабатывает социальную информацию. Но именно эта обработка делает тебя человеком, который замечает то, что другие пропускают. Слышит то, что не было сказано вслух. Чувствует напряжение в комнате раньше, чем кто-то успел что-то произнести.\n\nСтоимость и дар — это не противоположности. Это одно и то же явление, смотря с какой стороны смотреть.\n\nНо это поднимает другой вопрос. Если само по себе мышление не решает проблему — а мы уже видели, что петля может крутиться бесконечно — тогда что именно меняет ситуацию?"
 }
