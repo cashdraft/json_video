@@ -1,96 +1,124 @@
 {
-  "core_topic": "Overthinking and maladaptive rumination",
-  "one_sentence_video_promise": "Understand why overthinking happens, how it drains your energy, and what psychology reveals about breaking the cycle.",
+  "core_topic": "The psychology of overthinking and its paradoxical relationship with intelligence and emotional sensitivity",
+  "one_sentence_video_promise": "This video explains why the smartest, most emotionally aware people are often the most mentally exhausted — and what that reveals about how their minds actually work.",
+
   "original_title_analysis": {
     "original_title": "People Who Think Too Much | Psychology explain",
-    "title_formula": "People Who [Do X] | Psychology explain",
+    "title_formula": "Identity Label + Pipe Separator + Authority/Credibility Tag",
     "why_it_works": [
-      "Directly addresses a relatable trait",
-      "Uses simple, broad language for wide appeal",
-      "Promises psychological insight",
-      "Creates self-recognition for viewers"
+      "Uses second-person identity labeling ('People Who...') to trigger immediate self-recognition",
+      "Pipe separator creates a two-part structure: hook identity + credibility frame",
+      "'Psychology explain' signals educational, evidence-based content that legitimizes the topic",
+      "Broad yet specific — captures a universal feeling without alienating any niche"
     ],
     "what_to_preserve": [
-      "Direct address to a specific type of person",
-      "Clear connection to psychology",
-      "Implied promise of explanation or insight"
+      "Identity-first framing that targets self-recognizing viewers",
+      "The pairing of a relatable human trait with psychological authority",
+      "Simple, direct language that doesn't over-complicate the hook",
+      "The inclusive 'people who' phrasing which invites viewer self-identification"
     ],
     "what_to_avoid_copying": [
-      "Generic phrasing ('People Who Think Too Much')",
-      "Overly broad or unspecific language",
-      "Awkward grammar ('Psychology explain')"
+      "Grammatically awkward 'Psychology explain' — sounds unpolished and reduces credibility",
+      "Too generic — 'think too much' is used heavily and risks blending into search noise",
+      "No emotional tension or curiosity gap — the title tells but doesn't intrigue",
+      "Lacks a surprising angle, paradox, or specific payoff promise"
     ]
   },
+
   "target_viewer": {
-    "primary_identity": "Overthinkers",
-    "secondary_identity": "Sensitive, empathetic, or self-aware individuals",
+    "primary_identity": "Chronic overthinkers who are self-aware but feel trapped in mental loops",
+    "secondary_identity": "Emotionally intelligent individuals who experience mental exhaustion despite appearing high-functioning",
     "viewer_self_recognition_phrases": [
-      "I can't stop replaying conversations",
-      "I notice every small change in others",
-      "My mind never shuts off",
-      "I feel mentally drained for no clear reason"
+      "I replay conversations for hours after they end",
+      "I can't stop thinking about things that haven't even happened yet",
+      "My brain won't shut off at night",
+      "I'm always overthinking everything",
+      "I feel exhausted but I haven't done much"
     ]
   },
-  "main_pain": "Feeling mentally exhausted and stuck due to constant overthinking and rumination.",
-  "emotional_tension": "The same mental habits that make you empathetic and insightful also leave you feeling drained and trapped in your own thoughts.",
-  "core_paradox": "Overthinking is both a strength (pattern recognition, empathy) and a source of suffering (mental fatigue, anxiety).",
+
+  "main_pain": "Mental exhaustion caused by an inability to stop thinking, even when nothing is wrong",
+  "emotional_tension": "Being highly intelligent and emotionally perceptive — the very traits seen as strengths — is what causes the most internal suffering",
+  "core_paradox": "The same mental capacity that makes you thoughtful, careful, and empathetic is silently draining you",
+
   "psychological_mechanism": [
-    "Maladaptive rumination",
-    "Reward cycle of problem-solving",
-    "Cognitive empathy leading to mental fatigue",
-    "Default mode network overactivity",
-    "Learned adaptation from unpredictable environments"
+    "Maladaptive rumination — the mind loops on unresolved patterns seeking closure that never comes",
+    "Pattern recognition overdrive — a high-functioning brain that never receives a stop signal",
+    "Identity threat relief — understanding the psychology reframes the trait as neutral or even positive, reducing shame",
+    "Curiosity-validation loop — viewers want both to understand themselves and to feel seen"
   ],
+
   "strongest_angles": [
     {
-      "angle_id": "1",
-      "angle_name": "Hidden Cost of Overthinking",
-      "why_it_clicks": "Reveals an invisible struggle many experience but can't name, creating instant self-recognition and curiosity."
+      "angle_id": "A1",
+      "angle_name": "The Intelligence Trap",
+      "why_it_clicks": "Reframes overthinking as a byproduct of cognitive strength, not weakness — deeply validating for viewers who feel broken"
     },
     {
-      "angle_id": "2",
-      "angle_name": "The Paradox of Empathy and Exhaustion",
-      "why_it_clicks": "Validates viewers' sensitivity as a strength while explaining why it also causes pain, reducing shame."
+      "angle_id": "A2",
+      "angle_name": "The Exhaustion Paradox",
+      "why_it_clicks": "Explains why smart, emotionally aware people feel the most drained — creates an immediate 'that's me' recognition moment"
     },
     {
-      "angle_id": "3",
-      "angle_name": "Psychology’s Explanation for Mental Fatigue",
-      "why_it_clicks": "Promises scientific answers and practical understanding, appealing to viewers seeking validation and solutions."
+      "angle_id": "A3",
+      "angle_name": "What Your Overthinking Actually Says About You",
+      "why_it_clicks": "Shifts the frame from pathology to personality insight — promises self-discovery, not just explanation"
+    },
+    {
+      "angle_id": "A4",
+      "angle_name": "The Brain That Won't Stop",
+      "why_it_clicks": "Visceral, relatable metaphor that captures the feeling of rumination without clinical language"
+    },
+    {
+      "angle_id": "A5",
+      "angle_name": "Science of Rumination",
+      "why_it_clicks": "Yale and Michigan research references elevate credibility and attract viewers who want evidence-based content"
     }
   ],
+
   "curiosity_gaps": [
-    "Why does overthinking make you tired?",
-    "What is the real cause of mental exhaustion?",
-    "How can empathy and insight backfire?",
-    "What does psychology say about breaking the overthinking cycle?",
-    "Is overthinking a flaw or an adaptation?"
+    "Why do the smartest people feel the most mentally exhausted?",
+    "What is actually happening in the brain of someone who can't stop thinking?",
+    "Is overthinking a flaw — or a sign of something else entirely?",
+    "Why does your brain refuse to stop even when nothing is wrong?",
+    "What does constantly replaying conversations say about who you are?"
   ],
+
   "seo_keywords": [
-    "overthinking",
-    "rumination",
-    "mental exhaustion",
-    "psychology of overthinking",
+    "overthinking psychology",
+    "why do I overthink everything",
+    "people who think too much",
+    "rumination psychology",
     "maladaptive rumination",
-    "empathy and fatigue",
-    "how to stop overthinking"
+    "overthinker personality",
+    "why smart people overthink",
+    "can't stop thinking at night",
+    "emotional exhaustion overthinking",
+    "psychology of overthinking"
   ],
+
   "title_style_recommendations": [
-    "Directly address the viewer’s experience",
-    "Highlight the paradox or hidden cost",
-    "Use clear, relatable language",
-    "Promise psychological insight or explanation",
-    "Imply practical value or relief"
+    "Lead with the identity or paradox — not the topic label",
+    "Use a curiosity gap or ironic contrast in the first half of the title",
+    "Keep total character count under 60 for full display in search results",
+    "Avoid clinical jargon in the title — save it for in-video credibility",
+    "Pair a relatable human experience with a psychological revelation for maximum click pull",
+    "Consider second-person 'you' framing to increase direct viewer relevance"
   ],
+
   "thumbnail_text_directions": [
-    "Why Am I So Tired?",
-    "The Overthinker’s Trap",
-    "Stuck in My Head",
-    "Not Broken—Just Overthinking"
+    "Short identity phrase: 'You Think Too Much'",
+    "Paradox callout: 'Smart = Exhausted?'",
+    "Question format: 'Why Won't Your Brain Stop?'",
+    "Emotional state visual + text overlay: tired/stressed face + 'It's Not Weakness'",
+    "Contrast text: 'Most Intelligent → Most Drained'"
   ],
+
   "avoid_in_titles": [
-    "Generic or vague phrasing",
-    "Overly clinical language",
-    "Awkward grammar",
-    "Titles that blame or shame the viewer"
+    "Grammatically incomplete phrases like 'Psychology explain'",
+    "Overused generic terms like 'overthinking' without a twist or angle",
+    "Clickbait without payoff promise — the script delivers real psychology, the title should match",
+    "Titles that feel diagnostic or pathologizing without validation",
+    "Long, complex titles that bury the emotional hook"
   ]
 }

@@ -189,6 +189,108 @@ def build_draft1_rewriter_user_message(
     )
 
 
+def build_distiller_system_prompt(
+    master_prompt: str,
+    distiller_prompt: str,
+) -> str:
+    """Этап distiller (Мягкий Rewrite): в system Master → Distiller Prompt."""
+    parts: list[str] = []
+    m = (master_prompt or "").strip()
+    if m:
+        parts.append(m)
+    p = (distiller_prompt or "").strip()
+    if p:
+        parts.append(p)
+    return "\n\n".join(parts)
+
+
+def build_distiller_user_message(
+    source_text: str,
+    distiller_user_prompt: str,
+) -> str:
+    """User для distiller: JSON с User Promt + Input text."""
+    up = (distiller_user_prompt or "").strip()
+    return _json_user_message(
+        {
+            "distiller_user_promt": up or "",
+            "input_text": (source_text or "").strip() or "(пусто)",
+        }
+    )
+
+
+def build_author_system_prompt(
+    master_prompt: str,
+    author_prompt: str,
+) -> str:
+    """Этап author (Мягкий Rewrite): в system Master → Author Prompt."""
+    parts: list[str] = []
+    m = (master_prompt or "").strip()
+    if m:
+        parts.append(m)
+    p = (author_prompt or "").strip()
+    if p:
+        parts.append(p)
+    return "\n\n".join(parts)
+
+
+def build_author_user_message(
+    distiller_result: str,
+    author_user_prompt: str,
+    hero_prompt: str,
+    *,
+    target_chars: int,
+    duration_minutes: int = 5,  # kept for API-compat, not put into payload
+    chars_per_minute: int = 344,  # kept for API-compat, not put into payload
+) -> str:
+    """User для author: JSON с Hero + User Promt + Result Distiller + Duration.
+
+    В duration кладём только `target_chars` — единое число, целевая длина сценария.
+    Параметры duration_minutes/chars_per_minute оставлены в сигнатуре для совместимости
+    со старыми вызовами, но в итоговое тело не попадают (минуты и cpm используются
+    исключительно для расчёта target_chars на верхнем уровне).
+    """
+    dr = (distiller_result or "").strip() or "(пусто)"
+    up = (author_user_prompt or "").strip()
+    hp = (hero_prompt or "").strip()
+    tc = clamp_target_chars(int(target_chars))
+    return _json_user_message(
+        {
+            "hero_prompt": hp or "",
+            "author_user_promt": up or "",
+            "distiller_result_done": dr,
+            "distiller.txt": dr,
+            "duration": {"target_chars": tc},
+        }
+    )
+
+
+AUTHOR_STREAM_SYSTEM_SUFFIX = (
+    "Режим ответа (обязательно): пиши сценарий потоком «как в чате» — короткими порциями текста подряд "
+    "(абзацы и смысловые куски), без JSON-обёртки вокруг всего ответа. "
+    "Когда сценарий полностью передан, на последней отдельной строке напиши ровно: end\n"
+    "(три буквы, строчными, без пробелов и без кавычек на этой строке)."
+)
+
+
+def append_author_streaming_system_rule(system_prompt: str) -> str:
+    """Добавляет к system Author правило про поток и терминатор end."""
+    base = (system_prompt or "").strip()
+    suf = (AUTHOR_STREAM_SYSTEM_SUFFIX or "").strip()
+    if not base:
+        return suf
+    if not suf:
+        return base
+    return base + "\n\n" + suf
+
+
+def strip_author_stream_end_marker(text: str) -> str:
+    """Убирает завершающую строку end (регистронезависимо) после склейки стрима."""
+    lines = (text or "").replace("\r\n", "\n").split("\n")
+    while lines and lines[-1].strip().lower() == "end":
+        lines.pop()
+    return "\n".join(lines).rstrip()
+
+
 def build_retention_editor_system_prompt(
     retention_editor_prompt: str,
 ) -> str:
@@ -611,6 +713,8 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("analysis", "Analysis"),
     ("structure", "Architect"),
     ("draft1", "Block Writer"),
+    ("distiller", "Distiller"),
+    ("author", "Author"),
     ("retention_editor", "Retention Editor"),
     ("hook_editor", "Hook Editor"),
     ("flow_editor", "Flow Editor"),
@@ -628,6 +732,74 @@ REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
 
 _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_STAGES)}
 
+
+# --- Presets: «Глубокий Rewrite» и «Мягкий Rewrite» -------------------------
+#
+# Глубокий = текущий пайплайн (Analysis → Architect → Block Writer → редакторы …).
+# Мягкий   = вместо Analysis/Architect/Block Writer идут Distiller → Author,
+#            дальше всё то же (Retention Editor → … → YouTube packaging).
+#
+# Эти пресеты используются:
+#   - валидатором предусловий (`validate_prerequisites`) — чтобы preset_X не
+#     требовал результат «чужого» этапа из другого пресета;
+#   - UI (скрывает карточки не из текущего пресета и определяет порядок «Run pipeline»);
+#   - runner-ом запуска этапов (например, retention_editor берёт full_text из
+#     block_writer/full_text.txt в deep и из author.result в soft).
+REWRITE_PRESET_DEEP = "deep"
+REWRITE_PRESET_SOFT = "soft"
+REWRITE_PRESET_KEYS: frozenset[str] = frozenset({REWRITE_PRESET_DEEP, REWRITE_PRESET_SOFT})
+REWRITE_PRESET_DEFAULT = REWRITE_PRESET_DEEP
+
+REWRITE_PRESET_LABELS: dict[str, str] = {
+    REWRITE_PRESET_DEEP: "Глубокий Rewrite",
+    REWRITE_PRESET_SOFT: "Мягкий Rewrite",
+}
+
+REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
+    REWRITE_PRESET_DEEP: [
+        "analysis",
+        "structure",
+        "draft1",
+        "retention_editor",
+        "hook_editor",
+        "flow_editor",
+        "persona_editor",
+        "voiceover_editor",
+        "title_strategist",
+        "structure_splitter",
+        "scene_writer",
+        "animation_planner",
+        "scene_writer_live",
+        "youtube_packaging",
+    ],
+    REWRITE_PRESET_SOFT: [
+        "distiller",
+        "author",
+        "retention_editor",
+        "hook_editor",
+        "flow_editor",
+        "persona_editor",
+        "voiceover_editor",
+        "title_strategist",
+        "structure_splitter",
+        "scene_writer",
+        "animation_planner",
+        "scene_writer_live",
+        "youtube_packaging",
+    ],
+}
+
+
+def normalize_rewrite_preset(value: Any) -> str:
+    v = str(value or "").strip().lower()
+    if v in REWRITE_PRESET_KEYS:
+        return v
+    return REWRITE_PRESET_DEFAULT
+
+
+def stages_for_preset(preset: str) -> list[str]:
+    return list(REWRITE_PRESET_STAGE_KEYS.get(normalize_rewrite_preset(preset), []))
+
 # Подписи под заголовком этапа в UI.
 REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
     "analysis": (
@@ -643,6 +815,18 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "В User (по порядку): Duration, Hero Prompt, Block Writer User Promt, analysis.json, architect.json. "
         "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из architect.json "
         "и только после accept запускается следующий."
+    ),
+    "distiller": (
+        "Мягкий Rewrite — Distiller. В System (по порядку): Master Prompt, Distiller Prompt. "
+        "В User (по порядку): Distiller User Promt, исходный текст (input_text). "
+        "Один POST на этап — на выходе сжатая «дистилляция» исходника."
+    ),
+    "author": (
+        "Мягкий Rewrite — Author. В System (по порядку): Master Prompt, Author Prompt, правило потокового ответа "
+        "(модель шлёт текст чанками; в конце отдельной строкой end). "
+        "В User (JSON): hero_prompt, author_user_promt, distiller_result_done / distiller.txt (Result DONE Distiller), "
+        "duration (минуты, знаков/мин, target_chars, length_spec). Ответ приходит потоком (delta), на сервере склеивается; "
+        "строка end снимается из итогового текста."
     ),
     "retention_editor": (
         "Отправляем. В System: Retention Editor System Promt. "
@@ -699,6 +883,8 @@ REWRITE_STAGE_SUBTITLES: dict[str, str] = {
     "analysis": "Агент-аналитик YouTube-сценариев",
     "structure": "Агент-архитектор структуры YouTube-сценария",
     "draft1": "Агент-сценарист одного блока",
+    "distiller": "Агент-дистиллятор смысла исходного видео",
+    "author": "Агент-сценарист: полный сценарий потоком (чанки + end)",
     "retention_editor": "Агент-редактор удержания",
     "hook_editor": "Агент-редактор хуков",
     "flow_editor": "Агент-редактор потока",
@@ -736,6 +922,16 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
         "лимиты символов, цель блока и ограничения на содержание, пишет живым разговорным "
         "языком под войсовер. На выходе — JSON с готовым текстом блока, его длиной "
         "и кратким смысловым резюме, которое помогает следующему агенту не повторяться."
+    ),
+    "distiller": (
+        "Пресет «Мягкий Rewrite». Distiller — лёгкая альтернатива Analysis: "
+        "он не строит JSON-аналитику, а сжимает исходный текст в структурированный конспект "
+        "(главный тезис, ключевые идеи, факты, последовательность повествования). "
+        "На выходе — текст-дистилляция, который Author использует как основу для пересборки сценария."
+    ),
+    "author": (
+        "Пресет «Мягкий Rewrite». Author принимает дистилляцию (Result Distiller), Hero, Duration и User Promt; "
+        "пишет полный сценарий потоком (как чат), в конце отдельной строкой end — сервер склеивает куски и убирает end."
     ),
     "retention_editor": (
         "Этот агент берёт уже логически выверенный сценарий и точечно усиливает удержание "
@@ -832,6 +1028,7 @@ def new_stages_dict() -> dict[str, dict[str, Any]]:
 
 def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     """Приводит job к схеме с source_text и stages; миграция со старых полей."""
+    job["rewrite_preset"] = normalize_rewrite_preset(job.get("rewrite_preset"))
     job.setdefault("source_text", "")
     job.setdefault("source_text_ru", "")
     job["source_text_ru"] = str(job.get("source_text_ru") or "")
@@ -1052,26 +1249,45 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["last_result"] = str(sv.get("last_result") or "")
 
 
-def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None:
-    """None если ок, иначе текст ошибки для пользователя."""
+_STAGE_LABEL_BY_KEY: dict[str, str] = {k: lbl for k, lbl in REWRITE_STAGES}
+
+
+def validate_prerequisites(
+    stage_key: str,
+    stages: dict[str, Any],
+    *,
+    preset: str = REWRITE_PRESET_DEFAULT,
+) -> str | None:
+    """None если ок, иначе текст ошибки для пользователя.
+
+    Учёт preset: цепочка зависимостей строится **в пределах выбранного пресета**.
+    Этапы, не входящие в текущий preset, не считаются обязательными
+    предками (Distiller/Author не блокируют Глубокий, и Analysis/Architect/
+    Block Writer не блокируют Мягкий).
+    """
     if stage_key not in REWRITE_STAGE_KEYS:
         return "Неизвестный этап."
-    idx = _STAGE_ORDER_INDEX[stage_key]
+    preset = normalize_rewrite_preset(preset)
+    preset_order = REWRITE_PRESET_STAGE_KEYS.get(preset, [])
+    if stage_key not in preset_order:
+        # Этап выпадает из выбранного preset (например, "analysis" в Мягком) — нет
+        # смысла валидировать его предусловия для запуска именно этого пресета.
+        # Возвращаем None: запуск всё равно возможен (отдельной кнопкой), и его
+        # результат не влияет на пайплайн другого пресета.
+        return None
+    idx = preset_order.index(stage_key)
     if idx == 0:
         return None
     for i in range(idx):
-        pk, plabel = REWRITE_STAGES[i]
+        pk = preset_order[i]
+        plabel = _STAGE_LABEL_BY_KEY.get(pk, pk)
         if stage_key in ("structure_splitter", "scene_writer") and pk == "title_strategist":
-            # Title Strategist не обязателен для structure_splitter / scene_writer.
             continue
         if stage_key == "youtube_packaging" and pk == "scene_writer_live":
-            # YouTube packaging не зависит от Scene Writer Live.
             continue
         if stage_key == "youtube_packaging" and pk == "animation_planner":
-            # YouTube packaging не зависит от Animation Planner.
             continue
         if stage_key == "scene_writer_live" and pk == "animation_planner":
-            # Scene Writer Live не зависит от Animation Planner.
             continue
         prev = stages.get(pk) or {}
         if not str(prev.get("last_result") or "").strip():
@@ -1079,9 +1295,14 @@ def validate_prerequisites(stage_key: str, stages: dict[str, Any]) -> str | None
     return None
 
 
-def stage_run_prerequisites_met(stage_key: str, stages: dict[str, Any]) -> bool:
+def stage_run_prerequisites_met(
+    stage_key: str,
+    stages: dict[str, Any],
+    *,
+    preset: str = REWRITE_PRESET_DEFAULT,
+) -> bool:
     """True, если для этапа можно запускать генерацию (у предыдущих этапов есть сохранённый Result)."""
-    return validate_prerequisites(stage_key, stages) is None
+    return validate_prerequisites(stage_key, stages, preset=preset) is None
 
 
 def compose_rewrite_openai_request_body(
@@ -1092,6 +1313,8 @@ def compose_rewrite_openai_request_body(
     master_prompt: str,
     hero_prompt: str,
     target_chars: int,
+    duration_minutes: int = 5,
+    chars_per_minute: int = 344,
     block_writer_full_text: str = "",
     retention_editor_text: str = "",
     hook_editor_text: str = "",
@@ -1102,6 +1325,7 @@ def compose_rewrite_openai_request_body(
     title_strategist_result_text: str = "",
     scene_writer_result_text: str = "",
     original_title: str = "",
+    preset: str = REWRITE_PRESET_DEFAULT,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -1119,9 +1343,10 @@ def compose_rewrite_openai_request_body(
         "animation_planner",
         "scene_writer_live",
         "youtube_packaging",
+        "author",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
-    pre_err = validate_prerequisites(stage_key, stages_snap)
+    pre_err = validate_prerequisites(stage_key, stages_snap, preset=preset)
     if pre_err:
         return None, pre_err
     cell = stages_snap.get(stage_key) or {}
@@ -1158,6 +1383,31 @@ def compose_rewrite_openai_request_body(
             structure_res,
             str(cell.get("user_prompt") or ""),
             hero_prompt,
+        )
+    elif stage_key == "distiller":
+        prompt = build_distiller_system_prompt(
+            master_prompt,
+            str(cell.get("prompt") or ""),
+        )
+        user_text = build_distiller_user_message(
+            source_text,
+            str(cell.get("user_prompt") or ""),
+        )
+    elif stage_key == "author":
+        distiller_res = str((stages_snap.get("distiller") or {}).get("last_result") or "")
+        prompt = append_author_streaming_system_rule(
+            build_author_system_prompt(
+                master_prompt,
+                str(cell.get("prompt") or ""),
+            )
+        )
+        user_text = build_author_user_message(
+            distiller_res,
+            str(cell.get("user_prompt") or ""),
+            hero_prompt,
+            target_chars=target_chars,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
         )
     elif stage_key == "retention_editor":
         prompt = build_retention_editor_system_prompt(
@@ -1282,6 +1532,7 @@ def compose_rewrite_openai_request_body(
         "animation_planner",
         "scene_writer_live",
         "youtube_packaging",
+        "author",
     ):
         dur_payload = build_duration_length_spec_payload(
             target_chars=target_chars,
@@ -1383,14 +1634,16 @@ def snapshot_master_prompt_from_body(body: dict[str, Any]) -> str:
     return str(body.get("master_prompt") or "")
 
 
-def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int]:
-    """hero_prompt, target_chars (500–40 000, шаг 500)."""
+def snapshot_rewrite_preset_from_body(body: dict[str, Any], job: dict[str, Any] | None = None) -> str:
+    """Снимок текущего пресета: берём из body (если передан), иначе из job, иначе дефолт."""
+    if isinstance(body, dict) and "rewrite_preset" in body:
+        return normalize_rewrite_preset(body.get("rewrite_preset"))
+    return normalize_rewrite_preset((job or {}).get("rewrite_preset"))
+
+
+def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int, int, int]:
+    """hero_prompt, target_chars (500–40 000), duration_minutes, chars_per_minute."""
     hero = str(body.get("hero_prompt") or "")
-    if "target_chars" in body and body.get("target_chars") is not None and str(body.get("target_chars", "")).strip() != "":
-        try:
-            return hero, clamp_target_chars(int(body["target_chars"]))
-        except (TypeError, ValueError):
-            pass
     try:
         dm = int(body.get("duration_minutes", 5))
         dm = max(1, min(30, dm))
@@ -1401,4 +1654,9 @@ def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int]:
         cpm = max(1, min(2000, cpm))
     except (TypeError, ValueError):
         cpm = 344
-    return hero, clamp_target_chars(dm * cpm)
+    if "target_chars" in body and body.get("target_chars") is not None and str(body.get("target_chars", "")).strip() != "":
+        try:
+            return hero, clamp_target_chars(int(body["target_chars"])), dm, cpm
+        except (TypeError, ValueError):
+            pass
+    return hero, clamp_target_chars(dm * cpm), dm, cpm

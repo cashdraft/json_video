@@ -1,887 +1,131 @@
 {"scene_id": "scene_001"}
-{"text": "There's a pattern that comes up often."}
-{"text_ru": "Есть закономерность, которая встречается часто."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A single spiral or circular pattern drawn with a thin pencil line, suggesting repetition and recurrence."}}
-{"video": {"prompt": "The spiral slowly draws itself from center outward, pencil line appearing gradually."}}
+{"text": "Знаете, что странно?"}
+{"text_ru": "Знаете, что странно?"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A single raised eyebrow and a small question mark — simple expressive face fragment, hand-drawn style."}}
+{"video": {"prompt": "The question mark slowly appears stroke by stroke, as if being drawn in real time by an invisible pencil."}}
 
 {"scene_id": "scene_002"}
-{"text": "People who notice a lot, who are tuned in to others, often say they feel drained—even though they spend most of their time in their own heads."}
-{"text_ru": "Люди, которые многое замечают, которые настроены на других, часто говорят, что чувствуют себя опустошёнными — хотя большую часть времени проводят в собственных мыслях."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple human figure with eyes wide open, surrounded by faint small detail lines radiating outward suggesting heightened awareness, with a thought bubble above their head enclosing their own silhouette."}}
-{"video": {"prompt": "The radiating awareness lines pulse slowly outward while the figure remains still, then the thought bubble gently expands."}}
+{"text": "Одни из самых умных, эмоционально чутких людей, которых вы когда-либо встретите, — одновременно одни из самых измотанных."}
+{"text_ru": "Одни из самых умных, эмоционально чутких людей, которых вы когда-либо встретите, — одновременно одни из самых измотанных."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A person sitting hunched over, head resting on one hand, eyes half-closed with visible exhaustion. Above the head: a small glowing lightbulb and a tiny heart icon — symbols of intelligence and sensitivity. Sparse, clean linework."}}
+{"video": {"prompt": "Camera slowly zooms in on the hunched figure. The lightbulb flickers faintly. The figure's shoulders drop slightly, emphasizing fatigue."}}
 
 {"scene_id": "scene_003"}
-{"text": "The tiredness doesn't come from outside. It comes from the mind itself."}
-{"text_ru": "Усталость приходит не снаружи. Она исходит из самого разума."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple outline of a head in profile with a small gear or tangled knot drawn inside the skull area, no external elements around the figure."}}
-{"video": {"prompt": "The knot inside the head slowly tightens or rotates, camera stays fixed."}}
+{"text": "Не потому что они слишком много делают, а потому что слишком много думают."}
+{"text_ru": "Не потому что они слишком много делают, а потому что слишком много думают."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. Split composition: left side shows empty hands doing nothing; right side shows a head overflowing with swirling thought lines and mini sketched words. Sharp contrast between stillness of body and chaos of mind."}}
+{"video": {"prompt": "The swirling lines on the right (mind) grow and expand outward with a slow spiral motion, while the left side (hands) remains completely still."}}
 
 {"scene_id": "scene_004"}
-{"text": "Always working. Always circling."}
-{"text_ru": "Всегда работает. Всегда кружится."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A single arrow looping back on itself in a continuous circle, drawn with pencil, suggesting endless cycling motion."}}
-{"video": {"prompt": "The circular arrow traces itself repeatedly around the loop, never stopping."}}
+{"text": "Они прокручивают разговоры, которые закончились часы назад."}
+{"text_ru": "Они прокручивают разговоры, которые закончились часы назад."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A speech bubble with a rewind or loop arrow symbol inside it, hovering above a person's head. Clock hands nearby showing late hour. Minimalist linework."}}
+{"video": {"prompt": "The loop arrow inside the speech bubble slowly rotates in a continuous circle. The clock hands tick backward slightly."}}
 
 {"scene_id": "scene_005"}
-{"text": "These are the people who pick up on every small change, sense every shift in mood, and replay conversations long after they're over."}
-{"text_ru": "Это люди, которые замечают каждое малейшее изменение, чувствуют каждую смену настроения и прокручивают разговоры долго после их завершения."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple face with attentive eyes, beside it a small speech bubble with a rewind or loop symbol inside, suggesting replaying a past conversation."}}
-{"video": {"prompt": "The speech bubble with the loop symbol gently pulses, as if replaying on repeat."}}
+{"text": "Просчитывают сценарии, которые, возможно, никогда не случатся."}
+{"text_ru": "Просчитывают сценарии, которые, возможно, никогда не случатся."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. Several branching path lines like a decision tree, each branch ending in a faded dotted outline — suggesting imagined, unreal events. A small figure stands at the start of the tree, looking overwhelmed."}}
+{"video": {"prompt": "The branches of the decision tree draw themselves outward one by one, each new branch fading into dotted lines as it reaches its end."}}
 
 {"scene_id": "scene_006"}
-{"text": "Their reactions aren't quick or impulsive. They think things through."}
-{"text_ru": "Их реакции не быстрые и не импульсивные. Они всё обдумывают."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple hand resting on a chin in a thinking pose, with a small pause symbol or ellipsis drawn nearby suggesting deliberate pause before reacting."}}
-{"video": {"prompt": "The ellipsis dots appear one by one slowly, then fade, suggesting unhurried deliberation."}}
+{"text": "Лежат без сна в два ночи — не потому что что-то пошло не так,"}
+{"text_ru": "Лежат без сна в два ночи — не потому что что-то пошло не так,"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A figure lying flat in bed, eyes wide open staring at the ceiling. A simple clock sketch showing 2:00 AM floats in the corner. No dramatic scene — just stillness and wakefulness. Sparse lines."}}
+{"video": {"prompt": "The figure's eyes blink once slowly. The clock's minute hand ticks forward one notch. Subtle, quiet motion."}}
 
 {"scene_id": "scene_007"}
-{"text": "They try to predict what might happen and weigh different outcomes."}
-{"text_ru": "Они пытаются предвидеть, что может произойти, и взвешивают различные исходы."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple balance scale drawn in pencil with two pans, each holding a small abstract shape representing different possible outcomes."}}
-{"video": {"prompt": "The scale tips slowly left then right, weighing the two sides back and forth."}}
+{"text": "а потому что мозг отказывается прекращать задавать вопрос: а что, если?"}
+{"text_ru": "а потому что мозг отказывается прекращать задавать вопрос: а что, если?"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A simplified brain outline with the words 'а что, если?' sketched repeatedly inside it in varying sizes, filling the brain shape. The text loops and overlaps, conveying relentless mental chatter."}}
+{"video": {"prompt": "The 'а что, если?' phrases inside the brain pulse gently and multiply — new instances of the phrase appear and fade in a slow, looping rhythm, never fully stopping."}}
 
 {"scene_id": "scene_008"}
-{"text": "The more they care, the more their mind works."}
-{"text_ru": "Чем больше они заботятся, тем больше работает их разум."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple heart outline on the left connected by a line to a gear or brain outline on the right, suggesting caring fuels mental activity."}}
-{"video": {"prompt": "The connecting line pulses like a current flowing from heart to gear, gear begins to slowly spin."}}
+{"text": "И вот в чём психологический парадокс, лежащий в основе всего этого."}
+{"text_ru": "И вот в чём психологический парадокс, лежащий в основе всего этого."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A single question mark drawn with careful strokes, slightly unsteady, placed at the center of the frame. Clean, sparse composition."}}
+{"video": {"prompt": "The question mark slowly materializes line by line, as if being drawn by an invisible hand. Slight tremor in the strokes. Camera holds still."}}
 
 {"scene_id": "scene_009"}
-{"text": "This creates a kind of paradox. Thinking a lot isn't a flaw. It doesn't mean something is wrong."}
-{"text_ru": "Это создаёт своего рода парадокс. Много думать — не недостаток. Это не значит, что что-то не так."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. Two arrows pointing in opposite directions forming a loop paradox symbol, with a small checkmark sketched beside it indicating correctness despite contradiction."}}
-{"video": {"prompt": "The paradox arrows slowly rotate around each other while the checkmark fades in."}}
+{"text": "Та самая когнитивная привычка, которая делает человека вдумчивым, осторожным и сострадательным, —"}
+{"text_ru": "Та самая когнитивная привычка, которая делает человека вдумчивым, осторожным и сострадательным, —"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A human silhouette in a thoughtful pose — head slightly bowed, one hand raised to chin. Delicate, attentive lines suggesting care and restraint."}}
+{"video": {"prompt": "The silhouette is sketched gradually from head to hand, each line deliberate and slow. No movement after drawing. Camera static."}}
 
 {"scene_id": "scene_010"}
-{"text": "In fact, it often means someone is smart and empathetic."}
-{"text_ru": "На самом деле это часто означает, что человек умён и чуток."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple lightbulb and a small heart drawn side by side with pencil, suggesting intelligence and empathy together."}}
-{"video": {"prompt": "The lightbulb briefly glows brighter (suggested by thickening lines) while the heart gently pulses once."}}
+{"text": "она же его тихо и опустошает."}
+{"text_ru": "она же его тихо и опустошает."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. The same human silhouette from previous scene, but now with faint eraser marks spreading from the chest outward — as if the figure is being quietly worn away from within."}}
+{"video": {"prompt": "The eraser-like fading effect slowly expands from the center of the figure's chest, lines thinning and dissolving at the edges. Motion is subtle, almost imperceptible. Camera remains still."}}
 
 {"scene_id": "scene_011"}
-{"text": "The same things that help them understand others also make them more likely to get mentally tired."}
-{"text_ru": "То же самое, что помогает им понимать других, также делает их более склонными к умственной усталости."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple two-sided arrow connecting two icons: a small human figure (representing others) and a tired drooping head (representing mental fatigue), showing the direct link."}}
-{"video": {"prompt": "The double arrow pulses slowly between the two icons, emphasizing the connection."}}
+{"text": "Сегодня мы разберём психологию людей, которые думают слишком много."}
+{"text_ru": "Сегодня мы разберём психологию людей, которые думают слишком много."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, minimal elements, black lines only. A single human head in profile, brain visible inside skull as loose sketch lines, surrounded by swirling thought bubbles overlapping each other, suggesting mental overload. Clean, sparse composition."}}
+{"video": {"prompt": "Camera slowly zooms in toward the sketched head from a neutral wide shot. Thought bubbles gently appear one by one around the brain, drawn in with a pencil-stroke animation effect."}}
 
 {"scene_id": "scene_012"}
-{"text": "The cost isn't obvious. It doesn't look like stress or burnout. It's more subtle—a slow, steady drain."}
-{"text_ru": "Цена не очевидна. Это не похоже на стресс или выгорание. Это более тонко — медленное, постепенное истощение."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple container like a cup or vessel drawn in pencil with a tiny crack at the bottom, liquid level low, suggesting a slow invisible leak rather than a dramatic break."}}
-{"video": {"prompt": "A single drop slowly falls from the crack at the bottom of the vessel, dripping at a steady slow pace."}}
+{"text": "Что на самом деле происходит в их мозге, почему это развивается"}
+{"text_ru": "Что на самом деле происходит в их мозге, почему это развивается"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, minimal elements, black lines only. Close-up of a minimalist brain drawn in loose pencil strokes, with small spark or signal lines radiating from different areas, suggesting neural activity and internal processing. No color, transparent background."}}
+{"video": {"prompt": "The spark lines inside the brain sketch pulse and multiply subtly, drawn in a looping pencil-stroke animation. Slight camera push-in toward the brain center."}}
 
 {"scene_id": "scene_013"}
-{"text": "Over time, even simple decisions can start to feel heavy."}
-{"text_ru": "Со временем даже простые решения могут начать казаться тяжёлыми."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple small object like a pebble or button resting on an outstretched open hand drawn in pencil, but the hand and wrist are slightly bent downward as if the tiny object weighs a great deal."}}
-{"video": {"prompt": "The hand holding the small object slowly droops further downward under the imperceptible weight, moving in a slow gradual arc."}}
+{"text": "и что это в действительности говорит о том, кто они есть."}
+{"text_ru": "и что это в действительности говорит о том, кто они есть."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, minimal elements, black lines only. A simple sketch of a human silhouette standing alone, with a faint mirror or reflection outline beside them suggesting self-reflection or identity. Sparse lines, no fill, transparent background."}}
+{"video": {"prompt": "The mirror reflection outline of the silhouette slowly appears drawn by pencil-stroke animation, as if being sketched in real time. Camera remains static or pulls back slightly to show both figure and reflection."}}
 
 {"scene_id": "scene_014"}
-{"text": "This is common."}
-{"text_ru": "Это распространённое явление."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A single simple figure standing alone, shoulders slightly slumped, head bowed."}}
-{"video": {"prompt": "Camera slowly zooms in on the figure's bowed head."}}
+{"text": "Начнём с того, как исследователи называют этот паттерн."}
+{"text_ru": "Начнём с того, как исследователи называют этот паттерн."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. A lone researcher at a desk, papers spread out, one hand pointing to a handwritten label on a notepad. Clean, sparse composition."}}
+{"video": {"prompt": "Camera slowly zooms in toward the notepad label, subtle pencil-line flicker as if being written in real time."}}
 
 {"scene_id": "scene_015"}
-{"text": "People often think exhaustion comes from doing too much or from outside pressure."}
-{"text_ru": "Люди часто думают, что усталость возникает от слишком большой нагрузки или внешнего давления."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure surrounded by simple arrows pointing inward from outside, representing external pressure. A stack of papers or tasks beside them."}}
-{"video": {"prompt": "Arrows animate in one by one from outside the frame, converging toward the central figure."}}
+{"text": "Психологи обозначают его термином «дезадаптивная руминация» —"}
+{"text_ru": "Психологи обозначают его термином «дезадаптивная руминация» —"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. Close-up of a handwritten term 'дезадаптивная руминация' on paper, underlined once, surrounded by empty space."}}
+{"video": {"prompt": "The underline draws itself slowly beneath the word, light pencil-stroke animation left to right."}}
 
 {"scene_id": "scene_016"}
-{"text": "But for many, the real weight is inside: thoughts that don't stop,"}
-{"text_ru": "Но для многих настоящая тяжесть — внутри: мысли, которые не останавливаются,"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure with a large swirling spiral drawn inside the chest/head area, symbolizing internal mental noise. No external elements."}}
-{"video": {"prompt": "The spiral inside the figure slowly rotates and expands, suggesting relentless internal motion."}}
+{"text": "склонность ума снова и снова возвращаться к одним и тем же мысленным петлям,"}
+{"text_ru": "склонность ума снова и снова возвращаться к одним и тем же мысленным петлям,"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. A simple looping arrow drawn in a circle, representing a thought loop. A small stylized brain outline at the center. Minimal linework."}}
+{"video": {"prompt": "The looping arrow animates around the circle repeatedly, spinning in a continuous loop, reinforcing the idea of mental repetition."}}
 
 {"scene_id": "scene_017"}
-{"text": "a mind that's always on, always looking for meaning, always preparing for what might come next."}
-{"text_ru": "разум, который всегда включён, всегда ищет смысл, всегда готовится к тому, что может произойти."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple head in profile with small sketched icons inside — a question mark, a clock, an eye — representing searching, time, and vigilance."}}
-{"video": {"prompt": "Each icon pulses or blinks in sequence — question mark, clock, eye — in a repeating loop suggesting constant mental activity."}}
+{"text": "особенно в ситуациях неопределённости, вокруг прошлых событий или социальных взаимодействий."}
+{"text_ru": "особенно в ситуациях неопределённости, вокруг прошлых событий или социальных взаимодействий."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. Three small sketched icons spaced apart: a question mark (uncertainty), a calendar with an X (past events), two stick figures facing each other (social interaction). Sparse layout."}}
+{"video": {"prompt": "Each icon appears one by one with a quick pencil-draw animation, left to right, as if being sketched live."}}
 
 {"scene_id": "scene_018"}
-{"text": "Most people don't notice this process."}
-{"text_ru": "Большинство людей не замечают этого процесса."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure looking outward, away from the spiral shown faintly behind them inside their silhouette. Their gaze directed away, unaware."}}
-{"video": {"prompt": "Camera slowly pulls back to reveal the faint internal spiral the figure is unaware of."}}
+{"text": "Исследования Йельского университета и Мичиганского университета раз за разом показывают:"}
+{"text_ru": "Исследования Йельского университета и Мичиганского университета раз за разом показывают:"}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. Two minimalist university building facades side by side, labeled 'Yale' and 'Michigan' in small handwritten text beneath each. Clean architectural outlines only."}}
+{"video": {"prompt": "Camera pans slowly left to right across both buildings, slight paper-texture shake as if viewed on a document."}}
 
 {"scene_id": "scene_019"}
-{"text": "They just feel tired and blame themselves."}
-{"text_ru": "Они просто чувствуют усталость и винят себя."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure seated, head resting on hand, with a single downward-pointing arrow above them and a small pointing finger aimed at the figure itself."}}
-{"video": {"prompt": "The pointing finger slowly moves closer to the figure, emphasizing self-blame."}}
+{"text": "люди, склонные к руминации, делают это не потому что они слабые или тревожные."}
+{"text_ru": "люди, склонные к руминации, делают это не потому что они слабые или тревожные."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. A human figure standing upright, calm posture, with a small 'X' crossed out next to a drooping figure (weakness symbol) and a jagged anxiety line — both struck through. Minimal negative space."}}
+{"video": {"prompt": "The crossed-out symbols fade in and then get an animated strike-through drawn over them, emphasizing negation."}}
 
 {"scene_id": "scene_020"}
-{"text": "This is the hidden cost of overthinking."}
-{"text_ru": "Это и есть скрытая цена чрезмерного мышления."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure with a price tag hanging from their head, the tag blank or with a question mark. Shadow beneath them slightly oversized, suggesting hidden weight."}}
-{"video": {"prompt": "The price tag gently sways, then the shadow beneath the figure slowly grows larger."}}
+{"text": "Во многих случаях — потому что их мозг исключительно хорошо умеет распознавать паттерны."}
+{"text_ru": "Во многих случаях — потому что их мозг исключительно хорошо умеет распознавать паттерны."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. A stylized brain outline with several small repeating geometric patterns (dots, lines, triangles) arranged symmetrically inside it, suggesting pattern recognition. Clean and sparse."}}
+{"video": {"prompt": "The patterns inside the brain pulse gently, each repeating shape briefly highlights in sequence to suggest active recognition."}}
 
 {"scene_id": "scene_021"}
-{"text": "It's more common and more misunderstood than most realize."}
-{"text_ru": "Это встречается чаще и понимается хуже, чем большинство осознаёт."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. Multiple simple figures in a loose scattered arrangement, each with a small spiral or swirl inside their heads, showing the widespread nature of the condition."}}
-{"video": {"prompt": "Figures appear one by one across the frame, each revealing a small internal swirl, building a quiet crowd."}}
+{"text": "Он постоянно сканирует, постоянно обрабатывает информацию, постоянно ищет смысл."}
+{"text_ru": "Он постоянно сканирует, постоянно обрабатывает информацию, постоянно ищет смысл."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. A brain outline with a sweeping radar-like arc line inside it and small data fragments (dots, dashes) floating around. A small magnifying glass near the edge. Minimal elements."}}
+{"video": {"prompt": "The radar arc animates in a slow sweep inside the brain, dots and dashes drift inward, magnifying glass shifts slightly as if scanning."}}
 
 {"scene_id": "scene_022"}
-{"text":"Psychologists call this pattern "maladaptive rumination."}
-{"text_ru": "Психологи называют эту модель «дезадаптивной руминацией»."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black ink on transparent background, minimal elements. A single human head profile with a thought bubble above it containing a looping circular arrow, symbolizing repetitive thinking. Clean lines, no fill, sketch style."}}
-{"video": {"prompt": "The circular arrow inside the thought bubble slowly rotates in a loop, camera stays still, subtle hand-drawn animation effect."}}
-
-{"scene_id": "scene_023"}
-{"text": "It's not just thinking a lot."}
-{"text_ru": "Это не просто много думать."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A simple brain outline with a small 'x' mark crossing out a pile of thought dots, indicating it is not mere quantity of thoughts. Minimal lines, sketch style."}}
-{"video": {"prompt": "The 'x' mark scratches itself onto the drawing as if drawn by an invisible pencil, camera static."}}
-
-{"scene_id": "scene_024"}
-{"text": "It's going over the same worries, doubts, or regrets again and again."}
-{"text_ru": "Это снова и снова прокручивать одни и те же тревоги, сомнения или сожаления."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. Three small icons in a row — a worry cloud, a question mark, a broken heart — each enclosed in a looping oval arrow indicating repetition. Sparse, clean sketch lines."}}
-{"video": {"prompt": "Each looping oval arrow animates in sequence, spinning around its icon, creating a sense of endless repetition, camera fixed."}}
-
-{"scene_id": "scene_025"}
-{"text": "Someone might replay a conversation from last week, analyzing every word."}
-{"text_ru": "Кто-то может снова и снова прокручивать разговор прошлой недели, анализируя каждое слово."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. Two speech bubbles facing each other with a rewind arrow beneath them, and a small magnifying glass over one word inside a bubble. Minimal detail, sketch style."}}
-{"video": {"prompt": "The rewind arrow pulses back and forth beneath the speech bubbles, magnifying glass slowly moves over the words, camera still."}}
-
-{"scene_id": "scene_026"}
-{"text": "Or imagine every possible problem that could come up tomorrow."}
-{"text_ru": "Или представлять все возможные проблемы, которые могут возникнуть завтра."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A calendar page showing 'tomorrow' with multiple small exclamation marks and question marks scattered around it, suggesting imagined future problems. Clean sketch lines."}}
-{"video": {"prompt": "Exclamation and question marks appear one by one around the calendar page as if being sketched in real time, camera static."}}
-
-{"scene_id": "scene_027"}
-{"text": "It feels like searching for answers, but it rarely brings relief."}
-{"text_ru": "Это ощущается как поиск ответов, но редко приносит облегчение."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A magnifying glass searching over an empty space, with a wilted or drooping result — a small empty circle where an answer should be. Sketch style, minimal elements."}}
-{"video": {"prompt": "The magnifying glass moves slowly across the empty space, pauses, finds nothing, slight droop in the handle suggesting disappointment, camera fixed."}}
-
-{"scene_id": "scene_028"}
-{"text": "This isn't rare. Studies show almost everyone ruminates sometimes."}
-{"text_ru": "Это не редкость. Исследования показывают, что почти каждый иногда руминирует."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A simple crowd of small stick figures, most of them with a small looping thought symbol above their heads. Sparse lines, sketch style."}}
-{"video": {"prompt": "Looping thought symbols above stick figures pulse gently one after another across the crowd, camera still."}}
-
-{"scene_id": "scene_029"}
-{"text": "But for about 20% of people, it becomes a regular pattern."}
-{"text_ru": "Но примерно у 20% людей это становится регулярной моделью поведения."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A simple pie chart divided into roughly 80% and 20% segments, with the 20% segment highlighted by a repeating loop arrow. Minimal, clean sketch lines."}}
-{"video": {"prompt": "The loop arrow on the 20% segment spins continuously, drawing attention to that portion, camera static."}}
-
-{"scene_id": "scene_030"}
-{"text": "That matters."}
-{"text_ru": "Это важно."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A single bold exclamation mark, hand-drawn style, centered with emphasis lines radiating outward slightly. Very minimal."}}
-{"video": {"prompt": "Emphasis lines radiate briefly outward from the exclamation mark as if underlining importance, then settle, camera fixed."}}
-
-{"scene_id": "scene_031"}
-{"text": "Maladaptive rumination is linked to higher rates of anxiety, depression, and even physical health problems."}
-{"text_ru": "Дезадаптивная руминация связана с более высоким уровнем тревоги, депрессии и даже физическими проблемами со здоровьем."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. A central loop-arrow brain symbol with three lines connecting to three small icons: a jagged anxiety bolt, a downward depression arrow, and a body silhouette with an ache mark. Sketch style, sparse."}}
-{"video": {"prompt": "Each connecting line draws itself from the brain symbol outward to its icon in sequence, camera still, slow deliberate sketch animation."}}
-
-{"scene_id": "scene_032"}
-{"text": "It drains energy, messes with sleep, and can make you feel stuck in your own mind."}
-{"text_ru": "Это истощает энергию, нарушает сон и может заставить вас чувствовать себя застрявшим в собственной голове."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal. Three small sketches in a row: a battery nearly empty with a downward arrow, a crescent moon with jagged disruption lines, and a head with walls drawn inside trapping a tiny figure. Minimal lines, sketch style."}}
-{"video": {"prompt": "Battery drains visually, moon flickers with disruption lines, walls inside the head close in slightly around the figure, camera fixed, sequential subtle animations."}}
-
-{"scene_id": "scene_033"}
-{"text": "Why do some people get caught in these loops?"}
-{"text_ru": "Почему некоторые люди попадают в эти петли?"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A lone figure standing inside a circular looping arrow, looking confused, head slightly bowed."}}
-{"video": {"prompt": "The loop arrow slowly rotates around the figure, camera holds still, subtle pencil-stroke texture animation."}}
-
-{"scene_id": "scene_034"}
-{"text": "Research from Yale and the University of Michigan suggests that overthinkers are often good at spotting patterns."}
-{"text_ru": "Исследования Йельского университета и Мичиганского университета показывают, что люди, склонные к чрезмерным размышлениям, часто хорошо замечают закономерности."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. Two simple university building facades labeled 'Yale' and 'Michigan', with a magnifying glass hovering over a dotted pattern between them."}}
-{"video": {"prompt": "Magnifying glass slowly pans left to right over the dot pattern, camera static."}}
-
-{"scene_id": "scene_035"}
-{"text": "Their brains notice connections, pick up on small details, and try to predict what might happen."}
-{"text_ru": "Их мозг замечает связи, улавливает мелкие детали и пытается предсказать, что может произойти."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A simplified brain outline with thin lines connecting scattered small dots and shapes around it, suggesting neural pattern recognition."}}
-{"video": {"prompt": "Lines between dots draw themselves one by one outward from the brain, slow and deliberate pencil-drawing animation."}}
-
-{"scene_id": "scene_036"}
-{"text": "This can be helpful."}
-{"text_ru": "Это может быть полезным."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A simple checkmark inside a small circle, clean and minimal."}}
-{"video": {"prompt": "Checkmark draws itself with a single pencil stroke, camera static."}}
-
-{"scene_id": "scene_037"}
-{"text": "But when this skill turns inward—toward memories, worries, or regrets—it can lead to endless analysis."}
-{"text_ru": "Но когда этот навык обращается внутрь — к воспоминаниям, тревогам или сожалениям — он может привести к бесконечному анализу."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A figure facing inward toward a spiral, with small sketched icons of a clock (memory), a storm cloud (worry), and a broken line (regret) floating inside the spiral."}}
-{"video": {"prompt": "Spiral slowly tightens and pulls the floating icons inward, camera holds still."}}
-
-{"scene_id": "scene_038"}
-{"text": "The same strengths that help with problem-solving can also lead to rumination."}
-{"text_ru": "Те же сильные стороны, которые помогают решать задачи, могут также приводить к навязчивым размышлениям."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A single gear or puzzle piece split down the middle — left side labeled with a light bulb (problem-solving), right side showing a looping arrow (rumination)."}}
-{"video": {"prompt": "A vertical crack line slowly draws itself down the center of the shape, dividing both sides, camera static."}}
-
-{"scene_id": "scene_039"}
-{"text": "So, maladaptive rumination isn't just a bad habit."}
-{"text_ru": "Итак, дезадаптивное руминирование — это не просто вредная привычка."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A crossed-out habit-loop icon (simple circular arrow with an X through it), clean and stark."}}
-{"video": {"prompt": "The X mark draws itself slowly over the loop icon, camera static."}}
-
-{"scene_id": "scene_040"}
-{"text": "It's a side effect of a mind that's always searching for meaning, always connecting the dots—even when there's nothing new to find."}
-{"text_ru": "Это побочный эффект разума, который всегда ищет смысл, всегда соединяет точки — даже когда нет ничего нового для открытия."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A simple head silhouette with dozens of small dots scattered inside and outside it, connected by thin lines forming a web, some lines leading to empty space with a question mark."}}
-{"video": {"prompt": "Pencil lines continue drawing between dots endlessly, looping, camera slowly zooms out slightly."}}
-
-{"scene_id": "scene_041"}
-{"text": "For many, this shapes daily life in quiet ways."}
-{"text_ru": "Для многих это тихо формирует повседневную жизнь."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A simple silhouette of a person doing an ordinary task — sitting at a desk — with a faint thought loop sketched lightly above their head."}}
-{"video": {"prompt": "The faint loop above the head pulses very subtly, almost imperceptibly, camera holds still."}}
-
-{"scene_id": "scene_042"}
-{"text": "What makes the brain get stuck in this loop?"}
-{"text_ru": "Почему мозг застревает в этой петле?"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. A simple outline of a human head in profile, brain visible inside, with a circular looping arrow drawn inside the brain area, suggesting a repeating cycle. Black lines only."}}
-{"video": {"prompt": "The looping arrow inside the brain slowly rotates, repeating its cycle. Subtle pulse effect on the brain outline."}}
-
-{"scene_id": "scene_043"}
-{"text": "The answer is in how the brain works."}
-{"text_ru": "Ответ кроется в том, как работает мозг."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. A simplified side-view outline of a human head with a brain drawn inside using basic lobes. Black lines only, no fill."}}
-{"video": {"prompt": "Camera slowly zooms into the brain outline. A soft glow or pulse emanates from the center of the brain sketch."}}
-
-{"scene_id": "scene_044"}
-{"text": "Two main systems are involved."}
-{"text_ru": "Задействованы две основные системы."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. A brain outline divided into two distinct regions, each labeled with a small Roman numeral I and II. Simple dashed boundary line separating the two areas. Black lines only."}}
-{"video": {"prompt": "The two regions are highlighted one after the other with a brief pulse, drawing attention to each in sequence."}}
-
-{"scene_id": "scene_045"}
-{"text": "First, the prefrontal cortex—right behind your forehead—handles planning, analysis, and imagining what could happen."}
-{"text_ru": "Первая — префронтальная кора, расположенная прямо за лбом, отвечает за планирование, анализ и способность представлять возможные события."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. Side-view human head outline with brain inside. The frontal region (prefrontal cortex) is shaded with light pencil hatching and marked with a small arrow pointing to it from outside the head. Small icons nearby: a calendar, a magnifying glass, a thought bubble. Black lines only."}}
-{"video": {"prompt": "Arrow points to the prefrontal cortex area and pulses gently. The small icons (calendar, magnifying glass, thought bubble) appear one by one with a fade-in effect."}}
-
-{"scene_id": "scene_046"}
-{"text": "It lets you replay conversations and think about the future."}
-{"text_ru": "Она позволяет мысленно воспроизводить разговоры и думать о будущем."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. Inside a thought bubble: two simple speech bubbles replaying (with a circular replay arrow), and a small arrow pointing forward labeled with a horizon line suggesting the future. Black lines only."}}
-{"video": {"prompt": "The replay arrow spins slowly inside the thought bubble. The forward-pointing arrow stretches slightly toward the horizon."}}
-
-{"scene_id": "scene_047"}
-{"text": "For most people, this helps solve problems."}
-{"text_ru": "Для большинства людей это помогает решать проблемы."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. A simple figure (stick person) standing next to a large puzzle piece being placed into a puzzle. A subtle checkmark above. Black lines only."}}
-{"video": {"prompt": "The puzzle piece slides smoothly into place. The checkmark appears with a brief draw-on animation."}}
-
-{"scene_id": "scene_048"}
-{"text": "For overthinkers, this part is extra active."}
-{"text_ru": "У людей, склонных к избыточному обдумыванию, эта часть чрезмерно активна."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. Side-view head with the prefrontal cortex region visibly vibrating or crackling with energy lines radiating outward. Multiple small lightning bolt symbols around the frontal lobe. Black lines only."}}
-{"video": {"prompt": "Energy lines and lightning bolts radiate outward from the frontal region with a rapid flickering animation, conveying hyperactivity."}}
-
-{"scene_id": "scene_049"}
-{"text": "It keeps coming up with scenarios, looking for threats, and searching for perfect answers—even when there aren't any."}
-{"text_ru": "Она непрестанно генерирует сценарии, ищет угрозы и стремится к идеальным ответам — даже там, где их нет."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. Inside a thought bubble: three small panels — one showing branching scenario arrows, one showing an eye with an exclamation mark (threat detection), one showing a magnifying glass over a question mark (searching for answers). All surrounded by looping doodle lines. Black lines only."}}
-{"video": {"prompt": "The three panels cycle through in sequence with a quick zoom-in on each. Looping lines around them animate in a continuous swirl."}}
-
-{"scene_id": "scene_050"}
-{"text": "Second, the default mode network—a group of brain areas that turn on when you're resting or thinking about yourself—creates ongoing mental chatter."}
-{"text_ru": "Вторая система — сеть пассивного режима работы мозга, группа областей мозга, которые активируются в состоянии покоя или при размышлении о себе, — порождает непрекращающийся внутренний монолог."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. Brain outline with multiple small dots scattered across different regions, connected by thin lines forming a network. A small figure sitting in a resting pose next to the brain. Speech bubble with ellipsis (...) above the resting figure. Black lines only."}}
-{"video": {"prompt": "The network dots light up in sequence, with connecting lines drawing themselves one by one. The speech bubble ellipsis pulses repeatedly."}}
-
-{"scene_id": "scene_051"}
-{"text": "In overthinkers, this network is especially active."}
-{"text_ru": "У людей, склонных к избыточному обдумыванию, эта сеть особенно активна."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. Brain outline with the default mode network dots now larger and more numerous, connected lines thicker and more intense, radiating outward. Several small burst symbols around the network nodes. Black lines only."}}
-{"video": {"prompt": "The network nodes pulse rapidly in an amplified rhythm. Burst symbols appear and fade in quick succession around the brain."}}
-
-{"scene_id": "scene_052"}
-{"text": "The mind keeps scanning, narrating, and asking questions, even when nothing is happening outside."}
-{"text_ru": "Разум непрерывно сканирует, комментирует и задаёт вопросы — даже когда снаружи ничего не происходит."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. A radar sweep arc inside a head outline, a small open book with lines (narrating), and several question marks floating inside the thought space. Outside the head: empty space, no external stimuli. Black lines only."}}
-{"video": {"prompt": "The radar arc sweeps continuously. Question marks float upward slowly and fade. The book pages flutter gently."}}
-
-{"scene_id": "scene_053"}
-{"text": "Silence fills up with doubts and what-ifs."}
-{"text_ru": "Тишина заполняется сомнениями и мыслями «а что, если»."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimal elements. An empty room suggested by a simple floor line and blank space. Inside the emptiness: small floating words sketched as illegible scribbles, question marks, and small storm cloud doodles rising upward to fill the space. Black lines only."}}
-{"video": {"prompt": "The question marks and cloud doodles rise slowly from the floor upward, filling the empty space progressively until it feels crowded."}}
-
-{"scene_id": "scene_054"}
-{"text": "Why does this start for some people?"}
-{"text_ru": "Почему это начинается у некоторых людей?"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A single question mark drawn in expressive pencil strokes, slightly tilted, center of frame."}}
-{"video": {"prompt": "Question mark slowly appears stroke by stroke, as if being drawn by hand in real time."}}
-
-{"scene_id": "scene_055"}
-{"text": "Often, it goes back to childhood."}
-{"text_ru": "Часто всё уходит корнями в детство."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A small child silhouette sitting alone, drawn with simple pencil strokes, centered in frame."}}
-{"video": {"prompt": "Camera slowly zooms in on the child silhouette, soft fade-in from blank page."}}
-
-{"scene_id": "scene_056"}
-{"text": "Growing up in unpredictable situations—where moods, rules, or safety changed a lot—teaches the brain to stay alert."}
-{"text_ru": "Взросление в непредсказуемых условиях — когда настроения, правила или безопасность постоянно менялись — учит мозг оставаться начеку."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A child figure surrounded by jagged, shifting lines and arrows pointing in different directions, suggesting chaos and unpredictability."}}
-{"video": {"prompt": "Jagged lines around the child pulse and shift erratically, arrows rotate and change direction repeatedly."}}
-
-{"scene_id": "scene_057"}
-{"text": "This habit sticks, and the brain keeps running mental simulations even as an adult."}
-{"text_ru": "Эта привычка остаётся, и мозг продолжает прокручивать мысленные симуляции даже во взрослом возрасте."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. An adult figure with a thought bubble above head filled with looping circular arrows, suggesting endless mental loops."}}
-{"video": {"prompt": "Circular arrows inside the thought bubble spin continuously in a slow loop, never stopping."}}
-
-{"scene_id": "scene_058"}
-{"text": "It's not a flaw. It's a way the brain learned to handle uncertainty."}
-{"text_ru": "Это не изъян. Это способ, которым мозг научился справляться с неопределённостью."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A simple brain outline drawn in pencil with a small shield symbol sketched beside it, minimal and clean."}}
-{"video": {"prompt": "Shield symbol beside the brain fades in gently, a subtle glow effect drawn as radiating pencil lines."}}
-
-{"scene_id": "scene_059"}
-{"text": "So, overthinking isn't just a random habit."}
-{"text_ru": "Итак, навязчивые мысли — это не просто случайная привычка."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. The word 'OVERTHINKING' sketched in rough pencil lettering with a bold X crossing out the word 'random' beneath it."}}
-{"video": {"prompt": "X mark draws itself over 'random' with a quick pencil stroke motion."}}
-
-{"scene_id": "scene_060"}
-{"text": "It's the brain's way of trying to stay safe in situations that once felt unpredictable."}
-{"text_ru": "Это способ мозга пытаться оставаться в безопасности в ситуациях, которые когда-то казались непредсказуемыми."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A brain enclosed inside a protective circle, with small sketched danger symbols outside the circle, drawn minimally."}}
-{"video": {"prompt": "Danger symbols outside the circle pulse lightly; the protective circle holds steady without movement."}}
-
-{"scene_id": "scene_061"}
-{"text": "The problem is, the brain doesn't always realize when it's safe to relax."}
-{"text_ru": "Проблема в том, что мозг не всегда понимает, когда можно расслабиться."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A brain figure with wide alert eyes sketched in pencil, surrounded by a calm empty space, no threats present."}}
-{"video": {"prompt": "The alert eyes on the brain sketch blink slowly but remain wide open, never fully closing."}}
-
-{"scene_id": "scene_062"}
-{"text": "The same circuits that once protected you can now keep you stuck in worry and analysis."}
-{"text_ru": "Те же самые цепи, которые когда-то защищали вас, теперь могут удерживать вас в тревоге и анализе."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A tangled web of interconnected nodes and lines drawn in pencil, resembling neural circuits, with a small figure trapped inside the web."}}
-{"video": {"prompt": "The tangled web slowly tightens around the figure, lines drawing closer inward in a slow continuous motion."}}
-
-{"scene_id": "scene_063"}
-{"text": "Overthinking isn't only about anxiety or negativity."}
-{"text_ru": "Навязчивые мысли — это не только тревога или негатив."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. Two symbols side by side: a simple anxious face and a minus sign, both crossed out lightly with pencil strokes."}}
-{"video": {"prompt": "Light pencil cross strokes draw over each symbol one after the other, left to right."}}
-
-{"scene_id": "scene_064"}
-{"text": "It's a brain that's learned to stay on guard, always trying to protect—even when it's not needed anymore."}
-{"text_ru": "Это мозг, который научился держаться настороже, всегда стараясь защищать — даже когда это больше не нужно."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background, black lines only, minimal elements. A brain figure standing upright in a guard pose, holding a tiny sketched shield, alone in a completely empty space with no threats."}}
-{"video": {"prompt": "The brain guard figure slowly looks left, then right, then left again in a repeating patrol loop, shield held steady."}}
-
-{"scene_id": "scene_065"}
-{"text": "Not all overthinking is the same."}
-{"text_ru": "Не все навязчивые мысли одинаковы."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: two thought bubbles side by side, slightly different in shape, black outlines only, sparse detail"}}
-{"video": {"prompt": "Camera slowly zooms in on the two thought bubbles, subtle hand-drawn wobble effect"}}
-
-{"scene_id": "scene_066"}
-{"text": "There are two main types of rumination."}
-{"text_ru": "Существует два основных типа руминации."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: large number '2' with two simple brain/head silhouettes beneath it, black ink, no fill"}}
-{"video": {"prompt": "The number '2' draws itself in, each head silhouette fades in one after the other"}}
-
-{"scene_id": "scene_067"}
-{"text": "First, reflective rumination is when you think about a problem, trying to understand it."}
-{"text_ru": "Первый тип — рефлексивная руминация: вы думаете о проблеме, пытаясь её понять."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a simple human head profile with a magnifying glass over a small tangled knot inside the mind, black outlines, transparent bg"}}
-{"video": {"prompt": "Magnifying glass slowly moves across the knot as if examining it carefully"}}
-
-{"scene_id": "scene_068"}
-{"text":"You might ask, "Why did I react that way? What was really going on?"}
-{"text_ru": "Вы можете спросить себя: «Почему я так отреагировал? Что на самом деле происходило?»"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a speech bubble with a question mark inside, simple face outline below looking upward thoughtfully, black ink only"}}
-{"video": {"prompt": "Question mark inside the bubble pulses gently, face tilts upward slowly"}}
-
-{"scene_id": "scene_069"}
-{"text": "This kind of thinking is curious and can sometimes help you find answers."}
-{"text_ru": "Такой тип мышления основан на любопытстве и порой помогает найти ответы."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a simple lightbulb with a small spark at the top, black outline, no fill, sparse lines"}}
-{"video": {"prompt": "Lightbulb flickers and then glows steadily, spark animates upward"}}
-
-{"scene_id": "scene_070"}
-{"text": "Reflective rumination can be useful."}
-{"text_ru": "Рефлексивная руминация может быть полезной."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a simple checkmark inside a circle, clean black lines, transparent background"}}
-{"video": {"prompt": "Checkmark draws itself into the circle with a smooth pencil-stroke animation"}}
-
-{"scene_id": "scene_071"}
-{"text": "The other type is brooding rumination."}
-{"text_ru": "Второй тип — тягостная руминация."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a human head silhouette with a heavy dark storm cloud drawn inside, black ink, no fill"}}
-{"video": {"prompt": "Storm cloud slowly expands inside the head outline, lines darken gradually"}}
-
-{"scene_id": "scene_072"}
-{"text":"This is when you get stuck on the same thoughts: "Why does this always happen to me? What's wrong with me?"}
-{"text_ru": "Это когда вы застреваете на одних и тех же мыслях: «Почему это всегда случается со мной? Что со мной не так?»"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a circular arrow looping endlessly around a single question mark, black ink, minimal detail"}}
-{"video": {"prompt": "Circular arrow spins in a loop repeatedly, question mark stays static and unchanging"}}
-
-{"scene_id": "scene_073"}
-{"text": "There's no curiosity—just a feeling of being stuck."}
-{"text_ru": "Никакого любопытства — только ощущение застревания."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: two feet sinking slightly into ground lines, figure frozen mid-step, black outlines only"}}
-{"video": {"prompt": "Feet remain motionless, ground lines slowly creep upward around them"}}
-
-{"scene_id": "scene_074"}
-{"text": "Brooding is linked to more depression and anxiety."}
-{"text_ru": "Тягостная руминация связана с усилением депрессии и тревоги."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a simple downward arrow next to a drooping human figure outline, black ink, no fill"}}
-{"video": {"prompt": "Figure slowly droops further downward, arrow pulses once emphasizing descent"}}
-
-{"scene_id": "scene_075"}
-{"text": "It makes problems feel bigger instead of smaller."}
-{"text_ru": "Она делает проблемы ощутимо больше, а не меньше."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a small dot labeled 'problem' with an expanding circle growing around it, black outlines only"}}
-{"video": {"prompt": "Circle around the dot expands outward slowly, as if the problem is inflating"}}
-
-{"scene_id": "scene_076"}
-{"text":"For example, after an argument with a friend, reflective rumination might sound like, "What set that off? Did I misunderstand something? What could I do differently?"}
-{"text_ru": "Например, после ссоры с другом рефлексивная руминация может звучать так: «Что это спровоцировало? Я что-то не так понял? Что я мог бы сделать иначе?»"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: two simple stick figures facing each other with a small speech bubble between them containing a question mark, black ink, transparent bg"}}
-{"video": {"prompt": "Question mark in the speech bubble morphs gently into three smaller question marks, suggesting multiple angles of reflection"}}
-
-{"scene_id": "scene_077"}
-{"text":"Brooding would sound like, "I always mess things up. They probably don't like me now. I can't do anything right."}
-{"text_ru": "Тягостная руминация звучала бы так: «Я всегда всё порчу. Они, наверное, теперь не любят меня. Я ничего не могу сделать правильно»."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: single slouched figure with a heavy downward spiral drawn above its head, black ink, no fill"}}
-{"video": {"prompt": "Spiral above the figure tightens and contracts inward, figure slouches further"}}
-
-{"scene_id": "scene_078"}
-{"text": "The first is about understanding; the second just makes you feel worse."}
-{"text_ru": "Первый тип направлен на понимание; второй просто ухудшает ваше самочувствие."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: two columns — left has a lightbulb, right has a drooping face — divided by a single vertical line, black ink only"}}
-{"video": {"prompt": "Left lightbulb glows faintly, right drooping face sags slightly lower"}}
-
-{"scene_id": "scene_079"}
-{"text": "This difference matters."}
-{"text_ru": "Это различие важно."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a bold exclamation mark centered, clean black strokes, transparent background, nothing else"}}
-{"video": {"prompt": "Exclamation mark draws itself from top to bottom with a single clean pencil stroke"}}
-
-{"scene_id": "scene_080"}
-{"text": "Reflective rumination, while uncomfortable, is active and looks for answers."}
-{"text_ru": "Рефлексивная руминация, хотя и неприятна, активна и ищет ответы."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a figure leaning forward mid-stride with a small compass or arrow pointing ahead, black outlines, transparent bg"}}
-{"video": {"prompt": "Figure strides forward slowly, compass arrow rotates to point in a clear direction"}}
-
-{"scene_id": "scene_081"}
-{"text": "Brooding is passive and goes in circles."}
-{"text_ru": "Тягостная руминация пассивна и движется по кругу."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a seated figure with a circular dotted path looping around it going nowhere, black ink, minimal lines"}}
-{"video": {"prompt": "Dotted circular path animates continuously around the still seated figure, looping endlessly"}}
-
-{"scene_id": "scene_082"}
-{"text": "One can help you move forward; the other keeps you stuck."}
-{"text_ru": "Один тип помогает двигаться вперёд; другой держит вас на месте."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: two simple figures — left one walking forward with an arrow ahead, right one frozen with chains sketched at feet, black ink only"}}
-{"video": {"prompt": "Left figure takes a slow step forward, right figure remains completely motionless"}}
-
-{"scene_id": "scene_083"}
-{"text": "For overthinkers, these two often switch back and forth, making it feel like you're making progress when you're not."}
-{"text_ru": "У людей, склонных к чрезмерному обдумыванию, эти два типа часто чередуются, создавая ощущение прогресса там, где его нет."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a figure on a pendulum swinging between two labeled zones — one with a lightbulb, one with a storm cloud — black outlines, transparent bg"}}
-{"video": {"prompt": "Pendulum swings back and forth between lightbulb zone and storm cloud zone in a slow continuous loop"}}
-
-{"scene_id": "scene_084"}
-{"text": "This switching isn't random."}
-{"text_ru": "Это переключение не случайно."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A single switch or toggle drawn in black ink, minimal lines, isolated, centered composition."}}
-{"video": {"prompt": "Camera slowly zooms in on the switch. Subtle pencil-scratch texture animation."}}
-
-{"scene_id": "scene_085"}
-{"text": "Each time you move from brooding to reflection, your brain gets a small reward—a bit of dopamine,"}
-{"text_ru": "Каждый раз, когда ты переходишь от тоскливых мыслей к размышлению, мозг получает небольшую награду — немного дофамина,"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Minimalist brain outline in black, with a tiny spark or star near its center indicating a reward signal. Clean, sparse lines."}}
-{"video": {"prompt": "The small spark inside the brain flickers and pulses gently. Pencil-drawn ripple radiates outward from the spark."}}
-
-{"scene_id": "scene_086"}
-{"text": "the same chemical involved in solving problems."}
-{"text_ru": "того самого химического вещества, которое участвует в решении задач."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simple puzzle piece and a molecule symbol (minimal dots and lines) side by side in black ink, no fill, sparse."}}
-{"video": {"prompt": "The puzzle piece and molecule slowly drift toward each other as if connecting. Gentle floating motion."}}
-
-{"scene_id": "scene_087"}
-{"text": "It feels like you're getting somewhere,"}
-{"text_ru": "Кажется, что двигаешься вперёд,"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A minimalist figure mid-stride walking forward, single black pencil line, no background detail."}}
-{"video": {"prompt": "The figure takes one step forward. Simple looping walk cycle animation, one step only."}}
-
-{"scene_id": "scene_088"}
-{"text": "but then you slip back into brooding, thinking you're digging deeper."}
-{"text_ru": "но потом снова соскальзываешь в тоску, думая, что копаешь глубже."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. The same minimalist figure now slouched, head down, with a small downward spiral drawn beneath their feet in black pencil. Minimal lines."}}
-{"video": {"prompt": "The figure slowly sinks downward following the spiral. Camera tilts slightly down as the figure descends."}}
-
-{"scene_id": "scene_089"}
-{"text": "The cycle keeps going, fueled by the brain's reward system, even if nothing really changes."}
-{"text_ru": "Цикл продолжается, подпитываемый системой вознаграждения мозга, даже если ничего по-настоящему не меняется."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A circular arrow loop drawn in black pencil, inside it a tiny brain outline. Minimal, clean, no fill."}}
-{"video": {"prompt": "The circular arrow rotates continuously in a slow loop. The brain inside remains static while the arrow spins."}}
-
-{"scene_id": "scene_090"}
-{"text": "That's why overthinking is hard to spot from the inside."}
-{"text_ru": "Вот почему избыточные размышления так сложно заметить изнутри."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A figure looking inward — drawn as a person with a magnifying glass turned toward their own head, black pencil lines only, minimal detail."}}
-{"video": {"prompt": "The magnifying glass slowly moves in a small circular search motion around the head. Subtle hand-drawn wobble effect."}}
-
-{"scene_id": "scene_091"}
-{"text": "It feels like you're working hard, but the problem stays the same."}
-{"text_ru": "Кажется, что усердно работаешь, но проблема остаётся прежней."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A minimalist figure pushing against a large immovable block. The block has no movement cracks or tilt — completely static. Black pencil, transparent background."}}
-{"video": {"prompt": "The figure strains with effort — slight push motion — while the block remains perfectly still. Camera stays static."}}
-
-{"scene_id": "scene_092"}
-{"text": "The mind is busy, but nothing gets resolved."}
-{"text_ru": "Разум занят, но ничего не решается."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A head outline filled with many small tangled scribble lines suggesting activity and noise, but no clear shape or resolution. Black pencil only, minimal outer lines."}}
-{"video": {"prompt": "The scribbles inside the head animate with a subtle chaotic jitter. The outer head contour stays perfectly still."}}
-
-{"scene_id": "scene_093"}
-{"text": "There's also a link between overthinking and cognitive empathy."}
-{"text_ru": "Существует также связь между навязчивыми мыслями и когнитивной эмпатией."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a human head silhouette with two arrows connecting two abstract brain regions, one labeled with a loop symbol (overthinking) and one with a heart symbol (empathy). Black lines only, clean and sparse."}}
-{"video": {"prompt": "Camera slowly zooms in on the two connected brain regions, arrows gently pulse once."}}
-
-{"scene_id": "scene_094"}
-{"text": "A 2013 study in Psychological Science found that people who ruminate are often better at picking up on what others are thinking and feeling."}
-{"text_ru": "Исследование 2013 года в журнале Psychological Science показало, что люди, склонные к навязчивым размышлениям, нередко лучше улавливают мысли и чувства других."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: an open journal or research paper with the year '2013' and the words 'Psychological Science' lightly sketched. A small human figure nearby with thought bubbles pointing toward another figure. Black lines, sparse detail."}}
-{"video": {"prompt": "Thought bubbles from one figure drift slowly toward the second figure, as if being perceived."}}
-
-{"scene_id": "scene_095"}
-{"text": "Overthinkers notice small cues: a change in tone, a quick glance, a pause."}
-{"text_ru": "Люди с навязчивыми мыслями замечают мелкие сигналы: смену тона, быстрый взгляд, паузу."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: two simple face profiles facing each other. Between them: a small musical note (tone), a dotted eye line (glance), and a small ellipsis (pause). Black ink, minimal lines, transparent background."}}
-{"video": {"prompt": "Each small cue symbol (note, eye line, ellipsis) briefly highlights with a subtle circle as if being noticed, one by one."}}
-
-{"scene_id": "scene_096"}
-{"text": "Their brains replay interactions, analyze motives, and try to predict responses."}
-{"text_ru": "Их мозг прокручивает взаимодействия, анализирует мотивы и пытается предугадать реакции."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a brain with a circular arrow (replay), a magnifying glass (analyze), and a branching decision tree (predict). All in black pencil strokes, transparent background, minimal elements."}}
-{"video": {"prompt": "The circular arrow rotates slowly, the magnifying glass zooms in slightly, the decision tree branches extend outward in sequence."}}
-
-{"scene_id": "scene_097"}
-{"text": "This can help in social situations, but it also leads to more mental fatigue."}
-{"text_ru": "Это может помогать в социальных ситуациях, но также приводит к большей умственной усталости."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a simple balance scale. One side holds a small group of stick figures (social help), the other side holds a drooping head or wilting symbol (mental fatigue). Black lines, transparent background."}}
-{"video": {"prompt": "The scale tips slowly toward the fatigue side, then briefly levels, suggesting tension between the two."}}
-
-{"scene_id": "scene_098"}
-{"text": "The same study found that this sensitivity makes people feel responsible for others' emotions."}
-{"text_ru": "То же исследование показало, что эта чувствительность заставляет людей чувствовать ответственность за эмоции других."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a stick figure with hands slightly raised as if carrying weight, surrounded by small emotion icons (a tear, a frown, a question mark) floating around them. Black pencil, minimal, transparent background."}}
-{"video": {"prompt": "The emotion icons slowly drift toward the central figure, who slightly droops under their weight."}}
-
-{"scene_id": "scene_099"}
-{"text": "Overthinkers can't easily ignore signs that something's wrong."}
-{"text_ru": "Люди с навязчивыми мыслями не могут легко игнорировать признаки того, что что-то идёт не так."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a stick figure with eyes wide open, staring at a small warning triangle or exclamation mark. An X or crossed-out eye to the side showing the inability to look away. Black pencil, sparse lines, transparent background."}}
-{"video": {"prompt": "The warning symbol pulses slightly; the figure's gaze line remains locked on it, unmoving."}}
-
-{"scene_id": "scene_100"}
-{"text": "Their minds keep coming back to unresolved issues, looking for answers."}
-{"text_ru": "Их разум постоянно возвращается к нерешённым вопросам в поисках ответов."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a circular path with a small figure walking in a loop, at the center a question mark inside an open box or puzzle piece (unresolved issue). Black ink, clean minimal lines, transparent background."}}
-{"video": {"prompt": "The figure walks the loop path continuously, the question mark at center gently blinks or pulses."}}
-
-{"scene_id": "scene_101"}
-{"text": "This constant mental work uses up energy, leading to both emotional and physical tiredness."}
-{"text_ru": "Эта постоянная умственная работа расходует энергию, приводя как к эмоциональному, так и к физическому истощению."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a battery icon nearly empty, next to a drooping stick figure with slouched posture and heavy eyelids. A small brain icon above with lightning bolt draining. Black pencil, transparent background, minimal elements."}}
-{"video": {"prompt": "The battery level indicator slowly drops further; the figure's posture droops incrementally."}}
-
-{"scene_id": "scene_102"}
-{"text": "So, the same things that make overthinkers good at understanding others also make them more likely to feel exhausted."}
-{"text_ru": "Таким образом, те же качества, которые помогают людям с навязчивыми мыслями понимать других, делают их более склонными к истощению."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a two-sided arrow or Möbius loop connecting a glowing lightbulb (understanding others) and a wilting or dimmed figure (exhaustion). Black lines only, minimal, transparent background."}}
-{"video": {"prompt": "The arrow cycles slowly between the two symbols, emphasizing the loop between empathy and exhaustion."}}
-
-{"scene_id": "scene_103"}
-{"text": "They want to help, but can't always step back."}
-{"text_ru": "Они хотят помочь, но не всегда могут отступить."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimal pencil sketch on transparent background: a stick figure reaching one hand forward toward another figure (helping gesture), while their feet are rooted or anchored to the ground (can't step back). Black pencil strokes, transparent background, very sparse."}}
-{"video": {"prompt": "The reaching hand extends slightly further; the feet remain firmly planted, creating visible tension."}}
-
-{"scene_id": "scene_104"}
-{"text": "There's a point where more analysis stops helping."}
-{"text_ru": "Есть момент, когда дальнейший анализ перестаёт помогать."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a single thought bubble above a simple human head silhouette, the bubble filled with tangled scribble lines suggesting overload, black lines only, sparse composition"}}
-{"video": {"prompt": "The tangled scribble lines inside the thought bubble slowly stop moving and freeze, camera static"}}
-
-{"scene_id": "scene_105"}
-{"text": "You can look at a situation from every angle, replay every detail, imagine every outcome,"}
-{"text_ru": "Можно рассматривать ситуацию со всех сторон, прокручивать каждую деталь, представлять каждый исход,"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple geometric shape (cube or diamond) seen from multiple angles indicated by small arrow lines pointing in all directions around it, black lines only, clean and sparse"}}
-{"video": {"prompt": "The arrows around the shape rotate slowly in a loop, suggesting examination from all sides, subtle continuous motion"}}
-
-{"scene_id": "scene_106"}
-{"text": "but sometimes there's no answer."}
-{"text_ru": "но иногда ответа нет."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a large hand-drawn question mark, alone, centered, black on transparent, no other elements"}}
-{"video": {"prompt": "The question mark fades slightly then reappears, pulsing gently, unresolved"}}
-
-{"scene_id": "scene_107"}
-{"text": "The mind keeps searching, but the problem doesn't change."}
-{"text_ru": "Разум продолжает искать, но проблема не меняется."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple magnifying glass hovering over a small unchanging dot or knot shape, black lines only, minimal detail"}}
-{"video": {"prompt": "The magnifying glass moves side to side slowly over the static knot, which never changes, repetitive scanning motion"}}
-
-{"scene_id": "scene_108"}
-{"text": "This is the limit of thinking."}
-{"text_ru": "Это предел мышления."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a straight horizontal line with a small human head silhouette stopped directly at the line, unable to cross, black lines only, very sparse"}}
-{"video": {"prompt": "Camera slowly zooms in on the boundary line, figure remains motionless at the edge"}}
-
-{"scene_id": "scene_109"}
-{"text": "Not every problem can be solved by logic or understanding."}
-{"text_ru": "Не каждую проблему можно решить логикой или пониманием."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple knotted rope or tangled loop that cannot be untied, beside a small gear symbol crossed out with a single line, black lines only, minimal"}}
-{"video": {"prompt": "The gear symbol fades out gently, the knot remains unchanged, static hold"}}
-
-{"scene_id": "scene_110"}
-{"text": "Some things just stay uncertain."}
-{"text_ru": "Некоторые вещи так и остаются неопределёнными."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple cloud-like blob shape with faint dashed outline suggesting indefiniteness, no solid form, black lines only, sparse"}}
-{"video": {"prompt": "The dashed outline shifts and reforms slowly, never solidifying, gentle morphing loop"}}
-
-{"scene_id": "scene_111"}
-{"text": "Trying to force a solution can make you feel stuck and tired."}
-{"text_ru": "Попытка насильно найти решение может заставить вас чувствовать себя застрявшим и усталым."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple stick figure pushing hard against a large immovable boulder, hunched posture, effort lines drawn around arms, black lines only, minimal detail"}}
-{"video": {"prompt": "The stick figure strains repeatedly against the boulder with no movement, boulder stays fixed, looping push motion"}}
-
-{"scene_id": "scene_112"}
-{"text": "This tiredness isn't laziness or a flaw."}
-{"text_ru": "Эта усталость — не лень и не недостаток."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple drooping figure with slouched shoulders, a small X drawn next to a laziness symbol (crossed-out couch icon), black lines only, sparse composition"}}
-{"video": {"prompt": "The X mark beside the couch icon pulses once then fades, camera holds still"}}
-
-{"scene_id": "scene_113"}
-{"text": "It's what happens when you keep looking for closure that doesn't come."}
-{"text_ru": "Это то, что происходит, когда вы продолжаете искать завершение, которое не наступает."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple open door frame with no door, a small figure reaching toward it but the doorway leading to nothing, black lines only, minimal"}}
-{"video": {"prompt": "The figure slowly reaches toward the empty doorframe, hand never quite arriving, gentle looping reach motion"}}
-
-{"scene_id": "scene_114"}
-{"text": "The brain wants answers, but sometimes they aren't there."}
-{"text_ru": "Мозг хочет ответов, но иногда их просто нет."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simplified brain outline with a small empty speech bubble beside it, the bubble blank, black lines only, sparse"}}
-{"video": {"prompt": "The empty speech bubble flickers softly as if expecting text that never appears, subtle pulse"}}
-
-{"scene_id": "scene_115"}
-{"text": "The cycle keeps going, and the sense of burden grows."}
-{"text_ru": "Цикл продолжается, и ощущение бремени нарастает."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a circular arrow loop (cycle symbol) with a small downward-pressing weight or stone above a stick figure, black lines only, minimal elements"}}
-{"video": {"prompt": "The circular arrow rotates slowly while the weight descends slightly lower in each loop, gradual accumulation motion"}}
-
-{"scene_id": "scene_116"}
-{"text": "At this point, relief comes from a different approach—not more problem-solving, but changing how you relate to your thoughts."}
-{"text_ru": "В этот момент облегчение приходит от другого подхода — не от дальнейшего решения проблем, а от изменения того, как вы относитесь к своим мыслям."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Minimalist pencil sketch on transparent background: a simple stick figure stepping sideways away from a cluster of floating thought-bubble scribbles, turning to face a different direction with a calm open hand gesture, black lines only, sparse and clean"}}
-{"video": {"prompt": "The figure gently turns away from the thought cluster, the scribbles remain in place but grow slightly fainter, smooth lateral camera pan following the figure"}}
-
-{"scene_id": "scene_117"}
-{"text": "What helps when overthinking becomes a habit?"}
-{"text_ru": "Что помогает, когда сверхдумание становится привычкой?"}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A person sitting at a desk, head resting on hand, surrounded by swirling thought bubbles looping around their head."}}
-{"video": {"prompt": "Camera slowly zooms in on the person's face, thought bubbles gently spinning around them."}}
-
-{"scene_id": "scene_118"}
-{"text": "Research suggests a shift in strategy: instead of fighting your thoughts, try changing how you see them."}
-{"text_ru": "Исследования предлагают смену стратегии: вместо борьбы с мыслями попробуйте изменить то, как вы их воспринимаете."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. Two simple arrows: one pointing toward a thought bubble (fighting), one curving around it (observing). Clean contrast between the two paths."}}
-{"video": {"prompt": "The fighting arrow fades out, the curving observing arrow glows and expands slightly."}}
-
-{"scene_id": "scene_119"}
-{"text": "Acceptance and Commitment Therapy, or ACT, is built on this idea."}
-{"text_ru": "Терапия принятия и ответственности, или ACT, построена именно на этой идее."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. Bold hand-lettered acronym 'ACT' centered, with a small thought bubble lightly sketched beside it."}}
-{"video": {"prompt": "Letters of 'ACT' appear one by one, drawn in as if by a pencil in real time."}}
-
-{"scene_id": "scene_120"}
-{"text": "The goal isn't to get rid of hard thoughts or argue with them, but to notice them, let them be, and focus on actions that matter to you."}
-{"text_ru": "Цель — не избавиться от трудных мыслей и не спорить с ними, а замечать их, позволять им быть и сосредоточиться на действиях, которые важны для вас."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A thought bubble floating freely above a figure, the figure looking at it calmly with open hands at sides, not pushing or grabbing it."}}
-{"video": {"prompt": "The thought bubble drifts slowly upward while the figure remains still, calm, grounded."}}
-
-{"scene_id": "scene_121"}
-{"text": "One key technique in ACT is called cognitive diffusion."}
-{"text_ru": "Одна из ключевых техник в ACT называется когнитивное разделение."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. The words 'cognitive diffusion' hand-lettered, with a single thin line separating a thought bubble from a small human silhouette."}}
-{"video": {"prompt": "The thin separating line draws itself slowly between the thought bubble and the silhouette."}}
-
-{"scene_id": "scene_122"}
-{"text":"When a thought comes up—like, I always make mistakes—the usual reaction is to believe it or try to push it away."}
-{"text_ru": "Когда возникает мысль — например, «я всегда делаю ошибки» — обычная реакция: поверить ей или попытаться её отогнать."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A thought bubble containing the words 'I always make mistakes', a figure either nodding in agreement or raising a hand to push it away."}}
-{"video": {"prompt": "Figure alternates between nodding toward the bubble and pushing it, showing both reactions briefly."}}
-
-{"scene_id": "scene_123"}
-{"text":"Diffusion means seeing the thought as just a thought: I'm having the thought that I always make mistakes."}
-{"text_ru": "Разделение означает восприятие мысли просто как мысли: У меня есть мысль, что я всегда делаю ошибки."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A thought bubble with text inside it, and a second outer frame around the bubble labeled 'just a thought', creating a layered distance effect."}}
-{"video": {"prompt": "A second sketched border slowly appears around the thought bubble, creating visible distance."}}
-
-{"scene_id": "scene_124"}
-{"text":"Or, I notice I'm having the thought that I always make mistakes."}
-{"text_ru": "Или: «Я замечаю, что у меня есть мысль, что я всегда делаю ошибки»."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A small observer figure standing slightly apart, watching a thought bubble from a distance, with a dotted line connecting eyes to bubble."}}
-{"video": {"prompt": "Dotted line from observer's eyes to thought bubble draws itself slowly, emphasizing gentle observation."}}
-
-{"scene_id": "scene_125"}
-{"text": "This creates some distance, so the thought has less power."}
-{"text_ru": "Это создаёт дистанцию, и мысль теряет свою силу."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A thought bubble shrinking slightly as a figure steps back from it, space visible between them."}}
-{"video": {"prompt": "Thought bubble visibly shrinks or fades as the figure takes one small step back."}}
-
-{"scene_id": "scene_126"}
-{"text": "ACT doesn't try to erase thoughts, but helps people notice them, accept them, and act based on their values—not just on what pops into their mind."}
-{"text_ru": "ACT не пытается стереть мысли, но помогает людей замечать их, принимать и действовать согласно своим ценностям — а не просто тому, что приходит в голову."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure walking forward on a path, a thought bubble floating beside them not blocking the path, a small star or compass symbol ahead representing values."}}
-{"video": {"prompt": "Figure walks steadily forward toward the compass star, thought bubble drifts alongside without obstructing."}}
-
-{"scene_id": "scene_127"}
-{"text": "Over time, this changes the relationship to thinking."}
-{"text_ru": "Со временем это меняет отношение к мышлению."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A timeline arrow with a small figure at the start looking tense near a thought bubble, and the same figure at the end standing relaxed beside a lighter, smaller thought bubble."}}
-{"video": {"prompt": "Scene transitions along the timeline arrow from tense figure to relaxed figure, smooth left-to-right motion."}}
-
-{"scene_id": "scene_128"}
-{"text": "Thoughts become background noise—sometimes helpful, sometimes not, but always just thoughts."}
-{"text_ru": "Мысли становятся фоновым шумом — иногда полезным, иногда нет, но всегда просто мыслями."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. Multiple small thought bubbles scattered loosely in the background, a figure in the foreground facing forward, bubbles visually behind and smaller than the figure."}}
-{"video": {"prompt": "Thought bubbles drift gently in background, slightly fading, while figure in foreground remains steady and still."}}
-
-{"scene_id": "scene_129"}
-{"text": "This doesn't stop overthinking right away."}
-{"text_ru": "Это не останавливает сверхдумание сразу."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure with thought bubbles still swirling around their head, but the figure's posture is calm and upright, not overwhelmed."}}
-{"video": {"prompt": "Thought bubbles continue swirling but slow down slightly, figure remains composed."}}
-
-{"scene_id": "scene_130"}
-{"text": "But it gives a practical way to step back from the cycle, even if it keeps going."}
-{"text_ru": "Но оно даёт практический способ выйти из круговорота, даже если он продолжается."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A circular arrow loop representing the cycle of overthinking, a figure standing just outside the loop's edge, one foot stepped back."}}
-{"video": {"prompt": "Figure slowly takes one step back from the rotating loop, creating visible separation."}}
-
-{"scene_id": "scene_131"}
-{"text": "You learn to watch your mind's activity without getting pulled in."}
-{"text_ru": "Вы учитесь наблюдать за активностью своего разума, не втягиваясь в неё."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A figure sitting peacefully, watching a swirling mind-map or thought cluster in front of them like watching a stream, hands relaxed, eyes open and calm."}}
-{"video": {"prompt": "Thought cluster swirls gently in place, figure observes without leaning forward, scene ends in stillness."}}
-
-{"scene_id": "scene_132"}
-{"text": "Seeing overthinking as an adaptation, not a flaw, can help."}
-{"text_ru": "Восприятие чрезмерного обдумывания как адаптации, а не недостатка, может помочь."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simple human head silhouette in profile, with a small gear or spiral drawn lightly inside the brain area. Minimal lines, black ink only."}}
-{"video": {"prompt": "Camera slowly zooms in on the head silhouette. The spiral inside gently rotates once."}}
-
-{"scene_id": "scene_133"}
-{"text": "Overthinking is the brain's way of trying to predict, prepare, and avoid harm."}
-{"text_ru": "Чрезмерное обдумывание — это способ мозга пытаться предсказывать, готовиться и избегать вреда."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simplified brain outline with three small icons nearby: an eye (predict), a shield (prepare), and an arrow curving away (avoid harm). Black lines, minimal detail."}}
-{"video": {"prompt": "Each icon fades in one by one from left to right, subtle pencil-draw animation."}}
-
-{"scene_id": "scene_134"}
-{"text": "It's not a sign of something broken, but of being sensitive to risk and complexity."}
-{"text_ru": "Это не признак чего-то сломанного, а признак чувствительности к риску и сложности."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A cracked object crossed out with a light X on the left. On the right, a simple antenna or radar wave symbol suggesting sensitivity. Black minimal lines."}}
-{"video": {"prompt": "The cracked object fades slightly while the antenna pulses with a soft wave line radiating outward."}}
-
-{"scene_id": "scene_135"}
-{"text": "This alertness used to help, but now it can be tiring."}
-{"text_ru": "Эта бдительность раньше помогала, но теперь она может быть утомительной."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Left side: a simple alert eye, wide open. Right side: the same eye half-closed with a drooping eyelid. Minimal black lines, no shading."}}
-{"video": {"prompt": "The wide-open eye on the left slowly transitions to the tired half-closed eye on the right."}}
-
-{"scene_id": "scene_136"}
-{"text": "Still, it started as a way to survive."}
-{"text_ru": "Тем не менее, это началось как способ выжить."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A small figure standing upright inside a simple circle, arms slightly raised. A single word 'survive' sketched in light pencil below. Minimal black lines."}}
-{"video": {"prompt": "The circle around the figure draws itself slowly, enclosing the figure protectively."}}
-
-{"scene_id": "scene_137"}
-{"text": "The urge to overthink comes from care: wanting to do the right thing, avoid mistakes, and protect yourself and others."}
-{"text_ru": "Стремление к чрезмерному обдумыванию исходит из заботы: желания поступить правильно, избежать ошибок и защитить себя и других."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simple heart outline at center. Around it, three small sketched symbols: a checkmark (right thing), a crossed-out X (avoid mistakes), a shield (protect). Black minimal lines."}}
-{"video": {"prompt": "Each symbol appears one at a time around the heart, drawn in as if by a pencil in real time."}}
-
-{"scene_id": "scene_138"}
-{"text": "The mind rehearses situations not out of laziness, but out of a wish to keep safe."}
-{"text_ru": "Разум репетирует ситуации не из-за лени, а из-за желания оставаться в безопасности."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simple stage or curtain outline with a small figure standing on it. A loop arrow above the figure suggesting repetition. Minimal black lines, transparent background."}}
-{"video": {"prompt": "The loop arrow above the figure rotates slowly, suggesting rehearsal and repetition."}}
-
-{"scene_id": "scene_139"}
-{"text": "Adaptation isn't always comfortable. What once helped can now be hard to live with."}
-{"text_ru": "Адаптация не всегда удобна. То, что однажды помогало, теперь может быть тяжело переносить."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Two simple frames side by side: left frame shows a small figure standing easily, right frame shows the same figure hunched under a weight. Black minimal lines."}}
-{"video": {"prompt": "Camera pans slowly from the left frame to the right frame, pausing on the hunched figure."}}
-
-{"scene_id": "scene_140"}
-{"text": "The first step is understanding—seeing overthinking as a learned pattern, not a personal failure."}
-{"text_ru": "Первый шаг — понимание: восприятие чрезмерного обдумывания как усвоенной модели, а не личной неудачи."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simple magnifying glass over a looping pattern of lines (representing a habit loop). A small X near a broken figure (failure) is faded out. Minimal black lines."}}
-{"video": {"prompt": "The magnifying glass moves slowly over the loop pattern, bringing it into focus while the failure symbol fades."}}
-
-{"scene_id": "scene_141"}
-{"text": "Self-compassion matters."}
-{"text_ru": "Самосострадание важно."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A simple hand gently cupping a small heart outline. Minimal black lines, very few strokes, transparent background."}}
-{"video": {"prompt": "The hand slowly closes around the heart in a gentle cradling motion."}}
-
-{"scene_id": "scene_142"}
-{"text": "By seeing the logic behind these habits, you can respond with patience instead of frustration."}
-{"text_ru": "Понимая логику этих привычек, вы можете реагировать с терпением вместо раздражения."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. Two simple faces in profile facing each other: one with a calm flat line mouth (patience), one with a jagged mouth crossed out (frustration). Minimal black lines."}}
-{"video": {"prompt": "The frustrated face fades out gently while the calm face remains, slightly brightening."}}
-
-{"scene_id": "scene_143"}
-{"text": "Overthinking doesn't need to be erased; it needs to be understood and managed."}
-{"text_ru": "Чрезмерное обдумывание не нужно стирать; его нужно понять и научиться им управлять."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch on transparent background. A spiral (representing overthinking) with a simple hand resting beside it — not erasing it, but holding steady next to it. Minimal black lines on transparent background."}}
-{"video": {"prompt": "The hand moves slowly toward the spiral and rests beside it calmly, without erasing or covering it."}}
-
-{"scene_id": "scene_144"}
-{"text": "If you find yourself stuck in cycles of thought, remember: it's not proof that you're broken."}
-{"text_ru": "Если вы застряли в циклах мыслей, помните: это не доказательство того, что вы сломлены."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple human figure sits curled on the ground, head bowed, surrounded by looping circular arrows suggesting repeating thought cycles. Sparse, raw linework."}}
-{"video": {"prompt": "The circular arrows slowly rotate around the figure, then gently fade and still. Camera holds steady with a subtle slow zoom in toward the figure."}}
-
-{"scene_id": "scene_145"}
-{"text": "It's a mind trying to adapt."}
-{"text_ru": "Это разум, пытающийся адаптироваться."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple outline of a brain with small delicate tendrils reaching outward in different directions, suggesting exploration and adaptation. Clean sparse lines."}}
-{"video": {"prompt": "The tendrils slowly extend outward one by one, as if reaching and adjusting. Gentle pulse from the center of the brain shape."}}
-
-{"scene_id": "scene_146"}
-{"text": "With awareness and kindness to yourself, you can work with your mind, not against it."}
-{"text_ru": "С осознанностью и добротой к себе вы можете работать со своим разумом, а не против него."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. Two hands — one open, one gently placed over a simple head silhouette — suggesting care and self-compassion. Minimal linework, no shading."}}
-{"video": {"prompt": "The hand slowly moves to rest over the head silhouette in a calm, deliberate motion. Slight warmth suggested by a soft radial glow sketched in thin pencil lines around the hands."}}
-
-{"scene_id": "scene_147"}
-{"text": "Overthinking isn't an enemy."}
-{"text_ru": "Сверхдумание — это не враг."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple thought bubble above a head silhouette, but instead of a threat or monster inside, it is empty or contains a small gentle question mark. Sparse raw lines."}}
-{"video": {"prompt": "The thought bubble appears with a soft draw-on animation, the question mark fades in gently. No aggressive motion — calm and still."}}
-
-{"scene_id": "scene_148"}
-{"text": "It's a part of you that's been trying to help."}
-{"text_ru": "Это часть вас, которая всё это время пыталась помочь."}
-{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch, black on transparent background, minimal elements. A simple human figure with one hand placed over its own chest, a small heart or spark sketched lightly at the center. Minimal lines, intimate and quiet composition."}}
-{"video": {"prompt": "The small heart at the chest pulses once slowly. Camera gently pulls back to show the full figure standing quietly, settled and at peace."}}
+{"text": "Проблема не в интеллекте — проблема в том, что система никогда не получает сигнала остановиться."}
+{"text_ru": "Проблема не в интеллекте — проблема в том, что система никогда не получает сигнала остановиться."}
+{"start": {"prompt": "Бери нашего героя, если указан человек Pencil sketch black on transparent background, minimal elements. A stop sign outline (octagon) with a question mark inside instead of the word STOP, placed next to a looping circuit or gear that keeps spinning. Sparse composition, high contrast linework."}}
+{"video": {"prompt": "The gear spins continuously without stopping; the stop sign flickers as if the signal is absent or missing, reinforcing the idea of no halt command."}}

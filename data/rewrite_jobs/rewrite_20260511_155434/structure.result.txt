@@ -1,0 +1,404 @@
+{
+  "target_chars_total": 11000,
+  "narrative_arc": {
+    "opening_function": "Grab attention with a relatable paradox: why do we feel stressed even when nothing is happening? Set up the promise that stress is more than just a mental state.",
+    "middle_function": "Unpack the biological mechanisms of stress, especially cortisol, and show how modern life keeps us in chronic survival mode. Transition to the powerful role of diet and lifestyle, contrasting harmful and helpful choices, and provide actionable, science-backed advice.",
+    "ending_function": "Deliver an empowering payoff: stress is a biological process, not a personal failing, and small, practical changes can help. Leave the viewer with a sense of agency and clear next steps.",
+    "arc_summary": "The video starts with a relatable hook, builds understanding of the biology of stress, escalates with contrasts and practical advice, and concludes with a reframing that empowers viewers to take manageable action."
+  },
+  "global_rules": {
+    "language": "Russian",
+    "voice_style": "for_voiceover",
+    "avoid_repetition": true,
+    "maintain_semantic_progression": true,
+    "hook_density": "controlled",
+    "tone_goal": "Empowering, science-based, practical, and clear"
+  },
+  "blocks": [
+    {
+      "block_id": 1,
+      "block_name": "Стресс: парадокс современного человека",
+      "block_role": "hook",
+      "purpose": "Мгновенно вовлечь зрителя через узнаваемую ситуацию: ощущение стресса без видимых причин. Подчеркнуть парадокс и пообещать раскрытие глубинной сути стресса.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 900,
+      "target_chars_max": 1100,
+      "must_cover": [
+        "Парадокс: стресс даже в покое",
+        "Обещание раскрыть биологическую природу стресса"
+      ],
+      "must_not_cover": [
+        "Детальные биологические механизмы",
+        "Советы по питанию",
+        "Персонажные обращения и юмор"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": true,
+        "mid_hooks": 0,
+        "open_loop": true
+      },
+      "next_block_hint": "Переход к объяснению: что такое стресс с точки зрения биологии"
+    },
+    {
+      "block_id": 2,
+      "block_name": "Биология стресса: роль кортизола",
+      "block_role": "setup",
+      "purpose": "Ввести базовые понятия: стресс — это не только эмоции, а биологический процесс. Объяснить роль кортизола как гормона выживания.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "Стресс — это биология, а не только психология",
+        "Кортизол как гормон тревоги и выживания",
+        "Эволюционная функция кортизола"
+      ],
+      "must_not_cover": [
+        "Современные стрессоры",
+        "Влияние питания"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Cortisol is a survival hormone that is helpful in acute danger but problematic when chronically elevated."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Контраст между древними и современными стрессорами"
+    },
+    {
+      "block_id": 3,
+      "block_name": "Острый и хронический стресс: ловушка современности",
+      "block_role": "contrast",
+      "purpose": "Показать разницу между острым и хроническим стрессом. Контрастировать реальные угрозы прошлого и постоянные раздражители настоящего.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Контраст: физические угрозы vs. современные стрессоры",
+        "Почему организм не отличает тигра от email"
+      ],
+      "must_not_cover": [
+        "Советы по питанию",
+        "Глубокое объяснение воспаления"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Chronic stress affects multiple body systems, not just emotions."
+        ],
+        "C": [
+          "Gazelle vs. human stress recovery analogy."
+        ],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к последствиям хронического стресса для организма"
+    },
+    {
+      "block_id": 4,
+      "block_name": "Хронический стресс: что происходит с телом",
+      "block_role": "explanation",
+      "purpose": "Показать, как хронический стресс влияет на разные системы организма: сон, пищеварение, давление, иммунитет и т.д.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1500,
+      "target_chars_max": 1700,
+      "must_cover": [
+        "Влияние хронического стресса на тело",
+        "Перечень систем, которые страдают",
+        "Воспаление как защитная, но опасная реакция"
+      ],
+      "must_not_cover": [
+        "Влияние питания",
+        "Практические советы"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Inflammation is a defense mechanism that can become harmful when constantly activated."
+        ],
+        "C": [
+          "Group chat metaphor for body signals."
+        ],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к роли питания и образа жизни в управлении стрессом"
+    },
+    {
+      "block_id": 5,
+      "block_name": "Питание и стресс: скрытая связь",
+      "block_role": "turn",
+      "purpose": "Сделать поворот: питание — ключевой фактор, который может усиливать или снижать стресс. Подготовить к контрасту между разными типами питания.",
+      "target_chars_min": 800,
+      "target_chars_ideal": 1000,
+      "target_chars_max": 1200,
+      "must_cover": [
+        "Питание как фактор, влияющий на стресс",
+        "Обещание практических решений"
+      ],
+      "must_not_cover": [
+        "Детальный разбор продуктов",
+        "Списки нутриентов"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Diet can modulate the body's stress response."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Контраст: ультрапереработанные продукты против цельных"
+    },
+    {
+      "block_id": 6,
+      "block_name": "Ультрапереработанные продукты vs. цельные: влияние на стресс",
+      "block_role": "contrast",
+      "purpose": "Ярко показать разницу между ультрапереработанным и цельным питанием для уровня кортизола и устойчивости к стрессу.",
+      "target_chars_min": 1100,
+      "target_chars_ideal": 1400,
+      "target_chars_max": 1600,
+      "must_cover": [
+        "Факт: ультрапереработанная еда повышает кортизол",
+        "Цельные продукты помогают справляться со стрессом",
+        "Примеры и научные данные"
+      ],
+      "must_not_cover": [
+        "Детальные списки нутриентов",
+        "Глубокое объяснение микробиоты"
+      ],
+      "source_mapping": {
+        "A": [
+          "People who eat a very typical ultra-processed diet — lots of sugar, fried food, refined carbs, heavily processed stuff — tend to have much higher cortisol levels.",
+          "People who eat more whole foods (fruits, vegetables, healthy fats, fiber) usually handle stress much better."
+        ],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к биологическим причинам стресс-аппетита и пищевых привычек"
+    },
+    {
+      "block_id": 7,
+      "block_name": "Стресс-аппетит: почему нас тянет к сладкому и жирному",
+      "block_role": "explanation",
+      "purpose": "Объяснить, почему при стрессе хочется быстрых углеводов и жиров. Показать, что это биология, а не слабость.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Биологические причины стресс-аппетита",
+        "Краткосрочное облегчение и долгосрочные последствия",
+        "Снятие чувства вины"
+      ],
+      "must_not_cover": [
+        "Детальные списки продуктов",
+        "Советы по изменению рациона"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Stress eating is a biological response, not a moral failing."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к конкретным нутриентам и продуктам для поддержки нервной системы"
+    },
+    {
+      "block_id": 8,
+      "block_name": "Ключевые нутриенты и продукты для устойчивости к стрессу",
+      "block_role": "proof",
+      "purpose": "Дать конкретные примеры нутриентов и продуктов, которые помогают нервной системе восстанавливаться после стресса.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1500,
+      "target_chars_max": 1700,
+      "must_cover": [
+        "B-группы, омега-3, магний, клетчатка, пробиотики",
+        "Примеры продуктов",
+        "Практические рекомендации без перфекционизма"
+      ],
+      "must_not_cover": [
+        "Длинные списки",
+        "Юмор и стилистика донора"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [
+          "Examples of foods rich in B vitamins, omega-3s, magnesium, fiber, and probiotics."
+        ],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к роли кишечника и микробиоты в управлении стрессом"
+    },
+    {
+      "block_id": 9,
+      "block_name": "Кишечник и мозг: связь, которую нельзя игнорировать",
+      "block_role": "explanation",
+      "purpose": "Объяснить, как здоровье кишечника влияет на настроение и стресс. Подчеркнуть роль клетчатки и пробиотиков.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Связь кишечника и мозга",
+        "Серотонин в кишечнике",
+        "Практические шаги для поддержки микробиоты"
+      ],
+      "must_not_cover": [
+        "Детальные списки продуктов",
+        "Личные ремарки"
+      ],
+      "source_mapping": {
+        "A": [
+          "A huge amount of serotonin — one of the chemicals involved in mood regulation — exists in the gut."
+        ],
+        "B": [
+          "Gut health influences mood and stress."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к роли воды, кофеина и алкоголя в стресс-реакциях"
+    },
+    {
+      "block_id": 10,
+      "block_name": "Вода, кофеин, алкоголь: скрытые усилители стресса",
+      "block_role": "proof",
+      "purpose": "Показать, как обезвоживание, кофеин и алкоголь могут усиливать стресс. Подчеркнуть важность простых изменений.",
+      "target_chars_min": 800,
+      "target_chars_ideal": 1000,
+      "target_chars_max": 1200,
+      "must_cover": [
+        "Даже легкое обезвоживание повышает кортизол",
+        "Влияние кофеина и алкоголя на стресс",
+        "Практические советы по гидратации"
+      ],
+      "must_not_cover": [
+        "Детальные списки напитков",
+        "Юмор и стилистика донора"
+      ],
+      "source_mapping": {
+        "A": [
+          "Even mild dehydration can increase cortisol."
+        ],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Переход к эмоциональному payoff: снятие вины и практические шаги"
+    },
+    {
+      "block_id": 11,
+      "block_name": "Стресс — не ваша вина: биология вместо самобичевания",
+      "block_role": "payoff",
+      "purpose": "Рефрейминг: стресс — это биология, а не моральная слабость. Подчеркнуть, что небольшие изменения реально работают.",
+      "target_chars_min": 900,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Снятие чувства вины",
+        "Стресс — нормальная реакция на перегрузку",
+        "Маленькие шаги эффективны"
+      ],
+      "must_not_cover": [
+        "Личные обращения",
+        "Юмор и стилистика донора"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [
+          "Small changes in habits can help the nervous system feel safer."
+        ],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Финальное обобщение и призыв к действию"
+    },
+    {
+      "block_id": 12,
+      "block_name": "Финал: тело защищает, а не саботирует",
+      "block_role": "conclusion",
+      "purpose": "Обобщить: тело пытается защитить, а не навредить. Оставить зрителя с чувством контроля и вдохновением на простые перемены.",
+      "target_chars_min": 700,
+      "target_chars_ideal": 1000,
+      "target_chars_max": 1200,
+      "must_cover": [
+        "Тело работает на защиту",
+        "Понимание биологии — путь к управлению стрессом",
+        "Вдохновляющий финал без личных обращений"
+      ],
+      "must_not_cover": [
+        "Персональные обращения",
+        "Юмор и стилистика донора"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 0,
+        "open_loop": false
+      },
+      "next_block_hint": "Конец ролика"
+    }
+  ]
+}

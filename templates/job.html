@@ -189,6 +189,21 @@
                         </button>
                     </div>
                 </div>
+                <div id="tts-words-wrap" class="tts-words-wrap hidden" aria-expanded="false">
+                    <button type="button" id="tts-words-toggle" class="tts-words-toggle" aria-controls="tts-words-body">
+                        <span class="tts-words-chevron" aria-hidden="true">▸</span>
+                        <span class="tts-words-title">Тайминги слов</span>
+                        <span class="tts-words-summary" id="tts-words-summary"></span>
+                    </button>
+                    <div id="tts-words-body" class="tts-words-body" hidden>
+                        <div class="tts-words-actions">
+                            <button type="button" class="btn btn-secondary btn-sm" id="tts-words-download">Скачать .words.json</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="tts-words-copy">Скопировать JSON</button>
+                            <span id="tts-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
+                        </div>
+                        <pre id="tts-words-json" class="tts-words-json" aria-label="Тайминги слов (JSON)"></pre>
+                    </div>
+                </div>
             </div>
             {% endif %}
         </section>
@@ -313,6 +328,37 @@
             </div>
         </form>
 
+        {% if scenes|length > 0 %}
+        <div class="scenes-apply-timings">
+            <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                id="scenes-apply-timings-btn"
+                {% if not tts_words_available %}disabled title="Сначала сгенерируйте озвучку с пословными таймингами (.words.json)."{% else %}title="Применить тайминги из последнего .words.json к существующим сценам и обновить блок ниже."{% endif %}
+            >Сгенерировать JSON-код сцен с таймингами</button>
+            <span class="scenes-apply-timings-status tts-template-status hidden" id="scenes-apply-timings-status" aria-live="polite"></span>
+        </div>
+        {% endif %}
+
+        <div
+            id="scenes-stripped-wrap"
+            class="scenes-stripped-wrap{% if not scenes_stripped_with_timing %} hidden{% endif %}"
+            aria-expanded="false"
+        >
+            <button type="button" id="scenes-stripped-toggle" class="scenes-stripped-toggle" aria-controls="scenes-stripped-body">
+                <span class="scenes-stripped-chevron" aria-hidden="true">▸</span>
+                <span class="scenes-stripped-title">JSON-код сцен с таймингами</span>
+                <span class="scenes-stripped-summary" id="scenes-stripped-summary"></span>
+            </button>
+            <div id="scenes-stripped-body" class="scenes-stripped-body" hidden>
+                <div class="scenes-stripped-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="scenes-stripped-copy">Скопировать</button>
+                    <span id="scenes-stripped-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
+                </div>
+                <pre id="scenes-stripped-text" class="scenes-stripped-text" aria-label="JSON-код сцен с таймингами">{{ scenes_stripped_with_timing or '' }}</pre>
+            </div>
+        </div>
+
         <section class="generation-section scene-card rewrite-pipeline-runner video-panel" aria-label="Пакетная генерация изображений и видео">
             <div class="rewrite-pipeline-runner__head generation-runner__head">
                 <div class="generation-runner__head-top">
@@ -366,6 +412,13 @@
                     {% endif %}
                     <div class="scene-header">
                         <div class="scene-id">{{ scene.scene_id }}</div>
+                        {% set at = scene.audio_timing if scene.audio_timing is mapping else {} %}
+                        {% if at.get('badge') %}
+                        <span
+                            class="scene-audio-timing-badge{% if at.get('low_confidence') %} scene-audio-timing-badge--warn{% endif %}"
+                            title="Интервал в озвучке (по словам ElevenLabs)"
+                        >{{ at.badge }}</span>
+                        {% endif %}
                         {% if scene.text_ru %}
                         <div class="scene-text scene-text--ru" title="{{ scene.text_ru }}">{{ scene.text_ru }}</div>
                         {% endif %}
@@ -787,6 +840,77 @@
                 Скачать все (архив)
             </button>
         </div>
+        <section class="video-panel job-montage-panel" id="job-montage-panel" aria-label="Монтаж видео">
+            <div class="job-montage-panel__head">
+                <div class="scene-id rewrite-pipeline-runner__title job-montage-panel__title">Монтаж видео</div>
+                <p class="job-montage-panel__lead scene-text">Параметры для сборки финального ролика (озвучка + сцены).</p>
+            </div>
+            <div class="job-montage-panel__controls">
+                <div class="job-montage-row">
+                    <label class="job-montage-label" for="montage-zoom">Zoom</label>
+                    <input
+                        type="range"
+                        id="montage-zoom"
+                        class="job-montage-range"
+                        min="0"
+                        max="100"
+                        value="{{ montage_zoom_pct }}"
+                        step="1"
+                    >
+                    <output class="job-montage-value" id="montage-zoom-value" for="montage-zoom">{{ montage_zoom_pct }}%</output>
+                </div>
+                <div class="job-montage-row">
+                    <label class="job-montage-label" for="montage-fade-in">Fade In</label>
+                    <input
+                        type="range"
+                        id="montage-fade-in"
+                        class="job-montage-range"
+                        min="0"
+                        max="100"
+                        value="{{ montage_fade_in_pct }}"
+                        step="1"
+                    >
+                    <output class="job-montage-value" id="montage-fade-in-value" for="montage-fade-in">{{ montage_fade_in_pct }}%</output>
+                </div>
+            </div>
+            <div class="job-montage-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="montage-assemble-btn">Смонтировать видео</button>
+                <button type="button" class="btn btn-secondary btn-sm {% if not montage_props_ready %}hidden{% endif %}" id="montage-render-btn">Рендерить MP4</button>
+                <a class="btn btn-secondary btn-sm {% if not montage_mp4_ready %}hidden{% endif %}" id="montage-mp4-link" href="{{ montage_mp4_url or '#' }}" target="_blank" rel="noopener" download>Скачать MP4</a>
+                <a class="btn btn-secondary btn-sm {% if not montage_props_ready %}hidden{% endif %}" id="montage-props-link" href="{{ montage_props_url or '#' }}" target="_blank" rel="noopener">props.json</a>
+                <a class="btn btn-secondary btn-sm {% if not montage_props_ready %}hidden{% endif %}" id="montage-remotion-link" href="{{ montage_remotion_open_url or '#' }}" target="_blank" rel="noopener">Открыть в Remotion</a>
+            </div>
+            <p class="job-montage-status scene-text" id="montage-assemble-status" aria-live="polite"></p>
+        </section>
+
+        <div class="confirm-modal hidden" id="montage-modal" aria-hidden="true">
+            <div class="confirm-modal__backdrop" data-montage-close></div>
+            <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="montage-modal-title" aria-describedby="montage-modal-status">
+                <div class="confirm-modal__head">
+                    <h3 class="confirm-modal__title" id="montage-modal-title">Монтаж видео</h3>
+                </div>
+                <p class="confirm-modal__lead" id="montage-modal-status">Подготовка…</p>
+                <div class="download-all-progress-wrap" id="montage-progress-wrap" hidden>
+                    <div
+                        class="download-all-progress"
+                        role="progressbar"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="0"
+                        id="montage-progress"
+                    >
+                        <div class="download-all-progress__fill" id="montage-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="download-all-progress-meta" id="montage-progress-meta"></div>
+                </div>
+                <div class="confirm-modal__preview download-all-modal-log" id="montage-modal-log"></div>
+                <div class="confirm-modal__actions download-all-modal-actions">
+                    <button type="button" class="btn btn-danger btn-sm hidden" id="montage-modal-stop">Остановить</button>
+                    <a class="btn btn-secondary btn-sm hidden" id="montage-modal-mp4-link" href="#" target="_blank" rel="noopener" download>Скачать MP4</a>
+                    <button type="button" class="btn btn-secondary btn-sm" id="montage-modal-close">Закрыть</button>
+                </div>
+            </div>
+        </div>
         {% endif %}
     </div>
 
@@ -1050,7 +1174,8 @@
         );
     });
 
-    function validateScenesBeforeDownload() {
+    function validateScenesForAction(actionLabel) {
+        const label = String(actionLabel || 'Скачать все');
         const ttsSection = document.getElementById('elevenlabs-tts');
         if (ttsSection) {
             const playerWrap = document.getElementById('tts-player-wrap');
@@ -1060,7 +1185,7 @@
             if (!visiblePlayer && !hasSrc) {
                 return {
                     sectionEl: ttsSection,
-                    message: 'В проекте ещё нет озвучки. Сначала сгенерируйте её в блоке «Озвучка ElevenLabs», затем повторите «Скачать все».',
+                    message: 'В проекте ещё нет озвучки. Сначала сгенерируйте её в блоке «Озвучка ElevenLabs», затем повторите «' + label + '».',
                 };
             }
         }
@@ -1077,7 +1202,7 @@
                         return {
                             sceneEl: card,
                             sceneId: sid,
-                            message: 'Сцена ' + sid + ': не сгенерирован Start. Сначала сгенерируйте Start-изображение, затем повторите «Скачать все».',
+                            message: 'Сцена ' + sid + ': не сгенерирован Start. Сначала сгенерируйте Start-изображение, затем повторите «' + label + '».',
                         };
                     }
                 }
@@ -1091,7 +1216,7 @@
                     return {
                         sceneEl: card,
                         sceneId: sid,
-                        message: 'Сцена ' + sid + ': для live-сцены ещё не найдены фото/видео. Запустите поиск (↻) и повторите «Скачать все».',
+                        message: 'Сцена ' + sid + ': для live-сцены ещё не найдены фото/видео. Запустите поиск (↻) и повторите «' + label + '».',
                     };
                 }
                 const selected = pexelsSlot.querySelector('.pexels-slot-item--selected');
@@ -1099,12 +1224,16 @@
                     return {
                         sceneEl: card,
                         sceneId: sid,
-                        message: 'Сцена ' + sid + ': не выбрано ни одного материала. Отметьте 1–2 фото/видео чекбоксом и повторите «Скачать все».',
+                        message: 'Сцена ' + sid + ': не выбрано ни одного материала. Отметьте 1–2 фото/видео чекбоксом и повторите «' + label + '».',
                     };
                 }
             }
         }
         return null;
+    }
+
+    function validateScenesBeforeDownload() {
+        return validateScenesForAction('Скачать все');
     }
 
     function flashElementAttention(el, className) {
@@ -1437,7 +1566,37 @@
     }
 
     const computeJsonPromptStats = (rawText) => {
-        const text = String(rawText || '');
+        const text = String(rawText || '').trim();
+        if (text.startsWith('[')) {
+            try {
+                const arr = JSON.parse(text);
+                if (Array.isArray(arr)) {
+                    let currentScene = null;
+                    const scenes = [];
+                    for (const obj of arr) {
+                        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) continue;
+                        if (Object.prototype.hasOwnProperty.call(obj, 'scene_id')) {
+                            if (currentScene) scenes.push(currentScene);
+                            currentScene = { start: false, end: false, video: false };
+                            continue;
+                        }
+                        if (!currentScene) continue;
+                        const hasPrompt = (v) => Boolean(v && typeof v === 'object' && String(v.prompt || '').trim());
+                        if (Object.prototype.hasOwnProperty.call(obj, 'start')) currentScene.start = hasPrompt(obj.start);
+                        if (Object.prototype.hasOwnProperty.call(obj, 'end')) currentScene.end = hasPrompt(obj.end);
+                        if (Object.prototype.hasOwnProperty.call(obj, 'video')) currentScene.video = hasPrompt(obj.video);
+                    }
+                    if (currentScene) scenes.push(currentScene);
+                    const total = scenes.length;
+                    const start = scenes.filter((s) => s.start).length;
+                    const end = scenes.filter((s) => s.end).length;
+                    const video = scenes.filter((s) => s.video).length;
+                    return { total, start, end, video };
+                }
+            } catch (_) {
+                /* fall through to line-based */
+            }
+        }
         const lines = text.split('\n');
         let currentScene = null;
         const scenes = [];
@@ -1801,6 +1960,347 @@
             throw new Error(`${label}: невалидный JSON (HTTP ${resp.status})`);
         }
     };
+
+    (function initMontagePanel() {
+        const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+        const assembleBtn = document.getElementById('montage-assemble-btn');
+        const renderBtn   = document.getElementById('montage-render-btn');
+        const mp4Link     = document.getElementById('montage-mp4-link');
+        const propsLink   = document.getElementById('montage-props-link');
+        const remotionLink = document.getElementById('montage-remotion-link');
+        const zoomInput   = document.getElementById('montage-zoom');
+        const fadeInput   = document.getElementById('montage-fade-in');
+        const zoomOut     = document.getElementById('montage-zoom-value');
+        const fadeOut     = document.getElementById('montage-fade-in-value');
+        const statusEl    = document.getElementById('montage-assemble-status');
+        const modal       = document.getElementById('montage-modal');
+        const modalStatus = document.getElementById('montage-modal-status');
+        const modalLog    = document.getElementById('montage-modal-log');
+        const modalClose  = document.getElementById('montage-modal-close');
+        const modalStop   = document.getElementById('montage-modal-stop');
+        const modalMp4Link = document.getElementById('montage-modal-mp4-link');
+        const progWrap    = document.getElementById('montage-progress-wrap');
+        const progFill    = document.getElementById('montage-progress-fill');
+        const progBar     = document.getElementById('montage-progress');
+        const progMeta    = document.getElementById('montage-progress-meta');
+        const initialActiveRenderTaskId = {{ (montage_active_render_task_id or '') | tojson }};
+        const initialMp4Url = {{ (montage_mp4_url or '') | tojson }};
+        if (!zoomInput || !fadeInput) return;
+
+        const syncLabels = () => {
+            const z = Math.max(0, Math.min(100, parseInt(zoomInput.value, 10) || 0));
+            const f = Math.max(0, Math.min(100, parseInt(fadeInput.value, 10) || 0));
+            if (zoomOut) zoomOut.textContent = `${z}%`;
+            if (fadeOut) fadeOut.textContent = `${f}%`;
+        };
+        zoomInput.addEventListener('input', syncLabels);
+        fadeInput.addEventListener('input', syncLabels);
+        syncLabels();
+
+        let modalBusy = false;
+        let modalStopHandler = null;
+        const setModalStop = (handler) => {
+            modalStopHandler = handler || null;
+            if (!modalStop) return;
+            if (modalStopHandler) {
+                modalStop.classList.remove('hidden');
+                modalStop.disabled = false;
+            } else {
+                modalStop.classList.add('hidden');
+                modalStop.disabled = true;
+            }
+        };
+        const openModal = (titleText) => {
+            if (!modal) return;
+            modalBusy = true;
+            if (modalStatus) modalStatus.textContent = titleText || 'Подготовка…';
+            if (modalLog) modalLog.textContent = '';
+            if (progFill) progFill.style.width = '0%';
+            if (progMeta) progMeta.textContent = '';
+            if (progBar) progBar.setAttribute('aria-valuenow', '0');
+            if (progWrap) progWrap.hidden = false;
+            if (modalMp4Link) modalMp4Link.classList.add('hidden');
+            setModalStop(null);
+            // Кнопка «Закрыть» доступна всегда — рендер/сборка продолжатся в фоне.
+            modalClose?.classList.remove('hidden');
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+        };
+        const closeModal = () => {
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+        };
+        const finishModal = (statusText) => {
+            modalBusy = false;
+            if (modalStatus) modalStatus.textContent = statusText || '';
+            setModalStop(null);
+            modalClose?.classList.remove('hidden');
+        };
+        const appendLog = (line) => {
+            if (!modalLog) return;
+            const t = String(line || '').trim();
+            if (!t) return;
+            modalLog.textContent = (modalLog.textContent ? modalLog.textContent + '\n' : '') + t;
+            modalLog.scrollTop = modalLog.scrollHeight;
+        };
+        const setProg = (pct, metaText) => {
+            const p = Math.max(0, Math.min(100, Math.round(pct)));
+            if (progFill) progFill.style.width = p + '%';
+            if (progBar) progBar.setAttribute('aria-valuenow', String(p));
+            if (progMeta && metaText != null) progMeta.textContent = metaText;
+        };
+        modalClose?.addEventListener('click', closeModal);
+        modal?.addEventListener('click', (e) => {
+            if (e.target && e.target.hasAttribute('data-montage-close')) closeModal();
+        });
+        modalStop?.addEventListener('click', () => {
+            if (modalStopHandler) {
+                try { modalStopHandler(); } catch (_) { /* ignore */ }
+            }
+        });
+
+        const showResultButtons = (data) => {
+            if (mp4Link) mp4Link.classList.add('hidden');
+            if (renderBtn) {
+                renderBtn.classList.remove('hidden');
+                renderBtn.disabled = false;
+                renderBtn.dataset.taskId = '';
+            }
+            if (propsLink && data.props_url) {
+                propsLink.href = data.props_url;
+                propsLink.classList.remove('hidden');
+            }
+            if (remotionLink) {
+                const ro = data.remotion_open_url || `${ROOT}/job/${jobId}/montage/remotion-open`;
+                remotionLink.href = ro;
+                remotionLink.classList.remove('hidden');
+            }
+        };
+
+        assembleBtn?.addEventListener('click', async () => {
+            const zoom_pct = Math.max(0, Math.min(100, parseInt(zoomInput.value, 10) || 0));
+            const fade_in_pct = Math.max(0, Math.min(100, parseInt(fadeInput.value, 10) || 0));
+            if (statusEl) statusEl.textContent = '';
+
+            const validation = (typeof validateScenesForAction === 'function')
+                ? validateScenesForAction('Смонтировать видео')
+                : null;
+            if (validation) {
+                if (validation.sectionEl && typeof flashElementAttention === 'function') {
+                    flashElementAttention(validation.sectionEl, 'job-needs-attention');
+                } else if (validation.sceneEl && typeof flashSceneAttention === 'function') {
+                    flashSceneAttention(validation.sceneEl);
+                }
+                openJobErrorModal(validation.message);
+                return;
+            }
+
+            assembleBtn.disabled = true;
+            openModal('Запрос отправлен. Готовим ассеты для Remotion…');
+            try {
+                const resp = await fetch(`${ROOT}/job/${jobId}/montage/assemble`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zoom_pct, fade_in_pct }),
+                });
+                if (!resp.ok) {
+                    let msg = `HTTP ${resp.status}`;
+                    try { const d = await resp.json(); if (d?.error) msg = d.error; } catch (_) { /* ignore */ }
+                    throw new Error(msg);
+                }
+                const reader = resp.body?.getReader();
+                if (!reader) throw new Error('Нет потокового ответа');
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let finalData = null;
+                let scenesTotal = 0;
+                let scenesDone = 0;
+
+                const handleEvent = (ev) => {
+                    if (!ev || typeof ev !== 'object') return;
+                    if (ev.type === 'status') {
+                        const phase = String(ev.phase || '');
+                        const msg = String(ev.message || phase);
+                        if (modalStatus) modalStatus.textContent = msg;
+                        appendLog(msg);
+                        if (phase === 'scene_start' && typeof ev.total === 'number') {
+                            scenesTotal = ev.total;
+                        }
+                        if (phase === 'scene_done' || phase === 'scene_fail') {
+                            scenesDone += 1;
+                            if (scenesTotal > 0) {
+                                setProg(
+                                    (100 * scenesDone) / scenesTotal,
+                                    `Сцен: ${scenesDone} / ${scenesTotal}`,
+                                );
+                            }
+                        }
+                        if (phase === 'props_written') {
+                            setProg(100, 'props.json записан');
+                        }
+                    } else if (ev.type === 'error') {
+                        throw new Error(String(ev.error || 'Ошибка'));
+                    } else if (ev.type === 'result') {
+                        finalData = ev;
+                        if (modalStatus) modalStatus.textContent = String(ev.message || 'Готово.');
+                        setProg(100, `Сцен с медиа: ${ev.scenes_with_media || 0} / ${ev.scenes_total || 0}`);
+                    }
+                };
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let nl = buffer.indexOf('\n');
+                    while (nl >= 0) {
+                        const line = buffer.slice(0, nl).trim();
+                        buffer = buffer.slice(nl + 1);
+                        if (line) {
+                            try { handleEvent(JSON.parse(line)); } catch (_) { /* ignore */ }
+                        }
+                        nl = buffer.indexOf('\n');
+                    }
+                }
+                buffer += decoder.decode();
+                const tail = buffer.trim();
+                if (tail) {
+                    try { handleEvent(JSON.parse(tail)); } catch (_) { /* ignore */ }
+                }
+
+                if (!finalData || !finalData.ok) {
+                    throw new Error('Не удалось получить итог подготовки');
+                }
+                finishModal(String(finalData.message || 'Готово.'));
+                if (statusEl) statusEl.textContent = String(finalData.message || 'Готово.');
+                showResultButtons(finalData);
+            } catch (e) {
+                finishModal('Ошибка: ' + (e.message || String(e)));
+                openJobErrorModal(e.message || String(e));
+            } finally {
+                assembleBtn.disabled = false;
+            }
+        });
+
+        let renderPollTimer = null;
+        let currentRenderTaskId = '';
+        const stopRenderPoll = () => {
+            if (renderPollTimer != null) { clearTimeout(renderPollTimer); renderPollTimer = null; }
+        };
+
+        const showFinishedMp4 = (url) => {
+            if (!url) return;
+            if (mp4Link) {
+                mp4Link.href = url;
+                mp4Link.classList.remove('hidden');
+            }
+            if (modalMp4Link) {
+                modalMp4Link.href = url;
+                modalMp4Link.classList.remove('hidden');
+            }
+        };
+
+        const cancelRender = async () => {
+            if (!currentRenderTaskId && !confirm('Остановить рендер MP4?')) return;
+            try {
+                if (modalStop) modalStop.disabled = true;
+                appendLog('Остановка рендера по запросу пользователя…');
+                const q = currentRenderTaskId ? `?task_id=${encodeURIComponent(currentRenderTaskId)}` : '';
+                const r = await fetch(`${ROOT}/job/${jobId}/montage/render/cancel${q}`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                });
+                if (!r.ok) {
+                    const txt = await r.text().catch(() => '');
+                    appendLog('Не удалось остановить: HTTP ' + r.status + ' ' + txt.slice(0, 200));
+                }
+            } catch (e) {
+                appendLog('Сбой остановки: ' + (e?.message || String(e)));
+            }
+        };
+
+        const pollRender = async (taskId) => {
+            try {
+                currentRenderTaskId = taskId || '';
+                const r = await fetch(`${ROOT}/job/${jobId}/montage/render/status?task_id=${encodeURIComponent(taskId || '')}`, {
+                    credentials: 'same-origin',
+                });
+                if (r.status === 404) {
+                    // Активной задачи нет, и MP4 на диске тоже не нашли.
+                    setModalStop(null);
+                    if (renderBtn) renderBtn.disabled = false;
+                    return;
+                }
+                const data = await parseJsonOrThrow(r, 'Статус рендера');
+                if (!data.ok) throw new Error(data.error || 'no status');
+                const pct = Number(data.progress_pct || 0);
+                const stage = String(data.stage || '');
+                if (modalStatus) modalStatus.textContent = `Рендер MP4: ${stage || 'идёт'} (${pct}%)`;
+                setProg(pct, data.message || '');
+                if (data.state === 'done') {
+                    finishModal('Готово. MP4 собран.');
+                    showFinishedMp4(data.output_url);
+                    if (renderBtn) { renderBtn.disabled = false; }
+                    currentRenderTaskId = '';
+                    return;
+                }
+                if (data.state === 'cancelled') {
+                    finishModal('Рендер остановлен пользователем.');
+                    appendLog(String(data.message || ''));
+                    if (renderBtn) renderBtn.disabled = false;
+                    currentRenderTaskId = '';
+                    return;
+                }
+                if (data.state === 'error') {
+                    finishModal('Ошибка рендера');
+                    appendLog(String(data.error || '') + ' ' + String(data.message || ''));
+                    if (renderBtn) { renderBtn.disabled = false; }
+                    currentRenderTaskId = '';
+                    return;
+                }
+                setModalStop(cancelRender);
+                renderPollTimer = setTimeout(() => pollRender(taskId), 1500);
+            } catch (e) {
+                finishModal('Сбой опроса статуса рендера');
+                appendLog(e.message || String(e));
+                if (renderBtn) { renderBtn.disabled = false; }
+            }
+        };
+
+        renderBtn?.addEventListener('click', async () => {
+            renderBtn.disabled = true;
+            stopRenderPoll();
+            openModal('Запрос рендера MP4 отправлен…');
+            try {
+                const r = await fetch(`${ROOT}/job/${jobId}/montage/render`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: '{}',
+                });
+                const data = await parseJsonOrThrow(r, 'Рендер MP4');
+                if (!data.ok) throw new Error(data.error || data.message || 'Не удалось запустить');
+                renderBtn.dataset.taskId = String(data.task_id || '');
+                setModalStop(cancelRender);
+                pollRender(data.task_id);
+            } catch (e) {
+                finishModal('Ошибка: ' + (e.message || String(e)));
+                renderBtn.disabled = false;
+            }
+        });
+
+        // Восстановление состояния после перезагрузки страницы:
+        // 1) если в памяти процесса есть активный рендер для этого job_id —
+        //    открываем модалку и подключаемся к его прогрессу;
+        // 2) иначе если на диске уже лежит готовый out.mp4 — сразу проставляем
+        //    ссылки «Скачать MP4» (на панели и в модалке, если её откроют).
+        if (initialActiveRenderTaskId) {
+            openModal('Подключаюсь к активному рендеру…');
+            pollRender(initialActiveRenderTaskId);
+        } else if (initialMp4Url) {
+            showFinishedMp4(initialMp4Url);
+        }
+    })();
 
     const slotErrorUserHint = (raw) => {
         const s = String(raw || '').toLowerCase();
@@ -2652,6 +3152,8 @@
         const jobId = {{ job_id | tojson }};
         const ttsLastAudioUrl = {{ (tts_last_audio_href or '') | tojson }};
         const ttsLastAudioFilename = {{ (tts_last_audio_name or '') | tojson }};
+        const ttsLastWordsFilename = {{ (tts_last_words_name or '') | tojson }};
+        const ttsLastWordsUrl      = {{ (tts_last_words_href or '') | tojson }};
         const defaultVoiceId = {{ (tts_defaults.voice_id or '') | tojson }};
         const defaultModelId = {{ (tts_defaults.model_id or '') | tojson }};
         const modelSel = document.getElementById('tts-model');
@@ -2751,7 +3253,142 @@
             return parseInt(opt?.dataset?.max || '10000', 10);
         };
 
-        /** Как на сервере: elevenlabs_client.sentences_split_by_dot + pack_sentences_into_chunks */
+        // --- Тайминги слов (collapsible под плеером) ---
+        const wordsWrapEl     = document.getElementById('tts-words-wrap');
+        const wordsToggleBtn  = document.getElementById('tts-words-toggle');
+        const wordsBodyEl     = document.getElementById('tts-words-body');
+        const wordsSummaryEl  = document.getElementById('tts-words-summary');
+        const wordsJsonEl     = document.getElementById('tts-words-json');
+        const wordsDownloadBtn= document.getElementById('tts-words-download');
+        const wordsCopyBtn    = document.getElementById('tts-words-copy');
+        const wordsCopyStatus = document.getElementById('tts-words-copy-status');
+        let lastWordsDoc = null;
+        let lastWordsFilename = '';
+        let lastWordsUrl = '';
+
+        const formatTtsMs = (ms) => {
+            const n = Math.max(0, Math.floor(Number(ms || 0)));
+            const h = Math.floor(n / 3600000);
+            const m = Math.floor((n % 3600000) / 60000);
+            const s = Math.floor((n % 60000) / 1000);
+            const rem = n % 1000;
+            const pad = (v, w=2) => String(v).padStart(w, '0');
+            return (h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`) + `.${pad(rem, 3)}`;
+        };
+
+        function hideTtsWords() {
+            if (!wordsWrapEl) return;
+            wordsWrapEl.classList.add('hidden');
+            wordsWrapEl.setAttribute('aria-expanded', 'false');
+            if (wordsBodyEl) wordsBodyEl.hidden = true;
+            lastWordsDoc = null;
+            lastWordsFilename = '';
+            lastWordsUrl = '';
+        }
+
+        function setTtsWordsCollapsed(collapsed) {
+            if (!wordsWrapEl || !wordsBodyEl) return;
+            wordsWrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            wordsBodyEl.hidden = !!collapsed;
+        }
+
+        async function renderTtsWordsFromUrl(finalData) {
+            if (!wordsWrapEl) return;
+            const url = finalData.words_url;
+            const r = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!r.ok) throw new Error(`words.json HTTP ${r.status}`);
+            const doc = await r.json();
+            lastWordsDoc = doc;
+            lastWordsFilename = finalData.words_filename || 'voiceover.words.json';
+            lastWordsUrl = url;
+
+            const totalWords = Number(doc.total_words || (doc.words || []).length || 0);
+            const totalDurMs = Number(doc.total_duration_ms || 0);
+            const first = doc.words && doc.words[0];
+            const last  = doc.words && doc.words[doc.words.length - 1];
+            const parts = [
+                `Слов: ${totalWords}`,
+                `Длительность: ${formatTtsMs(totalDurMs)}`,
+            ];
+            if (first) parts.push(`Первое: «${String(first.word).slice(0, 20)}» @ ${first.start_ms} мс`);
+            if (last)  parts.push(`Последнее: «${String(last.word).slice(0, 20)}» @ ${last.end_ms} мс`);
+            if (wordsSummaryEl) wordsSummaryEl.textContent = '· ' + parts.join(' · ');
+            if (wordsJsonEl)    wordsJsonEl.textContent    = JSON.stringify(doc, null, 2);
+            wordsWrapEl.classList.remove('hidden');
+            setTtsWordsCollapsed(true); // по умолчанию свёрнут
+        }
+
+        function applySceneAudioTimings(rows) {
+            if (!Array.isArray(rows) || !rows.length) return;
+            rows.forEach((row) => {
+                if (!row || typeof row !== 'object') return;
+                const sid = row.scene_id;
+                if (sid == null) return;
+                const esc = String(sid).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                const card = document.querySelector('.scene-card[data-scene-id="' + esc + '"]');
+                if (!card) return;
+                card.querySelectorAll('.scene-audio-timing-badge').forEach((el) => el.remove());
+                const badge = row.badge;
+                if (!badge) return;
+                const span = document.createElement('span');
+                span.className = 'scene-audio-timing-badge'
+                    + (row.low_confidence ? ' scene-audio-timing-badge--warn' : '');
+                span.textContent = String(badge);
+                span.title = 'Интервал в озвучке (по словам ElevenLabs)';
+                const header = card.querySelector('.scene-header');
+                const sceneIdEl = card.querySelector('.scene-id');
+                if (header && sceneIdEl) {
+                    sceneIdEl.insertAdjacentElement('afterend', span);
+                } else if (header) {
+                    header.insertBefore(span, header.firstChild);
+                }
+            });
+            if (typeof window.rebuildScenesStrippedBlock === 'function') {
+                window.rebuildScenesStrippedBlock(rows);
+            }
+        }
+
+        if (wordsToggleBtn) {
+            wordsToggleBtn.addEventListener('click', () => {
+                const expanded = wordsWrapEl.getAttribute('aria-expanded') === 'true';
+                setTtsWordsCollapsed(expanded);
+            });
+        }
+        if (wordsDownloadBtn) {
+            wordsDownloadBtn.addEventListener('click', () => {
+                if (!lastWordsUrl) return;
+                const a = document.createElement('a');
+                a.href = lastWordsUrl;
+                a.download = lastWordsFilename || 'voiceover.words.json';
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            });
+        }
+        if (wordsCopyBtn) {
+            wordsCopyBtn.addEventListener('click', async () => {
+                if (!lastWordsDoc) return;
+                try {
+                    await navigator.clipboard.writeText(JSON.stringify(lastWordsDoc, null, 2));
+                    if (wordsCopyStatus) {
+                        wordsCopyStatus.textContent = 'JSON скопирован';
+                        wordsCopyStatus.classList.remove('hidden');
+                        setTimeout(() => wordsCopyStatus.classList.add('hidden'), 1800);
+                    }
+                } catch (e) {
+                    if (wordsCopyStatus) {
+                        wordsCopyStatus.textContent = 'Не удалось скопировать';
+                        wordsCopyStatus.classList.remove('hidden');
+                        setTimeout(() => wordsCopyStatus.classList.add('hidden'), 1800);
+                    }
+                }
+            });
+        }
+
+        /** Как на сервере: elevenlabs_client.sentences_split_by_dot + pack_sentences_into_chunks.
+         *  Между предложениями вставляется ведущий пробел — иначе при склейке
+         *  получится "…elit.Lorem ipsum…" и ElevenLabs прочитает стык слитно. */
         const sentencesSplitByDot = (text) => {
             const t = text.trim();
             if (!t) return [];
@@ -2760,7 +3397,7 @@
             for (const part of t.split('.')) {
                 const p = part.trim();
                 if (!p) continue;
-                out.push(`${p}.`);
+                out.push(`${out.length ? ' ' : ''}${p}.`);
             }
             return out.length ? out : [t];
         };
@@ -3177,6 +3814,19 @@
                 player.pause();
                 syncTtsPlayingUi();
                 playerWrap.classList.remove('hidden');
+
+                // Тайминги слов (with-timestamps) — стрим вернул words_url рядом с MP3.
+                try {
+                    if (finalData.words_url) {
+                        await renderTtsWordsFromUrl(finalData);
+                    } else {
+                        hideTtsWords();
+                    }
+                } catch (wordsErr) {
+                    console.warn('words.json load failed:', wordsErr);
+                    hideTtsWords();
+                }
+                applySceneAudioTimings(finalData.scene_audio_timings || []);
             } catch (e) {
                 errEl.textContent = e.message || String(e);
                 errEl.classList.remove('hidden');
@@ -3185,6 +3835,23 @@
                 busyEl.classList.add('hidden');
             }
         });
+
+        // Авто-подгрузка тайминговго JSON при загрузке страницы, если рядом
+        // с последним MP3 на диске есть парный <stem>.words.json. Не открываем
+        // блок (остаётся свёрнутым), только заполняем summary + JSON.
+        if (ttsLastWordsUrl) {
+            (async () => {
+                try {
+                    await renderTtsWordsFromUrl({
+                        words_url: ttsLastWordsUrl,
+                        words_filename: ttsLastWordsFilename,
+                    });
+                } catch (e) {
+                    console.warn('initial words.json autoload failed:', e);
+                    hideTtsWords();
+                }
+            })();
+        }
     /* ===== Animation Designer (End-слот, второе окно) ===== */
     (function initAnimAgent() {
         const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
@@ -3496,6 +4163,149 @@
 
     })();
     {% endif %}
+
+    (function scenesStrippedBlockInit() {
+        const wrapEl     = document.getElementById('scenes-stripped-wrap');
+        const toggleBtn  = document.getElementById('scenes-stripped-toggle');
+        const bodyEl     = document.getElementById('scenes-stripped-body');
+        const textEl     = document.getElementById('scenes-stripped-text');
+        const summaryEl  = document.getElementById('scenes-stripped-summary');
+        const copyBtn    = document.getElementById('scenes-stripped-copy');
+        const copyStatus = document.getElementById('scenes-stripped-copy-status');
+        if (!wrapEl) return;
+
+        function setCollapsed(collapsed) {
+            wrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            if (bodyEl) bodyEl.hidden = !!collapsed;
+        }
+
+        function formatMsClock(ms) {
+            const n = Math.max(0, Math.floor(Number(ms || 0)));
+            const m = Math.floor(n / 60000);
+            const sec = Math.floor((n % 60000) / 1000);
+            const centi = Math.floor((n % 1000) / 10);
+            return `${m}:${String(sec).padStart(2, '0')}.${String(centi).padStart(2, '0')}`;
+        }
+
+        function updateSummary() {
+            if (!summaryEl || !textEl) return;
+            const txt = textEl.textContent || '';
+            const sceneCount = (txt.match(/^\{"scene_id":/gm) || []).length;
+            summaryEl.textContent = sceneCount ? `· сцен: ${sceneCount}` : '';
+        }
+
+        window.rebuildScenesStrippedBlock = function (rows) {
+            if (!textEl) return;
+            if (!Array.isArray(rows) || !rows.length) return;
+            const byId = new Map();
+            rows.forEach((r) => {
+                if (r && r.scene_id != null) byId.set(String(r.scene_id), r);
+            });
+            const lines = [];
+            document.querySelectorAll('.scene-card').forEach((card) => {
+                const sid = card.getAttribute('data-scene-id') || '';
+                if (!sid) return;
+                const t = byId.get(sid);
+                if (!t) return;
+                const textElCard = card.querySelector('.scene-text:not(.scene-text--ru)');
+                const textRuEl   = card.querySelector('.scene-text--ru');
+                const text   = textElCard ? (textElCard.getAttribute('title') || textElCard.textContent || '') : '';
+                const textRu = textRuEl   ? (textRuEl.getAttribute('title')   || textRuEl.textContent   || '') : '';
+                const sm = (t.start_ms != null) ? String(t.start_ms) : '';
+                const em = (t.end_ms   != null) ? String(t.end_ms)   : '';
+                const dm = (t.duration_ms != null) ? Number(t.duration_ms) : null;
+                const startTime = t.start_time || (t.start_ms != null ? formatMsClock(t.start_ms) : '');
+                const startEnd  = t.start_end  || (t.end_ms   != null ? formatMsClock(t.end_ms)   : '');
+                const dur       = t.duration_s || (dm != null ? (dm / 1000).toFixed(2) : '');
+                const J = (v) => JSON.stringify(String(v));
+                lines.push(`{"scene_id": ${J(sid)}}`);
+                lines.push(`{"text": ${J(text.trim())}}`);
+                lines.push(`{"text_ru": ${J(textRu.trim())}}`);
+                lines.push(`{"start_time_ms": ${J(sm)}}`);
+                lines.push(`{"start_end_ms": ${J(em)}}`);
+                lines.push(`{"start_time": ${J(startTime)}}`);
+                lines.push(`{"start_end": ${J(startEnd)}}`);
+                lines.push(`{"Duration": ${J(dur)}}`);
+                lines.push('');
+            });
+            while (lines.length && lines[lines.length - 1] === '') lines.pop();
+            textEl.textContent = lines.join('\n');
+            wrapEl.classList.remove('hidden');
+            updateSummary();
+        };
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const expanded = wrapEl.getAttribute('aria-expanded') === 'true';
+                setCollapsed(expanded);
+            });
+        }
+
+        const applyBtn    = document.getElementById('scenes-apply-timings-btn');
+        const applyStatus = document.getElementById('scenes-apply-timings-status');
+        const setApplyStatus = (text, isError) => {
+            if (!applyStatus) return;
+            applyStatus.textContent = text || '';
+            applyStatus.classList.toggle('hidden', !text);
+            applyStatus.style.color = isError ? 'var(--danger, #ff6b6b)' : '';
+        };
+        if (applyBtn) {
+            applyBtn.addEventListener('click', async () => {
+                if (applyBtn.disabled) return;
+                applyBtn.disabled = true;
+                setApplyStatus('Сопоставляем тайминги…');
+                try {
+                    const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+                    const r = await fetch(`${ROOT}/job/${jobId}/scenes/apply-tts-timings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: '{}',
+                    });
+                    const data = await parseJsonOrThrow(r, 'apply-tts-timings');
+                    if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                    if (textEl) {
+                        textEl.textContent = String(data.scenes_stripped_text || '');
+                    }
+                    wrapEl.classList.remove('hidden');
+                    setCollapsed(false);
+                    updateSummary();
+                    setApplyStatus(
+                        `Готово: ${data.timings_applied || 0}/${data.scenes_count || 0} сцен. `
+                        + `Источник: ${data.words_filename || 'words.json'}.`,
+                    );
+                } catch (e) {
+                    setApplyStatus('Ошибка: ' + (e?.message || String(e)), true);
+                    if (typeof openJobErrorModal === 'function') {
+                        openJobErrorModal(e?.message || String(e));
+                    }
+                } finally {
+                    applyBtn.disabled = false;
+                }
+            });
+        }
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async () => {
+                const txt = textEl?.textContent || '';
+                if (!txt) return;
+                try {
+                    await navigator.clipboard.writeText(txt);
+                    if (copyStatus) {
+                        copyStatus.textContent = 'Скопировано';
+                        copyStatus.classList.remove('hidden');
+                        setTimeout(() => copyStatus.classList.add('hidden'), 1800);
+                    }
+                } catch (e) {
+                    if (copyStatus) {
+                        copyStatus.textContent = 'Не удалось скопировать';
+                        copyStatus.classList.remove('hidden');
+                        setTimeout(() => copyStatus.classList.add('hidden'), 1800);
+                    }
+                }
+            });
+        }
+        updateSummary();
+    })();
     </script>
 </body>
 </html>

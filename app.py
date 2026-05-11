@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import difflib
+from html import escape as html_escape
 import json
 import mimetypes
 import os
@@ -20,6 +21,7 @@ except ImportError:
     fcntl = None  # type: ignore
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
@@ -31,7 +33,7 @@ from io import BytesIO
 from pathlib import Path
 from collections.abc import Iterator
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 
 from dotenv import load_dotenv
 
@@ -67,12 +69,16 @@ from image_templates import (
 )
 from elevenlabs_client import (
     TTS_MODELS,
+    chars_to_words_ms,
     list_voices as elevenlabs_list_voices,
     max_chars_for_model,
     merge_mp3_files_ffmpeg,
+    mp3_duration_seconds_ffprobe,
     split_tts_text_into_chunks,
     text_to_speech_bytes,
+    text_to_speech_with_timestamps,
 )
+from job_scene_audio_align import align_scenes_to_word_timings, merge_audio_timing_into_scenes
 from elevenlabs_templates import (
     list_elevenlabs_template_names,
     load_elevenlabs_template,
@@ -92,11 +98,16 @@ from rewrite_openai import (
     REWRITE_MODELS,
     iter_draft1_blockwise_completion,
     iter_rewrite_completion,
+    iter_rewrite_completion_stream,
     list_draft1_wire_chat_payloads_for_export,
     normalize_rewrite_model,
     rewrite_chat_completion_wire_payload,
 )
 from rewrite_pipeline import (
+    REWRITE_PRESET_DEFAULT,
+    REWRITE_PRESET_KEYS,
+    REWRITE_PRESET_LABELS,
+    REWRITE_PRESET_STAGE_KEYS,
     REWRITE_STAGE_HELP_HINTS,
     REWRITE_STAGE_KEYS,
     REWRITE_STAGE_SEND_HINTS,
@@ -107,6 +118,9 @@ from rewrite_pipeline import (
     clamp_target_chars,
     apply_title_strategist_original_title_to_user_json,
     compose_rewrite_openai_request_body,
+    normalize_rewrite_preset,
+    snapshot_rewrite_preset_from_body,
+    stages_for_preset,
     ANIMATION_INTENSITY_OPTIONS,
     ANIMATION_INTENSITY_VALUES,
     ANIMATION_LOWMEDHIGH_VALUES,
@@ -127,6 +141,7 @@ from rewrite_pipeline import (
     snapshot_pipeline_extras_from_body,
     snapshot_stages_from_body,
     stage_run_prerequisites_met,
+    strip_author_stream_end_marker,
 )
 from rewrite_templates import (
     REWRITE_TEMPLATES_DIR,
@@ -446,8 +461,118 @@ def _job_file_lock(job_id: str):
 _REWRITE_ID_RE = re.compile(r"^rewrite_\d{8}_\d{6}$")
 
 
+def _latest_tts_words_doc_for_job(job_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Последний по mtime MP3 в data/job_audio/<job_id>/ и парный <stem>.words.json."""
+    audio_dir = JOB_AUDIO_DIR / job_id
+    if not audio_dir.is_dir():
+        return None, None
+    mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not mp3s:
+        return None, None
+    mp3 = mp3s[0]
+    words_path = audio_dir / f"{mp3.stem}.words.json"
+    if not words_path.is_file():
+        return None, None
+    try:
+        doc = json.loads(words_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    if not isinstance(doc, dict):
+        return None, None
+    return doc, mp3.name
+
+
+def _render_scenes_stripped_with_timing(scenes: list[dict]) -> str:
+    """Компактный «JSON-код сцен с таймингами»: 8 строк-объектов на сцену.
+    Если ни у одной сцены нет `audio_timing` — возвращает пустую строку (UI скрывает блок).
+    """
+    if not scenes:
+        return ""
+    has_any_timing = any(
+        isinstance(s, dict) and isinstance(s.get("audio_timing"), dict) and s["audio_timing"].get("start_ms") is not None
+        for s in scenes
+    )
+    if not has_any_timing:
+        return ""
+
+    def js(v: Any) -> str:
+        return json.dumps(v, ensure_ascii=False)
+
+    out: list[str] = []
+    for s in scenes:
+        if not isinstance(s, dict):
+            continue
+        at = s.get("audio_timing") if isinstance(s.get("audio_timing"), dict) else {}
+        sm = at.get("start_ms")
+        em = at.get("end_ms")
+        dm = at.get("duration_ms")
+        st_time = at.get("start_time") or ""
+        en_time = at.get("start_end") or ""
+        dur_s = at.get("duration_s") or ""
+        if not st_time and isinstance(sm, (int, float)):
+            from job_scene_audio_align import format_ms_clock as _f
+            st_time = _f(int(sm))
+        if not en_time and isinstance(em, (int, float)):
+            from job_scene_audio_align import format_ms_clock as _f
+            en_time = _f(int(em))
+        if not dur_s and isinstance(dm, (int, float)):
+            from job_scene_audio_align import format_duration_seconds as _f
+            dur_s = _f(int(dm))
+
+        out.append(f'{{"scene_id": {js(str(s.get("scene_id") or ""))}}}')
+        out.append(f'{{"text": {js(str(s.get("text") or ""))}}}')
+        out.append(f'{{"text_ru": {js(str(s.get("text_ru") or ""))}}}')
+        out.append(f'{{"start_time_ms": {js(str(sm) if sm is not None else "")}}}')
+        out.append(f'{{"start_end_ms": {js(str(em) if em is not None else "")}}}')
+        out.append(f'{{"start_time": {js(str(st_time))}}}')
+        out.append(f'{{"start_end": {js(str(en_time))}}}')
+        out.append(f'{{"Duration": {js(str(dur_s))}}}')
+        out.append("")
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
+
+
+def _apply_tts_word_timings_to_scenes(job_id: str, scenes: list[dict]) -> None:
+    """Если у последнего TTS есть words.json — выравнивает сцены и пишет audio_timing (на месте)."""
+    if not scenes:
+        return
+    words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id)
+    if not words_doc or not audio_fname:
+        return
+    words = words_doc.get("words")
+    if not isinstance(words, list) or not words:
+        return
+    try:
+        total_ms = int(words_doc.get("total_duration_ms") or 0)
+    except (TypeError, ValueError):
+        total_ms = 0
+    if total_ms <= 0:
+        try:
+            last = words[-1]
+            total_ms = int((last or {}).get("end_ms") or 0)
+        except (TypeError, ValueError, IndexError):
+            total_ms = 0
+    if total_ms <= 0:
+        return
+    try:
+        timings = align_scenes_to_word_timings(
+            scenes,
+            words,
+            total_duration_ms=total_ms,
+        )
+        merge_audio_timing_into_scenes(scenes, timings, audio_filename=audio_fname)
+    except Exception as exc:  # noqa: BLE001
+        try:
+            app.logger.warning("apply TTS timings to scenes job=%s: %s", job_id, exc)
+        except Exception:
+            pass
+
+
 def _safe_job_audio_filename(name: str) -> bool:
-    return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.mp3$", name))
+    # Разрешаем озвучку (.mp3) и парный JSON с пословными таймингами (.words.json),
+    # который ElevenLabs `/with-timestamps` отдаёт рядом с MP3.
+    return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(mp3|words\.json)$", name))
 
 
 def _safe_zip_archive_basename(name: str, fallback: str) -> str:
@@ -1103,6 +1228,24 @@ def _iter_scene_json_objects(raw_text: str) -> list[tuple[int, Any, str | None]]
     return out
 
 
+def _unwrap_json_array_of_objects(raw_text: str) -> str:
+    """Если вставили один JSON-массив объектов — превращаем в построчные объекты для parse_scene_blocks."""
+    t = (raw_text or "").strip()
+    if not t.startswith("["):
+        return raw_text or ""
+    try:
+        arr = json.loads(t)
+    except json.JSONDecodeError:
+        return raw_text or ""
+    if not isinstance(arr, list):
+        return raw_text or ""
+    lines: list[str] = []
+    for item in arr:
+        if isinstance(item, dict):
+            lines.append(json.dumps(item, ensure_ascii=False))
+    return "\n".join(lines) if lines else (raw_text or "")
+
+
 def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
     """
     Parse raw text into scene blocks.
@@ -1110,6 +1253,7 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
     Поддерживаются как однострочные, так и многострочные JSON-объекты (например, "animation").
     Returns: (list of scene dicts, list of error messages)
     """
+    raw_text = _unwrap_json_array_of_objects(raw_text)
     scenes: list[dict] = []
     errors: list[str] = []
     current_scene: dict | None = None
@@ -2711,8 +2855,10 @@ def rewrite_project_page(rewrite_id: str):
     st = rw.get("stages")
     if not isinstance(st, dict):
         st = {}
+    rewrite_preset_current = normalize_rewrite_preset(rw.get("rewrite_preset"))
     rewrite_stage_run_ok = {
-        sk: stage_run_prerequisites_met(sk, st) for sk in REWRITE_STAGE_KEYS
+        sk: stage_run_prerequisites_met(sk, st, preset=rewrite_preset_current)
+        for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
     voiceover_final_text = str(rw.get("voiceover_final_text") or "")
@@ -2731,6 +2877,10 @@ def rewrite_project_page(rewrite_id: str):
                 rewrite_stage_subtitles=REWRITE_STAGE_SUBTITLES,
                 rewrite_stage_run_ok=rewrite_stage_run_ok,
                 rewrite_stage_key_order=rewrite_stage_key_order,
+                rewrite_preset_current=rewrite_preset_current,
+                rewrite_preset_labels=REWRITE_PRESET_LABELS,
+                rewrite_preset_stage_keys=REWRITE_PRESET_STAGE_KEYS,
+                rewrite_preset_default=REWRITE_PRESET_DEFAULT,
                 rewrite_models=REWRITE_MODELS,
                 rewrite_template_names=list_rewrite_template_names(),
                 openai_key_set=key_set,
@@ -2970,6 +3120,8 @@ def rewrite_project_save(rewrite_id: str):
         rw["audio_timing_locked"] = bool(at_lock_in)
     if "rewrite_template" in body:
         rw["rewrite_template"] = str(body.get("rewrite_template") or "").strip()
+    if "rewrite_preset" in body:
+        rw["rewrite_preset"] = normalize_rewrite_preset(body.get("rewrite_preset"))
     merge_stages_from_request(rw, body.get("stages"))
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
@@ -3809,8 +3961,26 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
-    hero_prompt, target_chars = snapshot_pipeline_extras_from_body(body)
+    hero_prompt, target_chars, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    preset = snapshot_rewrite_preset_from_body(body, rw_job)
     api_key = os.getenv("OPENAI_API_KEY") or ""
+
+    # Author: в user уходит Result Distiller — подмешиваем с диска, если в снимке пусто.
+    if stage_key == "author" and isinstance(stages_snap, dict):
+        _snap = dict(stages_snap)
+        _dist_cell = dict(_snap.get("distiller") or {}) if isinstance(_snap.get("distiller"), dict) else {}
+        _dres = str(_dist_cell.get("last_result") or "").strip()
+        if not _dres:
+            _dp = _rewrite_stage_result_path(rewrite_id, "distiller")
+            if _dp.exists():
+                try:
+                    _dres = _dp.read_text(encoding="utf-8")
+                except OSError:
+                    _dres = ""
+        if _dres:
+            _dist_cell["last_result"] = _dres
+            _snap["distiller"] = _dist_cell
+        stages_snap = _snap
 
     def gen():
         if stage_key not in REWRITE_STAGE_KEYS:
@@ -3832,6 +4002,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             "animation_planner",
             "scene_writer_live",
             "youtube_packaging",
+            "author",
         ) and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
@@ -3840,12 +4011,24 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             return
         block_writer_full_text = ""
         if stage_key == "retention_editor":
-            full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
-            if full_text_path.exists():
-                try:
-                    block_writer_full_text = full_text_path.read_text(encoding="utf-8")
-                except OSError:
-                    block_writer_full_text = ""
+            # В Мягком пресете Retention Editor читает не block_writer/full_text.txt,
+            # а Result этапа Author (он играет роль склейки full_text).
+            if preset == "soft":
+                author_path = _rewrite_stage_result_path(rewrite_id, "author")
+                if author_path.exists():
+                    try:
+                        block_writer_full_text = author_path.read_text(encoding="utf-8")
+                    except OSError:
+                        block_writer_full_text = ""
+                else:
+                    block_writer_full_text = str((stages_snap.get("author") or {}).get("last_result") or "")
+            else:
+                full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
+                if full_text_path.exists():
+                    try:
+                        block_writer_full_text = full_text_path.read_text(encoding="utf-8")
+                    except OSError:
+                        block_writer_full_text = ""
         retention_editor_text = ""
         if stage_key == "hook_editor":
             p = _rewrite_stage_result_path(rewrite_id, "retention_editor")
@@ -3926,6 +4109,8 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             master_prompt=master_prompt,
             hero_prompt=hero_prompt,
             target_chars=target_chars,
+            duration_minutes=duration_minutes,
+            chars_per_minute=chars_per_minute,
             block_writer_full_text=block_writer_full_text,
             retention_editor_text=retention_editor_text,
             hook_editor_text=hook_editor_text,
@@ -3936,16 +4121,32 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             title_strategist_result_text=title_strategist_result_text,
             scene_writer_result_text=scene_writer_result_text,
             original_title=original_title,
+            preset=preset,
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
             return
-        msgs = payload["messages"]
-        prompt = str(msgs[0].get("content") or "")
-        user_text = str(msgs[1].get("content") or "")
+        # Достаём prompt/user_text устойчиво к двум форматам payload:
+        # OpenAI: messages=[{role:system}, {role:user}]; Claude (Kie.ai): top-level
+        # "system" + messages=[{role:user}]. Никогда не обращаемся по индексу,
+        # чтобы не получить IndexError на Claude-формате.
+        msgs_list = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+        prompt = str(payload.get("system") or "")
+        user_text = ""
+        user_msg_obj = None
+        for _m in msgs_list:
+            if not isinstance(_m, dict):
+                continue
+            _role = str(_m.get("role") or "").lower()
+            if _role == "system" and not prompt:
+                prompt = str(_m.get("content") or "")
+            elif _role == "user" and user_msg_obj is None:
+                user_msg_obj = _m
+                user_text = str(_m.get("content") or "")
         if stage_key == "title_strategist":
             user_text = apply_title_strategist_original_title_to_user_json(user_text, original_title)
-            msgs[1]["content"] = user_text
+            if isinstance(user_msg_obj, dict):
+                user_msg_obj["content"] = user_text
         model = str(payload.get("model") or "")
         if stage_key == "draft1":
             analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
@@ -4268,6 +4469,29 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 ensure_ascii=False,
             ) + "\n"
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
+        elif stage_key == "author":
+            for item in iter_rewrite_completion_stream(api_key, model, prompt, user_text):
+                t_item = str(item.get("type") or "")
+                if t_item == "delta":
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+                    continue
+                if t_item == "status":
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+                    continue
+                if t_item == "error":
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+                    return
+                if t_item == "result":
+                    raw = str(item.get("content") or "")
+                    cleaned = strip_author_stream_end_marker(strip_markdown_code_fence(raw))
+                    out_item = dict(item)
+                    out_item["content"] = cleaned
+                    yield json.dumps(out_item, ensure_ascii=False) + "\n"
+                    return
+            yield json.dumps(
+                {"type": "error", "message": "Author: поток завершился без итогового result."},
+                ensure_ascii=False,
+            ) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
                 t_item = str(item.get("type") or "")
@@ -4439,7 +4663,7 @@ def rewrite_project_api_payload(rewrite_id: str):
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
-    hero_prompt, target_chars = snapshot_pipeline_extras_from_body(body)
+    hero_prompt, target_chars, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
     block_writer_full_text = ""
     if stage_key == "retention_editor":
         full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
@@ -4521,6 +4745,22 @@ def rewrite_project_api_payload(rewrite_id: str):
                     title_strategist_result_text = p.read_text(encoding="utf-8")
                 except OSError:
                     title_strategist_result_text = ""
+    if stage_key == "author" and isinstance(stages_snap, dict):
+        _snap_ap = dict(stages_snap)
+        _dist_cell_ap = dict(_snap_ap.get("distiller") or {}) if isinstance(_snap_ap.get("distiller"), dict) else {}
+        _dres_ap = str(_dist_cell_ap.get("last_result") or "").strip()
+        if not _dres_ap:
+            _dp_ap = _rewrite_stage_result_path(rewrite_id, "distiller")
+            if _dp_ap.exists():
+                try:
+                    _dres_ap = _dp_ap.read_text(encoding="utf-8")
+                except OSError:
+                    _dres_ap = ""
+        if _dres_ap:
+            _dist_cell_ap["last_result"] = _dres_ap
+            _snap_ap["distiller"] = _dist_cell_ap
+        stages_snap = _snap_ap
+    preset_ap = snapshot_rewrite_preset_from_body(body, rw_job)
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -4528,6 +4768,8 @@ def rewrite_project_api_payload(rewrite_id: str):
         master_prompt=master_prompt,
         hero_prompt=hero_prompt,
         target_chars=target_chars,
+        duration_minutes=duration_minutes,
+        chars_per_minute=chars_per_minute,
         block_writer_full_text=block_writer_full_text,
         retention_editor_text=retention_editor_text,
         hook_editor_text=hook_editor_text,
@@ -4538,6 +4780,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         title_strategist_result_text=title_strategist_result_text,
         scene_writer_result_text=scene_writer_result_text,
         original_title=original_title,
+        preset=preset_ap,
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
@@ -4672,6 +4915,7 @@ def parse_for_job(job_id: str):
             flash(err, "error")
         return redirect(url_for("job_page", job_id=job_id))
 
+    timings_applied = False
     with _job_file_lock(job_id):
         job = load_job(job_id)
         if job is None:
@@ -4706,6 +4950,8 @@ def parse_for_job(job_id: str):
                 scene[slot] = new_slot
 
         meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+        pm = meta.get("montage")
+        prev_montage = dict(pm) if isinstance(pm, dict) and pm else None
         meta["aspect_ratio"] = aspect_ratio
         meta["video_duration"] = 10
         meta["image_model"] = image_model
@@ -4715,6 +4961,8 @@ def parse_for_job(job_id: str):
         meta["resolution"] = resolution
         meta["output_format"] = "jpg"
         meta["image_template"] = image_template
+        if prev_montage is not None:
+            meta["montage"] = prev_montage
 
         job["raw_input"] = raw_text
         job["parsed_scenes"] = scenes
@@ -4727,10 +4975,86 @@ def parse_for_job(job_id: str):
         job["selected_image_template"] = image_template
         job["job_meta"] = meta
         job["status"] = "ready" if scenes else "draft"
+        _apply_tts_word_timings_to_scenes(job_id, scenes)
+        timings_applied = any(
+            isinstance(s, dict) and isinstance(s.get("audio_timing"), dict) and (s["audio_timing"].get("badge"))
+            for s in scenes
+        )
         save_job(job_id, job)
 
-    flash(f"Сцены обновлены: {len(scenes)}.", "success")
+    flash_ok = f"Сцены обновлены: {len(scenes)}."
+    if timings_applied:
+        flash_ok += " Тайминги сопоставлены с последней озвучкой (.words.json)."
+    flash(flash_ok, "success")
     return redirect(url_for("job_page", job_id=job_id))
+
+
+@app.route("/job/<job_id>/scenes/apply-tts-timings", methods=["POST"])
+def job_scenes_apply_tts_timings(job_id: str):
+    """Пересчитывает audio_timing у сцен по последнему `<stem>.words.json`.
+
+    Используется кнопкой «Сгенерировать JSON-код сцен с таймингами»: если у
+    проекта уже есть сцены и есть пословные тайминги озвучки, повторно
+    добавлять сцены не нужно — этот эндпоинт берёт `.words.json`, выравнивает
+    сцены и записывает audio_timing на месте.
+    """
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+        scenes = job.get("scenes")
+        if not isinstance(scenes, list) or not scenes:
+            return jsonify({"ok": False, "error": "В проекте нет сцен."}), 400
+
+        words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id)
+        if not words_doc or not audio_fname:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": (
+                        "У проекта нет пословных таймингов (.words.json). "
+                        "Сгенерируйте озвучку моделью, которая возвращает timestamps."
+                    ),
+                }
+            ), 400
+
+        _apply_tts_word_timings_to_scenes(job_id, scenes)
+        timings_applied = sum(
+            1
+            for s in scenes
+            if isinstance(s, dict)
+            and isinstance(s.get("audio_timing"), dict)
+            and s["audio_timing"].get("start_ms") is not None
+        )
+        if timings_applied == 0:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": (
+                        "Не удалось сопоставить тайминги: проверьте, что текст сцен "
+                        "совпадает с озвучкой."
+                    ),
+                    "words_filename": audio_fname.replace(".mp3", ".words.json"),
+                }
+            ), 400
+
+        save_job(job_id, job)
+        rendered = _render_scenes_stripped_with_timing(scenes)
+
+    return jsonify(
+        {
+            "ok": True,
+            "scenes_count": len(scenes),
+            "timings_applied": timings_applied,
+            "scenes_stripped_text": rendered,
+            "audio_filename": audio_fname,
+            "words_filename": audio_fname.replace(".mp3", ".words.json"),
+            "message": (
+                f"Тайминги сопоставлены: {timings_applied}/{len(scenes)} сцен "
+                f"(озвучка: {audio_fname})."
+            ),
+        }
+    )
 
 
 @app.route("/job/<job_id>/pexels/search", methods=["POST"])
@@ -6031,7 +6355,11 @@ def job_elevenlabs_tts_stream(job_id: str):
                 return
 
         max_c = max_chars_for_model(model_id)
-        chunks = split_tts_text_into_chunks(text, max_c)
+        try:
+            chunks = split_tts_text_into_chunks(text, max_c)
+        except RuntimeError as e:
+            yield _ev({"type": "error", "error": f"Сплиттер TTS: {e}", "elapsed_seconds": elapsed()})
+            return
         if not chunks:
             yield _ev({"type": "error", "error": "Пустой текст", "elapsed_seconds": elapsed()})
             return
@@ -6064,6 +6392,23 @@ def job_elevenlabs_tts_stream(job_id: str):
 
         total_chars = len(text)
         total_chunks = len(chunks)
+        # Диагностический отпечаток чанков — позволяет в логе видеть, что куски
+        # действительно разные (хэши + длины), и быстро ловить регрессии.
+        try:
+            import hashlib as _hashlib
+            chunks_fingerprint = [
+                {
+                    "i": _i,
+                    "len": len(_c),
+                    "head": _c[:40],
+                    "tail": _c[-40:],
+                    "sha1_8": _hashlib.sha1(_c.encode("utf-8")).hexdigest()[:8],
+                }
+                for _i, _c in enumerate(chunks)
+            ]
+        except Exception:  # noqa: BLE001 - diagnostics-only, never block run
+            chunks_fingerprint = []
+        sum_chunk_chars = sum(len(_c) for _c in chunks)
         yield _ev(
             {
                 "type": "status",
@@ -6071,7 +6416,9 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "message": f"Подготовлено: {total_chunks} кусков, {total_chars} символов (лимит {max_c} на запрос).",
                 "total_chunks": total_chunks,
                 "total_chars": total_chars,
+                "sum_chunk_chars": sum_chunk_chars,
                 "chunk_limit": max_c,
+                "chunks_fingerprint": chunks_fingerprint,
                 "elapsed_seconds": elapsed(),
             }
         )
@@ -6084,75 +6431,104 @@ def job_elevenlabs_tts_stream(job_id: str):
         fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.mp3"
         out_path = out_dir / fname
 
+        # Накопитель сквозных миллисекунд для всех чанков.
+        all_words: list[dict[str, Any]] = []
+        cumulative_offset_ms: int = 0
         try:
-            if total_chunks == 1:
-                ch = chunks[0]
-                chunk_started = time.monotonic()
-                yield _ev(
-                    {
-                        "type": "status",
-                        "phase": "chunk_request",
-                        "chunk_index": 1,
-                        "total_chunks": 1,
-                        "chunk_chars": len(ch),
-                        "message": f"[1/1] Отправили в ElevenLabs: {len(ch)} символов. Ожидание ответа…",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-                audio = text_to_speech_bytes(text=ch, **tts_kw)
-                out_path.write_bytes(audio)
-                yield _ev(
-                    {
-                        "type": "status",
-                        "phase": "chunk_done",
-                        "chunk_index": 1,
-                        "total_chunks": 1,
-                        "chunk_chars": len(ch),
-                        "audio_bytes": len(audio),
-                        "chunk_wait_seconds": round(max(0.0, time.monotonic() - chunk_started), 1),
-                        "message": f"[1/1] Ответ получен: {len(audio)} байт аудио.",
-                        "elapsed_seconds": elapsed(),
-                    }
-                )
-            else:
-                with tempfile.TemporaryDirectory() as tmp:
-                    part_paths: list[Path] = []
-                    for i, ch in enumerate(chunks, start=1):
-                        chunk_started = time.monotonic()
+            with tempfile.TemporaryDirectory() as tmp:
+                part_paths: list[Path] = []
+                seen_paths: set[str] = set()
+                for i, ch in enumerate(chunks, start=1):
+                    chunk_started = time.monotonic()
+                    yield _ev(
+                        {
+                            "type": "status",
+                            "phase": "chunk_request",
+                            "chunk_index": i,
+                            "total_chunks": total_chunks,
+                            "chunk_chars": len(ch),
+                            "message": (
+                                f"[{i}/{total_chunks}] Отправили в ElevenLabs (with-timestamps): "
+                                f"{len(ch)} символов. Ожидание ответа…"
+                            ),
+                            "elapsed_seconds": elapsed(),
+                        }
+                    )
+                    # Один общий путь: всегда with-timestamps. Так фронт стабильно
+                    # получает words.json. Если модель не поддерживает timestamps,
+                    # text_to_speech_with_timestamps поднимет RuntimeError с
+                    # понятным сообщением (попадёт в `type:error` ниже).
+                    part_bytes, alignment = text_to_speech_with_timestamps(text=ch, **tts_kw)
+                    p = Path(tmp) / f"part_{i - 1:04d}.mp3"
+                    p.write_bytes(part_bytes)
+                    key = str(p.resolve())
+                    if key in seen_paths:
                         yield _ev(
                             {
-                                "type": "status",
-                                "phase": "chunk_request",
-                                "chunk_index": i,
-                                "total_chunks": total_chunks,
-                                "chunk_chars": len(ch),
-                                "message": f"[{i}/{total_chunks}] Отправили в ElevenLabs: {len(ch)} символов. Ожидание ответа…",
+                                "type": "error",
+                                "error": f"Внутренняя ошибка: повторный part_path {p.name} для chunk {i}.",
                                 "elapsed_seconds": elapsed(),
                             }
                         )
-                        part_bytes = text_to_speech_bytes(text=ch, **tts_kw)
-                        p = Path(tmp) / f"part_{i - 1:04d}.mp3"
-                        p.write_bytes(part_bytes)
-                        part_paths.append(p)
+                        return
+                    seen_paths.add(key)
+                    part_paths.append(p)
+
+                    # Char→word + сдвиг на накопленную длительность предыдущих чанков.
+                    try:
+                        chunk_words = chars_to_words_ms(
+                            ch,
+                            list(alignment.get("character_start_times_seconds") or []),
+                            list(alignment.get("character_end_times_seconds") or []),
+                            time_offset_ms=cumulative_offset_ms,
+                        )
+                    except RuntimeError as e:
                         yield _ev(
                             {
-                                "type": "status",
-                                "phase": "chunk_done",
-                                "chunk_index": i,
-                                "total_chunks": total_chunks,
-                                "chunk_chars": len(ch),
-                                "audio_bytes": len(part_bytes),
-                                "chunk_wait_seconds": round(max(0.0, time.monotonic() - chunk_started), 1),
-                                "message": f"[{i}/{total_chunks}] Ответ получен: {len(part_bytes)} байт аудио.",
+                                "type": "error",
+                                "error": f"Тайминги [{i}/{total_chunks}]: {e}",
                                 "elapsed_seconds": elapsed(),
                             }
                         )
+                        return
+                    all_words.extend(chunk_words)
+
+                    # Реальная длительность MP3 (ffprobe) — единственно корректный
+                    # offset для следующего чанка. character_end_times[-1] этого
+                    # не даёт: между концом речи и концом MP3 у ElevenLabs обычно
+                    # есть «хвост» тишины 20–80 мс.
+                    chunk_duration_sec = mp3_duration_seconds_ffprobe(p)
+                    cumulative_offset_ms += int(round(chunk_duration_sec * 1000))
 
                     yield _ev(
                         {
                             "type": "status",
+                            "phase": "chunk_done",
+                            "chunk_index": i,
+                            "total_chunks": total_chunks,
+                            "chunk_chars": len(ch),
+                            "chunk_words": len(chunk_words),
+                            "chunk_duration_ms": int(round(chunk_duration_sec * 1000)),
+                            "cumulative_offset_ms": cumulative_offset_ms,
+                            "audio_bytes": len(part_bytes),
+                            "chunk_wait_seconds": round(max(0.0, time.monotonic() - chunk_started), 1),
+                            "message": (
+                                f"[{i}/{total_chunks}] Ответ получен: {len(part_bytes)} байт, "
+                                f"{len(chunk_words)} слов, длительность {chunk_duration_sec:.2f}с."
+                            ),
+                            "elapsed_seconds": elapsed(),
+                        }
+                    )
+
+                if total_chunks == 1:
+                    shutil.copyfile(part_paths[0], out_path)
+                else:
+                    yield _ev(
+                        {
+                            "type": "status",
                             "phase": "merge_start",
-                            "message": f"Склейка {total_chunks} MP3-кусков…",
+                            "total_parts": len(part_paths),
+                            "message": f"Склейка {total_chunks} MP3-кусков ({len(part_paths)} файлов)…",
                             "elapsed_seconds": elapsed(),
                         }
                     )
@@ -6172,10 +6548,56 @@ def job_elevenlabs_tts_stream(job_id: str):
             yield _ev({"type": "error", "error": str(e), "elapsed_seconds": elapsed()})
             return
 
+        # Итоговая длительность смерженного MP3 — для UI и sanity-check.
+        total_duration_sec = mp3_duration_seconds_ffprobe(out_path) or 0.0
+        total_duration_ms = int(round(total_duration_sec * 1000))
+
+        # Сохраняем words.json рядом с MP3 (тот же базовый stem).
+        words_filename = fname[:-4] + ".words.json"
+        words_path = out_dir / words_filename
+        words_doc = {
+            "schema": "elevenlabs_with_timestamps_words@1",
+            "audio_filename": fname,
+            "voice_id": voice_id,
+            "voice_name": voice_name,
+            "model_id": model_id,
+            "total_chars": len(text),
+            "total_chunks": total_chunks,
+            "chunk_limit": max_c,
+            "total_words": len(all_words),
+            "total_duration_ms": total_duration_ms,
+            "words": all_words,
+        }
+        try:
+            tmp_words = words_path.with_suffix(words_path.suffix + ".tmp")
+            tmp_words.write_text(
+                json.dumps(words_doc, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            os.replace(tmp_words, words_path)
+        except OSError as e:
+            yield _ev(
+                {
+                    "type": "error",
+                    "error": f"Не удалось сохранить words.json: {e}",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+            return
+
         audio_url = url_for("job_audio_file", job_id=job_id, filename=fname)
+        words_url = url_for("job_audio_file", job_id=job_id, filename=words_filename)
+        first_word = all_words[0] if all_words else None
+        last_word = all_words[-1] if all_words else None
         entry = {
             "filename": fname,
             "url": audio_url,
+            "words_filename": words_filename,
+            "words_url": words_url,
+            "total_words": len(all_words),
+            "total_duration_ms": total_duration_ms,
+            "first_word": first_word,
+            "last_word": last_word,
             "created_at": datetime.now().timestamp(),
             "voice_id": voice_id,
             "voice_name": voice_name,
@@ -6212,6 +6634,31 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "use_speaker_boost": use_speaker_boost,
             }
             job["tts_last_text"] = text
+            scene_audio_timings: list[dict[str, Any]] = []
+            scenes_list = job.get("scenes")
+            if isinstance(scenes_list, list) and scenes_list and all_words:
+                try:
+                    timings = align_scenes_to_word_timings(
+                        scenes_list,
+                        all_words,
+                        total_duration_ms=total_duration_ms,
+                    )
+                    merge_audio_timing_into_scenes(
+                        scenes_list, timings, audio_filename=fname
+                    )
+                    for i, t in enumerate(timings):
+                        sc_i = scenes_list[i] if i < len(scenes_list) else None
+                        sid = (sc_i or {}).get("scene_id") if isinstance(sc_i, dict) else None
+                        row = dict(t)
+                        row["scene_id"] = sid
+                        scene_audio_timings.append(row)
+                except Exception as exc:  # noqa: BLE001 — не рвём успешный TTS из-за разметки
+                    try:
+                        app.logger.warning(  # type: ignore[attr-defined]
+                            "scene audio align failed job=%s: %s", job_id, exc
+                        )
+                    except Exception:
+                        pass
             save_job(job_id, job)
 
         yield _ev(
@@ -6219,6 +6666,7 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "type": "result",
                 "ok": True,
                 **entry,
+                "scene_audio_timings": scene_audio_timings,
                 "message": f"Готово: {len(chunks)} кусков, {len(text)} символов, ожидание {elapsed()}с.",
                 "elapsed_seconds": elapsed(),
             }
@@ -6829,6 +7277,8 @@ def job_audio_file(job_id: str, filename: str):
         abort(404)
     if not target.is_file():
         abort(404)
+    if filename.endswith(".words.json"):
+        return send_from_directory(d, filename, mimetype="application/json", max_age=0)
     return send_from_directory(d, filename, mimetype="audio/mpeg", max_age=0)
 
 
@@ -6853,6 +7303,564 @@ def job_pexels_file(job_id: str, filename: str):
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
+
+
+def _montage_pct_clamp(value: Any) -> int:
+    try:
+        x = int(round(float(value)))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(100, x))
+
+
+JOB_REMOTION_DIR = BASE_DIR / "data" / "job_remotion"
+
+
+def _job_remotion_dir(job_id: str) -> Path:
+    return JOB_REMOTION_DIR / job_id
+
+
+def _remotion_studio_url_from_env() -> str | None:
+    """Базовый URL Remotion Studio из REMOTION_STUDIO_URL (без завершающего /)."""
+    raw = (os.getenv("REMOTION_STUDIO_URL") or "").strip().rstrip("/")
+    if not raw.startswith(("http://", "https://")):
+        return None
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return None
+    if not parsed.netloc:
+        return None
+    return raw
+
+
+def _latest_audio_path_for_job(job_id: str) -> Path | None:
+    audio_dir = JOB_AUDIO_DIR / job_id
+    if not audio_dir.is_dir():
+        return None
+    mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return mp3s[0] if mp3s else None
+
+
+@app.route("/job/<job_id>/montage/assemble", methods=["POST"])
+def job_montage_assemble(job_id: str):
+    """Сохраняет настройки монтажа и стримит подготовку ассетов для Remotion (NDJSON)."""
+    data = request.get_json(silent=True) or {}
+    zoom = _montage_pct_clamp(data.get("zoom_pct"))
+    fade_in = _montage_pct_clamp(data.get("fade_in_pct"))
+
+    with _job_file_lock(job_id):
+        job_check = load_job(job_id)
+        if job_check is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+        meta = job_check.get("job_meta") if isinstance(job_check.get("job_meta"), dict) else {}
+        meta["montage"] = {"zoom_pct": zoom, "fade_in_pct": fade_in}
+        job_check["job_meta"] = meta
+        save_job(job_id, job_check)
+
+    def _ev(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, ensure_ascii=False) + "\n"
+
+    @stream_with_context
+    def gen():
+        started = time.monotonic()
+
+        def elapsed() -> float:
+            return round(max(0.0, time.monotonic() - started), 1)
+
+        from job_montage_prepare import prepare_montage  # late import (избегаем циклов)
+
+        job = load_job(job_id)
+        if job is None:
+            yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
+            return
+
+        scenes_total = len(job.get("scenes") or [])
+        if scenes_total == 0:
+            yield _ev({"type": "error", "error": "В проекте нет сцен", "elapsed_seconds": elapsed()})
+            return
+
+        audio_src = _latest_audio_path_for_job(job_id)
+        if audio_src is None:
+            yield _ev({"type": "error", "error": "В проекте нет озвучки (MP3).", "elapsed_seconds": elapsed()})
+            return
+
+        out_dir = _job_remotion_dir(job_id)
+        if out_dir.is_dir():
+            shutil.rmtree(out_dir, ignore_errors=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        yield _ev(
+            {
+                "type": "status",
+                "phase": "prepare_start",
+                "message": (
+                    f"Подготовка ассетов: {scenes_total} сцен, "
+                    f"озвучка {audio_src.name}, каталог data/job_remotion/{job_id}/"
+                ),
+                "scenes": scenes_total,
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+        event_queue: queue.Queue[dict[str, Any]] = queue.Queue()
+
+        def on_progress(p: dict[str, Any]) -> None:
+            event_queue.put(p)
+
+        worker_result: dict[str, Any] = {"props": None, "error": None}
+
+        def worker() -> None:
+            try:
+                props = prepare_montage(
+                    job_id=job_id,
+                    job=job,
+                    base_dir=out_dir,
+                    audio_src=audio_src,
+                    pexels_dir=_job_pexels_dir(job_id),
+                    fetch_url_bytes=lambda url: _fetch_url_bytes_capped(url),
+                    remotion_public_dir=(BASE_DIR / "remotion" / "public" / "jobs"),
+                    progress=on_progress,
+                )
+                worker_result["props"] = props
+            except Exception as exc:  # noqa: BLE001
+                worker_result["error"] = str(exc)
+            finally:
+                event_queue.put({"stage": "__done__"})
+
+        th = threading.Thread(target=worker, daemon=True)
+        th.start()
+
+        while True:
+            try:
+                ev = event_queue.get(timeout=30)
+            except queue.Empty:
+                yield _ev({"type": "status", "phase": "heartbeat", "elapsed_seconds": elapsed()})
+                continue
+            if ev.get("stage") == "__done__":
+                break
+            stage = str(ev.get("stage") or "")
+            payload: dict[str, Any] = {"type": "status", "phase": stage, "elapsed_seconds": elapsed()}
+            payload.update({k: v for k, v in ev.items() if k not in ("stage",)})
+            if stage == "audio_prepare":
+                payload["message"] = (
+                    f"Озвучка: из «{ev.get('source') or '?'}» → «{ev.get('target') or 'voiceover.wav'}» — "
+                    f"{ev.get('detail') or 'подготовка…'}"
+                )
+            elif stage == "audio_fallback":
+                payload["message"] = (
+                    f"Озвучка: {ev.get('detail') or 'переключение на копию MP3'} "
+                    f"(«{ev.get('source') or '?'}» → «{ev.get('target') or 'voiceover.mp3'}»)."
+                )
+            elif stage == "audio_done":
+                src = ev.get("source") or "—"
+                fn = ev.get("filename") or "—"
+                fmt = str(ev.get("format") or "").upper() or "—"
+                ms = int(ev.get("duration_ms") or 0)
+                if ev.get("transcoded"):
+                    payload["message"] = (
+                        f"Озвучка готова: «{src}» → «{fn}» ({fmt}, {ms} мс по ffprobe)."
+                    )
+                else:
+                    payload["message"] = (
+                        f"Озвучка записана (копия без перекодирования): «{src}» → «{fn}» ({fmt}, {ms} мс). "
+                        f"В Studio волна на таймлайне может не отрисоваться."
+                    )
+            elif stage == "audio_missing":
+                payload["message"] = (
+                    f"Озвучка: {ev.get('detail') or 'файл не найден или запись не удалась'} "
+                    f"(источник: {ev.get('source') or '—'})."
+                )
+            elif stage == "public_link_fail":
+                payload["message"] = f"Симлинк public/jobs: {ev.get('error') or 'ошибка'}"
+            elif stage == "scene_start":
+                payload["message"] = (
+                    f"[{int(ev.get('index') or 0) + 1}/{int(ev.get('total') or 0)}] "
+                    f"{ev.get('scene_id') or ev.get('stem')}: {ev.get('source') or '—'} ({ev.get('kind') or '—'})"
+                )
+            elif stage == "scene_done":
+                payload["message"] = (
+                    f"[{int(ev.get('index') or 0) + 1}/{int(ev.get('total') or 0)}] "
+                    f"готово: {ev.get('kind') or '—'}"
+                )
+            elif stage == "scene_fail":
+                payload["message"] = (
+                    f"[{int(ev.get('index') or 0) + 1}/{int(ev.get('total') or 0)}] "
+                    f"медиа недоступно ({ev.get('reason') or 'unknown'})"
+                )
+            elif stage == "props_written":
+                payload["message"] = f"props.json записан ({int(ev.get('scenes') or 0)} сцен)."
+            yield _ev(payload)
+
+        if worker_result["error"]:
+            yield _ev({"type": "error", "error": worker_result["error"], "elapsed_seconds": elapsed()})
+            return
+
+        props = worker_result["props"] or {}
+        scenes_with_media = sum(1 for sc in (props.get("scenes") or []) if isinstance(sc.get("media"), dict) and sc["media"].get("src"))
+        yield _ev(
+            {
+                "type": "result",
+                "ok": True,
+                "message": (
+                    f"Готово. Сцен с медиа: {scenes_with_media}/{len(props.get('scenes') or [])}, "
+                    f"длительность {int(props.get('total_duration_ms') or 0)} мс."
+                ),
+                "props_url": url_for("job_montage_file", job_id=job_id, filename="props.json"),
+                "studio_url": url_for("job_montage_open_studio", job_id=job_id),
+                "remotion_open_url": url_for("job_montage_remotion_open", job_id=job_id),
+                "remotion_studio_configured": _remotion_studio_url_from_env() is not None,
+                "render_url": url_for("job_montage_render", job_id=job_id),
+                "total_duration_ms": int(props.get("total_duration_ms") or 0),
+                "scenes_total": len(props.get("scenes") or []),
+                "scenes_with_media": scenes_with_media,
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+    return Response(gen(), mimetype="application/x-ndjson; charset=utf-8")
+
+
+_SAFE_MONTAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(json|mp3|wav|mp4|webm|png|jpg|jpeg|webp|gif|mov)$")
+
+
+@app.route("/job/<job_id>/montage/file/<path:filename>")
+def job_montage_file(job_id: str, filename: str):
+    if load_job(job_id) is None:
+        abort(404)
+    d = _job_remotion_dir(job_id).resolve()
+    if not d.is_dir():
+        abort(404)
+    parts = filename.split("/")
+    if any(p in ("", "..", ".") for p in parts):
+        abort(404)
+    if len(parts) == 2 and parts[0] == "media":
+        leaf = parts[1]
+    elif len(parts) == 1:
+        leaf = parts[0]
+    else:
+        abort(404)
+    if not _SAFE_MONTAGE_NAME_RE.match(leaf):
+        abort(404)
+    target = (d / filename).resolve()
+    try:
+        target.relative_to(d)
+    except ValueError:
+        abort(404)
+    if not target.is_file():
+        abort(404)
+    if leaf.endswith(".json"):
+        return send_from_directory(d, filename, mimetype="application/json", max_age=0)
+    return send_from_directory(d, filename, max_age=0)
+
+
+@app.route("/job/<job_id>/montage/studio")
+def job_montage_open_studio(job_id: str):
+    """JSON-заглушка для API; для браузера используйте /montage/remotion-open."""
+    return jsonify(
+        {
+            "ok": False,
+            "error": "studio_not_running",
+            "message": (
+                "Remotion Studio запускается вручную из каталога remotion/ "
+                "(см. REMOTION_STUDIO_URL в .env). Для открытия из интерфейса проекта "
+                "используйте ссылку «Открыть в Remotion» на странице job."
+            ),
+        }
+    )
+
+
+@app.route("/job/<job_id>/montage/remotion-open")
+def job_montage_remotion_open(job_id: str):
+    """Открытие Studio в новой вкладке: редирект на REMOTION_STUDIO_URL или подсказка."""
+    if load_job(job_id) is None:
+        abort(404)
+    props_path = _job_remotion_dir(job_id) / "props.json"
+    if not props_path.is_file():
+        abort(400)
+    ext = _remotion_studio_url_from_env()
+    if ext:
+        studio_page = urljoin(ext.rstrip("/") + "/", "JobMontage")
+        target = f"{studio_page}?{urlencode({'job': job_id})}"
+        return redirect(target, code=302)
+
+    jid = html_escape(job_id)
+    body = f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Remotion Studio</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:42rem;margin:2rem;line-height:1.5">
+<h1>Remotion Studio не настроен</h1>
+<p>Для кнопки «Открыть в Remotion» в <code>.env</code> задайте переменную
+<code>REMOTION_STUDIO_URL</code> — полный URL, с которого в браузере открывается Studio
+(например <code>http://127.0.0.1:3000</code> или <code>http://&lt;IP&gt;:3333</code> при
+<code>npx remotion studio --host 0.0.0.0 --port 3333</code>).</p>
+<p>Проект <code>{jid}</code>: ассеты в <code>data/job_remotion/{jid}/</code> и
+<code>remotion/public/jobs/{jid}/</code>. После настройки <code>REMOTION_STUDIO_URL</code>
+кнопка «Открыть в Remotion» ведёт на
+<code>…/JobMontage?job={jid}</code> — Studio подгружает <code>props.json</code> автоматически.</p>
+</body></html>"""
+    return Response(body, mimetype="text/html; charset=utf-8")
+
+
+_REMOTION_DIR = BASE_DIR / "remotion"
+_REMOTION_NPX = shutil.which("npx") or "/usr/bin/npx"
+_REMOTION_NODE = shutil.which("node") or "/usr/bin/node"
+
+
+_montage_render_lock = threading.Lock()
+_montage_render_tasks: dict[str, dict[str, Any]] = {}
+
+
+def _montage_render_view(st: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task_id": st.get("task_id"),
+        "job_id": st.get("job_id"),
+        "state": st.get("state"),
+        "progress_pct": int(st.get("progress_pct") or 0),
+        "stage": st.get("stage"),
+        "message": st.get("message"),
+        "started_at": st.get("started_at"),
+        "finished_at": st.get("finished_at"),
+        "error": st.get("error"),
+        "output_url": st.get("output_url"),
+        "output_filename": st.get("output_filename"),
+    }
+
+
+def _montage_render_worker(task_id: str, job_id: str) -> None:
+    props_path = _job_remotion_dir(job_id) / "props.json"
+    out_path = _job_remotion_dir(job_id) / "out.mp4"
+    if not props_path.is_file():
+        with _montage_render_lock:
+            st = _montage_render_tasks.get(task_id)
+            if st:
+                st.update(state="error", error="no_props", message="props.json не найден", finished_at=time.time())
+        return
+    if out_path.exists():
+        try:
+            out_path.unlink()
+        except OSError:
+            pass
+
+    env = dict(os.environ)
+    env["PATH"] = "/usr/bin:" + env.get("PATH", "")
+
+    cmd = [
+        _REMOTION_NPX,
+        "--no",
+        "remotion",
+        "render",
+        "src/index.ts",
+        "JobMontage",
+        str(out_path),
+        f"--props={props_path.resolve()}",
+        "--log=info",
+    ]
+
+    with _montage_render_lock:
+        st = _montage_render_tasks.get(task_id)
+        if st:
+            st.update(state="running", stage="bundle", message="Запуск Remotion render…")
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(_REMOTION_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+            bufsize=1,
+        )
+    except OSError as exc:
+        with _montage_render_lock:
+            st = _montage_render_tasks.get(task_id)
+            if st:
+                st.update(
+                    state="error",
+                    error="spawn_failed",
+                    message=f"Не удалось запустить npx remotion: {exc}",
+                    finished_at=time.time(),
+                )
+        return
+
+    pct_re = re.compile(r"(\d{1,3})\s*%")
+    last_line = ""
+    with _montage_render_lock:
+        st = _montage_render_tasks.get(task_id)
+        if st:
+            st["pid"] = proc.pid
+
+    if proc.stdout is not None:
+        for raw in proc.stdout:
+            line = raw.rstrip("\n")
+            last_line = line
+            stage = None
+            pct = None
+            lo = line.lower()
+            if "bundl" in lo:
+                stage = "bundle"
+            elif "rendering frames" in lo or "rendering" in lo:
+                stage = "rendering"
+            elif "encoding" in lo:
+                stage = "encoding"
+            elif "muxing" in lo or "stitching" in lo:
+                stage = "muxing"
+            elif "done" in lo and "ms" in lo:
+                stage = "done"
+            m = pct_re.search(line)
+            if m:
+                try:
+                    p = int(m.group(1))
+                    if 0 <= p <= 100:
+                        pct = p
+                except ValueError:
+                    pct = None
+            with _montage_render_lock:
+                st = _montage_render_tasks.get(task_id)
+                if st:
+                    if stage:
+                        st["stage"] = stage
+                    if pct is not None:
+                        st["progress_pct"] = pct
+                    st["message"] = line[:240]
+
+    rc = proc.wait()
+
+    with _montage_render_lock:
+        st = _montage_render_tasks.get(task_id)
+        if not st:
+            return
+        cancelled = bool(st.get("cancel_requested"))
+        if cancelled:
+            st.update(
+                state="cancelled",
+                stage="cancelled",
+                error="cancelled",
+                message="Рендер остановлен пользователем.",
+                finished_at=time.time(),
+            )
+        elif rc == 0 and out_path.is_file():
+            st.update(
+                state="done",
+                progress_pct=100,
+                stage="done",
+                message="Рендер MP4 завершён.",
+                finished_at=time.time(),
+                output_filename="out.mp4",
+                output_url=url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
+            )
+        else:
+            st.update(
+                state="error",
+                stage=st.get("stage") or "error",
+                error=f"exit_code={rc}",
+                message=("Ошибка рендера: " + (last_line[:240] if last_line else "")) or "Ошибка рендера",
+                finished_at=time.time(),
+            )
+
+
+@app.route("/job/<job_id>/montage/render", methods=["POST"])
+def job_montage_render(job_id: str):
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    props_path = _job_remotion_dir(job_id) / "props.json"
+    if not props_path.is_file():
+        return jsonify({"ok": False, "error": "no_props", "message": "Сначала запустите подготовку («Смонтировать видео»)."}), 400
+
+    with _montage_render_lock:
+        for tid, st in _montage_render_tasks.items():
+            if st.get("job_id") == job_id and st.get("state") in ("queued", "running"):
+                return jsonify({"ok": True, **_montage_render_view(st)})
+        task_id = uuid.uuid4().hex
+        _montage_render_tasks[task_id] = {
+            "task_id": task_id,
+            "job_id": job_id,
+            "state": "queued",
+            "progress_pct": 0,
+            "stage": "queued",
+            "message": "Поставлено в очередь",
+            "started_at": time.time(),
+            "finished_at": None,
+            "error": None,
+            "output_url": None,
+            "output_filename": None,
+            "pid": None,
+        }
+        st = _montage_render_tasks[task_id]
+
+    threading.Thread(target=_montage_render_worker, args=(task_id, job_id), daemon=True).start()
+    return jsonify({"ok": True, **_montage_render_view(st)})
+
+
+@app.route("/job/<job_id>/montage/render/status")
+def job_montage_render_status(job_id: str):
+    task_id = (request.args.get("task_id") or "").strip()
+    with _montage_render_lock:
+        st = _montage_render_tasks.get(task_id)
+        if not st or st.get("job_id") != job_id:
+            for tid, candidate in _montage_render_tasks.items():
+                if candidate.get("job_id") == job_id and (
+                    candidate.get("state") in ("queued", "running") or not task_id
+                ):
+                    st = candidate
+                    break
+        if not st:
+            # Активной/недавней задачи нет, но MP4 уже мог быть отрендерен ранее
+            # (сервис мог быть перезапущен — память _montage_render_tasks теряется).
+            out_path = _job_remotion_dir(job_id) / "out.mp4"
+            if out_path.is_file():
+                return jsonify({
+                    "ok": True,
+                    "task_id": None,
+                    "job_id": job_id,
+                    "state": "done",
+                    "progress_pct": 100,
+                    "stage": "done",
+                    "message": "MP4 уже готов.",
+                    "started_at": None,
+                    "finished_at": out_path.stat().st_mtime,
+                    "error": None,
+                    "output_url": url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
+                    "output_filename": "out.mp4",
+                })
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        view = _montage_render_view(st)
+    return jsonify({"ok": True, **view})
+
+
+@app.route("/job/<job_id>/montage/render/cancel", methods=["POST"])
+def job_montage_render_cancel(job_id: str):
+    """Останавливает активный рендер Remotion для job_id (kill -TERM по PID)."""
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    task_id = (request.args.get("task_id") or "").strip()
+    target = None
+    with _montage_render_lock:
+        if task_id:
+            cand = _montage_render_tasks.get(task_id)
+            if cand and cand.get("job_id") == job_id:
+                target = cand
+        if target is None:
+            for _tid, cand in _montage_render_tasks.items():
+                if cand.get("job_id") == job_id and cand.get("state") in ("queued", "running"):
+                    target = cand
+                    break
+        if target is None:
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        pid = target.get("pid")
+        target["cancel_requested"] = True
+        target["message"] = "Остановка по запросу пользователя…"
+
+    if pid:
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, ValueError, OSError) as exc:
+            with _montage_render_lock:
+                target["message"] = f"Не удалось остановить процесс: {exc}"
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    with _montage_render_lock:
+        return jsonify({"ok": True, **_montage_render_view(target)})
 
 
 @app.route("/job/<job_id>/download-all")
@@ -6936,22 +7944,62 @@ def job_page(job_id: str):
     job_has_audio = audio_dir.is_dir() and any(audio_dir.glob("*.mp3"))
     tts_last_audio_href: str | None = None
     tts_last_audio_name: str | None = None
+    tts_last_words_href: str | None = None
+    tts_last_words_name: str | None = None
     if job_has_audio and audio_dir.is_dir():
         mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
         if mp3s:
             tts_last_audio_name = mp3s[0].name
             tts_last_audio_href = url_for("job_audio_file", job_id=job_id, filename=mp3s[0].name)
+            # Парный .words.json (если есть) — для авто-подгрузки блока «Тайминги слов».
+            words_candidate = mp3s[0].with_suffix("").name + ".words.json"  # base без .mp3 + .words.json
+            words_path = audio_dir / words_candidate
+            if words_path.is_file():
+                tts_last_words_name = words_candidate
+                tts_last_words_href = url_for("job_audio_file", job_id=job_id, filename=words_candidate)
     anim_template_name = (meta.get("image_template") or job.get("selected_image_template") or "").strip()
     anim_style_pack, _anim_style_pack_raw = load_style_pack_for_template(anim_template_name)
+    _mont = meta.get("montage") if isinstance(meta.get("montage"), dict) else {}
+    try:
+        montage_zoom_pct = max(0, min(100, int(round(float(_mont.get("zoom_pct") or 0)))))
+    except (TypeError, ValueError):
+        montage_zoom_pct = 0
+    try:
+        montage_fade_in_pct = max(0, min(100, int(round(float(_mont.get("fade_in_pct") or 0)))))
+    except (TypeError, ValueError):
+        montage_fade_in_pct = 0
+
+    # Состояние «после рефреша»: если props.json/out.mp4 уже есть на диске —
+    # сразу восстанавливаем кнопки «props.json», «Открыть в Remotion», «Скачать MP4».
+    _rem_dir = _job_remotion_dir(job_id)
+    _props_path = _rem_dir / "props.json"
+    _mp4_path = _rem_dir / "out.mp4"
+    montage_props_ready = _props_path.is_file()
+    montage_mp4_ready = _mp4_path.is_file()
+    montage_props_url = url_for("job_montage_file", job_id=job_id, filename="props.json") if montage_props_ready else ""
+    montage_mp4_url = url_for("job_montage_file", job_id=job_id, filename="out.mp4") if montage_mp4_ready else ""
+    montage_remotion_open_url = url_for("job_montage_remotion_open", job_id=job_id) if montage_props_ready else ""
+    # Активный рендер: если в памяти процесса есть running/queued — пробросим task_id,
+    # чтобы UI сам подцепился к прогрессу через /montage/render/status.
+    montage_active_render_task_id = ""
+    with _montage_render_lock:
+        for _tid, _cand in _montage_render_tasks.items():
+            if _cand.get("job_id") == job_id and _cand.get("state") in ("queued", "running"):
+                montage_active_render_task_id = _tid
+                break
     return render_template(
         "job.html",
         job_id=job_id,
         job=job,
         scenes=job.get("scenes", []),
+        scenes_stripped_with_timing=_render_scenes_stripped_with_timing(job.get("scenes") or []),
+        tts_words_available=bool(tts_last_words_href),
         job_has_audio=job_has_audio,
         tts_last_text=str(job.get("tts_last_text") or ""),
         tts_last_audio_href=tts_last_audio_href,
         tts_last_audio_name=tts_last_audio_name,
+        tts_last_words_href=tts_last_words_href,
+        tts_last_words_name=tts_last_words_name,
         summary=summary,
         scene_slot_image_header_meta=scene_slot_image_header_meta,
         scene_slot_video_header_meta=scene_slot_video_header_meta,
@@ -6963,6 +8011,14 @@ def job_page(job_id: str):
         tts_defaults=job.get("tts_defaults") or {},
         tts_template_names=list_elevenlabs_template_names(),
         tts_template=(job.get("tts_template") or "Naomi"),
+        montage_zoom_pct=montage_zoom_pct,
+        montage_fade_in_pct=montage_fade_in_pct,
+        montage_props_ready=montage_props_ready,
+        montage_mp4_ready=montage_mp4_ready,
+        montage_props_url=montage_props_url,
+        montage_mp4_url=montage_mp4_url,
+        montage_remotion_open_url=montage_remotion_open_url,
+        montage_active_render_task_id=montage_active_render_task_id,
         anim_agent_models=REWRITE_MODELS,
         anim_agent_default_model=REWRITE_DEFAULT_MODEL,
         anim_agent_end_system_prompt=load_anim_agent_prompt("end_system"),
