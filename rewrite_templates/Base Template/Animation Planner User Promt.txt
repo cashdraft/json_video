@@ -1,8 +1,0 @@
-Plan animations for the scenes below.
-
-Use ONLY the visual_modes and motion_styles provided in animation_settings.
-Respect target_animation_ratio and the qualitative knobs (motion_intensity, scene_complexity, pacing, visual_density).
-
-If prefer_quality_over_exact_ratio is true and a scene does not fit any allowed visual_mode well — keep it static; do not force the ratio.
-
-Return strict JSON per the schema in the system prompt.

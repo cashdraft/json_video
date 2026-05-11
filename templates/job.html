@@ -384,12 +384,11 @@
                 {% set has_end_prompt = scene.end.prompt|default('', true) %}
                 {% set has_video_prompt = scene.video.prompt|default('', true) %}
                 {% set has_live_media = (scene.content_type|default('', true) and scene.keywords|default('', true)) %}
-                {% set has_animation = (scene.animation is mapping and scene.animation) %}
                 {% set start_ready = scene.start.image_url|default('', true) %}
                 {% set end_ready = scene.end.image_url|default('', true) %}
                 {% set video_ready = (not has_start_prompt or start_ready) and (not has_end_prompt or end_ready) %}
                 <div
-                    class="scene-card{{ ' scene-card--live' if has_live_media else '' }}{{ ' scene-card--animation' if has_animation else '' }}"
+                    class="scene-card{{ ' scene-card--live' if has_live_media else '' }}"
                     data-scene-index="{{ loop.index0 }}"
                     data-scene-id="{{ scene.scene_id }}"
                     data-has-start-prompt="{{ '1' if has_start_prompt else '0' }}"
@@ -425,155 +424,7 @@
                         <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
                     </div>
                     <div class="scene-slots">
-                        {% if has_animation %}
-                        {% set anim = scene.animation %}
-                        {% set anim_visual_modes = anim.visual_modes if anim.visual_modes is iterable and (anim.visual_modes is not string) else [] %}
-                        {% set anim_motion_styles = anim.motion_styles if anim.motion_styles is iterable and (anim.motion_styles is not string) else [] %}
-                        {% set anim_primary_keys = ['visual_modes', 'motion_styles', 'screen', 'motion', 'score', 'focus', 'mood'] %}
-                        {% set has_score = anim.score is defined and anim.score is not none %}
-                        {% set ns_anim = namespace(any=false) %}
-                        {% if anim_visual_modes or anim_motion_styles or anim.screen or anim.motion or has_score or anim.focus or anim.mood %}{% set ns_anim.any = true %}{% endif %}
-                        {% for _k, _v in anim.items() %}
-                        {% if _k not in anim_primary_keys %}{% set ns_anim.any = true %}{% endif %}
-                        {% endfor %}
-                        <div class="scene-slot scene-slot--anim-preview" data-slot="anim-start" data-scene-index="{{ loop.index0 }}" data-scene-id="{{ scene.scene_id }}">
-                            <div class="slot-header">
-                                <span class="slot-badge badge-yes">Start</span>
-                                <span class="slot-header-meta">animation · все поля плана</span>
-                            </div>
-                            <div class="slot-placeholder slot-placeholder--animation" data-status="done">
-                                <div class="anim-tile" data-anim-tile>
-                                    {% if anim_visual_modes %}
-                                    <div class="anim-tile__field-title">visual_modes</div>
-                                    <div class="anim-tile__chips">
-                                        {% for vm in anim_visual_modes %}
-                                        <span class="anim-tile__chip anim-tile__chip--vm">{{ vm }}</span>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-                                    {% if anim_motion_styles %}
-                                    <div class="anim-tile__field-title">motion_styles</div>
-                                    <div class="anim-tile__chips">
-                                        {% for ms in anim_motion_styles %}
-                                        <span class="anim-tile__chip anim-tile__chip--ms">{{ ms }}</span>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-                                    {% if anim.screen %}
-                                    <div class="anim-tile__row"><span class="anim-tile__label">screen</span><span class="anim-tile__value">{{ anim.screen }}</span></div>
-                                    {% endif %}
-                                    {% if anim.motion %}
-                                    <div class="anim-tile__row"><span class="anim-tile__label">motion</span><span class="anim-tile__value">{{ anim.motion }}</span></div>
-                                    {% endif %}
-                                    {% if has_score %}
-                                    <div class="anim-tile__row"><span class="anim-tile__label">score</span><span class="anim-tile__value">{{ anim.score }}</span></div>
-                                    {% endif %}
-                                    {% if anim.focus %}
-                                    <div class="anim-tile__row"><span class="anim-tile__label">focus</span><span class="anim-tile__value">{{ anim.focus }}</span></div>
-                                    {% endif %}
-                                    {% if anim.mood %}
-                                    <div class="anim-tile__row"><span class="anim-tile__label">mood</span><span class="anim-tile__value">{{ anim.mood }}</span></div>
-                                    {% endif %}
-                                    {% for k, v in anim.items() %}
-                                    {% if k not in anim_primary_keys %}
-                                    <div class="anim-tile__row"><span class="anim-tile__label">{{ k }}</span><span class="anim-tile__value">{{ v|tojson if v is mapping or v is iterable and v is not string else v }}</span></div>
-                                    {% endif %}
-                                    {% endfor %}
-                                    {% if not ns_anim.any %}
-                                    <span class="slot-status">—</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% set end_agent = anim.end_agent if anim.end_agent is mapping else {} %}
-                        {% set end_state = end_agent.state if end_agent.state else 'pending' %}
-                        {% set end_result_text = end_agent.result|default('', true) %}
-                        {% set end_error_text = end_agent.error|default('', true) %}
-                        {% set end_model_saved = end_agent.model|default('', true) %}
-                        <div class="scene-slot scene-slot--anim-preview scene-slot--anim-agent" data-slot="anim-end" data-scene-index="{{ loop.index0 }}" data-scene-id="{{ scene.scene_id }}">
-                            <div class="slot-header anim-agent-header">
-                                <span class="slot-badge badge-yes">End · Animation Designer</span>
-                                <select class="tts-select anim-agent-model" data-anim-agent-model aria-label="Модель OpenAI" {% if not openai_key_set %}disabled{% endif %}>
-                                    {% set _cur_model = end_model_saved or anim_agent_default_model %}
-                                    {% for m in anim_agent_models %}
-                                    <option value="{{ m.id }}" {% if _cur_model == m.id %}selected{% endif %}>{{ m.label }}</option>
-                                    {% endfor %}
-                                </select>
-                                <button type="button" class="btn btn-success btn-sm anim-agent-run" data-action="anim-end-run" title="Запустить агента" {% if not openai_key_set %}disabled{% endif %}>↻</button>
-                            </div>
-                            <div class="anim-agent-body">
-                                <div class="anim-agent-field" data-anim-agent-field="system">
-                                    <div class="anim-agent-field__head slot-header">
-                                        <span class="slot-badge badge-{{ 'yes' if anim_agent_end_system_prompt else 'no' }}">System Prompt: {{ 'YES' if anim_agent_end_system_prompt else 'NO' }}</span>
-                                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-anim-agent-lock="system" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                        </button>
-                                    </div>
-                                    <textarea class="rewrite-source-textarea rewrite-source-textarea--locked anim-agent-system" data-anim-agent-text="system" rows="4" readonly placeholder="System Prompt для Animation Designer…">{{ anim_agent_end_system_prompt }}</textarea>
-                                </div>
-                                <div class="anim-agent-field" data-anim-agent-field="user">
-                                    <div class="anim-agent-field__head slot-header">
-                                        <span class="slot-badge badge-{{ 'yes' if anim_agent_end_user_prompt else 'no' }}">User Prompt: {{ 'YES' if anim_agent_end_user_prompt else 'NO' }}</span>
-                                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-anim-agent-lock="user" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                        </button>
-                                        <span class="slot-header-meta anim-agent-extras">
-                                            + style_pack.json{% if not anim_agent_style_pack_present %} <span class="anim-agent-style-pack-missing" title="Файл не найден в data/image_templates/{{ anim_agent_template_name or '—' }}/">отсутствует</span>{% endif %} + JSON сцены
-                                        </span>
-                                    </div>
-                                    <textarea class="rewrite-source-textarea rewrite-source-textarea--locked anim-agent-user" data-anim-agent-text="user" rows="4" readonly placeholder="User Prompt для Animation Designer…">{{ anim_agent_end_user_prompt }}</textarea>
-                                </div>
-                                <div class="anim-agent-status" data-anim-agent-status data-status="{{ end_state }}">
-                                    {% if end_state == 'done' %}Готово{% elif end_state == 'fail' %}Ошибка: {{ end_error_text or '—' }}{% else %}Pending{% endif %}
-                                </div>
-                                <div class="anim-agent-field" data-anim-agent-field="result">
-                                    <div class="anim-agent-field__head slot-header">
-                                        <span class="slot-badge badge-{{ 'yes' if end_result_text else 'no' }}">Result</span>
-                                        <button type="button" class="btn btn-secondary btn-sm anim-agent-copy" data-action="anim-end-copy" title="Скопировать">Copy</button>
-                                    </div>
-                                    <textarea class="rewrite-source-textarea rewrite-source-textarea--locked anim-agent-result" data-anim-agent-result rows="6" readonly placeholder="Здесь появится ответ модели…">{{ end_result_text }}</textarea>
-                                </div>
-                            </div>
-                        </div>
-                        {% set video_render = anim.video_render if anim.video_render is mapping else {} %}
-                        {% set vr_state = video_render.state if video_render.state else 'pending' %}
-                        {% set vr_url = video_render.video_url|default('', true) %}
-                        {% set vr_error = video_render.error|default('', true) %}
-                        {% set vr_log_tail = video_render.log_tail|default('', true) %}
-                        {% set has_end_result = end_result_text|trim|length > 0 %}
-                        <div class="scene-slot scene-slot--anim-preview scene-slot--anim-render" data-slot="anim-video" data-scene-index="{{ loop.index0 }}" data-scene-id="{{ scene.scene_id }}">
-                            <div class="slot-header anim-render-header">
-                                <span class="slot-badge badge-{{ 'yes' if vr_url else 'no' }}">Video · Remotion</span>
-                                <button type="button" class="btn btn-success btn-sm anim-render-run" data-action="anim-render-run" title="Собрать TSX из Result и отрендерить через Remotion" {% if not has_end_result %}disabled{% endif %}>↻ Render</button>
-                                <span class="slot-header-meta anim-render-meta">{% if video_render.duration_ms %}{{ (video_render.duration_ms / 1000)|round(1) }}s · {% endif %}{% if video_render.size_bytes %}{{ ((video_render.size_bytes / 1024 / 1024)|round(2)) }} MB{% endif %}</span>
-                            </div>
-                            <div class="anim-render-body">
-                                <div class="anim-render-status" data-anim-render-status data-status="{{ vr_state }}">
-                                    {% if vr_state == 'done' and vr_url %}Готово{% elif vr_state == 'fail' %}Ошибка: {{ vr_error or '—' }}{% elif vr_state == 'running' %}Рендер…{% else %}Pending — нажми Render после Animation Designer{% endif %}
-                                </div>
-                                <div class="anim-render-player" data-anim-render-player>
-                                    {% if vr_url %}
-                                    <video class="anim-render-video" data-anim-render-video controls preload="metadata" src="{{ vr_url }}"></video>
-                                    {% else %}
-                                    <video class="anim-render-video is-empty" data-anim-render-video controls preload="metadata" hidden></video>
-                                    {% endif %}
-                                </div>
-                                {% if vr_log_tail %}
-                                <details class="anim-render-log-wrap" data-anim-render-log-wrap{% if not vr_error %} hidden{% endif %}>
-                                    <summary>Лог рендера</summary>
-                                    <pre class="anim-render-log" data-anim-render-log>{{ vr_log_tail }}</pre>
-                                </details>
-                                {% else %}
-                                <details class="anim-render-log-wrap" data-anim-render-log-wrap hidden>
-                                    <summary>Лог рендера</summary>
-                                    <pre class="anim-render-log" data-anim-render-log></pre>
-                                </details>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% elif has_live_media %}
+                        {% if has_live_media %}
                         {% set pexels_items = scene.pexels_results if scene.pexels_results is defined and scene.pexels_results else [] %}
                         {% set excluded_keywords = scene.excluded_keywords if scene.excluded_keywords is defined and scene.excluded_keywords else [] %}
                         {% set selected_pexels = scene.pexels_selected_indices if scene.pexels_selected_indices is defined and scene.pexels_selected_indices else [] %}
@@ -868,6 +719,30 @@
                         {% endfor %}
                     </select>
                     <span class="job-montage-value job-montage-value--mode" id="montage-zoom-mode-hint" aria-live="polite"></span>
+                </div>
+                <div class="job-montage-row">
+                    <label class="job-montage-label" for="montage-zoom-smooth" title="Постоянная скорость зума. Слайдер задаёт «эталонный» пик за «Базовую длительность». Сцены длиннее — пик тот же; сцены короче — пик пропорционально меньше, чтобы скорость зума не менялась.">Плавный зум</label>
+                    <div class="job-montage-smooth-controls">
+                        <label class="job-montage-smooth-toggle">
+                            <input type="checkbox" id="montage-zoom-smooth" {% if montage_zoom_smooth %}checked{% endif %}>
+                            <span>Постоянная скорость зума</span>
+                        </label>
+                        <span class="job-montage-smooth-ref">
+                            <span class="job-montage-smooth-ref-label">Базовая длительность:</span>
+                            <input
+                                type="number"
+                                id="montage-zoom-ref-seconds"
+                                class="job-montage-smooth-ref-input"
+                                min="{{ montage_zoom_ref_seconds_min }}"
+                                max="{{ montage_zoom_ref_seconds_max }}"
+                                step="{{ montage_zoom_ref_seconds_step }}"
+                                value="{{ montage_zoom_ref_seconds }}"
+                                {% if not montage_zoom_smooth %}disabled{% endif %}
+                            >
+                            <span class="job-montage-smooth-ref-unit">с</span>
+                        </span>
+                    </div>
+                    <span class="job-montage-value job-montage-value--mode" id="montage-zoom-smooth-hint" aria-live="polite"></span>
                 </div>
                 <div class="job-montage-row">
                     <label class="job-montage-label" for="montage-fade-in">Fade In</label>
@@ -1981,6 +1856,9 @@
         const zoomInput   = document.getElementById('montage-zoom');
         const zoomModeSel = document.getElementById('montage-zoom-mode');
         const zoomModeHint = document.getElementById('montage-zoom-mode-hint');
+        const zoomSmoothChk = document.getElementById('montage-zoom-smooth');
+        const zoomRefInput = document.getElementById('montage-zoom-ref-seconds');
+        const zoomSmoothHint = document.getElementById('montage-zoom-smooth-hint');
         const fadeInput   = document.getElementById('montage-fade-in');
         const zoomOut     = document.getElementById('montage-zoom-value');
         const fadeOut     = document.getElementById('montage-fade-in-value');
@@ -2031,6 +1909,24 @@
             return MONTAGE_ZOOM_MODES.indexOf(s) >= 0 ? s : 'alternate';
         };
 
+        const MONTAGE_ZOOM_REF_MIN = parseFloat(zoomRefInput?.getAttribute('min') || '1');
+        const MONTAGE_ZOOM_REF_MAX = parseFloat(zoomRefInput?.getAttribute('max') || '30');
+        const MONTAGE_ZOOM_REF_STEP = parseFloat(zoomRefInput?.getAttribute('step') || '0.5');
+
+        const clampMontageZoomRefSeconds = (raw) => {
+            let x = parseFloat(raw);
+            if (!Number.isFinite(x)) x = 5;
+            x = Math.max(MONTAGE_ZOOM_REF_MIN, Math.min(MONTAGE_ZOOM_REF_MAX, x));
+            const n = Math.round((x - MONTAGE_ZOOM_REF_MIN) / MONTAGE_ZOOM_REF_STEP);
+            return Math.round((MONTAGE_ZOOM_REF_MIN + n * MONTAGE_ZOOM_REF_STEP) * 10) / 10;
+        };
+
+        const formatMontageRu = (n, digits) => {
+            return (Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits))
+                .toFixed(digits)
+                .replace('.', ',');
+        };
+
         const syncLabels = () => {
             const zs = clampMontageZoomScale(zoomInput.value);
             zoomInput.value = String(zs);
@@ -2043,10 +1939,37 @@
                     ? 'Не активно (пик 1,000×).'
                     : (MONTAGE_ZOOM_MODE_HINTS[mode] || '');
             }
+            if (zoomSmoothChk && zoomRefInput) {
+                const smoothOn = !!zoomSmoothChk.checked;
+                zoomRefInput.disabled = !smoothOn;
+                if (zoomRefInput.value !== '') {
+                    const ref = clampMontageZoomRefSeconds(zoomRefInput.value);
+                    if (zoomRefInput.value !== String(ref)) zoomRefInput.value = String(ref);
+                }
+                if (zoomSmoothHint) {
+                    if (zs <= 1.0001) {
+                        zoomSmoothHint.textContent = 'Не активно (пик 1,000×).';
+                    } else if (!smoothOn) {
+                        zoomSmoothHint.textContent = 'Выкл: зум проходит весь диапазон ровно за длительность каждой сцены (скорость разная).';
+                    } else {
+                        const ref = clampMontageZoomRefSeconds(zoomRefInput.value || '5');
+                        const speedPerSec = (zs - 1) / Math.max(0.001, ref);
+                        const exampleShort = 2.0;
+                        const examplePeak = 1 + speedPerSec * Math.min(ref, exampleShort);
+                        zoomSmoothHint.textContent =
+                            `Скорость ≈ +${formatMontageRu(speedPerSec * 100, 2)}% / с. ` +
+                            `Сцена ≥ ${formatMontageRu(ref, 1)} c → пик ${formatMontageRu(zs, 3)}×. ` +
+                            `Сцена 2 c → пик ${formatMontageRu(examplePeak, 3)}×.`;
+                    }
+                }
+            }
         };
         zoomInput.addEventListener('input', syncLabels);
         fadeInput.addEventListener('input', syncLabels);
         if (zoomModeSel) zoomModeSel.addEventListener('change', syncLabels);
+        if (zoomSmoothChk) zoomSmoothChk.addEventListener('change', syncLabels);
+        if (zoomRefInput) zoomRefInput.addEventListener('input', syncLabels);
+        if (zoomRefInput) zoomRefInput.addEventListener('change', syncLabels);
         syncLabels();
 
         let modalBusy = false;
@@ -2133,6 +2056,8 @@
         assembleBtn?.addEventListener('click', async () => {
             const zoom_scale = clampMontageZoomScale(zoomInput.value);
             const zoom_mode = clampMontageZoomMode(zoomModeSel ? zoomModeSel.value : 'alternate');
+            const zoom_smooth = !!(zoomSmoothChk && zoomSmoothChk.checked);
+            const zoom_ref_seconds = clampMontageZoomRefSeconds(zoomRefInput ? zoomRefInput.value : '5');
             const fade_in_pct = Math.max(0, Math.min(100, parseInt(fadeInput.value, 10) || 0));
             if (statusEl) statusEl.textContent = '';
 
@@ -2155,7 +2080,7 @@
                 const resp = await fetch(`${ROOT}/job/${jobId}/montage/assemble`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ zoom_scale, zoom_mode, fade_in_pct }),
+                    body: JSON.stringify({ zoom_scale, zoom_mode, zoom_smooth, zoom_ref_seconds, fade_in_pct }),
                 });
                 if (!resp.ok) {
                     let msg = `HTTP ${resp.status}`;
@@ -3905,272 +3830,6 @@
                 }
             })();
         }
-    /* ===== Animation Designer (End-слот, второе окно) ===== */
-    (function initAnimAgent() {
-        const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
-        const fields = ['system', 'user'];
-        const debounceTimers = new Map();
-
-        function debounce(key, fn, ms) {
-            const t = debounceTimers.get(key);
-            if (t) clearTimeout(t);
-            debounceTimers.set(key, setTimeout(fn, ms));
-        }
-
-        function setLockedUI(textarea, locked) {
-            if (!textarea) return;
-            textarea.readOnly = !!locked;
-            textarea.classList.toggle('rewrite-source-textarea--locked', !!locked);
-        }
-
-        async function savePrompt(kind, text) {
-            try {
-                const resp = await fetch(`${ROOT}/job/${jobId}/anim-agent/prompts/${kind}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text }),
-                });
-                await parseJsonOrThrow(resp, 'Сохранение промпта');
-            } catch (e) {
-                console.warn('anim-agent save failed', e);
-            }
-        }
-
-        function broadcastPromptChange(kind, text) {
-            document.dispatchEvent(new CustomEvent('anim-agent:prompt-change', {
-                detail: { kind, text },
-            }));
-        }
-
-        function applyPromptToAll(kind, text) {
-            document.querySelectorAll(`textarea[data-anim-agent-text="${kind}"]`).forEach((el) => {
-                if (document.activeElement === el) return;
-                if (el.value !== text) el.value = text;
-                const card = el.closest('.scene-slot--anim-agent');
-                if (!card) return;
-                const headBadge = card.querySelector(
-                    `[data-anim-agent-field="${kind}"] .slot-badge`
-                );
-                if (headBadge) {
-                    const has = !!(text || '').trim();
-                    headBadge.classList.toggle('badge-yes', has);
-                    headBadge.classList.toggle('badge-no', !has);
-                    const label = kind === 'system' ? 'System Prompt' : 'User Prompt';
-                    headBadge.textContent = `${label}: ${has ? 'YES' : 'NO'}`;
-                }
-            });
-        }
-
-        document.querySelectorAll('.scene-slot--anim-agent').forEach((card) => {
-            fields.forEach((kind) => {
-                const fieldEl = card.querySelector(`[data-anim-agent-field="${kind}"]`);
-                if (!fieldEl) return;
-                const textarea = fieldEl.querySelector(`textarea[data-anim-agent-text="${kind}"]`);
-                const lockBtn = fieldEl.querySelector(`[data-anim-agent-lock="${kind}"]`);
-                if (!textarea || !lockBtn) return;
-                lockBtn.addEventListener('click', function () {
-                    const locked = lockBtn.classList.toggle('rewrite-lock-toggle--locked');
-                    setLockedUI(textarea, locked);
-                    if (!locked) {
-                        textarea.focus();
-                    } else {
-                        const txt = textarea.value;
-                        savePrompt(`end_${kind}`, txt);
-                        applyPromptToAll(kind, txt);
-                        broadcastPromptChange(kind, txt);
-                    }
-                });
-                textarea.addEventListener('input', function () {
-                    debounce(`anim-${kind}-${textarea}`, function () {
-                        savePrompt(`end_${kind}`, textarea.value);
-                        applyPromptToAll(kind, textarea.value);
-                        broadcastPromptChange(kind, textarea.value);
-                    }, 600);
-                });
-            });
-
-            const runBtn = card.querySelector('.anim-agent-run');
-            const modelSel = card.querySelector('[data-anim-agent-model]');
-            const sysTa = card.querySelector('textarea[data-anim-agent-text="system"]');
-            const usrTa = card.querySelector('textarea[data-anim-agent-text="user"]');
-            const statusEl = card.querySelector('[data-anim-agent-status]');
-            const resultEl = card.querySelector('[data-anim-agent-result]');
-            const sceneId = card.getAttribute('data-scene-id') || '';
-
-            const setStatus = (state, msg) => {
-                if (!statusEl) return;
-                statusEl.setAttribute('data-status', state);
-                statusEl.textContent = msg;
-            };
-
-            runBtn?.addEventListener('click', async function () {
-                if (!sceneId) return;
-                runBtn.classList.add('is-busy');
-                runBtn.disabled = true;
-                setStatus('running', 'Запрос к OpenAI…');
-                if (resultEl) resultEl.value = '';
-                try {
-                    const resp = await fetch(
-                        `${ROOT}/job/${jobId}/scene/${encodeURIComponent(sceneId)}/anim-end/run`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                system_prompt: sysTa ? sysTa.value : '',
-                                user_prompt: usrTa ? usrTa.value : '',
-                                model: modelSel ? modelSel.value : '',
-                            }),
-                        }
-                    );
-                    const data = await parseJsonOrThrow(resp, 'Animation Designer');
-                    if (data && data.ok && data.state === 'done') {
-                        if (resultEl) resultEl.value = String(data.result || '');
-                        setStatus('done', `Готово · модель ${data.model || ''}`.trim());
-                        const resultBadge = card.querySelector(
-                            '[data-anim-agent-field="result"] .slot-badge'
-                        );
-                        if (resultBadge) {
-                            resultBadge.classList.remove('badge-no');
-                            resultBadge.classList.add('badge-yes');
-                            resultBadge.textContent = 'Result';
-                        }
-                        const renderRoot = document.querySelector(
-                            `.scene-slot--anim-render[data-scene-id="${sceneId}"]`
-                        );
-                        const renderBtn = renderRoot?.querySelector('.anim-render-run');
-                        if (renderBtn) renderBtn.disabled = false;
-                    } else {
-                        const err = (data && (data.error || data.message)) || 'Ошибка';
-                        setStatus('fail', `Ошибка: ${err}`);
-                    }
-                } catch (e) {
-                    setStatus('fail', `Ошибка: ${e && e.message ? e.message : e}`);
-                } finally {
-                    runBtn.classList.remove('is-busy');
-                    runBtn.disabled = false;
-                }
-            });
-
-            const copyBtn = card.querySelector('[data-action="anim-end-copy"]');
-            copyBtn?.addEventListener('click', async function () {
-                const v = resultEl ? resultEl.value : '';
-                if (!v) return;
-                try { await navigator.clipboard.writeText(v); copyBtn.textContent = 'OK'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 900); }
-                catch (_) { copyBtn.textContent = 'fail'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 900); }
-            });
-        });
-
-        document.addEventListener('anim-agent:prompt-change', function (ev) {
-            const { kind, text } = ev.detail || {};
-            if (!kind) return;
-            applyPromptToAll(kind, text || '');
-        });
-    })();
-
-    /* ===== Animation Render (Video-слот, Remotion) ===== */
-    (function initAnimRender() {
-        const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
-
-        function setRenderStatus(card, state, msg) {
-            const statusEl = card.querySelector('[data-anim-render-status]');
-            if (!statusEl) return;
-            statusEl.setAttribute('data-status', state);
-            statusEl.textContent = msg;
-        }
-
-        function setVideo(card, url) {
-            const videoEl = card.querySelector('[data-anim-render-video]');
-            if (!videoEl) return;
-            if (url) {
-                const bust = url.includes('?') ? `${url}&t=${Date.now()}` : `${url}?t=${Date.now()}`;
-                videoEl.removeAttribute('hidden');
-                videoEl.classList.remove('is-empty');
-                videoEl.src = bust;
-                try { videoEl.load(); } catch (_) {}
-            } else {
-                videoEl.setAttribute('hidden', 'hidden');
-                videoEl.removeAttribute('src');
-            }
-        }
-
-        function setLogTail(card, tail, openIfError) {
-            const wrap = card.querySelector('[data-anim-render-log-wrap]');
-            const pre = card.querySelector('[data-anim-render-log]');
-            if (!pre) return;
-            pre.textContent = String(tail || '');
-            if (wrap) {
-                if (tail) {
-                    wrap.removeAttribute('hidden');
-                    if (openIfError) wrap.setAttribute('open', '');
-                } else {
-                    wrap.setAttribute('hidden', 'hidden');
-                }
-            }
-        }
-
-        function getResultCode(sceneId) {
-            const ta = document.querySelector(
-                `.scene-slot--anim-agent[data-scene-id="${sceneId}"] [data-anim-agent-result]`
-            );
-            return ta ? (ta.value || '') : '';
-        }
-
-        document.querySelectorAll('.scene-slot--anim-render').forEach((card) => {
-            const btn = card.querySelector('.anim-render-run');
-            if (!btn) return;
-            const sceneId = card.getAttribute('data-scene-id') || '';
-            const badge = card.querySelector('.slot-badge');
-            const metaEl = card.querySelector('.anim-render-meta');
-
-            btn.addEventListener('click', async function () {
-                if (!sceneId) return;
-                const code = getResultCode(sceneId);
-                if (!code.trim()) {
-                    setRenderStatus(card, 'fail', 'Ошибка: нет TSX в Result. Запусти Animation Designer (End).');
-                    return;
-                }
-                btn.disabled = true;
-                btn.classList.add('is-busy');
-                setRenderStatus(card, 'running', 'Сборка и рендер Remotion… это может занять до минуты');
-                setLogTail(card, '', false);
-                try {
-                    const resp = await fetch(
-                        `${ROOT}/job/${jobId}/scene/${encodeURIComponent(sceneId)}/anim-render/run`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ code }),
-                        }
-                    );
-                    const data = await parseJsonOrThrow(resp, 'Remotion render');
-                    if (data && data.ok && data.video_url) {
-                        const sec = data.duration_ms ? (data.duration_ms / 1000).toFixed(1) : '';
-                        const mb = data.size_bytes ? (data.size_bytes / 1024 / 1024).toFixed(2) : '';
-                        setRenderStatus(card, 'done', `Готово · ${sec}s · ${mb} MB`);
-                        setVideo(card, data.video_url);
-                        if (badge) {
-                            badge.classList.remove('badge-no');
-                            badge.classList.add('badge-yes');
-                        }
-                        if (metaEl) {
-                            metaEl.textContent = `${sec}s · ${mb} MB`;
-                        }
-                        setLogTail(card, '', false);
-                    } else {
-                        const err = (data && (data.error || data.message)) || 'Ошибка';
-                        setRenderStatus(card, 'fail', `Ошибка: ${err}`);
-                        setLogTail(card, (data && data.log_tail) || '', true);
-                    }
-                } catch (e) {
-                    setRenderStatus(card, 'fail', `Ошибка: ${e && e.message ? e.message : e}`);
-                } finally {
-                    btn.classList.remove('is-busy');
-                    btn.disabled = false;
-                }
-            });
-        });
-    })();
-
     (function () {
         const modal = document.getElementById('job-delete-confirm-modal');
         const cancelBtn = document.getElementById('job-delete-confirm-cancel');

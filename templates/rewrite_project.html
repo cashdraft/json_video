@@ -308,17 +308,40 @@
                 <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — все этапы конвейера по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
             </section>
 
-            {# Какие карточки разрешено сворачивать «Свернуть все/Развернуть все»: первые 10 этапов
-               текущего пресета (например, для Soft — distiller, author, retention_editor, …, structure_splitter). #}
+            {# «Свернуть все»: до 10 этапов с начала пресета, но без Scene Writer / SWL —
+               иначе после удаления animation_planner scene_writer попадает в [:10] и тело
+               карточки скрывается классом rewrite-stage-card--body-collapsed. #}
             {% set _preset_keys = rewrite_preset_stage_keys[rewrite_preset_current] %}
-            {% set collapsible_pipeline_stages = _preset_keys[:10] %}
-            {% set collapsible_extra_stages = ['animation_planner', 'scene_writer_live', 'youtube_packaging'] %}
+            {% set ns_col = namespace(lst=[]) %}
+            {% for k in _preset_keys %}
+                {% if k not in ('scene_writer', 'scene_writer_live') and ns_col.lst|length < 10 %}
+                    {% set _ = ns_col.lst.append(k) %}
+                {% endif %}
+            {% endfor %}
+            {% set collapsible_pipeline_stages = ns_col.lst %}
+            {% set collapsible_extra_stages = ['scene_writer_live', 'youtube_packaging'] %}
+            {# Объединение по ВСЕМ пресетам — нужно, чтобы при переключении пресета на клиенте
+               карточки уже имели класс --collapsible и обёртку rewrite-stage-collapsible-inner.
+               Иначе после переключения preset → soft карточки Distiller/Author есть, но без
+               обёртки и без класса, и «Свернуть все» не может их свернуть. #}
+            {% set ns_union = namespace(lst=[]) %}
+            {% for _preset_id, _plist in rewrite_preset_stage_keys.items() %}
+                {% set ns_each = namespace(cnt=0) %}
+                {% for _k in _plist %}
+                    {% if _k not in ('scene_writer', 'scene_writer_live') and ns_each.cnt < 10 %}
+                        {% if _k not in ns_union.lst %}{% set _ = ns_union.lst.append(_k) %}{% endif %}
+                        {% set ns_each.cnt = ns_each.cnt + 1 %}
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+            {% set union_collapsible_stages = ns_union.lst %}
 
             <div class="rewrite-preset-toggle" role="group" aria-label="Пресет ReWrite" data-rewrite-preset-current="{{ rewrite_preset_current }}">
                 <span class="rewrite-preset-toggle__label">Пресет:</span>
                 <div class="rewrite-preset-toggle__group">
                     <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'deep' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="deep">{{ rewrite_preset_labels['deep'] }}</button>
                     <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'soft' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="soft">{{ rewrite_preset_labels['soft'] }}</button>
+                    <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'prewritten' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="prewritten">{{ rewrite_preset_labels['prewritten'] }}</button>
                 </div>
             </div>
 
@@ -342,11 +365,15 @@
             {% set user_prompt_locked = cell.user_prompt_locked|default(false) %}
             {% set style_prompt_locked = cell.style_prompt_locked|default(false) %}
             {% set past_prompt_locked = cell.past_prompt_locked|default(true) %}
-            {% set result_locked = cell.result_locked|default(true) %}
+            {# Inbox — пользователь вставляет текст сразу, поэтому Result у него по умолчанию разблокирован. #}
+            {% set result_locked = cell.result_locked|default(false if stage_key == 'inbox' else true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
-            {% set stage_collapsible = stage_key in collapsible_pipeline_stages or stage_key in collapsible_extra_stages %}
+            {# Карточка получает --collapsible/обёртку для ВСЕХ потенциально сворачиваемых
+               этапов (объединение по пресетам). data-pipeline-collapse уже зависит от
+               текущего пресета и обновляется JS-скриптом при переключении. #}
+            {% set stage_collapsible = stage_key in union_collapsible_stages or stage_key in collapsible_extra_stages %}
             {% set _in_current_preset = stage_key in _preset_keys %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'animation_planner' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-header-top">
@@ -363,7 +390,9 @@
                                     <div class="scene-id rewrite-stage-title-text">{{ stage_label }}</div>
                                 </div>
                                 <div class="rewrite-stage-header-tools">
+                                    {% if stage_key != 'inbox' %}
                                     <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
+                                    {% endif %}
                                     <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
                                         <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
                                         <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
@@ -379,6 +408,7 @@
                     <div class="rewrite-stage-collapsible-inner">
                     {% endif %}
                     <div class="rewrite-stage-stack">
+                        {% if stage_key != 'inbox' %}
                         <div class="rewrite-stage-row rewrite-stage-row--controls">
                             <div class="rewrite-stage-model-cell">
                                 <div class="slot-header rewrite-stage-compact-header">
@@ -402,7 +432,7 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'distiller' or stage_key == 'author' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'animation_planner' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'distiller' or stage_key == 'author' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_user_prompt else 'no' }} rewrite-stage-user-prompt-badge">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
@@ -474,119 +504,15 @@
                                 </div>
                             </div>
                             {% endif %}
-                            {% if stage_key == 'animation_planner' %}
-                            {% set anim = cell.animation_settings or animation_settings_default %}
-                            <div class="rewrite-stage-prompt-cell rewrite-anim-controls-cell" data-anim-controls="1">
-                                <div class="rewrite-anim-grid">
-                                    <div class="rewrite-anim-field rewrite-anim-field--multi" data-anim-field="visual_modes">
-                                        <h3 class="rewrite-source-subtitle">Visual modes</h3>
-                                        <p class="rewrite-source-subhint">Какие визуальные «миры» можно использовать в анимациях.</p>
-                                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %}>
-                                            <span class="rewrite-anim-dropdown__btn-label">Выбрано: <span data-anim-count>0</span></span>
-                                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
-                                        </button>
-                                        <div class="rewrite-anim-dropdown__panel" hidden role="listbox">
-                                            <div class="rewrite-anim-dropdown__toolbar">
-                                                <button type="button" class="rewrite-anim-bulk" data-anim-bulk="all">Выделить все</button>
-                                                <button type="button" class="rewrite-anim-bulk" data-anim-bulk="none">Снять все</button>
-                                            </div>
-                                            {% for opt in animation_visual_mode_options %}
-                                            <label class="rewrite-anim-option">
-                                                <input type="checkbox" class="rewrite-anim-checkbox" value="{{ opt.id }}" {% if opt.id in (anim.visual_modes or []) %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
-                                                <span class="rewrite-anim-option__body">
-                                                    <span class="rewrite-anim-option__title">{{ opt.id }}</span>
-                                                    <span class="rewrite-anim-option__desc">{{ opt.desc }}</span>
-                                                </span>
-                                            </label>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    <div class="rewrite-anim-field rewrite-anim-field--multi" data-anim-field="motion_styles">
-                                        <h3 class="rewrite-source-subtitle">Motion styles</h3>
-                                        <p class="rewrite-source-subhint">Разрешённые типы движения для анимированных сцен.</p>
-                                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %}>
-                                            <span class="rewrite-anim-dropdown__btn-label">Выбрано: <span data-anim-count>0</span></span>
-                                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
-                                        </button>
-                                        <div class="rewrite-anim-dropdown__panel" hidden role="listbox">
-                                            <div class="rewrite-anim-dropdown__toolbar">
-                                                <button type="button" class="rewrite-anim-bulk" data-anim-bulk="all">Выделить все</button>
-                                                <button type="button" class="rewrite-anim-bulk" data-anim-bulk="none">Снять все</button>
-                                            </div>
-                                            {% set ns = namespace(prev_group='') %}
-                                            {% for opt in animation_motion_style_options %}
-                                            {% if opt.group != ns.prev_group %}
-                                            <div class="rewrite-anim-group">{{ opt.group }}</div>
-                                            {% set ns.prev_group = opt.group %}
-                                            {% endif %}
-                                            <label class="rewrite-anim-option">
-                                                <input type="checkbox" class="rewrite-anim-checkbox" value="{{ opt.id }}" {% if opt.id in (anim.motion_styles or []) %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
-                                                <span class="rewrite-anim-option__body">
-                                                    <span class="rewrite-anim-option__title">{{ opt.id }}</span>
-                                                    <span class="rewrite-anim-option__desc">{{ opt.desc }}</span>
-                                                </span>
-                                            </label>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    <div class="rewrite-anim-field" data-anim-field="target_animation_ratio">
-                                        <h3 class="rewrite-source-subtitle">Target animation ratio</h3>
-                                        <p class="rewrite-source-subhint">Желаемая доля анимированных сцен.</p>
-                                        <div class="tts-slider-block rewrite-source-duration">
-                                            <label class="tts-slider-label">Доля <span class="tts-slider-val" data-anim-ratio-num>{{ '%.1f'|format(anim.target_animation_ratio|float) }}</span></label>
-                                            <input type="range" class="tts-range" min="0.1" max="1.0" step="0.1" value="{{ '%.1f'|format(anim.target_animation_ratio|float) }}" data-anim-ratio {% if not openai_key_set %}disabled{% endif %}>
-                                            <div class="tts-slider-ends">
-                                                <span>0.1</span>
-                                                <span>1.0</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="rewrite-anim-field" data-anim-field="prefer_quality_over_exact_ratio">
-                                        <h3 class="rewrite-source-subtitle">Prefer quality over exact ratio</h3>
-                                        <p class="rewrite-source-subhint">Не добивать процент, если сцена плохо подходит.</p>
-                                        <label class="rewrite-anim-toggle">
-                                            <input type="checkbox" data-anim-prefer-quality {% if anim.prefer_quality_over_exact_ratio %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
-                                            <span class="rewrite-anim-toggle__track" aria-hidden="true"><span class="rewrite-anim-toggle__thumb"></span></span>
-                                            <span class="rewrite-anim-toggle__label" data-anim-prefer-quality-text>{{ 'Да' if anim.prefer_quality_over_exact_ratio else 'Нет' }}</span>
-                                        </label>
-                                    </div>
-                                    {% set single_groups = [
-                                        ('motion_intensity', 'Motion intensity', 'Насколько активное движение допустимо.', animation_motion_intensity_options),
-                                        ('scene_complexity', 'Scene complexity', 'Насколько сложные сцены разрешены.', animation_scene_complexity_options),
-                                        ('pacing', 'Pacing', 'Ритм ролика.', animation_pacing_options),
-                                        ('visual_density', 'Visual density', 'Сколько объектов на экране одновременно.', animation_visual_density_options),
-                                    ] %}
-                                    {% for sg_key, sg_label, sg_hint, sg_opts in single_groups %}
-                                    <div class="rewrite-anim-field rewrite-anim-field--single" data-anim-field="{{ sg_key }}">
-                                        <h3 class="rewrite-source-subtitle">{{ sg_label }}</h3>
-                                        <p class="rewrite-source-subhint">{{ sg_hint }}</p>
-                                        {% set cur_val = anim[sg_key] %}
-                                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %}>
-                                            <span class="rewrite-anim-dropdown__btn-label" data-anim-single-label>{{ cur_val }}</span>
-                                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
-                                        </button>
-                                        <div class="rewrite-anim-dropdown__panel" hidden role="listbox">
-                                            {% for opt in sg_opts %}
-                                            <label class="rewrite-anim-option rewrite-anim-option--radio">
-                                                <input type="radio" name="anim-{{ stage_key }}-{{ sg_key }}-{{ rw.rewrite_id }}" class="rewrite-anim-radio" value="{{ opt.id }}" {% if cur_val == opt.id %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
-                                                <span class="rewrite-anim-option__body">
-                                                    <span class="rewrite-anim-option__title">{{ opt.id }}</span>
-                                                    <span class="rewrite-anim-option__desc">{{ opt.desc }}</span>
-                                                </span>
-                                            </label>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            {% endif %}
                         </div>
+                        {% endif %}{# stage_key != 'inbox' #}
                         <div class="rewrite-stage-row rewrite-stage-row--result">
                             <div class="slot-header rewrite-stage-result-toolbar">
                                 <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
+                                {% if stage_key != 'inbox' %}
                                 <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
                                 <span class="rewrite-stage-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
+                                {% endif %}
                                 <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-result-toggle{% if result_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                     <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                     <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -601,7 +527,7 @@
                                     <span class="slot-status slot-status-with-spinner rewrite-stage-status-text"></span>
                                     <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn">Cancel</button>
                                 </div>
-                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="{% if stage_key == 'youtube_packaging' %}8{% else %}3{% endif %}" {% if result_locked %}readonly{% endif %} placeholder="Pending" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
+                                <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="{% if stage_key == 'youtube_packaging' %}8{% elif stage_key == 'inbox' %}12{% else %}3{% endif %}" {% if result_locked %}readonly{% endif %} placeholder="{% if stage_key == 'inbox' %}Вставьте сюда готовый текст сценария…{% else %}Pending{% endif %}" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
                             {% if stage_key == 'youtube_packaging' %}
                             <div class="rewrite-scene-writer-check rewrite-youtube-packaging-preview" data-youtube-packaging-preview aria-live="polite"></div>
@@ -1782,41 +1708,6 @@
         try { return JSON.parse(raw); } catch (e) { return null; }
     }
 
-    function readAnimationSettingsFromBlock(block) {
-        if (!block) return undefined;
-        var wrap = block.querySelector('[data-anim-controls="1"]');
-        if (!wrap) return undefined;
-        function getMulti(field) {
-            var f = wrap.querySelector('[data-anim-field="' + field + '"]');
-            if (!f) return [];
-            var out = [];
-            f.querySelectorAll('input.rewrite-anim-checkbox:checked').forEach(function (el) { out.push(String(el.value || '')); });
-            return out;
-        }
-        function getSingle(field) {
-            var f = wrap.querySelector('[data-anim-field="' + field + '"]');
-            if (!f) return '';
-            var checked = f.querySelector('input.rewrite-anim-radio:checked');
-            return checked ? String(checked.value || '') : '';
-        }
-        var rangeEl = wrap.querySelector('input[data-anim-ratio]');
-        var ratio = rangeEl ? parseFloat(rangeEl.value || '0.4') : 0.4;
-        if (!isFinite(ratio)) ratio = 0.4;
-        if (ratio < 0.1) ratio = 0.1; if (ratio > 1.0) ratio = 1.0;
-        ratio = Math.round(ratio * 10) / 10;
-        var preferEl = wrap.querySelector('input[data-anim-prefer-quality]');
-        return {
-            visual_modes: getMulti('visual_modes'),
-            motion_styles: getMulti('motion_styles'),
-            target_animation_ratio: ratio,
-            prefer_quality_over_exact_ratio: !!(preferEl && preferEl.checked),
-            motion_intensity: getSingle('motion_intensity') || 'medium',
-            scene_complexity: getSingle('scene_complexity') || 'medium',
-            pacing: getSingle('pacing') || 'medium',
-            visual_density: getSingle('visual_density') || 'medium'
-        };
-    }
-
     function tryBuildStructureSplitterCheckFromCurrentValues() {
         var structureBlock = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
         var voiceoverBlock = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"]');
@@ -2558,10 +2449,7 @@
                     if ((sk === 'structure_splitter' || sk === 'scene_writer') && prevKey === 'title_strategist') {
                         continue;
                     }
-                    if (sk === 'youtube_packaging' && (prevKey === 'scene_writer_live' || prevKey === 'animation_planner')) {
-                        continue;
-                    }
-                    if (sk === 'scene_writer_live' && prevKey === 'animation_planner') {
+                    if (sk === 'youtube_packaging' && prevKey === 'scene_writer_live') {
                         continue;
                     }
                     const prev = byKey[prevKey];
@@ -2894,7 +2782,7 @@
                             syncPromptBadge(block);
                         }
                     }
-                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'distiller' || key === 'author' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'animation_planner' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
+                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'distiller' || key === 'author' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
                         var uta = block.querySelector('.rewrite-stage-user-prompt');
                         if (uta) {
                             uta.value = cell.user_prompt;
@@ -2931,7 +2819,7 @@
                         if (tv) tv.textContent = String(n);
                     }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'distiller' || key === 'author' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'animation_planner' || key === 'scene_writer_live' || key === 'youtube_packaging') {
+                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'distiller' || key === 'author' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
@@ -3312,7 +3200,6 @@
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
                 scene_writer_live_check: (key === 'scene_writer_live' ? readSceneMediaCheckFromBlock(block) : null),
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
-                animation_settings: (key === 'animation_planner' ? readAnimationSettingsFromBlock(block) : undefined),
                 last_result: resEl ? (resEl.value || '') : '',
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
                 user_prompt_locked: (block.getAttribute('data-user-prompt-locked') === '1'),
@@ -3513,7 +3400,7 @@
     function applyAnalysisUserPromptLockUI(block) {
         if (!block) return;
         var sk = block.getAttribute('data-stage-key');
-        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'distiller' && sk !== 'author' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'animation_planner' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
+        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'distiller' && sk !== 'author' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
         const locked = block.getAttribute('data-user-prompt-locked') === '1';
         const ta = block.querySelector('.rewrite-stage-user-prompt');
         const toggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
@@ -3754,7 +3641,7 @@
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
             }
-            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'distiller' || block.getAttribute('data-stage-key') === 'author' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'animation_planner' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
+            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'distiller' || block.getAttribute('data-stage-key') === 'author' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
                 const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
                 const uTa = block.querySelector('.rewrite-stage-user-prompt');
                 if (uTa) {
@@ -4549,6 +4436,12 @@
                         if (stageKey === 'youtube_packaging') {
                             renderYoutubePackagingPreview(block);
                         }
+                        // После завершения Voiceover Editor — обновить «Итоговый текст»
+                        // и сбросить перевод. Программное resTextarea.value не дёргает
+                        // input event, поэтому зовём напрямую.
+                        if (stageKey === 'voiceover_editor' && typeof window.__rewriteRefreshVoiceoverFinal === 'function') {
+                            try { window.__rewriteRefreshVoiceoverFinal(); } catch (_) {}
+                        }
                         syncStageRunButtons();
                     }
                 }
@@ -4679,6 +4572,11 @@
                 if (existingRes) {
                     appendPipelineRunnerLog('• Пропуск: у этапа уже есть Result (' + existingRes.length + ' симв.) — повторный запуск не нужен.');
                     continue;
+                }
+                if (sk === 'inbox') {
+                    appendPipelineRunnerLog('✖ Inbox пустой. Вставьте готовый текст в Result и запустите ещё раз.');
+                    allOk = false;
+                    break;
                 }
                 var ok = await runStage(sk, block, { manageBusy: false, signal: signal });
                 if (signal.aborted) {
@@ -4947,17 +4845,38 @@
                 toggleBtn.disabled = false;
             }
         }
+        // Сбрасываем перевод на русский, когда edited_text поменялся: старый перевод
+        // больше не соответствует исходнику, держать его в JSON и UI вредно.
+        function resetRussianTranslation() {
+            var _ruTa = document.getElementById('rewrite-voiceover-final-text-ru');
+            var _ruWrap = document.getElementById('rewrite-voiceover-final-text-ru-wrap');
+            var _ruCounts = document.getElementById('rewrite-voiceover-final-ru-counts');
+            if (_ruTa && (_ruTa.value || '').length > 0) {
+                _ruTa.value = '';
+                if (_ruCounts) _ruCounts.textContent = '';
+                if (_ruWrap) {
+                    _ruWrap.classList.add('hidden');
+                    _ruWrap.setAttribute('aria-hidden', 'true');
+                }
+            }
+        }
+        // «Итоговый текст» всегда подтягивает свежий edited_text из Voiceover Editor:
+        // и при автогенерации, и при ручной правке Result. Перевод на русский
+        // сбрасывается, потому что исходник изменился.
         function refreshFromVoiceover() {
-            if (!voiceoverFinalLocked) return;
             if (!voEditorTa) return;
             var fresh = extractEdited(voEditorTa.value || '');
             var current = ta.value || '';
-            if (fresh && fresh !== current) {
+            if (fresh !== current) {
                 ta.value = fresh;
                 updateCounts();
+                resetRussianTranslation();
                 scheduleAutosave(500);
             }
         }
+        // Экспонируем наружу для runStage() — после программной записи resTextarea.value
+        // событие input не фиатится автоматически, надо звать вручную.
+        window.__rewriteRefreshVoiceoverFinal = refreshFromVoiceover;
         if (voEditorTa) {
             voEditorTa.addEventListener('input', refreshFromVoiceover);
             voEditorTa.addEventListener('change', refreshFromVoiceover);
@@ -5211,124 +5130,6 @@
         el.addEventListener('change', function () { scheduleAutosave(0); });
     });
 
-    (function initAnimationPlannerControls() {
-        var blocks = document.querySelectorAll('.rewrite-stage-card[data-stage-key="animation_planner"]');
-        if (!blocks.length) return;
-
-        function updateMultiCount(field) {
-            var btnLabel = field.querySelector('[data-anim-count]');
-            if (!btnLabel) return;
-            var n = field.querySelectorAll('input.rewrite-anim-checkbox:checked').length;
-            btnLabel.textContent = String(n);
-        }
-        function updateSingleLabel(field) {
-            var lbl = field.querySelector('[data-anim-single-label]');
-            if (!lbl) return;
-            var checked = field.querySelector('input.rewrite-anim-radio:checked');
-            lbl.textContent = checked ? String(checked.value || '') : '—';
-        }
-        function closeAllPanels(except) {
-            document.querySelectorAll('.rewrite-anim-dropdown__panel').forEach(function (panel) {
-                if (panel === except) return;
-                panel.hidden = true;
-                var btn = panel.parentElement && panel.parentElement.querySelector('.rewrite-anim-dropdown__btn');
-                if (btn) btn.setAttribute('aria-expanded', 'false');
-            });
-        }
-        document.addEventListener('click', function (e) {
-            if (!e.target.closest || !e.target.closest('.rewrite-anim-field')) {
-                closeAllPanels(null);
-            }
-        });
-
-        blocks.forEach(function (block) {
-            block.querySelectorAll('.rewrite-anim-field').forEach(function (field) {
-                var btn = field.querySelector('.rewrite-anim-dropdown__btn');
-                var panel = field.querySelector('.rewrite-anim-dropdown__panel');
-                if (btn && panel) {
-                    btn.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        var open = !panel.hidden;
-                        if (open) {
-                            panel.hidden = true;
-                            btn.setAttribute('aria-expanded', 'false');
-                        } else {
-                            closeAllPanels(panel);
-                            panel.hidden = false;
-                            btn.setAttribute('aria-expanded', 'true');
-                        }
-                    });
-                }
-                updateMultiCount(field);
-                updateSingleLabel(field);
-                var bulkAll = field.querySelector('.rewrite-anim-bulk[data-anim-bulk="all"]');
-                var bulkNone = field.querySelector('.rewrite-anim-bulk[data-anim-bulk="none"]');
-                function applyAnimCheckboxBulk(checked) {
-                    field.querySelectorAll('input.rewrite-anim-checkbox').forEach(function (cb) {
-                        if (!cb.disabled) cb.checked = checked;
-                    });
-                    updateMultiCount(field);
-                    scheduleAutosave(0);
-                }
-                if (bulkAll) {
-                    bulkAll.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        applyAnimCheckboxBulk(true);
-                    });
-                }
-                if (bulkNone) {
-                    bulkNone.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        applyAnimCheckboxBulk(false);
-                    });
-                }
-                field.querySelectorAll('input.rewrite-anim-checkbox').forEach(function (cb) {
-                    cb.addEventListener('change', function () {
-                        updateMultiCount(field);
-                        scheduleAutosave(300);
-                    });
-                });
-                field.querySelectorAll('input.rewrite-anim-radio').forEach(function (rb) {
-                    rb.addEventListener('change', function () {
-                        updateSingleLabel(field);
-                        if (panel) {
-                            panel.hidden = true;
-                            if (btn) btn.setAttribute('aria-expanded', 'false');
-                        }
-                        scheduleAutosave(0);
-                    });
-                });
-            });
-            var ratioRange = block.querySelector('input[data-anim-ratio]');
-            var ratioNum = block.querySelector('[data-anim-ratio-num]');
-            if (ratioRange) {
-                var onRatio = function () {
-                    var v = parseFloat(ratioRange.value || '0.4');
-                    if (!isFinite(v)) v = 0.4;
-                    if (v < 0.1) v = 0.1; if (v > 1.0) v = 1.0;
-                    v = Math.round(v * 10) / 10;
-                    ratioRange.value = v.toFixed(1);
-                    if (ratioNum) ratioNum.textContent = v.toFixed(1);
-                };
-                ratioRange.addEventListener('input', function () { onRatio(); scheduleAutosave(500); });
-                ratioRange.addEventListener('change', function () { onRatio(); scheduleAutosave(0); });
-                onRatio();
-            }
-            var preferEl = block.querySelector('input[data-anim-prefer-quality]');
-            var preferText = block.querySelector('[data-anim-prefer-quality-text]');
-            if (preferEl) {
-                var syncPrefer = function () {
-                    if (preferText) preferText.textContent = preferEl.checked ? 'Да' : 'Нет';
-                };
-                preferEl.addEventListener('change', function () {
-                    syncPrefer();
-                    scheduleAutosave(0);
-                });
-                syncPrefer();
-            }
-        });
-    })();
-
     (function initGlobalModelDropdown() {
         var field = document.querySelector('[data-global-model-field="1"]');
         var select = document.getElementById('rewrite-global-model');
@@ -5562,8 +5363,14 @@
                 idxEl.setAttribute('data-stage-display-index', String(n));
             }
         });
-        // collapsible_pipeline_stages пересчитываем на первые 10 в пресете.
-        COLLAPSIBLE_PIPELINE_STAGE_KEYS = presetKeys.slice(0, 10);
+        // collapsible_pipeline_stages: до 10 этапов с начала пресета, без scene_writer / scene_writer_live
+        // (см. server-side комментарий у ns_col — иначе SW попадает под массовое сворачивание).
+        COLLAPSIBLE_PIPELINE_STAGE_KEYS = [];
+        for (var pi = 0; pi < presetKeys.length && COLLAPSIBLE_PIPELINE_STAGE_KEYS.length < 10; pi++) {
+            var pk = presetKeys[pi];
+            if (pk === 'scene_writer' || pk === 'scene_writer_live') continue;
+            COLLAPSIBLE_PIPELINE_STAGE_KEYS.push(pk);
+        }
         var label = document.getElementById('rewrite-stages-collapse-bar-label');
         if (label) {
             label.textContent = 'Этапы 1–' + COLLAPSIBLE_PIPELINE_STAGE_KEYS.length;
@@ -5577,6 +5384,14 @@
                 card.setAttribute('data-pipeline-collapse', '1');
             } else {
                 card.removeAttribute('data-pipeline-collapse');
+            }
+            if (key === 'scene_writer') {
+                card.classList.remove('rewrite-stage-card--body-collapsed');
+            }
+            // Если этап выпал из видимого пресета, не оставляем его в "свёрнутом"
+            // состоянии — иначе при возврате он откроется уже схлопнутым визуально.
+            if (!presetSet[key]) {
+                card.classList.remove('rewrite-stage-card--body-collapsed');
             }
         });
     }

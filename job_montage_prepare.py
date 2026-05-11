@@ -86,6 +86,10 @@ _MONTAGE_ZOOM_MAX = 1.5
 _MONTAGE_ZOOM_STEP = 0.025
 _MONTAGE_ZOOM_MODES = ("alternate", "all_in", "all_out", "random")
 _MONTAGE_ZOOM_MODE_DEFAULT = "alternate"
+_MONTAGE_ZOOM_REF_SEC_MIN = 1.0
+_MONTAGE_ZOOM_REF_SEC_MAX = 30.0
+_MONTAGE_ZOOM_REF_SEC_STEP = 0.5
+_MONTAGE_ZOOM_REF_SEC_DEFAULT = 5.0
 
 
 def _montage_zoom_mode_resolve(montage: dict[str, Any]) -> str:
@@ -93,6 +97,26 @@ def _montage_zoom_mode_resolve(montage: dict[str, Any]) -> str:
     if s in _MONTAGE_ZOOM_MODES:
         return s
     return _MONTAGE_ZOOM_MODE_DEFAULT
+
+
+def _montage_zoom_smooth_resolve(montage: dict[str, Any]) -> bool:
+    v = montage.get("zoom_smooth")
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _montage_zoom_ref_seconds_resolve(montage: dict[str, Any]) -> float:
+    try:
+        x = float(montage.get("zoom_ref_seconds")) if montage.get("zoom_ref_seconds") is not None else _MONTAGE_ZOOM_REF_SEC_DEFAULT
+    except (TypeError, ValueError):
+        x = _MONTAGE_ZOOM_REF_SEC_DEFAULT
+    x = max(_MONTAGE_ZOOM_REF_SEC_MIN, min(_MONTAGE_ZOOM_REF_SEC_MAX, x))
+    n = int(round((x - _MONTAGE_ZOOM_REF_SEC_MIN) / _MONTAGE_ZOOM_REF_SEC_STEP))
+    x = _MONTAGE_ZOOM_REF_SEC_MIN + n * _MONTAGE_ZOOM_REF_SEC_STEP
+    return float(round(min(x, _MONTAGE_ZOOM_REF_SEC_MAX), 1))
 
 
 def _montage_zoom_scale_resolve(montage: dict[str, Any]) -> float:
@@ -143,6 +167,8 @@ def build_props(
     montage = meta.get("montage") if isinstance(meta.get("montage"), dict) else {}
     zoom_scale = _montage_zoom_scale_resolve(montage)
     zoom_mode = _montage_zoom_mode_resolve(montage)
+    zoom_smooth = _montage_zoom_smooth_resolve(montage)
+    zoom_ref_seconds = _montage_zoom_ref_seconds_resolve(montage)
     try:
         fade_in_pct = max(0, min(100, int(round(float(montage.get("fade_in_pct") or 0)))))
     except (TypeError, ValueError):
@@ -212,6 +238,8 @@ def build_props(
         "montage": {
             "zoom_scale": zoom_scale,
             "zoom_mode": zoom_mode,
+            "zoom_smooth": zoom_smooth,
+            "zoom_ref_seconds": zoom_ref_seconds,
             "fade_in_pct": fade_in_pct,
         },
         "scenes": out_scenes,

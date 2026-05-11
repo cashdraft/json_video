@@ -38,6 +38,8 @@ const montageSchema = z
     zoom_scale: z.number().optional(),
     zoom_pct: z.number().optional(),
     zoom_mode: z.enum(["alternate", "all_in", "all_out", "random"]).optional(),
+    zoom_smooth: z.boolean().optional(),
+    zoom_ref_seconds: z.number().optional(),
     fade_in_pct: z.number().optional(),
   })
   .optional();
@@ -206,6 +208,22 @@ function useScenesImagePrefetch(
   return resolved;
 }
 
+// Если включён «плавный зум» — для коротких сцен уменьшаем пик так,
+// чтобы скорость зума совпадала с «эталоном»: peak_ref достигается за zoom_ref_seconds.
+// Для сцен ≥ zoom_ref_seconds peak остаётся полным (peak_ref).
+function effectivePeakForScene(
+  peakRef: number,
+  durationSec: number,
+  smoothEnabled: boolean,
+  refSeconds: number | undefined,
+): number {
+  if (!smoothEnabled || peakRef <= 1.0001) return peakRef;
+  const ref = Math.max(0.1, Number(refSeconds) || 5);
+  if (durationSec >= ref) return peakRef;
+  const k = Math.max(0, Math.min(1, durationSec / ref));
+  return 1 + (peakRef - 1) * k;
+}
+
 export const JobMontage: React.FC<JobMontageProps> = ({
   scenes,
   audio,
@@ -213,8 +231,12 @@ export const JobMontage: React.FC<JobMontageProps> = ({
   job_id,
 }) => {
   const { fps } = useVideoConfig();
-  const peak = montagePeakScale(montage);
+  const peakRef = montagePeakScale(montage);
   const mode: ZoomMode = (montage?.zoom_mode ?? "alternate") as ZoomMode;
+  const smoothEnabled = Boolean(montage?.zoom_smooth);
+  const refSeconds = Number.isFinite(montage?.zoom_ref_seconds)
+    ? (montage?.zoom_ref_seconds as number)
+    : 5;
   const seedKey = String(job_id || "job") + "::" + String(scenes.length);
   const prefetchedByRel = useScenesImagePrefetch(scenes);
   return (
@@ -224,6 +246,13 @@ export const JobMontage: React.FC<JobMontageProps> = ({
         const lengthFrames = Math.max(
           1,
           msToFrames(Math.max(0, scene.end_ms - scene.start_ms) || 33, fps),
+        );
+        const sceneDurSec = Math.max(0.001, lengthFrames / Math.max(1, fps));
+        const scenePeak = effectivePeakForScene(
+          peakRef,
+          sceneDurSec,
+          smoothEnabled,
+          refSeconds,
         );
         const direction = pickZoomDirection(mode, idx, seedKey);
         const m = scene.media;
@@ -238,7 +267,7 @@ export const JobMontage: React.FC<JobMontageProps> = ({
           >
             <SceneRender
               scene={scene}
-              peakScale={peak}
+              peakScale={scenePeak}
               durationInFrames={lengthFrames}
               direction={direction}
               resolvedImgSrc={resolvedImgSrc}

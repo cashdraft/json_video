@@ -107,6 +107,7 @@ from rewrite_pipeline import (
     REWRITE_PRESET_DEFAULT,
     REWRITE_PRESET_KEYS,
     REWRITE_PRESET_LABELS,
+    REWRITE_PRESET_PREWRITTEN,
     REWRITE_PRESET_STAGE_KEYS,
     REWRITE_STAGE_HELP_HINTS,
     REWRITE_STAGE_KEYS,
@@ -121,18 +122,6 @@ from rewrite_pipeline import (
     normalize_rewrite_preset,
     snapshot_rewrite_preset_from_body,
     stages_for_preset,
-    ANIMATION_INTENSITY_OPTIONS,
-    ANIMATION_INTENSITY_VALUES,
-    ANIMATION_LOWMEDHIGH_VALUES,
-    ANIMATION_MOTION_STYLE_OPTIONS,
-    ANIMATION_MOTION_STYLES,
-    ANIMATION_PACING_OPTIONS,
-    ANIMATION_PACING_VALUES,
-    ANIMATION_SCENE_COMPLEXITY_OPTIONS,
-    ANIMATION_VISUAL_DENSITY_OPTIONS,
-    ANIMATION_VISUAL_MODE_OPTIONS,
-    ANIMATION_VISUAL_MODES,
-    default_animation_settings,
     merge_stages_from_request,
     new_stages_dict,
     normalize_rewrite_job_data,
@@ -166,253 +155,28 @@ JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
 JOB_PEXELS_DIR = BASE_DIR / "data" / "job_pexels"
 REWRITE_JOBS_DIR = BASE_DIR / "data" / "rewrite_jobs"
 REWRITE_MEDIA_DIR = BASE_DIR / "data" / "rewrite_media"
-ANIM_AGENT_DIR = BASE_DIR / "data" / "animation_agent"
-ANIM_AGENT_KINDS = ("end_system", "end_user")
-
-REMOTION_DIR = BASE_DIR / "remotion"
-REMOTION_RENDERS_DIR = REMOTION_DIR / "scene_renders"
-JOB_VIDEOS_DIR = BASE_DIR / "data" / "job_videos"
-NPX_BIN = "/usr/bin/npx"
-REMOTION_RENDER_TIMEOUT = 600
 
 
-def _anim_agent_path(kind: str) -> Path | None:
-    if kind not in ANIM_AGENT_KINDS:
-        return None
-    return ANIM_AGENT_DIR / f"{kind}_prompt.txt"
+def _sanitize_scene_deprecated(scene: dict[str, Any]) -> None:
+    """Удаляет поля снятых фич: animation, prompt_master, prompt_master_render, …"""
+    if not isinstance(scene, dict):
+        return
+    scene.pop("animation", None)
+    for k in list(scene.keys()):
+        if isinstance(k, str) and k.startswith("prompt_master"):
+            scene.pop(k, None)
 
 
-def load_anim_agent_prompt(kind: str) -> str:
-    p = _anim_agent_path(kind)
-    if p is None or not p.is_file():
-        return ""
-    try:
-        return p.read_text(encoding="utf-8")
-    except OSError:
-        return ""
+def _sanitize_job_scenes(job: dict[str, Any] | None) -> None:
+    if not isinstance(job, dict):
+        return
+    scenes = job.get("scenes")
+    if not isinstance(scenes, list):
+        return
+    for s in scenes:
+        if isinstance(s, dict):
+            _sanitize_scene_deprecated(s)
 
-
-def save_anim_agent_prompt(kind: str, text: str) -> bool:
-    p = _anim_agent_path(kind)
-    if p is None:
-        return False
-    ANIM_AGENT_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        p.write_text(str(text or ""), encoding="utf-8")
-    except OSError:
-        return False
-    return True
-
-
-def load_style_pack_for_template(template_name: str) -> tuple[dict | None, str]:
-    """Возвращает (parsed_dict_or_None, raw_text). raw_text='' если файла нет."""
-    name = (template_name or "").strip()
-    if not name:
-        return None, ""
-    td = safe_template_dir(IMAGE_TEMPLATES_DIR, name)
-    if td is None:
-        return None, ""
-    sp = td / "style_pack.json"
-    if not sp.is_file():
-        return None, ""
-    try:
-        raw = sp.read_text(encoding="utf-8")
-    except OSError:
-        return None, ""
-    try:
-        return json.loads(raw), raw
-    except (json.JSONDecodeError, ValueError):
-        return None, raw
-
-
-_ANIM_INTERNAL_KEYS = {"end_agent", "video_render"}
-
-
-def _scene_payload_for_anim_agent(scene: dict[str, Any]) -> dict[str, Any]:
-    """Минимальный JSON сцены для Animation Designer агента — только scene_id + animation (без внутренних полей)."""
-    out: dict[str, Any] = {
-        "scene_id": str(scene.get("scene_id") or "").strip(),
-    }
-    anim = scene.get("animation")
-    if isinstance(anim, dict) and anim:
-        clean = {k: v for k, v in anim.items() if k not in _ANIM_INTERNAL_KEYS}
-        if clean:
-            out["animation"] = clean
-    return out
-
-
-def _safe_scene_token(scene_id: str) -> str:
-    s = re.sub(r"[^A-Za-z0-9_]+", "_", str(scene_id or "").strip())
-    s = s.strip("_")
-    return s or "scene"
-
-
-def _remotion_canvas_for_template(template_name: str) -> tuple[int, int, int, int]:
-    """Возвращает (width, height, fps, duration_in_frames). Берёт canvas из style_pack, иначе дефолт 1920x1080@30 fps, 5 c."""
-    width, height, fps, dur = 1920, 1080, 30, 150
-    sp, _raw = load_style_pack_for_template(template_name)
-    if isinstance(sp, dict):
-        canvas = sp.get("canvas") or {}
-        if isinstance(canvas, dict):
-            try:
-                width = int(canvas.get("width") or width) or width
-                height = int(canvas.get("height") or height) or height
-                fps = int(canvas.get("fps") or fps) or fps
-            except (TypeError, ValueError):
-                pass
-    return width, height, fps, dur
-
-
-def _remotion_entry_tsx(scene_export_hint: str, width: int, height: int, fps: int, duration_in_frames: int) -> str:
-    """Генерирует entry.tsx, регистрирующий ровно одну композицию `Scene`.
-
-    Поддерживает: `export default`, именованный export ровно совпадающий с hint,
-    либо первый функциональный export.
-    """
-    return (
-        'import React from "react";\n'
-        'import { Composition, registerRoot } from "remotion";\n'
-        'import * as Mod from "./scene";\n'
-        '\n'
-        'const HINT = ' + json.dumps(scene_export_hint) + ';\n'
-        '\n'
-        'function pickComponent(): React.FC<any> {\n'
-        '  const m: any = Mod as any;\n'
-        '  if (m && typeof m.default === "function") return m.default as React.FC<any>;\n'
-        '  if (HINT && typeof m[HINT] === "function") return m[HINT] as React.FC<any>;\n'
-        '  for (const k of Object.keys(m)) {\n'
-        '    const v = m[k];\n'
-        '    if (typeof v === "function" && /^[A-Za-z_$]/.test(k)) return v as React.FC<any>;\n'
-        '  }\n'
-        '  throw new Error("scene.tsx: ни одного функционального export не найдено (нужен default или функция)");\n'
-        '}\n'
-        '\n'
-        'const Comp = pickComponent();\n'
-        '\n'
-        'const Root: React.FC = () => (\n'
-        '  <>\n'
-        '    <Composition\n'
-        f'      id="Scene"\n'
-        '      component={Comp}\n'
-        f'      durationInFrames={{{duration_in_frames}}}\n'
-        f'      fps={{{fps}}}\n'
-        f'      width={{{width}}}\n'
-        f'      height={{{height}}}\n'
-        '    />\n'
-        '  </>\n'
-        ');\n'
-        '\n'
-        'registerRoot(Root);\n'
-    )
-
-
-def _run_remotion_render(
-    job_id: str,
-    scene_id: str,
-    code: str,
-    template_name: str,
-) -> tuple[bool, dict[str, Any]]:
-    """Сохраняет код, запускает `npx remotion render`, складывает MP4 в data/job_videos/<job_id>/<token>.mp4.
-
-    Возвращает (ok, info_dict) где info содержит keys: video_url|error, exit_code, stderr_tail, duration_ms, ...
-    """
-    token = _safe_scene_token(scene_id)
-    if not (code or "").strip():
-        return False, {"error": "Пустой код Result — нечего рендерить"}
-    if not REMOTION_DIR.is_dir() or not (REMOTION_DIR / "node_modules").is_dir():
-        return False, {"error": "Папка remotion не найдена или не выполнен npm install"}
-
-    work_dir = REMOTION_RENDERS_DIR / f"{job_id}__{token}"
-    work_dir.mkdir(parents=True, exist_ok=True)
-
-    width, height, fps, duration = _remotion_canvas_for_template(template_name)
-    entry_code = _remotion_entry_tsx(token, width, height, fps, duration)
-
-    try:
-        (work_dir / "scene.tsx").write_text(code, encoding="utf-8")
-        (work_dir / "entry.tsx").write_text(entry_code, encoding="utf-8")
-    except OSError as e:
-        return False, {"error": f"Не удалось записать TSX: {e}"}
-
-    out_dir = JOB_VIDEOS_DIR / job_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{token}.mp4"
-    if out_path.exists():
-        try:
-            out_path.unlink()
-        except OSError:
-            pass
-
-    rel_entry = f"scene_renders/{job_id}__{token}/entry.tsx"
-    cmd = [
-        NPX_BIN,
-        "--no",
-        "remotion",
-        "render",
-        rel_entry,
-        "Scene",
-        str(out_path),
-        "--log",
-        "error",
-    ]
-    env = dict(os.environ)
-    env["PATH"] = "/usr/bin:" + env.get("PATH", "")
-    started = time.monotonic()
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(REMOTION_DIR),
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=REMOTION_RENDER_TIMEOUT,
-        )
-    except subprocess.TimeoutExpired:
-        return False, {"error": f"Таймаут {REMOTION_RENDER_TIMEOUT}s"}
-    except OSError as e:
-        return False, {"error": f"Не удалось запустить npx: {e}"}
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-
-    stderr_text = (proc.stderr or "").strip()
-    stdout_text = (proc.stdout or "").strip()
-    log_tail = (stderr_text or stdout_text)[-2000:]
-
-    if proc.returncode != 0 or not out_path.is_file():
-        return False, {
-            "error": (stderr_text or stdout_text or f"remotion exit {proc.returncode}").splitlines()[-1] if (stderr_text or stdout_text) else f"remotion exit {proc.returncode}",
-            "exit_code": proc.returncode,
-            "log_tail": log_tail,
-            "duration_ms": elapsed_ms,
-        }
-
-    return True, {
-        "video_url": url_for("job_video_file", job_id=job_id, filename=out_path.name),
-        "filename": out_path.name,
-        "size_bytes": out_path.stat().st_size,
-        "duration_ms": elapsed_ms,
-        "log_tail": log_tail,
-        "width": width,
-        "height": height,
-        "fps": fps,
-        "duration_frames": duration,
-    }
-
-
-def compose_anim_end_user_message(
-    user_prompt_text: str,
-    style_pack: dict | None,
-    scene_payload: dict[str, Any],
-) -> str:
-    """Финальный user message: текст пользователя + style_pack + сцена в JSON-виде."""
-    parts: list[str] = []
-    txt = (user_prompt_text or "").strip()
-    if txt:
-        parts.append(txt)
-    sp_block = {"style_pack": style_pack if isinstance(style_pack, dict) else None}
-    sc_block = {"scene": scene_payload}
-    parts.append(json.dumps(sp_block, ensure_ascii=False, indent=2))
-    parts.append(json.dumps(sc_block, ensure_ascii=False, indent=2))
-    return "\n\n".join(parts)
 
 # Serialize read-modify-write on the same job JSON. Without this, concurrent
 # requests (bulk ↻ video, overlapping polls) can last-write-win and drop e.g.
@@ -1250,7 +1014,7 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
     """
     Parse raw text into scene blocks.
     Logic: new scene_id starts a new scene; subsequent blocks belong to current scene.
-    Поддерживаются как однострочные, так и многострочные JSON-объекты (например, "animation").
+    Поддерживаются как однострочные, так и многострочные JSON-объекты.
     Returns: (list of scene dicts, list of error messages)
     """
     raw_text = _unwrap_json_array_of_objects(raw_text)
@@ -1335,15 +1099,6 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
                 current_scene["video"] = video_val
             continue
 
-        # Блок animation (Animation Planner) — анимированная сцена.
-        if "animation" in obj:
-            anim_val = obj["animation"]
-            if anim_val is not None and not isinstance(anim_val, dict):
-                errors.append(f"У сцены {current_scene.get('scene_id')} блок animation должен быть объектом")
-            else:
-                current_scene["animation"] = anim_val
-            continue
-
         # Новый формат Scene Writer Live: content_type + keywords.
         if "content_type" in obj:
             ct = str(obj.get("content_type") or "").strip().lower()
@@ -1363,6 +1118,18 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
                 current_scene["keywords"] = ", ".join(str(x).strip() for x in kv if str(x).strip())
             else:
                 current_scene["keywords"] = str(kv or "").strip()
+            continue
+
+        if "animation" in obj:
+            errors.append(
+                f"У сцены {current_scene.get('scene_id')} блок «animation» больше не поддерживается — удалите его из разметки сцен."
+            )
+            continue
+        pm_keys = [k for k in obj if isinstance(k, str) and k.startswith("prompt_master")]
+        if pm_keys:
+            errors.append(
+                f"У сцены {current_scene.get('scene_id')} поля {', '.join(pm_keys)} больше не поддерживаются — удалите их из разметки сцен."
+            )
             continue
 
     # Последняя сцена
@@ -1397,7 +1164,6 @@ def normalize_scene(scene_parts: dict) -> dict:
         "start": scene_parts.get("start") or {"prompt": None},
         "end": scene_parts.get("end") or {"prompt": None},
         "video": scene_parts.get("video") or {"prompt": None},
-        "animation": scene_parts.get("animation") if isinstance(scene_parts.get("animation"), dict) else None,
     }
 
 
@@ -1477,6 +1243,8 @@ def save_job_file(payload: dict) -> tuple[str, str]:
     job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     filename = f"{job_id}.json"
     filepath = JOBS_DIR / filename
+    if isinstance(payload, dict):
+        _sanitize_job_scenes(payload)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     return str(filepath), job_id
@@ -1490,7 +1258,10 @@ def load_job(job_id: str) -> dict | None:
     for _ in range(3):
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                return json.load(f)
+                job = json.load(f)
+                if isinstance(job, dict):
+                    _sanitize_job_scenes(job)
+                return job
         except json.JSONDecodeError:
             time.sleep(0.02)
             continue
@@ -1501,6 +1272,8 @@ def load_job(job_id: str) -> dict | None:
 
 def save_job(job_id: str, job: dict) -> None:
     """Persist job JSON to disk."""
+    if isinstance(job, dict):
+        _sanitize_job_scenes(job)
     filepath = JOBS_DIR / f"{job_id}.json"
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     tmp_name = None
@@ -2966,13 +2739,6 @@ def rewrite_project_page(rewrite_id: str):
                 rewrite_template_names=list_rewrite_template_names(),
                 openai_key_set=key_set,
                 voiceover_final_text=voiceover_final_text,
-                animation_visual_mode_options=ANIMATION_VISUAL_MODE_OPTIONS,
-                animation_motion_style_options=ANIMATION_MOTION_STYLE_OPTIONS,
-                animation_motion_intensity_options=ANIMATION_INTENSITY_OPTIONS,
-                animation_scene_complexity_options=ANIMATION_SCENE_COMPLEXITY_OPTIONS,
-                animation_pacing_options=ANIMATION_PACING_OPTIONS,
-                animation_visual_density_options=ANIMATION_VISUAL_DENSITY_OPTIONS,
-                animation_settings_default=default_animation_settings(),
                 youtube_cookies_status=youtube_cookies_status_dict(),
             )
         )
@@ -4095,6 +3861,25 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             _snap["distiller"] = _dist_cell
         stages_snap = _snap
 
+    # Voiceover Editor / Title Strategist / Structure Splitter в пресете
+    # «Я уже ЗАrewriteИЛ» (prewritten) все читают исходник из inbox.last_result.
+    # Если в снимке inbox пришёл пустым (рестарт вкладки и т.п.), подтягиваем
+    # последнее сохранённое значение из JSON проекта.
+    if (
+        preset == REWRITE_PRESET_PREWRITTEN
+        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and isinstance(stages_snap, dict)
+    ):
+        _snap = dict(stages_snap)
+        _ibx_cell = dict(_snap.get("inbox") or {}) if isinstance(_snap.get("inbox"), dict) else {}
+        _ibx = str(_ibx_cell.get("last_result") or "").strip()
+        if not _ibx:
+            _ibx = str(((rw_job.get("stages") or {}).get("inbox") or {}).get("last_result") or "").strip()
+        if _ibx:
+            _ibx_cell["last_result"] = _ibx
+            _snap["inbox"] = _ibx_cell
+        stages_snap = _snap
+
     def gen():
         if stage_key not in REWRITE_STAGE_KEYS:
             yield json.dumps(
@@ -4112,7 +3897,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             "title_strategist",
             "structure_splitter",
             "scene_writer",
-            "animation_planner",
             "scene_writer_live",
             "youtube_packaging",
             "author",
@@ -4206,7 +3990,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                     except OSError:
                         title_strategist_result_text = ""
         scene_writer_result_text = ""
-        if stage_key in ("scene_writer_live", "animation_planner"):
+        if stage_key == "scene_writer_live":
             scene_writer_result_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
             if not scene_writer_result_text.strip():
                 p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
@@ -4424,65 +4208,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 },
                 ensure_ascii=False,
             ) + "\n"
-            yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
-        elif stage_key == "animation_planner":
-            raw_scenes = str(scene_writer_result_text or "").strip()
-            scenes_in, parse_errors = parse_scene_blocks(raw_scenes)
-            if not scenes_in:
-                reason = "; ".join(parse_errors[:3]) if parse_errors else "пустой или невалидный Scene Writer Result"
-                yield json.dumps(
-                    {"type": "error", "message": f"Animation Planner: нет валидных сцен во входе ({reason})."},
-                    ensure_ascii=False,
-                ) + "\n"
-                return
-            batch_size = 20
-            total_batches = (len(scenes_in) + batch_size - 1) // batch_size
-            acc_parts: list[str] = []
-            for bi in range(total_batches):
-                start = bi * batch_size
-                end = min(start + batch_size, len(scenes_in))
-                chunk = scenes_in[start:end]
-                step_user = json.dumps(
-                    {
-                        "batch_index": bi + 1,
-                        "batch_count": total_batches,
-                        "scenes_offset_start": start + 1,
-                        "scenes_offset_end": end,
-                        "scenes_batch": chunk,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                joined_user = f"{user_text}\n\n{step_user}"
-                yield json.dumps(
-                    {
-                        "type": "status",
-                        "message": (
-                            f"Animation Planner: batch {bi + 1}/{total_batches} "
-                            f"(сцены {start + 1}–{end}, всего {len(chunk)})…"
-                        ),
-                    },
-                    ensure_ascii=False,
-                ) + "\n"
-                part = ""
-                for item in iter_rewrite_completion(api_key, model, prompt, joined_user):
-                    t = str(item.get("type") or "")
-                    if t == "result":
-                        part = str(item.get("content") or "").strip()
-                    elif t == "error":
-                        err = str(item.get("message") or "Ошибка Animation Planner.")
-                        yield json.dumps(
-                            {"type": "error", "message": f"Batch {bi + 1}/{total_batches}: {err}"},
-                            ensure_ascii=False,
-                        ) + "\n"
-                        return
-                    elif t == "status":
-                        yield json.dumps(
-                            {"type": "status", "message": f"[{bi + 1}/{total_batches}] {str(item.get('message') or '')}"},
-                            ensure_ascii=False,
-                        ) + "\n"
-                acc_parts.append(part)
-            full = "\n\n".join([p for p in acc_parts if p]).strip()
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
         elif stage_key == "scene_writer_live":
             raw_scenes = str(scene_writer_result_text or "").strip()
@@ -4839,7 +4564,7 @@ def rewrite_project_api_payload(rewrite_id: str):
                 except OSError:
                     structure_splitter_text = ""
     scene_writer_result_text = ""
-    if stage_key in ("scene_writer_live", "animation_planner"):
+    if stage_key == "scene_writer_live":
         scene_writer_result_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
         if not scene_writer_result_text.strip():
             p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
@@ -4874,6 +4599,22 @@ def rewrite_project_api_payload(rewrite_id: str):
             _snap_ap["distiller"] = _dist_cell_ap
         stages_snap = _snap_ap
     preset_ap = snapshot_rewrite_preset_from_body(body, rw_job)
+    # api-payload в пресете «Я уже ЗАrewriteИЛ»: то же тело, что при запуске стадии.
+    # Voiceover Editor / Title Strategist / Structure Splitter все читают inbox.
+    if (
+        preset_ap == REWRITE_PRESET_PREWRITTEN
+        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and isinstance(stages_snap, dict)
+    ):
+        _snap_ib = dict(stages_snap)
+        _ibx_cell_ap = dict(_snap_ib.get("inbox") or {}) if isinstance(_snap_ib.get("inbox"), dict) else {}
+        _ibx_ap = str(_ibx_cell_ap.get("last_result") or "").strip()
+        if not _ibx_ap:
+            _ibx_ap = str(((rw_job.get("stages") or {}).get("inbox") or {}).get("last_result") or "").strip()
+        if _ibx_ap:
+            _ibx_cell_ap["last_result"] = _ibx_ap
+            _snap_ib["inbox"] = _ibx_cell_ap
+        stages_snap = _snap_ib
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -5957,217 +5698,6 @@ def update_job_scene_prompt(job_id: str):
     return jsonify({"ok": True, "prompt": prompt})
 
 
-@app.route("/job/<job_id>/anim-agent/prompts/<kind>", methods=["GET", "POST"])
-def anim_agent_prompts(job_id: str, kind: str):
-    """Загрузка/сохранение глобальных промптов Animation Designer агента (end_system/end_user)."""
-    if kind not in ANIM_AGENT_KINDS:
-        return jsonify({"ok": False, "error": "Bad kind"}), 400
-    if request.method == "GET":
-        return jsonify({"ok": True, "kind": kind, "text": load_anim_agent_prompt(kind)})
-    body = request.get_json(silent=True) or {}
-    text = str(body.get("text") or "")
-    if save_anim_agent_prompt(kind, text):
-        return jsonify({"ok": True, "kind": kind})
-    return jsonify({"ok": False, "error": "Не удалось сохранить файл"}), 500
-
-
-@app.route("/job/<job_id>/scene/<path:scene_id>/anim-end/run", methods=["POST"])
-def anim_agent_end_run(job_id: str, scene_id: str):
-    """Запуск Animation Designer агента для одной сцены (End-слот).
-
-    Тело: { "system_prompt"?: str, "user_prompt"?: str, "model"?: str }.
-    Промпты по умолчанию читаются с диска.
-    Финальный user message = user_prompt + style_pack + scene JSON.
-    Результат сохраняется в job["scenes"][i]["animation"]["end_agent"].
-    """
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not api_key:
-        return jsonify({"ok": False, "error": "OPENAI_API_KEY не задан в .env"}), 400
-    body = request.get_json(silent=True) or {}
-    sp_in = body.get("system_prompt")
-    up_in = body.get("user_prompt")
-    model_in = (body.get("model") or "").strip()
-
-    system_prompt = (
-        str(sp_in) if isinstance(sp_in, str) and sp_in.strip() else load_anim_agent_prompt("end_system")
-    )
-    user_prompt_text = (
-        str(up_in) if isinstance(up_in, str) and up_in.strip() else load_anim_agent_prompt("end_user")
-    )
-    model = normalize_rewrite_model(model_in)
-
-    if not system_prompt.strip():
-        return jsonify({"ok": False, "error": "System Prompt пуст. Заполните и сохраните."}), 400
-
-    with _job_file_lock(job_id):
-        job = load_job(job_id)
-        if job is None:
-            return jsonify({"ok": False, "error": "Job не найден"}), 404
-        scenes = job.get("scenes") or []
-        idx = -1
-        for i, s in enumerate(scenes):
-            if isinstance(s, dict) and str(s.get("scene_id") or "") == scene_id:
-                idx = i
-                break
-        if idx < 0:
-            return jsonify({"ok": False, "error": f"Сцена {scene_id} не найдена"}), 404
-        scene = scenes[idx]
-        anim = scene.get("animation")
-        if not isinstance(anim, dict) or not anim:
-            return jsonify({"ok": False, "error": "У сцены нет animation"}), 400
-
-        meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
-        template_name = (meta.get("image_template") or job.get("selected_image_template") or "").strip()
-        scene_payload = _scene_payload_for_anim_agent(scene)
-        style_pack, _raw = load_style_pack_for_template(template_name)
-        user_message = compose_anim_end_user_message(user_prompt_text, style_pack, scene_payload)
-
-    last_event: dict[str, Any] | None = None
-    result_text: str = ""
-    error_text: str = ""
-    for ev in iter_rewrite_completion(api_key, model, system_prompt, user_message):
-        last_event = ev
-        if ev.get("type") == "result":
-            result_text = str(ev.get("content") or "")
-        elif ev.get("type") == "error":
-            error_text = str(ev.get("message") or "Ошибка")
-
-    state = "fail" if error_text else ("done" if result_text else "fail")
-    if not result_text and not error_text:
-        error_text = (last_event or {}).get("message") or "Пустой ответ от OpenAI"
-
-    with _job_file_lock(job_id):
-        job = load_job(job_id)
-        if job is None:
-            return jsonify({"ok": False, "error": "Job исчез"}), 404
-        scenes = job.get("scenes") or []
-        if 0 <= idx < len(scenes) and isinstance(scenes[idx], dict):
-            scene = scenes[idx]
-            anim = scene.get("animation") if isinstance(scene.get("animation"), dict) else {}
-            anim["end_agent"] = {
-                "model": model,
-                "state": state,
-                "result": result_text,
-                "error": error_text,
-                "updated_at": int(time.time()),
-                "style_pack_present": bool(style_pack),
-            }
-            scene["animation"] = anim
-            scenes[idx] = scene
-            job["scenes"] = scenes
-            save_job(job_id, job)
-
-    if state != "done":
-        return jsonify({"ok": False, "error": error_text, "state": state}), 200
-    return jsonify({"ok": True, "state": state, "result": result_text, "model": model})
-
-
-@app.route("/job/<job_id>/scene/<path:scene_id>/anim-render/run", methods=["POST"])
-def anim_agent_render_run(job_id: str, scene_id: str):
-    """Сборка и рендер сцены в Remotion. Принимает {code?: str}; если не передан — берёт scene.animation.end_agent.result."""
-    body = request.get_json(silent=True) or {}
-    code_in = body.get("code")
-    code = str(code_in) if isinstance(code_in, str) else ""
-
-    with _job_file_lock(job_id):
-        job = load_job(job_id)
-        if job is None:
-            return jsonify({"ok": False, "error": "Job не найден"}), 404
-        scenes = job.get("scenes") or []
-        idx = -1
-        for i, s in enumerate(scenes):
-            if isinstance(s, dict) and str(s.get("scene_id") or "") == scene_id:
-                idx = i
-                break
-        if idx < 0:
-            return jsonify({"ok": False, "error": f"Сцена {scene_id} не найдена"}), 404
-        scene = scenes[idx]
-        anim = scene.get("animation") if isinstance(scene.get("animation"), dict) else {}
-        if not anim:
-            return jsonify({"ok": False, "error": "У сцены нет animation"}), 400
-        if not code.strip():
-            saved = (anim.get("end_agent") or {}).get("result") if isinstance(anim.get("end_agent"), dict) else ""
-            code = str(saved or "")
-        if not code.strip():
-            return jsonify({"ok": False, "error": "Нет TSX-кода: сначала запусти Animation Designer (End)"}), 400
-
-        meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
-        template_name = (meta.get("image_template") or job.get("selected_image_template") or "").strip()
-        anim["video_render"] = {
-            "state": "running",
-            "started_at": int(time.time()),
-            "video_url": (anim.get("video_render") or {}).get("video_url") if isinstance(anim.get("video_render"), dict) else "",
-        }
-        scene["animation"] = anim
-        scenes[idx] = scene
-        job["scenes"] = scenes
-        save_job(job_id, job)
-
-    ok, info = _run_remotion_render(job_id, scene_id, code, template_name)
-
-    with _job_file_lock(job_id):
-        job = load_job(job_id)
-        if job is None:
-            return jsonify({"ok": False, "error": "Job исчез во время рендера"}), 404
-        scenes = job.get("scenes") or []
-        if 0 <= idx < len(scenes) and isinstance(scenes[idx], dict):
-            scene = scenes[idx]
-            anim = scene.get("animation") if isinstance(scene.get("animation"), dict) else {}
-            anim["video_render"] = {
-                "state": "done" if ok else "fail",
-                "updated_at": int(time.time()),
-                "video_url": info.get("video_url", ""),
-                "filename": info.get("filename", ""),
-                "size_bytes": info.get("size_bytes"),
-                "duration_ms": info.get("duration_ms"),
-                "error": info.get("error", "") if not ok else "",
-                "log_tail": info.get("log_tail", ""),
-                "exit_code": info.get("exit_code"),
-                "width": info.get("width"),
-                "height": info.get("height"),
-                "fps": info.get("fps"),
-                "duration_frames": info.get("duration_frames"),
-            }
-            scene["animation"] = anim
-            scenes[idx] = scene
-            job["scenes"] = scenes
-            save_job(job_id, job)
-
-    if not ok:
-        return jsonify({
-            "ok": False,
-            "error": info.get("error") or "Не удалось отрендерить",
-            "log_tail": info.get("log_tail", ""),
-            "exit_code": info.get("exit_code"),
-        }), 200
-    return jsonify({
-        "ok": True,
-        "video_url": info["video_url"],
-        "filename": info["filename"],
-        "size_bytes": info["size_bytes"],
-        "duration_ms": info["duration_ms"],
-    })
-
-
-@app.route("/job/<job_id>/video/<filename>")
-def job_video_file(job_id: str, filename: str):
-    if load_job(job_id) is None:
-        abort(404)
-    if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.mp4$", filename or ""):
-        abort(404)
-    d = (JOB_VIDEOS_DIR / job_id).resolve()
-    if not d.is_dir():
-        abort(404)
-    target = (d / filename).resolve()
-    try:
-        target.relative_to(d)
-    except ValueError:
-        abort(404)
-    if not target.is_file():
-        abort(404)
-    return send_from_directory(d, filename, mimetype="video/mp4", max_age=0)
-
-
 @app.route("/job/<job_id>/scene/delete", methods=["POST"])
 def delete_job_scene(job_id: str):
     """Удаляет одну сцену из job по индексу. Подчищает локальные файлы Pexels этой сцены."""
@@ -6819,16 +6349,12 @@ def _render_scenes_input_text(scenes: list[dict[str, Any]]) -> str:
             if kw:
                 lines.append(json.dumps({"keywords": kw}, ensure_ascii=False))
         else:
-            anim_blk = sc.get("animation")
-            if isinstance(anim_blk, dict):
-                lines.append(json.dumps({"animation": anim_blk}, ensure_ascii=False))
-            else:
-                for slot in ("start", "end", "video"):
-                    blk = sc.get(slot)
-                    if isinstance(blk, dict):
-                        lines.append(
-                            json.dumps({slot: {"prompt": blk.get("prompt", None)}}, ensure_ascii=False)
-                        )
+            for slot in ("start", "end", "video"):
+                blk = sc.get(slot)
+                if isinstance(blk, dict):
+                    lines.append(
+                        json.dumps({slot: {"prompt": blk.get("prompt", None)}}, ensure_ascii=False)
+                    )
     return ("\n".join(lines) + "\n") if lines else ""
 
 
@@ -7431,6 +6957,31 @@ _MONTAGE_ZOOM_MAX = 1.5
 _MONTAGE_ZOOM_STEP = 0.025
 _MONTAGE_ZOOM_MODES = ("alternate", "all_in", "all_out", "random")
 _MONTAGE_ZOOM_MODE_DEFAULT = "alternate"
+_MONTAGE_ZOOM_REF_SEC_MIN = 1.0
+_MONTAGE_ZOOM_REF_SEC_MAX = 30.0
+_MONTAGE_ZOOM_REF_SEC_STEP = 0.5
+_MONTAGE_ZOOM_REF_SEC_DEFAULT = 5.0
+
+
+def _montage_zoom_ref_seconds_clamp(value: Any) -> float:
+    """Базовая длительность для «плавного зума»: 1.0…30.0 с шагом 0.5 с."""
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        x = _MONTAGE_ZOOM_REF_SEC_DEFAULT
+    x = max(_MONTAGE_ZOOM_REF_SEC_MIN, min(_MONTAGE_ZOOM_REF_SEC_MAX, x))
+    n = int(round((x - _MONTAGE_ZOOM_REF_SEC_MIN) / _MONTAGE_ZOOM_REF_SEC_STEP))
+    x = _MONTAGE_ZOOM_REF_SEC_MIN + n * _MONTAGE_ZOOM_REF_SEC_STEP
+    return float(round(min(x, _MONTAGE_ZOOM_REF_SEC_MAX), 1))
+
+
+def _montage_bool_clamp(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    s = str(value or "").strip().lower()
+    return s in ("1", "true", "yes", "on")
 
 
 def _montage_zoom_mode_clamp(value: Any) -> str:
@@ -7507,6 +7058,8 @@ def job_montage_assemble(job_id: str):
     data = request.get_json(silent=True) or {}
     zoom_scale = _montage_zoom_scale_from_request_body(data)
     zoom_mode = _montage_zoom_mode_clamp(data.get("zoom_mode"))
+    zoom_smooth = _montage_bool_clamp(data.get("zoom_smooth"))
+    zoom_ref_seconds = _montage_zoom_ref_seconds_clamp(data.get("zoom_ref_seconds"))
     fade_in = _montage_pct_clamp(data.get("fade_in_pct"))
 
     with _job_file_lock(job_id):
@@ -7517,6 +7070,8 @@ def job_montage_assemble(job_id: str):
         meta["montage"] = {
             "zoom_scale": zoom_scale,
             "zoom_mode": zoom_mode,
+            "zoom_smooth": zoom_smooth,
+            "zoom_ref_seconds": zoom_ref_seconds,
             "fade_in_pct": fade_in,
         }
         job_check["job_meta"] = meta
@@ -8123,11 +7678,14 @@ def job_page(job_id: str):
             if words_path.is_file():
                 tts_last_words_name = words_candidate
                 tts_last_words_href = url_for("job_audio_file", job_id=job_id, filename=words_candidate)
-    anim_template_name = (meta.get("image_template") or job.get("selected_image_template") or "").strip()
-    anim_style_pack, _anim_style_pack_raw = load_style_pack_for_template(anim_template_name)
     _mont = meta.get("montage") if isinstance(meta.get("montage"), dict) else {}
     montage_zoom_scale = _montage_zoom_scale_from_meta(_mont)
     montage_zoom_mode = _montage_zoom_mode_clamp(_mont.get("zoom_mode"))
+    montage_zoom_smooth = _montage_bool_clamp(_mont.get("zoom_smooth"))
+    if _mont.get("zoom_ref_seconds") is not None:
+        montage_zoom_ref_seconds = _montage_zoom_ref_seconds_clamp(_mont.get("zoom_ref_seconds"))
+    else:
+        montage_zoom_ref_seconds = _MONTAGE_ZOOM_REF_SEC_DEFAULT
     try:
         montage_fade_in_pct = max(0, min(100, int(round(float(_mont.get("fade_in_pct") or 0)))))
     except (TypeError, ValueError):
@@ -8178,6 +7736,11 @@ def job_page(job_id: str):
         montage_zoom_scale=montage_zoom_scale,
         montage_zoom_mode=montage_zoom_mode,
         montage_zoom_modes=list(_MONTAGE_ZOOM_MODES),
+        montage_zoom_smooth=montage_zoom_smooth,
+        montage_zoom_ref_seconds=montage_zoom_ref_seconds,
+        montage_zoom_ref_seconds_min=_MONTAGE_ZOOM_REF_SEC_MIN,
+        montage_zoom_ref_seconds_max=_MONTAGE_ZOOM_REF_SEC_MAX,
+        montage_zoom_ref_seconds_step=_MONTAGE_ZOOM_REF_SEC_STEP,
         montage_fade_in_pct=montage_fade_in_pct,
         montage_props_ready=montage_props_ready,
         montage_mp4_ready=montage_mp4_ready,
@@ -8185,12 +7748,6 @@ def job_page(job_id: str):
         montage_mp4_url=montage_mp4_url,
         montage_remotion_open_url=montage_remotion_open_url,
         montage_active_render_task_id=montage_active_render_task_id,
-        anim_agent_models=REWRITE_MODELS,
-        anim_agent_default_model=REWRITE_DEFAULT_MODEL,
-        anim_agent_end_system_prompt=load_anim_agent_prompt("end_system"),
-        anim_agent_end_user_prompt=load_anim_agent_prompt("end_user"),
-        anim_agent_style_pack_present=bool(anim_style_pack),
-        anim_agent_template_name=anim_template_name,
     )
 
 

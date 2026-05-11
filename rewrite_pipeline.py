@@ -497,219 +497,9 @@ def build_youtube_packaging_user_message(
     return _json_user_message(payload)
 
 
-# ---------------------------------------------------------------------------
-# Animation Planner — конфиг этапа (visual modes, motion styles, ratio и т.д.).
-# Для удобства сериализации/UI: всё хранится в cell["animation_settings"].
-# ---------------------------------------------------------------------------
-
-ANIMATION_VISUAL_MODE_OPTIONS: list[dict[str, str]] = [
-    {"id": "text", "desc": "Крупный текст, подписи, заголовки, короткие фразы."},
-    {"id": "kinetic_typography", "desc": "Текст как главный анимированный объект: вылетает, собирается, пульсирует."},
-    {"id": "numbers", "desc": "Цифры, проценты, суммы, счётчики, рост/падение значений."},
-    {"id": "quotes", "desc": "Цитаты, ключевые фразы, выделенные мысли."},
-    {"id": "lists", "desc": "Списки, чек-листы, пункты, шаги."},
-    {"id": "icons", "desc": "Векторные иконки: деньги, тревога, дом, мозг, график и т.д."},
-    {"id": "emoji", "desc": "Emoji как быстрые эмоциональные акценты."},
-    {"id": "arrows", "desc": "Стрелки, направления, причинно-следственные связи."},
-    {"id": "shapes", "desc": "Плашки, круги, линии, рамки, карточки, выделения."},
-    {"id": "charts", "desc": "Графики: линейные, столбчатые, круговые, мини-графики."},
-    {"id": "diagrams", "desc": "Схемы, блок-схемы, связи между элементами."},
-    {"id": "tables", "desc": "Таблицы, матрицы, сравнение данных по строкам/колонкам."},
-    {"id": "comparisons", "desc": "A vs B, было/стало, хорошо/плохо, до/после."},
-    {"id": "timelines", "desc": "Последовательность событий, этапы, прогресс по времени."},
-    {"id": "maps", "desc": "Карты, маршруты, точки, география, перемещение."},
-    {"id": "ui_screens", "desc": "Интерфейсы сайтов, приложений, браузеров, экранов."},
-    {"id": "chat_interfaces", "desc": "Чаты, сообщения, диалоги, уведомления, комментарии."},
-    {"id": "documents", "desc": "Документы, чеки, договоры, письма, анкеты, счета."},
-    {"id": "money_visuals", "desc": "Деньги, купюры, монеты, карты, кошельки, транзакции."},
-    {"id": "devices", "desc": "Телефоны, ноутбуки, экраны, техника."},
-    {"id": "objects", "desc": "Простые предметы: коробки, ключи, еда, инструменты, товары."},
-    {"id": "vehicles", "desc": "Машины, самолёты, поезда, транспорт, доставка."},
-    {"id": "buildings", "desc": "Дома, офисы, магазины, банки, городские здания."},
-    {"id": "people_silhouettes", "desc": "Силуэты людей без детальных лиц."},
-    {"id": "characters", "desc": "Простые персонажи, маскоты, мультяшные фигуры."},
-    {"id": "human_faces", "desc": "Лица, эмоции, мимика, крупные портреты."},
-    {"id": "hands", "desc": "Руки, жесты, взаимодействие с объектами."},
-    {"id": "animals", "desc": "Животные, питомцы, символические звери."},
-    {"id": "environments", "desc": "Комнаты, офисы, города, природа, космос, фоны."},
-    {"id": "abstract_fx", "desc": "Метафоры, частицы, свечение, дым, glitch, surreal, mixed media."},
-]
-ANIMATION_VISUAL_MODES: list[str] = [o["id"] for o in ANIMATION_VISUAL_MODE_OPTIONS]
-
-
-ANIMATION_MOTION_STYLE_OPTIONS: list[dict[str, str]] = [
-    {"id": "fade", "group": "Базовые", "desc": "Плавное появление/исчезновение."},
-    {"id": "slide", "group": "Базовые", "desc": "Въезд/выезд объекта."},
-    {"id": "scale", "group": "Базовые", "desc": "Увеличение/уменьшение."},
-    {"id": "pop", "group": "Базовые", "desc": "Резкое акцентное появление."},
-    {"id": "rotation", "group": "Базовые", "desc": "Поворот."},
-    {"id": "typewriter", "group": "Текст", "desc": "Печать текста."},
-    {"id": "word_by_word", "group": "Текст", "desc": "Появление по словам."},
-    {"id": "line_reveal", "group": "Текст", "desc": "Раскрытие строк."},
-    {"id": "text_scramble", "group": "Текст", "desc": "Сборка текста из символов."},
-    {"id": "counter", "group": "Текст", "desc": "Рост/падение чисел."},
-    {"id": "highlight_sweep", "group": "Текст", "desc": "Проход подсветки по тексту."},
-    {"id": "ui_click", "group": "UI", "desc": "Клик в интерфейсе."},
-    {"id": "notification_pop", "group": "UI", "desc": "Pop-up уведомление."},
-    {"id": "tab_switch", "group": "UI", "desc": "Переключение вкладок."},
-    {"id": "scroll_motion", "group": "UI", "desc": "Прокрутка страницы/экрана."},
-    {"id": "arrow_draw", "group": "Схемы", "desc": "Прорисовка стрелки."},
-    {"id": "path_flow", "group": "Схемы", "desc": "Движение по траектории."},
-    {"id": "diagram_build", "group": "Схемы", "desc": "Сборка схемы."},
-    {"id": "timeline_reveal", "group": "Схемы", "desc": "Раскрытие таймлайна."},
-    {"id": "comparison_motion", "group": "Схемы", "desc": "Анимация A vs B / было-стало."},
-    {"id": "progress_fill", "group": "Схемы", "desc": "Заполнение шкалы."},
-    {"id": "camera_motion", "group": "Камера", "desc": "Движение камеры."},
-    {"id": "parallax", "group": "Камера", "desc": "Многослойная глубина."},
-    {"id": "slow_drift", "group": "Камера", "desc": "Медленное плавание объектов."},
-    {"id": "focus_shift", "group": "Камера", "desc": "Перевод фокуса."},
-    {"id": "glitch", "group": "Эффекты", "desc": "Digital glitch."},
-    {"id": "shake_impact", "group": "Эффекты", "desc": "Удар/тряска."},
-    {"id": "glow_pulse", "group": "Эффекты", "desc": "Пульсация свечения."},
-    {"id": "particle_burst", "group": "Эффекты", "desc": "Всплеск частиц."},
-    {"id": "smoke_reveal", "group": "Эффекты", "desc": "Появление через дым."},
-    {"id": "light_flash", "group": "Эффекты", "desc": "Вспышка."},
-    {"id": "distortion", "group": "Эффекты", "desc": "Волна искажения."},
-    {"id": "morph", "group": "Метаморфозы", "desc": "Превращение одного объекта в другой."},
-    {"id": "fragment_break", "group": "Метаморфозы", "desc": "Распад на части."},
-    {"id": "symbolic_transform", "group": "Метаморфозы", "desc": "Символическая трансформация."},
-    {"id": "loop_motion", "group": "Метаморфозы", "desc": "Цикличное движение."},
-    {"id": "floating_motion", "group": "Метаморфозы", "desc": "Парение."},
-    {"id": "collapse_motion", "group": "Метаморфозы", "desc": "Схлопывание/разрушение."},
-    {"id": "cutout_motion", "group": "Стилистика", "desc": "Puppet/cutout анимация."},
-    {"id": "comic_transition", "group": "Стилистика", "desc": "Комиксный переход."},
-    {"id": "motion_collage", "group": "Стилистика", "desc": "Движение коллажа."},
-    {"id": "mixed_media", "group": "Стилистика", "desc": "Смешанные техники."},
-    {"id": "fake_3d", "group": "Стилистика", "desc": "Псевдо-3D."},
-    {"id": "dynamic_transition", "group": "Стилистика", "desc": "Сложный переход между сценами."},
-]
-ANIMATION_MOTION_STYLES: list[str] = [o["id"] for o in ANIMATION_MOTION_STYLE_OPTIONS]
-
-
-ANIMATION_INTENSITY_OPTIONS: list[dict[str, str]] = [
-    {"id": "low", "desc": "Спокойно, минимум движения. YouTube documentary."},
-    {"id": "medium", "desc": "Современный explainer, умеренная динамика."},
-    {"id": "high", "desc": "Энергичный монтаж, много motion."},
-    {"id": "extreme", "desc": "Хаос, hyper-editing, MrBeast/TikTok energy."},
-]
-ANIMATION_INTENSITY_VALUES: list[str] = [o["id"] for o in ANIMATION_INTENSITY_OPTIONS]
-
-ANIMATION_SCENE_COMPLEXITY_OPTIONS: list[dict[str, str]] = [
-    {"id": "low", "desc": "Текст + иконка."},
-    {"id": "medium", "desc": "Несколько слоёв, простая схема."},
-    {"id": "high", "desc": "Полноценная motion composition."},
-]
-
-ANIMATION_PACING_OPTIONS: list[dict[str, str]] = [
-    {"id": "slow", "desc": "Медленный cinematic."},
-    {"id": "medium", "desc": "Обычный YouTube explainer."},
-    {"id": "fast", "desc": "Быстрый монтаж, частые смены."},
-]
-ANIMATION_PACING_VALUES: list[str] = [o["id"] for o in ANIMATION_PACING_OPTIONS]
-
-ANIMATION_VISUAL_DENSITY_OPTIONS: list[dict[str, str]] = [
-    {"id": "low", "desc": "1–3 объекта, чистый экран."},
-    {"id": "medium", "desc": "Несколько элементов."},
-    {"id": "high", "desc": "Много слоёв/UI/графики."},
-]
-ANIMATION_LOWMEDHIGH_VALUES: list[str] = ["low", "medium", "high"]
-
-
-def default_animation_settings() -> dict[str, Any]:
-    """Дефолтные значения настроек этапа Animation Planner."""
-    return {
-        "visual_modes": [],
-        "motion_styles": [],
-        "target_animation_ratio": 0.4,
-        "prefer_quality_over_exact_ratio": True,
-        "motion_intensity": "medium",
-        "scene_complexity": "medium",
-        "pacing": "medium",
-        "visual_density": "medium",
-    }
-
-
-def _clamp_animation_ratio(v: Any) -> float:
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return 0.4
-    if not (0.1 <= f <= 1.0):
-        f = max(0.1, min(1.0, f))
-    return round(f * 10) / 10
-
-
-def normalize_animation_settings(raw: Any) -> dict[str, Any]:
-    """Приводит произвольный dict к валидным настройкам Animation Planner."""
-    out = default_animation_settings()
-    if not isinstance(raw, dict):
-        return out
-    vm = raw.get("visual_modes")
-    if isinstance(vm, list):
-        out["visual_modes"] = [s for s in (str(x).strip() for x in vm) if s in ANIMATION_VISUAL_MODES]
-    ms = raw.get("motion_styles")
-    if isinstance(ms, list):
-        out["motion_styles"] = [s for s in (str(x).strip() for x in ms) if s in ANIMATION_MOTION_STYLES]
-    out["target_animation_ratio"] = _clamp_animation_ratio(raw.get("target_animation_ratio"))
-    if "prefer_quality_over_exact_ratio" in raw:
-        out["prefer_quality_over_exact_ratio"] = bool(raw.get("prefer_quality_over_exact_ratio"))
-    mi = str(raw.get("motion_intensity") or "").strip().lower()
-    if mi in ANIMATION_INTENSITY_VALUES:
-        out["motion_intensity"] = mi
-    sc = str(raw.get("scene_complexity") or "").strip().lower()
-    if sc in ANIMATION_LOWMEDHIGH_VALUES:
-        out["scene_complexity"] = sc
-    pc = str(raw.get("pacing") or "").strip().lower()
-    if pc in ANIMATION_PACING_VALUES:
-        out["pacing"] = pc
-    vd = str(raw.get("visual_density") or "").strip().lower()
-    if vd in ANIMATION_LOWMEDHIGH_VALUES:
-        out["visual_density"] = vd
-    return out
-
-
-def build_animation_planner_system_prompt(prompt: str) -> str:
-    """Этап animation_planner: в system только Animation Planner System Promt."""
-    return (prompt or "").strip()
-
-
-def build_animation_planner_user_message(
-    user_prompt: str,
-    *,
-    settings: dict[str, Any],
-) -> str:
-    """User для animation_planner.
-
-    Формат: текст User Promt → JSON с тремя блоками
-        settings              — числовые/строковые тумблеры (без списков),
-        allowed_visual_modes  — {visual_mode: bool} по всем 30 опциям,
-        allowed_motion_styles — {motion_style: bool} по всем 44 опциям.
-    Сцены передаются батчами в `app.py` (отдельный JSON блок с scenes_batch).
-    """
-    up = (user_prompt or "").strip()
-    s = normalize_animation_settings(settings)
-    selected_vm = set(s.get("visual_modes") or [])
-    selected_ms = set(s.get("motion_styles") or [])
-    payload: dict[str, Any] = {
-        "settings": {
-            "target_animation_ratio": s["target_animation_ratio"],
-            "prefer_quality_over_exact_ratio": s["prefer_quality_over_exact_ratio"],
-            "motion_intensity": s["motion_intensity"],
-            "scene_complexity": s["scene_complexity"],
-            "pacing": s["pacing"],
-            "visual_density": s["visual_density"],
-        },
-        "allowed_visual_modes": {m: (m in selected_vm) for m in ANIMATION_VISUAL_MODES},
-        "allowed_motion_styles": {m: (m in selected_ms) for m in ANIMATION_MOTION_STYLES},
-    }
-    json_str = json.dumps(payload, ensure_ascii=False, indent=2)
-    if up:
-        return f"{up}\n\n{json_str}"
-    return json_str
-
-
 # (ключ в JSON, заголовок в UI)
 REWRITE_STAGES: list[tuple[str, str]] = [
+    ("inbox", "Inbox"),
     ("analysis", "Analysis"),
     ("structure", "Architect"),
     ("draft1", "Block Writer"),
@@ -723,7 +513,6 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
-    ("animation_planner", "Animation Planner"),
     ("scene_writer_live", "Scene Writer Live"),
     ("youtube_packaging", "YouTube packaging engine"),
 ]
@@ -747,12 +536,16 @@ _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_ST
 #     block_writer/full_text.txt в deep и из author.result в soft).
 REWRITE_PRESET_DEEP = "deep"
 REWRITE_PRESET_SOFT = "soft"
-REWRITE_PRESET_KEYS: frozenset[str] = frozenset({REWRITE_PRESET_DEEP, REWRITE_PRESET_SOFT})
+REWRITE_PRESET_PREWRITTEN = "prewritten"
+REWRITE_PRESET_KEYS: frozenset[str] = frozenset(
+    {REWRITE_PRESET_DEEP, REWRITE_PRESET_SOFT, REWRITE_PRESET_PREWRITTEN}
+)
 REWRITE_PRESET_DEFAULT = REWRITE_PRESET_DEEP
 
 REWRITE_PRESET_LABELS: dict[str, str] = {
     REWRITE_PRESET_DEEP: "Глубокий Rewrite",
     REWRITE_PRESET_SOFT: "Мягкий Rewrite",
+    REWRITE_PRESET_PREWRITTEN: "Я уже ЗАrewriteИЛ",
 }
 
 REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
@@ -768,7 +561,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "animation_planner",
         "scene_writer_live",
         "youtube_packaging",
     ],
@@ -783,7 +575,20 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "animation_planner",
+        "scene_writer_live",
+        "youtube_packaging",
+    ],
+    # «Я уже ЗАrewriteИЛ»: текст уже готов, его просто вставляют в Inbox
+    # (Result-only этап без модели/промпта). Voiceover Editor / Title Strategist /
+    # Structure Splitter читают исходник прямо из Inbox. Scene Writer / SWL /
+    # YouTube packaging работают как в остальных пресетах — от Structure Splitter
+    # / Scene Writer / Title Strategist соответственно.
+    REWRITE_PRESET_PREWRITTEN: [
+        "inbox",
+        "voiceover_editor",
+        "title_strategist",
+        "structure_splitter",
+        "scene_writer",
         "scene_writer_live",
         "youtube_packaging",
     ],
@@ -861,12 +666,6 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем block-by-block. В System: Scene Writer System Promt. "
         "В User: Scene Writer User Promt, Scene Writer Style Promt, параметры длины сцены и текущий block."
     ),
-    "animation_planner": (
-        "Отправляем batch-by-batch по 20 сцен (последний батч — сколько осталось). "
-        "В System: Animation Planner System Promt. "
-        "В User: текст Animation Planner User Promt, затем JSON {settings, allowed_visual_modes, "
-        "allowed_motion_styles}, затем текущий batch (scenes_batch + batch_index/batch_count)."
-    ),
     "scene_writer_live": (
         "Отправляем batch-by-batch по 50 сцен. В System: Scene Writer Live System Promt. "
         "В User: Scene Writer Live User Promt, content_type, target_percent, Result этапа Scene Writer и текущий batch."
@@ -880,6 +679,7 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
 
 # Краткие подзаголовки под названием этапа (мутный серый под заголовком в карточке).
 REWRITE_STAGE_SUBTITLES: dict[str, str] = {
+    "inbox": "Готовый текст: вставьте сюда — дальше пойдёт Voiceover Editor → Title Strategist → Structure Splitter",
     "analysis": "Агент-аналитик YouTube-сценариев",
     "structure": "Агент-архитектор структуры YouTube-сценария",
     "draft1": "Агент-сценарист одного блока",
@@ -893,12 +693,16 @@ REWRITE_STAGE_SUBTITLES: dict[str, str] = {
     "title_strategist": "Агент-стратег заголовков",
     "structure_splitter": "Агент-сплиттер текста",
     "scene_writer": "",
-    "animation_planner": "",
     "scene_writer_live": "",
     "youtube_packaging": "",
 }
 
 REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
+    "inbox": (
+        "Inbox — это не агент, а просто вход для уже готового текста сценария. "
+        "Вставьте сюда финальный текст в поле Result и нажмите Сгенерировать — "
+        "пайплайн пойдёт сразу с Voiceover Editor, минуя все стадии написания."
+    ),
     "analysis": (
         "Этот агент глубоко разбирает исходный текст YouTube-ролика и превращает его "
         "в структурированную аналитическую основу для написания нового сценария. "
@@ -991,10 +795,6 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
         "текст без пропусков и перекрытий."
     ),
     "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
-    "animation_planner": (
-        "Берёт Result из Scene Writer и решает, какие сцены делать анимированными. Учитывает целевой процент "
-        "анимаций, разрешённые visual_modes / motion_styles, общую интенсивность движения, плотность кадра и темп."
-    ),
     "scene_writer_live": "Берёт Result из Scene Writer и пакетно (по 50 сцен) дополняет сцены media-полями.",
     "youtube_packaging": (
         "Собирает заголовки, описание, хештеги и идеи превью для YouTube из готового вывода Scene Writer."
@@ -1012,7 +812,6 @@ def default_stage_entry() -> dict[str, Any]:
         "scene_writer_check": None,
         "structure_splitter_check": None,
         "block_writer_check": None,
-        "animation_settings": default_animation_settings(),
         "model": REWRITE_DEFAULT_MODEL,
         "last_result": "",
         "prompt_locked": False,
@@ -1102,10 +901,7 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             e["scene_writer_check"] = None
         if not isinstance(e.get("scene_writer_live_check"), dict):
             e["scene_writer_live_check"] = None
-        if key == "animation_planner":
-            e["animation_settings"] = normalize_animation_settings(e.get("animation_settings"))
-        else:
-            e.pop("animation_settings", None)
+        e.pop("animation_settings", None)
         if isinstance(e.get("scene_media_check"), dict) and not isinstance(e.get("scene_writer_live_check"), dict):
             e["scene_writer_live_check"] = e.get("scene_media_check")
         e.pop("scene_media_check", None)
@@ -1229,9 +1025,6 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         if "block_writer_check" in sv:
             v = sv.get("block_writer_check")
             e["block_writer_check"] = v if isinstance(v, dict) else None
-        if "animation_settings" in sv and sk == "animation_planner":
-            v = sv.get("animation_settings")
-            e["animation_settings"] = normalize_animation_settings(v)
         if locked_in_body is not None:
             e["prompt_locked"] = bool(locked_in_body)
         user_locked_in_body = sv.get("user_prompt_locked") if "user_prompt_locked" in sv else None
@@ -1267,6 +1060,9 @@ def validate_prerequisites(
     """
     if stage_key not in REWRITE_STAGE_KEYS:
         return "Неизвестный этап."
+    if stage_key == "inbox":
+        # Inbox — Result-only, не запускается моделью. Предусловий нет.
+        return None
     preset = normalize_rewrite_preset(preset)
     preset_order = REWRITE_PRESET_STAGE_KEYS.get(preset, [])
     if stage_key not in preset_order:
@@ -1278,6 +1074,18 @@ def validate_prerequisites(
     idx = preset_order.index(stage_key)
     if idx == 0:
         return None
+    # В пресете «Я уже ЗАrewriteИЛ» Voiceover Editor / Title Strategist /
+    # Structure Splitter все три читают исходник напрямую из Inbox.
+    # Им нужен только заполненный Inbox, между собой они не зависят.
+    if preset == REWRITE_PRESET_PREWRITTEN and stage_key in (
+        "voiceover_editor",
+        "title_strategist",
+        "structure_splitter",
+    ):
+        ibx = stages.get("inbox") or {}
+        if not str(ibx.get("last_result") or "").strip():
+            return "Сначала вставьте готовый текст в Inbox (Result)."
+        return None
     for i in range(idx):
         pk = preset_order[i]
         plabel = _STAGE_LABEL_BY_KEY.get(pk, pk)
@@ -1285,12 +1093,10 @@ def validate_prerequisites(
             continue
         if stage_key == "youtube_packaging" and pk == "scene_writer_live":
             continue
-        if stage_key == "youtube_packaging" and pk == "animation_planner":
-            continue
-        if stage_key == "scene_writer_live" and pk == "animation_planner":
-            continue
         prev = stages.get(pk) or {}
         if not str(prev.get("last_result") or "").strip():
+            if pk == "inbox":
+                return "Сначала вставьте готовый текст в Inbox (Result)."
             return f"Сначала выполните этап «{plabel}» — нет сохранённого результата."
     return None
 
@@ -1330,6 +1136,9 @@ def compose_rewrite_openai_request_body(
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
         return None, "Неизвестный этап."
+    if stage_key == "inbox":
+        # Inbox — это «вставь готовый текст в Result», его нечего запускать у модели.
+        return None, "Inbox — это вход для готового текста, не этап для запуска. Просто вставьте текст в Result."
     if stage_key not in (
         "structure",
         "retention_editor",
@@ -1340,7 +1149,6 @@ def compose_rewrite_openai_request_body(
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "animation_planner",
         "scene_writer_live",
         "youtube_packaging",
         "author",
@@ -1446,26 +1254,49 @@ def compose_rewrite_openai_request_body(
         prompt = build_voiceover_editor_system_prompt(
             str(cell.get("prompt") or ""),
         )
+        # В пресете «Я уже ЗАrewriteИЛ» (prewritten) Voiceover Editor запускается
+        # первым после Inbox: на вход подаём вставленный в Inbox.Result готовый
+        # текст вместо обычного persona_editor.last_result.
+        ve_input_text = persona_editor_text
+        if normalize_rewrite_preset(preset) == REWRITE_PRESET_PREWRITTEN:
+            ve_input_text = str((stages_snap.get("inbox") or {}).get("last_result") or "")
+            if not ve_input_text.strip():
+                return None, "Сначала вставьте готовый текст в Inbox (Result)."
         user_text = build_voiceover_editor_user_message(
             str(cell.get("user_prompt") or ""),
-            persona_editor_text,
+            ve_input_text,
         )
     elif stage_key == "title_strategist":
         prompt = build_title_strategist_system_prompt(
             str(cell.get("prompt") or ""),
         )
+        # В пресете «Я уже ЗАrewriteИЛ» Title Strategist берёт исходный текст
+        # из Inbox (а не edited_text из Voiceover Editor) — пользователь хочет,
+        # чтобы все три финальных агента работали с одним и тем же исходником.
+        ts_input_text = voiceover_editor_text
+        if normalize_rewrite_preset(preset) == REWRITE_PRESET_PREWRITTEN:
+            ts_input_text = str((stages_snap.get("inbox") or {}).get("last_result") or "")
+            if not ts_input_text.strip():
+                return None, "Сначала вставьте готовый текст в Inbox (Result)."
         user_text = build_title_strategist_user_message(
             str(cell.get("user_prompt") or ""),
-            voiceover_editor_text,
+            ts_input_text,
             original_title=original_title,
         )
     elif stage_key == "structure_splitter":
         prompt = build_structure_splitter_system_prompt(
             str(cell.get("prompt") or ""),
         )
+        # В пресете «Я уже ЗАrewriteИЛ» Structure Splitter берёт исходный текст
+        # из Inbox (а не edited_text из Voiceover Editor).
+        ss_input_text = voiceover_editor_text
+        if normalize_rewrite_preset(preset) == REWRITE_PRESET_PREWRITTEN:
+            ss_input_text = str((stages_snap.get("inbox") or {}).get("last_result") or "")
+            if not ss_input_text.strip():
+                return None, "Сначала вставьте готовый текст в Inbox (Result)."
         user_text = build_structure_splitter_user_message(
             str(cell.get("user_prompt") or ""),
-            voiceover_editor_text,
+            ss_input_text,
         )
     elif stage_key == "scene_writer":
         prompt = (str(cell.get("prompt") or "") or "").strip()
@@ -1497,15 +1328,6 @@ def compose_rewrite_openai_request_body(
                 "scene_writer_result": sw,
             }
         )
-    elif stage_key == "animation_planner":
-        prompt = build_animation_planner_system_prompt(str(cell.get("prompt") or ""))
-        sw = str(scene_writer_result_text or "").strip()
-        if not sw:
-            return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
-        user_text = build_animation_planner_user_message(
-            str(cell.get("user_prompt") or ""),
-            settings=cell.get("animation_settings") or {},
-        )
     else:
         prompt = build_rewrite_system_prompt(
             master_prompt,
@@ -1529,7 +1351,6 @@ def compose_rewrite_openai_request_body(
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "animation_planner",
         "scene_writer_live",
         "youtube_packaging",
         "author",
@@ -1618,8 +1439,6 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "style_prompt_locked": bool(cell.get("style_prompt_locked")),
             "past_prompt_locked": bool(cell.get("past_prompt_locked")),
         }
-        if key == "animation_planner":
-            stages[key]["animation_settings"] = normalize_animation_settings(cell.get("animation_settings"))
     return source_text, stages
 
 

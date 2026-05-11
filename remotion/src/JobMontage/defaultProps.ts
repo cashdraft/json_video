@@ -11,7 +11,13 @@ export const defaultJobMontageProps: JobMontageProps = {
   total_duration_ms: 5000,
   static_prefix: "",
   audio: { src: null, duration_ms: 0 },
-  montage: { zoom_scale: 1, zoom_mode: "alternate", fade_in_pct: 0 },
+  montage: {
+    zoom_scale: 1,
+    zoom_mode: "alternate",
+    zoom_smooth: false,
+    zoom_ref_seconds: 5,
+    fade_in_pct: 0,
+  },
   scenes: [
     {
       scene_id: "scene_001",
