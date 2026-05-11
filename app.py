@@ -28,7 +28,7 @@ import threading
 import time
 import uuid
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from collections.abc import Iterator
@@ -1942,6 +1942,86 @@ _YOUTUBE_YDL_BASE: dict = {
 }
 
 
+def _youtube_cookies_file_path() -> Path:
+    """Путь к cookies.txt (Netscape). Переопределение: YT_COOKIES_PATH в .env."""
+    raw = (os.getenv("YT_COOKIES_PATH") or "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return (BASE_DIR / "data" / "secrets" / "yt_cookies.txt").resolve()
+
+
+def _youtube_cookiefile_opts() -> dict[str, Any]:
+    """Опции yt-dlp: cookiefile, если файл непустой."""
+    p = _youtube_cookies_file_path()
+    try:
+        if p.is_file() and p.stat().st_size > 0:
+            return {"cookiefile": str(p)}
+    except OSError:
+        pass
+    return {}
+
+
+def _youtube_cookies_age_human(seconds: float) -> str:
+    if seconds < 60:
+        return f"{int(max(1, seconds))} с"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} мин"
+    if seconds < 86400:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        return f"{h} ч" + (f" {m} мин" if m else "")
+    d = int(seconds // 86400)
+    return f"{d} дн"
+
+
+def youtube_cookies_status_dict() -> dict[str, Any]:
+    """Сводка для UI / GET API (без содержимого файла)."""
+    p = _youtube_cookies_file_path()
+    try:
+        rel_hint = str(p.resolve().relative_to(BASE_DIR.resolve()))
+    except ValueError:
+        rel_hint = p.name
+    out: dict[str, Any] = {
+        "present": False,
+        "mtime_iso": None,
+        "age_seconds": None,
+        "age_human": None,
+        "size_bytes": 0,
+        "path_hint": rel_hint,
+    }
+    try:
+        if p.is_file() and p.stat().st_size > 0:
+            st = p.stat()
+            out["present"] = True
+            out["size_bytes"] = int(st.st_size)
+            mt = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
+            out["mtime_iso"] = mt.isoformat()
+            age = max(0.0, time.time() - st.st_mtime)
+            out["age_seconds"] = int(age)
+            out["age_human"] = _youtube_cookies_age_human(age)
+    except OSError:
+        pass
+    return out
+
+
+def _youtube_validate_cookies_upload(raw: bytes) -> str | None:
+    if len(raw) > 2_000_000:
+        return "Файл слишком большой (максимум 2 МБ)."
+    if len(raw) < 32:
+        return "Файл слишком короткий."
+    head = raw[:8192].decode("utf-8", errors="replace").lower()
+    if (
+        "youtube.com" not in head
+        and "youtu.be" not in head
+        and ".google.com" not in head
+        and "googlevideo.com" not in head
+    ):
+        return "В файле не найдены домены YouTube/Google — убедитесь, что это экспорт cookies с youtube.com (формат Netscape)."
+    if "# netscape" not in head and "\t" not in head[:200]:
+        return "Ожидается cookies.txt в формате Netscape (табуляция, строка «# Netscape…»)."
+    return None
+
+
 def _ytdl_youtube_extractor_player_client(name: str) -> dict:
     c = (name or "").strip().lower()
     return {
@@ -2072,6 +2152,7 @@ def _youtube_pick_audio_format_id(formats: list[dict]) -> str | None:
 def _youtube_probe_audio_format_id(url: str, cname: str, socket_timeout: int) -> str | None:
     opts: dict[str, Any] = {
         **_YOUTUBE_YDL_BASE,
+        **_youtube_cookiefile_opts(),
         "socket_timeout": socket_timeout,
         "retries": 0,
         "fragment_retries": 0,
@@ -2892,6 +2973,7 @@ def rewrite_project_page(rewrite_id: str):
                 animation_pacing_options=ANIMATION_PACING_OPTIONS,
                 animation_visual_density_options=ANIMATION_VISUAL_DENSITY_OPTIONS,
                 animation_settings_default=default_animation_settings(),
+                youtube_cookies_status=youtube_cookies_status_dict(),
             )
         )
     except Exception:
@@ -3381,6 +3463,7 @@ def rewrite_youtube_verify(rewrite_id: str):
                 with YoutubeDL(
                     {
                         **_YOUTUBE_YDL_BASE,
+                        **_youtube_cookiefile_opts(),
                         "socket_timeout": v_socket,
                         "retries": 1,
                         "fragment_retries": 1,
@@ -3433,6 +3516,35 @@ def rewrite_youtube_verify(rewrite_id: str):
     return jsonify({"ok": True, "youtube_title": title})
 
 
+@app.route("/rewrite/<rewrite_id>/youtube/cookies/status", methods=["GET"])
+def rewrite_youtube_cookies_status(rewrite_id: str):
+    if load_rewrite_job(rewrite_id) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, **youtube_cookies_status_dict()})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/cookies", methods=["POST"])
+def rewrite_youtube_cookies_upload(rewrite_id: str):
+    if load_rewrite_job(rewrite_id) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    f = request.files.get("file")
+    if f is None or not getattr(f, "filename", None):
+        return jsonify({"ok": False, "message": "Выберите файл cookies.txt."}), 400
+    raw = f.read()
+    err = _youtube_validate_cookies_upload(raw)
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    dest = _youtube_cookies_file_path()
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_name(dest.name + f".{os.getpid()}.{uuid.uuid4().hex}.tmp")
+        tmp.write_bytes(raw)
+        os.replace(tmp, dest)
+    except OSError as e:
+        return jsonify({"ok": False, "message": f"Не удалось сохранить файл: {e}"}), 500
+    return jsonify({"ok": True, **youtube_cookies_status_dict()})
+
+
 def _rewrite_youtube_perform_download(
     rewrite_id: str,
     rw: dict,
@@ -3473,6 +3585,7 @@ def _rewrite_youtube_perform_download(
             same_re = _youtube_same_client_retries()
             ydl_opts: dict = {
                 **_YOUTUBE_YDL_BASE,
+                **_youtube_cookiefile_opts(),
                 "socket_timeout": stall_read_sec,
                 "retries": same_re,
                 "fragment_retries": same_re,
@@ -7313,6 +7426,52 @@ def _montage_pct_clamp(value: Any) -> int:
     return max(0, min(100, x))
 
 
+_MONTAGE_ZOOM_MIN = 1.0
+_MONTAGE_ZOOM_MAX = 1.5
+_MONTAGE_ZOOM_STEP = 0.025
+_MONTAGE_ZOOM_MODES = ("alternate", "all_in", "all_out", "random")
+_MONTAGE_ZOOM_MODE_DEFAULT = "alternate"
+
+
+def _montage_zoom_mode_clamp(value: Any) -> str:
+    s = str(value or "").strip().lower()
+    if s in _MONTAGE_ZOOM_MODES:
+        return s
+    return _MONTAGE_ZOOM_MODE_DEFAULT
+
+
+def _montage_zoom_scale_clamp(value: Any) -> float:
+    """Масштаб пика Ken Burns (1 = без эффекта, 1.5 = +50% к размеру кадра), шаг 0.025."""
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        x = _MONTAGE_ZOOM_MIN
+    x = max(_MONTAGE_ZOOM_MIN, min(_MONTAGE_ZOOM_MAX, x))
+    n = int(round((x - _MONTAGE_ZOOM_MIN) / _MONTAGE_ZOOM_STEP))
+    x = _MONTAGE_ZOOM_MIN + n * _MONTAGE_ZOOM_STEP
+    return float(round(min(x, _MONTAGE_ZOOM_MAX), 3))
+
+
+def _montage_zoom_scale_from_request_body(data: dict[str, Any]) -> float:
+    """Тело POST: предпочтительно zoom_scale; иначе legacy zoom_pct 0…100 → 1.0…1.5."""
+    if data.get("zoom_scale") is not None and str(data.get("zoom_scale")).strip() != "":
+        return _montage_zoom_scale_clamp(data.get("zoom_scale"))
+    zp = _montage_pct_clamp(data.get("zoom_pct"))
+    return _montage_zoom_scale_clamp(_MONTAGE_ZOOM_MIN + (zp / 100.0) * (_MONTAGE_ZOOM_MAX - _MONTAGE_ZOOM_MIN))
+
+
+def _montage_zoom_scale_from_meta(montage: dict[str, Any]) -> float:
+    """Чтение из job_meta.montage: zoom_scale или legacy zoom_pct."""
+    if montage.get("zoom_scale") is not None and str(montage.get("zoom_scale")).strip() != "":
+        return _montage_zoom_scale_clamp(montage.get("zoom_scale"))
+    try:
+        zp = int(round(float(montage.get("zoom_pct") or 0)))
+    except (TypeError, ValueError):
+        zp = 0
+    zp = max(0, min(100, zp))
+    return _montage_zoom_scale_clamp(_MONTAGE_ZOOM_MIN + (zp / 100.0) * (_MONTAGE_ZOOM_MAX - _MONTAGE_ZOOM_MIN))
+
+
 JOB_REMOTION_DIR = BASE_DIR / "data" / "job_remotion"
 
 
@@ -7346,7 +7505,8 @@ def _latest_audio_path_for_job(job_id: str) -> Path | None:
 def job_montage_assemble(job_id: str):
     """Сохраняет настройки монтажа и стримит подготовку ассетов для Remotion (NDJSON)."""
     data = request.get_json(silent=True) or {}
-    zoom = _montage_pct_clamp(data.get("zoom_pct"))
+    zoom_scale = _montage_zoom_scale_from_request_body(data)
+    zoom_mode = _montage_zoom_mode_clamp(data.get("zoom_mode"))
     fade_in = _montage_pct_clamp(data.get("fade_in_pct"))
 
     with _job_file_lock(job_id):
@@ -7354,7 +7514,11 @@ def job_montage_assemble(job_id: str):
         if job_check is None:
             return jsonify({"ok": False, "error": "Job not found"}), 404
         meta = job_check.get("job_meta") if isinstance(job_check.get("job_meta"), dict) else {}
-        meta["montage"] = {"zoom_pct": zoom, "fade_in_pct": fade_in}
+        meta["montage"] = {
+            "zoom_scale": zoom_scale,
+            "zoom_mode": zoom_mode,
+            "fade_in_pct": fade_in,
+        }
         job_check["job_meta"] = meta
         save_job(job_id, job_check)
 
@@ -7551,7 +7715,9 @@ def job_montage_file(job_id: str, filename: str):
         abort(404)
     if leaf.endswith(".json"):
         return send_from_directory(d, filename, mimetype="application/json", max_age=0)
-    return send_from_directory(d, filename, max_age=0)
+    # медиа сцен/озвучка/готовый mp4 — содержимое не меняется (cachebusting через имя файла сцены и пересборку каталога),
+    # отдаём с долгоживущим immutable, чтобы браузер не перепрашивал каждый сик в превью
+    return send_from_directory(d, filename, max_age=60 * 60 * 24 * 30)
 
 
 @app.route("/job/<job_id>/montage/studio")
@@ -7960,10 +8126,8 @@ def job_page(job_id: str):
     anim_template_name = (meta.get("image_template") or job.get("selected_image_template") or "").strip()
     anim_style_pack, _anim_style_pack_raw = load_style_pack_for_template(anim_template_name)
     _mont = meta.get("montage") if isinstance(meta.get("montage"), dict) else {}
-    try:
-        montage_zoom_pct = max(0, min(100, int(round(float(_mont.get("zoom_pct") or 0)))))
-    except (TypeError, ValueError):
-        montage_zoom_pct = 0
+    montage_zoom_scale = _montage_zoom_scale_from_meta(_mont)
+    montage_zoom_mode = _montage_zoom_mode_clamp(_mont.get("zoom_mode"))
     try:
         montage_fade_in_pct = max(0, min(100, int(round(float(_mont.get("fade_in_pct") or 0)))))
     except (TypeError, ValueError):
@@ -8011,7 +8175,9 @@ def job_page(job_id: str):
         tts_defaults=job.get("tts_defaults") or {},
         tts_template_names=list_elevenlabs_template_names(),
         tts_template=(job.get("tts_template") or "Naomi"),
-        montage_zoom_pct=montage_zoom_pct,
+        montage_zoom_scale=montage_zoom_scale,
+        montage_zoom_mode=montage_zoom_mode,
+        montage_zoom_modes=list(_MONTAGE_ZOOM_MODES),
         montage_fade_in_pct=montage_fade_in_pct,
         montage_props_ready=montage_props_ready,
         montage_mp4_ready=montage_mp4_ready,
@@ -8043,4 +8209,18 @@ except Exception as _e:  # noqa: BLE001
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    import argparse
+
+    pr = argparse.ArgumentParser(description="JSON Video dev server (Flask)")
+    pr.add_argument(
+        "--cookies",
+        metavar="FILE",
+        help="cookies.txt в формате Netscape (как у yt-dlp --cookies); на время процесса задаёт YT_COOKIES_PATH.",
+    )
+    pr.add_argument("--host", default="0.0.0.0")
+    pr.add_argument("--port", type=int, default=5000)
+    pr.add_argument("--no-debug", action="store_true", help="выключить debug у Flask")
+    args, _unknown = pr.parse_known_args()
+    if args.cookies:
+        os.environ["YT_COOKIES_PATH"] = str(Path(args.cookies).expanduser().resolve())
+    app.run(host=args.host, port=args.port, debug=not args.no_debug)

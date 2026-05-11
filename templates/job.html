@@ -843,21 +843,31 @@
         <section class="video-panel job-montage-panel" id="job-montage-panel" aria-label="Монтаж видео">
             <div class="job-montage-panel__head">
                 <div class="scene-id rewrite-pipeline-runner__title job-montage-panel__title">Монтаж видео</div>
-                <p class="job-montage-panel__lead scene-text">Параметры для сборки финального ролика (озвучка + сцены).</p>
+                <p class="job-montage-panel__lead scene-text">Параметры для сборки финального ролика (озвучка + сцены). Zoom: за время сцены кадр плавно 100% → выбранный пик → 100% (Ken Burns).</p>
             </div>
             <div class="job-montage-panel__controls">
                 <div class="job-montage-row">
-                    <label class="job-montage-label" for="montage-zoom">Zoom</label>
+                    <label class="job-montage-label" for="montage-zoom" title="Масштаб в середине сцены: от 1× (без зума) до 1,5× (+50% к размеру кадра). Начало и конец сцены — 1×.">Zoom</label>
                     <input
                         type="range"
                         id="montage-zoom"
                         class="job-montage-range"
-                        min="0"
-                        max="100"
-                        value="{{ montage_zoom_pct }}"
-                        step="1"
+                        min="1"
+                        max="1.5"
+                        value="{{ montage_zoom_scale }}"
+                        step="0.025"
                     >
-                    <output class="job-montage-value" id="montage-zoom-value" for="montage-zoom">{{ montage_zoom_pct }}%</output>
+                    <output class="job-montage-value job-montage-value--zoom" id="montage-zoom-value" for="montage-zoom">пик +{{ ((montage_zoom_scale - 1) * 100)|round(1) }}% · {{ ('%.3f'|format(montage_zoom_scale))|replace('.', ',') }}×</output>
+                </div>
+                <div class="job-montage-row">
+                    {% set zoom_mode_labels = {'alternate': 'По очереди (zoom / zoom out)', 'all_in': 'Только zoom', 'all_out': 'Только zoom out', 'random': 'Random'} %}
+                    <label class="job-montage-label" for="montage-zoom-mode" title="Чередование направления зума по сценам. По очереди: 1-я сцена — наезд, 2-я — отъезд, и т.д. Random — детерминированный по job_id.">Direction</label>
+                    <select id="montage-zoom-mode" class="job-montage-select">
+                        {% for k in montage_zoom_modes %}
+                        <option value="{{ k }}" {% if k == montage_zoom_mode %}selected{% endif %}>{{ zoom_mode_labels.get(k, k) }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="job-montage-value job-montage-value--mode" id="montage-zoom-mode-hint" aria-live="polite"></span>
                 </div>
                 <div class="job-montage-row">
                     <label class="job-montage-label" for="montage-fade-in">Fade In</label>
@@ -1969,6 +1979,8 @@
         const propsLink   = document.getElementById('montage-props-link');
         const remotionLink = document.getElementById('montage-remotion-link');
         const zoomInput   = document.getElementById('montage-zoom');
+        const zoomModeSel = document.getElementById('montage-zoom-mode');
+        const zoomModeHint = document.getElementById('montage-zoom-mode-hint');
         const fadeInput   = document.getElementById('montage-fade-in');
         const zoomOut     = document.getElementById('montage-zoom-value');
         const fadeOut     = document.getElementById('montage-fade-in-value');
@@ -1987,14 +1999,54 @@
         const initialMp4Url = {{ (montage_mp4_url or '') | tojson }};
         if (!zoomInput || !fadeInput) return;
 
+        const MONTAGE_ZOOM_MIN = 1;
+        const MONTAGE_ZOOM_MAX = 1.5;
+        const MONTAGE_ZOOM_STEP = 0.025;
+
+        const clampMontageZoomScale = (raw) => {
+            let x = parseFloat(raw);
+            if (Number.isNaN(x)) x = MONTAGE_ZOOM_MIN;
+            x = Math.max(MONTAGE_ZOOM_MIN, Math.min(MONTAGE_ZOOM_MAX, x));
+            const n = Math.round((x - MONTAGE_ZOOM_MIN) / MONTAGE_ZOOM_STEP);
+            return Math.round((MONTAGE_ZOOM_MIN + n * MONTAGE_ZOOM_STEP) * 1000) / 1000;
+        };
+
+        const formatMontageZoomOutput = (scale) => {
+            const s = clampMontageZoomScale(scale);
+            const extra = Math.round((s - 1) * 1000) / 10;
+            const scaleStr = s.toFixed(3).replace('.', ',');
+            return `пик +${String(extra).replace('.', ',')}% · ${scaleStr}×`;
+        };
+
+        const MONTAGE_ZOOM_MODES = ['alternate', 'all_in', 'all_out', 'random'];
+        const MONTAGE_ZOOM_MODE_HINTS = {
+            alternate: 'Сцена 1 — наезд (1× → пик), сцена 2 — отъезд (пик → 1×), и так по очереди.',
+            all_in: 'Все сцены: 1× → пик (наезд).',
+            all_out: 'Все сцены: пик → 1× (отъезд).',
+            random: 'Направление выбирается случайно для каждой сцены (детерминированно от job_id).',
+        };
+
+        const clampMontageZoomMode = (raw) => {
+            const s = String(raw || '').trim().toLowerCase();
+            return MONTAGE_ZOOM_MODES.indexOf(s) >= 0 ? s : 'alternate';
+        };
+
         const syncLabels = () => {
-            const z = Math.max(0, Math.min(100, parseInt(zoomInput.value, 10) || 0));
+            const zs = clampMontageZoomScale(zoomInput.value);
+            zoomInput.value = String(zs);
             const f = Math.max(0, Math.min(100, parseInt(fadeInput.value, 10) || 0));
-            if (zoomOut) zoomOut.textContent = `${z}%`;
+            if (zoomOut) zoomOut.textContent = formatMontageZoomOutput(zs);
             if (fadeOut) fadeOut.textContent = `${f}%`;
+            if (zoomModeHint) {
+                const mode = clampMontageZoomMode(zoomModeSel ? zoomModeSel.value : 'alternate');
+                zoomModeHint.textContent = (zs <= 1.0001)
+                    ? 'Не активно (пик 1,000×).'
+                    : (MONTAGE_ZOOM_MODE_HINTS[mode] || '');
+            }
         };
         zoomInput.addEventListener('input', syncLabels);
         fadeInput.addEventListener('input', syncLabels);
+        if (zoomModeSel) zoomModeSel.addEventListener('change', syncLabels);
         syncLabels();
 
         let modalBusy = false;
@@ -2079,7 +2131,8 @@
         };
 
         assembleBtn?.addEventListener('click', async () => {
-            const zoom_pct = Math.max(0, Math.min(100, parseInt(zoomInput.value, 10) || 0));
+            const zoom_scale = clampMontageZoomScale(zoomInput.value);
+            const zoom_mode = clampMontageZoomMode(zoomModeSel ? zoomModeSel.value : 'alternate');
             const fade_in_pct = Math.max(0, Math.min(100, parseInt(fadeInput.value, 10) || 0));
             if (statusEl) statusEl.textContent = '';
 
@@ -2102,7 +2155,7 @@
                 const resp = await fetch(`${ROOT}/job/${jobId}/montage/assemble`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ zoom_pct, fade_in_pct }),
+                    body: JSON.stringify({ zoom_scale, zoom_mode, fade_in_pct }),
                 });
                 if (!resp.ok) {
                     let msg = `HTTP ${resp.status}`;

@@ -21,6 +21,10 @@ build/
 *.swp
 *.swo
 
+# YouTube cookies (ручной экспорт; не в репозиторий)
+data/secrets/*
+!data/secrets/.gitkeep
+
 # Data (jobs contain prompts, keep local)
 data/jobs/*.json
 data/rewrite_jobs/*.json

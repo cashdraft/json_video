@@ -13,6 +13,7 @@ props.json — JSON со схемой, которую читает Remotion-ко
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -80,6 +81,40 @@ def _safe_scene_stem(scene: dict[str, Any], idx0: int) -> str:
     return base
 
 
+_MONTAGE_ZOOM_MIN = 1.0
+_MONTAGE_ZOOM_MAX = 1.5
+_MONTAGE_ZOOM_STEP = 0.025
+_MONTAGE_ZOOM_MODES = ("alternate", "all_in", "all_out", "random")
+_MONTAGE_ZOOM_MODE_DEFAULT = "alternate"
+
+
+def _montage_zoom_mode_resolve(montage: dict[str, Any]) -> str:
+    s = str(montage.get("zoom_mode") or "").strip().lower()
+    if s in _MONTAGE_ZOOM_MODES:
+        return s
+    return _MONTAGE_ZOOM_MODE_DEFAULT
+
+
+def _montage_zoom_scale_resolve(montage: dict[str, Any]) -> float:
+    """Согласовано с app.py: zoom_scale или legacy zoom_pct 0…100 → 1.0…1.5."""
+    if montage.get("zoom_scale") is not None and str(montage.get("zoom_scale")).strip() != "":
+        try:
+            x = float(montage.get("zoom_scale"))
+        except (TypeError, ValueError):
+            x = _MONTAGE_ZOOM_MIN
+    else:
+        try:
+            zp = int(round(float(montage.get("zoom_pct") or 0)))
+        except (TypeError, ValueError):
+            zp = 0
+        zp = max(0, min(100, zp))
+        x = _MONTAGE_ZOOM_MIN + (zp / 100.0) * (_MONTAGE_ZOOM_MAX - _MONTAGE_ZOOM_MIN)
+    x = max(_MONTAGE_ZOOM_MIN, min(_MONTAGE_ZOOM_MAX, x))
+    n = int(round((x - _MONTAGE_ZOOM_MIN) / _MONTAGE_ZOOM_STEP))
+    x = _MONTAGE_ZOOM_MIN + n * _MONTAGE_ZOOM_STEP
+    return float(round(min(x, _MONTAGE_ZOOM_MAX), 3))
+
+
 def _aspect_to_size(aspect: str) -> tuple[int, int]:
     s = str(aspect or "16:9").strip()
     if s == "9:16":
@@ -106,10 +141,8 @@ def build_props(
     aspect = str(meta.get("aspect_ratio") or "16:9")
     width, height = _aspect_to_size(aspect)
     montage = meta.get("montage") if isinstance(meta.get("montage"), dict) else {}
-    try:
-        zoom_pct = max(0, min(100, int(round(float(montage.get("zoom_pct") or 0)))))
-    except (TypeError, ValueError):
-        zoom_pct = 0
+    zoom_scale = _montage_zoom_scale_resolve(montage)
+    zoom_mode = _montage_zoom_mode_resolve(montage)
     try:
         fade_in_pct = max(0, min(100, int(round(float(montage.get("fade_in_pct") or 0)))))
     except (TypeError, ValueError):
@@ -177,11 +210,61 @@ def build_props(
             "duration_ms": int(audio_duration_ms),
         },
         "montage": {
-            "zoom_pct": zoom_pct,
+            "zoom_scale": zoom_scale,
+            "zoom_mode": zoom_mode,
             "fade_in_pct": fade_in_pct,
         },
         "scenes": out_scenes,
     }
+
+
+def _image_optimize_for_studio(src: Path, target_w: int, target_h: int) -> bool:
+    """Опционально (MONTAGE_OPTIMIZE_IMAGES=1) ужимает картинку до композиции, перекодирует в jpg q≈5.
+
+    Цель — снизить размер блобов в превью Remotion Studio (картинки 0.5–1 МБ тормозят на сик).
+    Уменьшает только если изображение больше композиции; пропорции сохраняем (object-fit: cover делает остальное).
+    На рендер влияния минимальное: 1920×1080 при q=5 ≈ 200–300 КБ.
+    """
+    if (os.getenv("MONTAGE_OPTIMIZE_IMAGES") or "").strip().lower() not in ("1", "true", "yes", "on"):
+        return False
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not src.is_file():
+        return False
+    try:
+        w = max(2, int(target_w))
+        h = max(2, int(target_h))
+    except (TypeError, ValueError):
+        return False
+    tmp = src.with_suffix(src.suffix + ".opt.jpg")
+    vf = (
+        f"scale='min({w},iw)':-2:force_original_aspect_ratio=decrease,"
+        f"scale='-2':'min({h},ih)':force_original_aspect_ratio=decrease"
+    )
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-loglevel", "error",
+        "-i", str(src),
+        "-vf", vf,
+        "-q:v", "5",
+        "-map_metadata", "-1",
+        str(tmp),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if proc.returncode != 0 or not tmp.is_file() or tmp.stat().st_size <= 0:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    try:
+        os.replace(tmp, src)
+    except OSError:
+        return False
+    return True
 
 
 def _transcode_voiceover_for_studio(src: Path, dst: Path) -> bool:
@@ -368,6 +451,11 @@ def prepare_montage(
                     target_path = None
 
         if target_path and target_path.is_file():
+            if kind == "image":
+                meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+                aspect = str(meta.get("aspect_ratio") or "16:9")
+                tw, th = _aspect_to_size(aspect)
+                _image_optimize_for_studio(target_path, tw, th)
             rel = f"media/{target_path.name}"
             scene_media.append({"kind": kind, "source": source, "src": rel})
             push("scene_done", index=i, total=total, scene_id=str((s or {}).get("scene_id") or ""), kind=kind, src=rel)
