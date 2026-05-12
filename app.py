@@ -1777,6 +1777,75 @@ def youtube_cookies_status_dict() -> dict[str, Any]:
     return out
 
 
+_YOUTUBE_OG_IMAGE_RE = re.compile(
+    r'<meta\s+(?:property|name)\s*=\s*"og:image"[^>]*content\s*=\s*"([^"]+)"',
+    re.IGNORECASE,
+)
+
+
+def _youtube_fetch_channel_avatar_url(channel_url: str, *, timeout: float = 4.0) -> str:
+    """Качаем HTML канала и вытаскиваем <meta property="og:image"> — это аватар.
+
+    На странице канала YouTube кладёт в og:image именно круглый логотип канала
+    (формат s900-c-k-..., домены yt3.googleusercontent.com / i.ytimg.com).
+    Возвращаем "" при любых сбоях — UI просто не покажет картинку.
+    """
+    u = (channel_url or "").strip()
+    if not u or not (u.startswith("http://") or u.startswith("https://")):
+        return ""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        r = requests.get(u, headers=headers, timeout=timeout, allow_redirects=True)
+    except requests.RequestException:
+        return ""
+    if not r.ok:
+        return ""
+    m = _YOUTUBE_OG_IMAGE_RE.search(r.text or "")
+    if not m:
+        return ""
+    av = m.group(1).strip()
+    if not (av.startswith("https://yt3.") or av.startswith("https://i.ytimg.")):
+        return ""
+    return av
+
+
+def _youtube_channel_meta_from_info(info: dict | None) -> dict[str, str]:
+    """Извлекаем читаемые поля канала из yt-dlp info."""
+    d = info if isinstance(info, dict) else {}
+    name = str(d.get("channel") or d.get("uploader") or "").strip()
+    cid = str(d.get("channel_id") or "").strip()
+    url = str(d.get("channel_url") or d.get("uploader_url") or "").strip()
+    return {"name": name, "id": cid, "url": url}
+
+
+def _youtube_enrich_channel_meta(
+    rw: dict,
+    *,
+    info: dict | None = None,
+    fetch_avatar: bool = True,
+) -> dict[str, str]:
+    """Заполняем rw.youtube_channel{,_id,_url,_avatar}; возвращаем актуальные значения для клиента."""
+    meta = _youtube_channel_meta_from_info(info)
+    rw["youtube_channel"] = meta["name"]
+    rw["youtube_channel_id"] = meta["id"]
+    rw["youtube_channel_url"] = meta["url"]
+    avatar = ""
+    if fetch_avatar and meta["url"]:
+        avatar = _youtube_fetch_channel_avatar_url(meta["url"])
+    rw["youtube_channel_avatar"] = avatar
+    return {
+        "youtube_channel": meta["name"],
+        "youtube_channel_url": meta["url"],
+        "youtube_channel_avatar": avatar,
+    }
+
+
 def _youtube_validate_cookies_upload(raw: bytes) -> str | None:
     if len(raw) > 2_000_000:
         return "Файл слишком большой (максимум 2 МБ)."
@@ -1807,12 +1876,20 @@ def _ytdl_youtube_extractor_player_client(name: str) -> dict:
 
 
 def _youtube_stall_read_sec() -> int:
-    """Сколько секунд ждать **без данных** по сокету (CDN / youtube) на одной попытке, затем «провал» → следующий player_client."""
-    raw = (os.getenv("YOUTUBE_STALL_READ_SEC") or "20").strip()
+    """Сколько секунд ждать **без данных** по сокету (CDN / youtube) на одной попытке, затем «провал» → следующий player_client.
+
+    Эмпирика: googlevideo CDN иногда отдаёт первый байт через 25-35 секунд
+    (роутинг до ближайшего edge-узла, медленный старт после n-challenge).
+    При 20 секундах android_vr/android регулярно ловят Read timed out
+    ещё до начала реальной отдачи аудио — тогда yt-dlp прокидывает ошибку,
+    мы прыгаем на следующий player_client, и через 1-2 шага упираемся
+    в `Requested format is not available`. Поэтому держим 45 с по умолчанию.
+    """
+    raw = (os.getenv("YOUTUBE_STALL_READ_SEC") or "45").strip()
     try:
         s = int(raw, 10)
     except ValueError:
-        s = 20
+        s = 45
     return max(5, min(120, s))
 
 
@@ -1844,12 +1921,27 @@ def _youtube_player_client_chain() -> list[str]:
     Цепочка клиентов: сначала YOUTUBE_PLAYER_CLIENT (или android), потом YOUTUBE_PLAYER_CLIENT_FALLBACK.
     Дубликаты убираем. Следующий клиент — по ошибке extract_info/скачивания или таймауту сокета
     (YOUTUBE_STALL_READ_SEC на скачивании, см. _youtube_stall_read_sec).
+
+    В 2026 году многим роликам web/ios/mweb-клиенты выдают «Requested format is not available»
+    (формат требует GVS PO Token и yt-dlp его пропускает). android_vr остаётся рабочим
+    фоллбеком — даёт полный список audio-only форматов, поэтому держим его в цепочке
+    по умолчанию.
     """
-    head = (os.getenv("YOUTUBE_PLAYER_CLIENT") or "android").strip()
+    head = (os.getenv("YOUTUBE_PLAYER_CLIENT") or "android_vr").strip()
     head_list = [c.strip().lower() for c in head.split(",") if c.strip()]
-    # Порядок: часто web/ios/mweb дают другой endpoint; tv — лишний раунт плеера (часто дольше), убрали по умолчанию.
+    # Порядок: android_vr и android первыми — они возвращают полный набор audio-only
+    # форматов (139/140/249/251) и не зависят от GVS PO Token, который ломает
+    # web/ios/mweb («Requested format is not available» — у этих клиентов в каталоге
+    # остаются только storyboards).
+    # tvhtml5 и mediaconnect — две «здоровые» подстраховки: на практике (проверено
+    # для подкастов с длинной озвучкой 2026‑05) они тоже отдают m4a 140 без PO Token,
+    # когда CDN кладёт первую попытку android/android_vr (read timeout на googlevideo).
+    # tv (классический) — лишний раунд плеера, оставили в самом конце.
     # Подогнать под ваш IP: YBENCH_URL=... .venv/bin/python3 scripts/benchmark_youtube_clients.py
-    tail = (os.getenv("YOUTUBE_PLAYER_CLIENT_FALLBACK") or "web,ios,mweb").strip()
+    tail = (
+        os.getenv("YOUTUBE_PLAYER_CLIENT_FALLBACK")
+        or "android,tvhtml5,mediaconnect,web,ios,mweb"
+    ).strip()
     tail_list = [c.strip().lower() for c in tail.split(",") if c.strip()]
     out: list[str] = []
     seen: set[str] = set()
@@ -1857,7 +1949,7 @@ def _youtube_player_client_chain() -> list[str]:
         if c and c not in seen:
             seen.add(c)
             out.append(c)
-    return out or ["android", "web"]
+    return out or ["android_vr", "android", "tvhtml5", "mediaconnect", "web"]
 
 
 def _youtube_format_chain() -> list[str]:
@@ -2709,6 +2801,21 @@ def rewrite_project_page(rewrite_id: str):
     st = rw.get("stages")
     if not isinstance(st, dict):
         st = {}
+    if not (rw.get("youtube_channel_avatar") or "").strip() and (rw.get("youtube_url") or "").strip():
+        cache_path = _youtube_info_cache_path(rewrite_id)
+        cached_info: dict | None = None
+        try:
+            if cache_path.is_file():
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    cached_info = json.load(f)
+        except (OSError, ValueError):
+            cached_info = None
+        if isinstance(cached_info, dict):
+            try:
+                _youtube_enrich_channel_meta(rw, info=cached_info)
+                save_rewrite_job(rewrite_id, rw)
+            except Exception:
+                app.logger.exception("youtube channel meta backfill failed for %s", rewrite_id)
     rewrite_preset_current = normalize_rewrite_preset(rw.get("rewrite_preset"))
     rewrite_stage_run_ok = {
         sk: stage_run_prerequisites_met(sk, st, preset=rewrite_preset_current)
@@ -3271,6 +3378,7 @@ def rewrite_youtube_verify(rewrite_id: str):
     rw["youtube_url"] = url
     rw["youtube_verified"] = True
     rw["youtube_title"] = title
+    channel_meta = _youtube_enrich_channel_meta(rw, info=info)
     if prev_url != url:
         rw["youtube_audio_file"] = ""
         rw["youtube_transcript_text"] = ""
@@ -3279,7 +3387,7 @@ def rewrite_youtube_verify(rewrite_id: str):
         rw["youtube_phase"] = ""
         rw["youtube_status"] = ""
     save_rewrite_job(rewrite_id, rw)
-    return jsonify({"ok": True, "youtube_title": title})
+    return jsonify({"ok": True, "youtube_title": title, **channel_meta})
 
 
 @app.route("/rewrite/<rewrite_id>/youtube/cookies/status", methods=["GET"])
@@ -6921,6 +7029,154 @@ def job_audio_file(job_id: str, filename: str):
     return send_from_directory(d, filename, mimetype="audio/mpeg", max_age=0)
 
 
+@app.route("/job/<job_id>/whisper/words", methods=["POST"])
+def job_whisper_words(job_id: str):
+    """Прогоняет последний MP3 джоба через локальный faster-whisper и сохраняет
+    рядом ``<stem>.whisper.words.json``. Стримит прогресс в формате NDJSON
+    (event-per-line), финальное событие — ``{"type":"final", ...}``.
+    """
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+
+    mp3 = _latest_audio_path_for_job(job_id)
+    if mp3 is None:
+        return (
+            jsonify({"ok": False, "error": "Нет MP3-озвучки в data/job_audio/<job_id>/"}),
+            400,
+        )
+    audio_dir = mp3.parent
+    out_filename = f"{mp3.stem}.whisper.words.json"
+    out_path = audio_dir / out_filename
+
+    body = request.get_json(silent=True) or {}
+    raw_lang = (body.get("language") or "").strip() if isinstance(body, dict) else ""
+    language = raw_lang or None
+
+    def _ev(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, ensure_ascii=False) + "\n"
+
+    @stream_with_context
+    def gen():
+        started = time.monotonic()
+
+        def elapsed() -> float:
+            return round(max(0.0, time.monotonic() - started), 1)
+
+        try:
+            from whisper_words import iter_progress_events  # late import
+        except Exception as e:  # noqa: BLE001
+            yield _ev(
+                {
+                    "type": "error",
+                    "error": f"faster-whisper недоступен: {e}",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+            return
+
+        yield _ev(
+            {
+                "type": "status",
+                "phase": "prepare",
+                "audio_filename": mp3.name,
+                "language": language,
+                "message": f"Транскрипция {mp3.name} через локальный faster-whisper…",
+                "elapsed_seconds": elapsed(),
+            }
+        )
+
+        final_doc: dict[str, Any] | None = None
+        err: str | None = None
+        try:
+            for ev in iter_progress_events(mp3, language=language):
+                stage = str(ev.get("stage") or "")
+                if stage == "error":
+                    err = str(ev.get("error") or "whisper failed")
+                    break
+                if stage == "final":
+                    final_doc = ev.get("doc") if isinstance(ev.get("doc"), dict) else None
+                    continue
+                payload: dict[str, Any] = {"type": "status", "phase": stage, "elapsed_seconds": elapsed()}
+                payload.update({k: v for k, v in ev.items() if k != "stage"})
+                if stage == "model_load":
+                    payload["message"] = f"Загружаю модель Whisper «{ev.get('model')}»…"
+                elif stage == "model_ready":
+                    payload["message"] = (
+                        f"Модель «{ev.get('model')}» готова "
+                        f"(device={ev.get('device')}, compute={ev.get('compute_type')})."
+                    )
+                elif stage == "segment":
+                    total_ms = int(ev.get("total_ms") or 0)
+                    cur_ms = int(ev.get("current_ms") or 0)
+                    pct = (cur_ms / total_ms * 100.0) if total_ms > 0 else 0.0
+                    payload["progress_pct"] = round(max(0.0, min(100.0, pct)), 1)
+                    payload["message"] = (
+                        f"Сегмент {ev.get('segment_index')}: {cur_ms / 1000:.1f}s "
+                        f"/ {(total_ms / 1000):.1f}s · слов накоплено {ev.get('words_so_far')}."
+                    )
+                yield _ev(payload)
+        except Exception as e:  # noqa: BLE001
+            err = str(e)
+
+        if err or final_doc is None:
+            yield _ev(
+                {
+                    "type": "error",
+                    "error": err or "Whisper не вернул результат",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+            return
+
+        try:
+            tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+            tmp.write_text(
+                json.dumps(final_doc, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            os.replace(tmp, out_path)
+        except OSError as e:
+            yield _ev(
+                {
+                    "type": "error",
+                    "error": f"Не удалось сохранить {out_filename}: {e}",
+                    "elapsed_seconds": elapsed(),
+                }
+            )
+            return
+
+        words_list = final_doc.get("words") or []
+        first_w = words_list[0] if words_list else None
+        last_w = words_list[-1] if words_list else None
+        yield _ev(
+            {
+                "type": "final",
+                "phase": "done",
+                "elapsed_seconds": elapsed(),
+                "audio_filename": mp3.name,
+                "words_filename": out_filename,
+                "words_url": url_for(
+                    "job_audio_file", job_id=job_id, filename=out_filename
+                ),
+                "total_words": int(final_doc.get("total_words") or len(words_list)),
+                "total_duration_ms": int(final_doc.get("total_duration_ms") or 0),
+                "language": final_doc.get("language"),
+                "language_probability": final_doc.get("language_probability"),
+                "model": final_doc.get("model"),
+                "device": final_doc.get("device"),
+                "compute_type": final_doc.get("compute_type"),
+                "first_word": first_w,
+                "last_word": last_w,
+                "message": (
+                    f"Готово: {len(words_list)} слов, "
+                    f"язык={final_doc.get('language')}, "
+                    f"модель={final_doc.get('model')} ({final_doc.get('device')})."
+                ),
+            }
+        )
+
+    return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
+
+
 @app.route("/job/<job_id>/pexels/<filename>")
 def job_pexels_file(job_id: str, filename: str):
     if load_job(job_id) is None:
@@ -7061,6 +7317,7 @@ def job_montage_assemble(job_id: str):
     zoom_smooth = _montage_bool_clamp(data.get("zoom_smooth"))
     zoom_ref_seconds = _montage_zoom_ref_seconds_clamp(data.get("zoom_ref_seconds"))
     fade_in = _montage_pct_clamp(data.get("fade_in_pct"))
+    prefer_video = _montage_bool_clamp(data.get("prefer_video"))
 
     with _job_file_lock(job_id):
         job_check = load_job(job_id)
@@ -7073,6 +7330,7 @@ def job_montage_assemble(job_id: str):
             "zoom_smooth": zoom_smooth,
             "zoom_ref_seconds": zoom_ref_seconds,
             "fade_in_pct": fade_in,
+            "prefer_video": prefer_video,
         }
         job_check["job_meta"] = meta
         save_job(job_id, job_check)
@@ -7131,9 +7389,27 @@ def job_montage_assemble(job_id: str):
 
         def worker() -> None:
             try:
+                job_work = load_job(job_id)
+                if job_work is None:
+                    worker_result["error"] = "Job not found"
+                    return
+                scenes_w = job_work.get("scenes")
+                if isinstance(scenes_w, list) and scenes_w:
+                    # Пересчитать audio_timing из words.json (алгоритм align мог обновиться).
+                    _apply_tts_word_timings_to_scenes(job_id, scenes_w)
+                    try:
+                        save_job(job_id, job_work)
+                    except Exception:
+                        try:
+                            app.logger.warning(  # type: ignore[attr-defined]
+                                "montage assemble: save after word re-align failed job=%s",
+                                job_id,
+                            )
+                        except Exception:
+                            pass
                 props = prepare_montage(
                     job_id=job_id,
-                    job=job,
+                    job=job_work,
                     base_dir=out_dir,
                     audio_src=audio_src,
                     pexels_dir=_job_pexels_dir(job_id),
@@ -7243,8 +7519,18 @@ def job_montage_assemble(job_id: str):
 _SAFE_MONTAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(json|mp3|wav|mp4|webm|png|jpg|jpeg|webp|gif|mov)$")
 
 
-@app.route("/job/<job_id>/montage/file/<path:filename>")
+def _montage_file_cors(resp: Response) -> Response:
+    """Studio Remotion (:3000) грузит props.json с Flask (:5000) — нужен CORS."""
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    resp.headers["Access-Control-Max-Age"] = "3600"
+    return resp
+
+
+@app.route("/job/<job_id>/montage/file/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
 def job_montage_file(job_id: str, filename: str):
+    if request.method == "OPTIONS":
+        return _montage_file_cors(make_response("", 204))
     if load_job(job_id) is None:
         abort(404)
     d = _job_remotion_dir(job_id).resolve()
@@ -7269,10 +7555,12 @@ def job_montage_file(job_id: str, filename: str):
     if not target.is_file():
         abort(404)
     if leaf.endswith(".json"):
-        return send_from_directory(d, filename, mimetype="application/json", max_age=0)
+        return _montage_file_cors(
+            send_from_directory(d, filename, mimetype="application/json", max_age=0)
+        )
     # медиа сцен/озвучка/готовый mp4 — содержимое не меняется (cachebusting через имя файла сцены и пересборку каталога),
     # отдаём с долгоживущим immutable, чтобы браузер не перепрашивал каждый сик в превью
-    return send_from_directory(d, filename, max_age=60 * 60 * 24 * 30)
+    return _montage_file_cors(send_from_directory(d, filename, max_age=60 * 60 * 24 * 30))
 
 
 @app.route("/job/<job_id>/montage/studio")
@@ -7690,6 +7978,7 @@ def job_page(job_id: str):
         montage_fade_in_pct = max(0, min(100, int(round(float(_mont.get("fade_in_pct") or 0)))))
     except (TypeError, ValueError):
         montage_fade_in_pct = 0
+    montage_prefer_video = _montage_bool_clamp(_mont.get("prefer_video"))
 
     # Состояние «после рефреша»: если props.json/out.mp4 уже есть на диске —
     # сразу восстанавливаем кнопки «props.json», «Открыть в Remotion», «Скачать MP4».
@@ -7742,6 +8031,7 @@ def job_page(job_id: str):
         montage_zoom_ref_seconds_max=_MONTAGE_ZOOM_REF_SEC_MAX,
         montage_zoom_ref_seconds_step=_MONTAGE_ZOOM_REF_SEC_STEP,
         montage_fade_in_pct=montage_fade_in_pct,
+        montage_prefer_video=montage_prefer_video,
         montage_props_ready=montage_props_ready,
         montage_mp4_ready=montage_mp4_ready,
         montage_props_url=montage_props_url,

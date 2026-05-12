@@ -4,11 +4,64 @@ import { Logo, myCompSchema2 } from "./HelloWorld/Logo";
 import { JobMontage, jobMontagePropsSchema } from "./JobMontage/JobMontage";
 import { defaultJobMontageProps } from "./JobMontage/defaultProps";
 
+declare global {
+  interface Window {
+    /** Если задан — откуда грузить props.json в Studio (например http://72.56.116.130:5000). */
+    __JSON_VIDEO_API_ORIGIN__?: string;
+  }
+}
+
 const FPS = defaultJobMontageProps.fps;
 const defaultDurationFrames = Math.max(
   1,
   Math.round((defaultJobMontageProps.total_duration_ms / 1000) * FPS),
 );
+
+/** URL props.json на Flask (Studio на :3000 не отдаёт public/ как сырой JSON — только SPA). */
+function montagePropsFlaskUrl(jobId: string): string | null {
+  if (typeof window === "undefined") return null;
+  const custom = (window.__JSON_VIDEO_API_ORIGIN__ || "").trim().replace(/\/+$/, "");
+  if (custom) {
+    return `${custom}/job/${encodeURIComponent(jobId)}/montage/file/props.json`;
+  }
+  const { protocol, hostname, port } = window.location;
+  if (port === "3000") {
+    return `${protocol}//${hostname}:5000/job/${encodeURIComponent(jobId)}/montage/file/props.json`;
+  }
+  return null;
+}
+
+async function fetchJobMontagePropsJson(jobId: string): Promise<unknown | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25_000);
+
+  const tryFetch = async (url: string): Promise<unknown | null> => {
+    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    if (!res.ok) return null;
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("application/json")) {
+      return null;
+    }
+    return (await res.json()) as unknown;
+  };
+
+  try {
+    const staticUrl = staticFile(`jobs/${jobId}/props.json`);
+    const fromStatic = await tryFetch(staticUrl);
+    if (fromStatic) return fromStatic;
+
+    const flaskUrl = montagePropsFlaskUrl(jobId);
+    if (flaskUrl) {
+      const fromFlask = await tryFetch(flaskUrl);
+      if (fromFlask) return fromFlask;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -34,10 +87,8 @@ export const RemotionRoot: React.FC = () => {
               const jobId = new URLSearchParams(window.location.search).get("job");
               if (jobId) {
                 try {
-                  const url = staticFile(`jobs/${jobId}/props.json`);
-                  const res = await fetch(url);
-                  if (res.ok) {
-                    const json: unknown = await res.json();
+                  const json = await fetchJobMontagePropsJson(jobId);
+                  if (json) {
                     const parsed = jobMontagePropsSchema.safeParse(json);
                     if (parsed.success) {
                       resolved = parsed.data;
@@ -45,7 +96,10 @@ export const RemotionRoot: React.FC = () => {
                       console.warn("JobMontage props.json validation failed", parsed.error.flatten());
                     }
                   } else {
-                    console.warn("JobMontage props.json HTTP", res.status, url);
+                    console.warn(
+                      "JobMontage: не удалось загрузить props.json (ни staticFile, ни Flask). job=",
+                      jobId,
+                    );
                   }
                 } catch (err) {
                   if (isAbortError(err)) {

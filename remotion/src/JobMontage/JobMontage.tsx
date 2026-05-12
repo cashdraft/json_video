@@ -41,6 +41,7 @@ const montageSchema = z
     zoom_smooth: z.boolean().optional(),
     zoom_ref_seconds: z.number().optional(),
     fade_in_pct: z.number().optional(),
+    prefer_video: z.boolean().optional(),
   })
   .optional();
 
@@ -224,6 +225,22 @@ function effectivePeakForScene(
   return 1 + (peakRef - 1) * k;
 }
 
+/** Непрозрачность в начале сцены: 0→1 за первые fade_in_pct% длительности (остальное — 1). Линейно. */
+function sceneFadeInOpacity(
+  frame: number,
+  durationInFrames: number,
+  fadeInPct: number,
+): number {
+  if (fadeInPct <= 0 || durationInFrames < 1) return 1;
+  const pct = Math.max(0, Math.min(100, Math.round(fadeInPct)));
+  const fadeFrames = Math.min(
+    durationInFrames,
+    Math.max(1, Math.round((pct / 100) * durationInFrames)),
+  );
+  if (fadeFrames <= 1) return 1;
+  return Math.min(1, frame / (fadeFrames - 1));
+}
+
 export const JobMontage: React.FC<JobMontageProps> = ({
   scenes,
   audio,
@@ -237,6 +254,10 @@ export const JobMontage: React.FC<JobMontageProps> = ({
   const refSeconds = Number.isFinite(montage?.zoom_ref_seconds)
     ? (montage?.zoom_ref_seconds as number)
     : 5;
+  const fadeInPct = Math.max(
+    0,
+    Math.min(100, Math.round(Number(montage?.fade_in_pct ?? 0))),
+  );
   const seedKey = String(job_id || "job") + "::" + String(scenes.length);
   const prefetchedByRel = useScenesImagePrefetch(scenes);
   return (
@@ -271,6 +292,7 @@ export const JobMontage: React.FC<JobMontageProps> = ({
               durationInFrames={lengthFrames}
               direction={direction}
               resolvedImgSrc={resolvedImgSrc}
+              fadeInPct={fadeInPct}
             />
           </Sequence>
         );
@@ -286,7 +308,17 @@ const SceneRender: React.FC<{
   durationInFrames: number;
   direction: ZoomDirection;
   resolvedImgSrc?: string;
-}> = ({ scene, peakScale, durationInFrames, direction, resolvedImgSrc }) => {
+  fadeInPct: number;
+}> = ({
+  scene,
+  peakScale,
+  durationInFrames,
+  direction,
+  resolvedImgSrc,
+  fadeInPct,
+}) => {
+  const frame = useCurrentFrame();
+  const fadeOpacity = sceneFadeInOpacity(frame, durationInFrames, fadeInPct);
   const media = scene.media;
   if (media && media.src) {
     const url = staticFile(media.src);
@@ -297,7 +329,7 @@ const SceneRender: React.FC<{
           durationInFrames={durationInFrames}
           direction={direction}
         >
-          <AbsoluteFill style={{ backgroundColor: "#000" }}>
+          <AbsoluteFill style={{ backgroundColor: "#000", opacity: fadeOpacity }}>
             <Video
               src={url}
               muted
@@ -313,7 +345,7 @@ const SceneRender: React.FC<{
         durationInFrames={durationInFrames}
         direction={direction}
       >
-        <AbsoluteFill style={{ backgroundColor: "#000" }}>
+        <AbsoluteFill style={{ backgroundColor: "#000", opacity: fadeOpacity }}>
           <Img
             src={resolvedImgSrc || url}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
@@ -333,6 +365,7 @@ const SceneRender: React.FC<{
         fontFamily: "system-ui, sans-serif",
         fontSize: 36,
         textAlign: "center",
+        opacity: fadeOpacity,
       }}
     >
       <div>{scene.text_ru || scene.text || scene.scene_id}</div>

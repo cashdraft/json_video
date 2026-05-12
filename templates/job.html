@@ -204,6 +204,25 @@
                         <pre id="tts-words-json" class="tts-words-json" aria-label="Тайминги слов (JSON)"></pre>
                     </div>
                 </div>
+                <div id="whisper-words-wrap" class="tts-words-wrap" aria-expanded="false">
+                    <div class="tts-words-actions" style="padding: 0.55rem 0.75rem; margin-bottom: 0;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="whisper-words-run">Прогнать локальный Whisper по словам</button>
+                        <span id="whisper-words-status" class="tts-template-status" aria-live="polite"></span>
+                    </div>
+                    <button type="button" id="whisper-words-toggle" class="tts-words-toggle hidden" aria-controls="whisper-words-body">
+                        <span class="tts-words-chevron" aria-hidden="true">▸</span>
+                        <span class="tts-words-title">Тайминги слов (Whisper)</span>
+                        <span class="tts-words-summary" id="whisper-words-summary"></span>
+                    </button>
+                    <div id="whisper-words-body" class="tts-words-body" hidden>
+                        <div class="tts-words-actions">
+                            <button type="button" class="btn btn-secondary btn-sm" id="whisper-words-download">Скачать .whisper.words.json</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="whisper-words-copy">Скопировать JSON</button>
+                            <span id="whisper-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
+                        </div>
+                        <pre id="whisper-words-json" class="tts-words-json" aria-label="Тайминги слов Whisper (JSON)"></pre>
+                    </div>
+                </div>
             </div>
             {% endif %}
         </section>
@@ -694,7 +713,7 @@
         <section class="video-panel job-montage-panel" id="job-montage-panel" aria-label="Монтаж видео">
             <div class="job-montage-panel__head">
                 <div class="scene-id rewrite-pipeline-runner__title job-montage-panel__title">Монтаж видео</div>
-                <p class="job-montage-panel__lead scene-text">Параметры для сборки финального ролика (озвучка + сцены). Zoom: за время сцены кадр плавно 100% → выбранный пик → 100% (Ken Burns).</p>
+                <p class="job-montage-panel__lead scene-text">Параметры для сборки финального ролика (озвучка + сцены). Zoom: за время сцены кадр плавно 100% → выбранный пик → 100% (Ken Burns). Fade In: в начале каждой сцены кадр появляется из чёрного за долю длительности сцены (скорость разная у коротких и длинных сцен).</p>
             </div>
             <div class="job-montage-panel__controls">
                 <div class="job-montage-row">
@@ -745,7 +764,7 @@
                     <span class="job-montage-value job-montage-value--mode" id="montage-zoom-smooth-hint" aria-live="polite"></span>
                 </div>
                 <div class="job-montage-row">
-                    <label class="job-montage-label" for="montage-fade-in">Fade In</label>
+                    <label class="job-montage-label" for="montage-fade-in" title="Доля длительности каждой сцены (0–100%), за которую картинка/видео плавно появляется из чёрного. На стыке сцен предыдущий кадр уже исчез — это fade-in из чёрного, не кросс-диссолв между двумя кадрами.">Fade In</label>
                     <input
                         type="range"
                         id="montage-fade-in"
@@ -756,6 +775,16 @@
                         step="1"
                     >
                     <output class="job-montage-value" id="montage-fade-in-value" for="montage-fade-in">{{ montage_fade_in_pct }}%</output>
+                </div>
+                <div class="job-montage-row">
+                    <label class="job-montage-label" for="montage-prefer-video" title="Если на сцене есть и видео сцены, и Start image — выбираем видео сцены. По умолчанию (выключен) — берём Start image. Pexels в монтаж не идёт.">Приоритет Видео</label>
+                    <div class="job-montage-smooth-controls">
+                        <label class="job-montage-smooth-toggle">
+                            <input type="checkbox" id="montage-prefer-video" {% if montage_prefer_video %}checked{% endif %}>
+                            <span>Если есть видео сцены — брать его вместо Start image</span>
+                        </label>
+                    </div>
+                    <span class="job-montage-value job-montage-value--mode" id="montage-prefer-video-hint" aria-live="polite"></span>
                 </div>
             </div>
             <div class="job-montage-actions">
@@ -1860,6 +1889,8 @@
         const zoomRefInput = document.getElementById('montage-zoom-ref-seconds');
         const zoomSmoothHint = document.getElementById('montage-zoom-smooth-hint');
         const fadeInput   = document.getElementById('montage-fade-in');
+        const preferVideoChk = document.getElementById('montage-prefer-video');
+        const preferVideoHint = document.getElementById('montage-prefer-video-hint');
         const zoomOut     = document.getElementById('montage-zoom-value');
         const fadeOut     = document.getElementById('montage-fade-in-value');
         const statusEl    = document.getElementById('montage-assemble-status');
@@ -1963,6 +1994,11 @@
                     }
                 }
             }
+            if (preferVideoHint) {
+                preferVideoHint.textContent = (preferVideoChk && preferVideoChk.checked)
+                    ? 'Видео сцены > Start image. Pexels в монтаж не идёт.'
+                    : 'Start image > Видео сцены. Pexels в монтаж не идёт.';
+            }
         };
         zoomInput.addEventListener('input', syncLabels);
         fadeInput.addEventListener('input', syncLabels);
@@ -1970,6 +2006,7 @@
         if (zoomSmoothChk) zoomSmoothChk.addEventListener('change', syncLabels);
         if (zoomRefInput) zoomRefInput.addEventListener('input', syncLabels);
         if (zoomRefInput) zoomRefInput.addEventListener('change', syncLabels);
+        if (preferVideoChk) preferVideoChk.addEventListener('change', syncLabels);
         syncLabels();
 
         let modalBusy = false;
@@ -2059,6 +2096,7 @@
             const zoom_smooth = !!(zoomSmoothChk && zoomSmoothChk.checked);
             const zoom_ref_seconds = clampMontageZoomRefSeconds(zoomRefInput ? zoomRefInput.value : '5');
             const fade_in_pct = Math.max(0, Math.min(100, parseInt(fadeInput.value, 10) || 0));
+            const prefer_video = !!(preferVideoChk && preferVideoChk.checked);
             if (statusEl) statusEl.textContent = '';
 
             const validation = (typeof validateScenesForAction === 'function')
@@ -2080,7 +2118,7 @@
                 const resp = await fetch(`${ROOT}/job/${jobId}/montage/assemble`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ zoom_scale, zoom_mode, zoom_smooth, zoom_ref_seconds, fade_in_pct }),
+                    body: JSON.stringify({ zoom_scale, zoom_mode, zoom_smooth, zoom_ref_seconds, fade_in_pct, prefer_video }),
                 });
                 if (!resp.ok) {
                     let msg = `HTTP ${resp.status}`;
@@ -3360,6 +3398,175 @@
                         wordsCopyStatus.classList.remove('hidden');
                         setTimeout(() => wordsCopyStatus.classList.add('hidden'), 1800);
                     }
+                }
+            });
+        }
+
+        // --- Тайминги слов от локального Whisper (faster-whisper) ---
+        const whisperWrapEl       = document.getElementById('whisper-words-wrap');
+        const whisperRunBtn       = document.getElementById('whisper-words-run');
+        const whisperStatusEl     = document.getElementById('whisper-words-status');
+        const whisperToggleBtn    = document.getElementById('whisper-words-toggle');
+        const whisperBodyEl       = document.getElementById('whisper-words-body');
+        const whisperSummaryEl    = document.getElementById('whisper-words-summary');
+        const whisperJsonEl       = document.getElementById('whisper-words-json');
+        const whisperDownloadBtn  = document.getElementById('whisper-words-download');
+        const whisperCopyBtn      = document.getElementById('whisper-words-copy');
+        const whisperCopyStatus   = document.getElementById('whisper-words-copy-status');
+        let lastWhisperDoc = null;
+        let lastWhisperFilename = '';
+        let lastWhisperUrl = '';
+        let whisperRunStartedAt = 0;
+
+        function setWhisperWordsCollapsed(collapsed) {
+            if (!whisperWrapEl || !whisperBodyEl) return;
+            whisperWrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            whisperBodyEl.hidden = !!collapsed;
+        }
+
+        function renderWhisperWordsFromFinal(finalEv) {
+            if (!whisperWrapEl) return;
+            lastWhisperDoc = finalEv && typeof finalEv === 'object' ? finalEv : null;
+            lastWhisperFilename = finalEv?.words_filename || 'voiceover.whisper.words.json';
+            lastWhisperUrl = finalEv?.words_url || '';
+
+            const totalWords = Number(finalEv?.total_words || 0);
+            const totalDurMs = Number(finalEv?.total_duration_ms || 0);
+            const first = finalEv?.first_word;
+            const last  = finalEv?.last_word;
+            const parts = [
+                `Слов: ${totalWords}`,
+                `Длительность: ${formatTtsMs(totalDurMs)}`,
+            ];
+            if (finalEv?.model)    parts.push(`Модель: ${finalEv.model}`);
+            if (finalEv?.device)   parts.push(`Устройство: ${finalEv.device}`);
+            if (finalEv?.language) parts.push(`Язык: ${finalEv.language}`);
+            if (first) parts.push(`Первое: «${String(first.word).slice(0, 20)}» @ ${first.start_ms} мс`);
+            if (last)  parts.push(`Последнее: «${String(last.word).slice(0, 20)}» @ ${last.end_ms} мс`);
+            if (whisperSummaryEl) whisperSummaryEl.textContent = '· ' + parts.join(' · ');
+            if (whisperJsonEl) {
+                // В итоговом event-е мы не получаем сам массив слов, поэтому
+                // фоном скачиваем сохранённый JSON и кладём его в pre.
+                whisperJsonEl.textContent = 'Загрузка JSON…';
+                if (lastWhisperUrl) {
+                    fetch(lastWhisperUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+                        .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+                        .then((doc) => {
+                            lastWhisperDoc = doc;
+                            whisperJsonEl.textContent = JSON.stringify(doc, null, 2);
+                        })
+                        .catch((e) => {
+                            whisperJsonEl.textContent = 'Не удалось загрузить JSON: ' + (e?.message || e);
+                        });
+                }
+            }
+            if (whisperToggleBtn) whisperToggleBtn.classList.remove('hidden');
+            setWhisperWordsCollapsed(false);
+        }
+
+        if (whisperToggleBtn) {
+            whisperToggleBtn.addEventListener('click', () => {
+                const expanded = whisperWrapEl.getAttribute('aria-expanded') === 'true';
+                setWhisperWordsCollapsed(expanded);
+            });
+        }
+        if (whisperDownloadBtn) {
+            whisperDownloadBtn.addEventListener('click', () => {
+                if (!lastWhisperUrl) return;
+                const a = document.createElement('a');
+                a.href = lastWhisperUrl;
+                a.download = lastWhisperFilename || 'voiceover.whisper.words.json';
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            });
+        }
+        if (whisperCopyBtn) {
+            whisperCopyBtn.addEventListener('click', async () => {
+                if (!lastWhisperDoc) return;
+                try {
+                    await navigator.clipboard.writeText(JSON.stringify(lastWhisperDoc, null, 2));
+                    if (whisperCopyStatus) {
+                        whisperCopyStatus.textContent = 'JSON скопирован';
+                        whisperCopyStatus.classList.remove('hidden');
+                        setTimeout(() => whisperCopyStatus.classList.add('hidden'), 1800);
+                    }
+                } catch (e) {
+                    if (whisperCopyStatus) {
+                        whisperCopyStatus.textContent = 'Не удалось скопировать';
+                        whisperCopyStatus.classList.remove('hidden');
+                        setTimeout(() => whisperCopyStatus.classList.add('hidden'), 1800);
+                    }
+                }
+            });
+        }
+
+        if (whisperRunBtn) {
+            whisperRunBtn.addEventListener('click', async () => {
+                whisperRunBtn.disabled = true;
+                whisperRunStartedAt = Date.now();
+                const setStatus = (msg) => {
+                    if (whisperStatusEl) {
+                        whisperStatusEl.textContent = String(msg || '');
+                        whisperStatusEl.classList.remove('hidden');
+                    }
+                };
+                setStatus('Запуск локального Whisper…');
+                try {
+                    const resp = await fetch(`/job/{{ job_id }}/whisper/words`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
+                        body: JSON.stringify({}),
+                    });
+                    if (!resp.ok) {
+                        let msg = `HTTP ${resp.status}`;
+                        try { const j = await resp.json(); if (j?.error) msg = j.error; } catch (_) {}
+                        throw new Error(msg);
+                    }
+                    const reader = resp.body?.getReader();
+                    if (!reader) throw new Error('Нет потокового ответа от сервера');
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    let finalEv = null;
+
+                    const handle = (ev) => {
+                        if (!ev || typeof ev !== 'object') return;
+                        const waitSec = Math.max(0, Math.floor((Date.now() - whisperRunStartedAt) / 1000));
+                        if (ev.type === 'error') throw new Error(String(ev.error || 'whisper failed'));
+                        if (ev.type === 'final') { finalEv = ev; setStatus(`${ev.message || 'Готово'} (${waitSec}с)`); return; }
+                        if (ev.type === 'status') {
+                            const pct = Number.isFinite(Number(ev.progress_pct)) ? ` · ${ev.progress_pct.toFixed(1)}%` : '';
+                            setStatus(`${ev.message || ev.phase || 'Whisper…'} (${waitSec}с${pct})`);
+                        }
+                    };
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        let nl = buffer.indexOf('\n');
+                        while (nl >= 0) {
+                            const line = buffer.slice(0, nl).trim();
+                            buffer = buffer.slice(nl + 1);
+                            if (line) {
+                                let ev = null;
+                                try { ev = JSON.parse(line); } catch (_) {}
+                                handle(ev);
+                            }
+                            nl = buffer.indexOf('\n');
+                        }
+                    }
+                    buffer += decoder.decode();
+                    const tail = buffer.trim();
+                    if (tail) { try { handle(JSON.parse(tail)); } catch (_) {} }
+
+                    if (!finalEv) throw new Error('Whisper не вернул итог');
+                    renderWhisperWordsFromFinal(finalEv);
+                } catch (e) {
+                    setStatus('Ошибка: ' + (e?.message || String(e)));
+                } finally {
+                    whisperRunBtn.disabled = false;
                 }
             });
         }

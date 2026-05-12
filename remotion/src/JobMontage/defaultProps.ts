@@ -17,6 +17,7 @@ export const defaultJobMontageProps: JobMontageProps = {
     zoom_smooth: false,
     zoom_ref_seconds: 5,
     fade_in_pct: 0,
+    prefer_video: false,
   },
   scenes: [
     {

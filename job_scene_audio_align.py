@@ -56,13 +56,17 @@ def align_scenes_to_word_timings(
     words: list[dict[str, Any]],
     *,
     total_duration_ms: int,
-    match_window: int = 18,
+    match_window: int | None = None,
     low_confidence_ratio: float = 0.85,
 ) -> list[dict[str, Any]]:
     """
     Возвращает по одному dict на сцену (порядок как в `scenes`) с полями:
     start_ms, end_ms, duration_ms, raw_start_ms, raw_end_ms, match_ratio,
     low_confidence, badge.
+
+    ``match_window``: если ``None`` (по умолчанию), каждый токен сцены ищется от
+    текущей позиции до конца массива ``words`` (монотонный индекс ``j``).
+    Если задано положительное целое — ограничение ``j + match_window`` (старое поведение).
     """
     n = len(scenes)
     if n == 0:
@@ -91,7 +95,12 @@ def align_scenes_to_word_timings(
 
         matched_idx: list[int] = []
         for nt in norm_toks:
-            hi = min(j + max(1, int(match_window)), nw)
+            # По умолчанию ищем до конца массива: узкое окно (+18 слов) давало обрыв
+            # цепочки токенов при паузах → одно совпадение → raw_start==raw_end → 0 ms в props.
+            if match_window is None:
+                hi = nw
+            else:
+                hi = min(j + max(1, int(match_window)), nw)
             found: int | None = None
             for k in range(j, hi):
                 wtxt = str((words[k] or {}).get("word") or "")

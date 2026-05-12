@@ -30,41 +30,42 @@ def _ext_from_url(url: str, fallback: str) -> str:
     return fallback
 
 
-def _pick_scene_media(scene: dict[str, Any]) -> dict[str, Any] | None:
-    """Приоритет: scene.video.video_url → scene.start.image_url → первый выбранный Pexels."""
+def _pick_scene_media(
+    scene: dict[str, Any],
+    *,
+    prefer_video: bool = False,
+) -> dict[str, Any] | None:
+    """Выбор медиа для сцены — только из самой сцены.
+
+    `prefer_video=False` (по умолчанию): берём Start image (фото), при его отсутствии —
+    сгенерированное видео сцены.
+
+    `prefer_video=True`: берём сгенерированное видео сцены, при его отсутствии —
+    Start image.
+
+    Pexels‑результаты в монтаж не идут.
+    """
     if not isinstance(scene, dict):
         return None
+
     video_blk = scene.get("video") if isinstance(scene.get("video"), dict) else None
-    if video_blk:
-        v_url = str(video_blk.get("video_url") or "").strip()
-        if v_url:
-            return {"kind": "video", "source": "scene.video", "url": v_url, "local_path": None}
+    video_url = str((video_blk or {}).get("video_url") or "").strip()
     start_blk = scene.get("start") if isinstance(scene.get("start"), dict) else None
-    if start_blk:
-        s_url = str(start_blk.get("image_url") or "").strip()
-        if s_url:
-            return {"kind": "image", "source": "scene.start", "url": s_url, "local_path": None}
-    results = scene.get("pexels_results") if isinstance(scene.get("pexels_results"), list) else []
-    sel_raw = scene.get("pexels_selected_indices") if isinstance(scene.get("pexels_selected_indices"), list) else []
-    for v in sel_raw:
-        try:
-            idx = int(v)
-        except (TypeError, ValueError):
-            continue
-        if 0 <= idx < len(results):
-            row = results[idx]
-            if not isinstance(row, dict):
-                continue
-            is_video = str(row.get("type") or "").strip().lower() == "video"
-            media_url = str(row.get("media_url") or "").strip()
-            local_url = str(row.get("local_url") or "").strip()
-            return {
-                "kind": "video" if is_video else "image",
-                "source": "pexels",
-                "url": media_url,
-                "local_url": local_url,
-            }
-    return None
+    image_url = str((start_blk or {}).get("image_url") or "").strip()
+
+    def _scene_video_pick() -> dict[str, Any] | None:
+        if not video_url:
+            return None
+        return {"kind": "video", "source": "scene.video", "url": video_url, "local_path": None}
+
+    def _scene_image_pick() -> dict[str, Any] | None:
+        if not image_url:
+            return None
+        return {"kind": "image", "source": "scene.start", "url": image_url, "local_path": None}
+
+    if prefer_video:
+        return _scene_video_pick() or _scene_image_pick()
+    return _scene_image_pick() or _scene_video_pick()
 
 
 def _safe_scene_stem(scene: dict[str, Any], idx0: int) -> str:
@@ -101,6 +102,15 @@ def _montage_zoom_mode_resolve(montage: dict[str, Any]) -> str:
 
 def _montage_zoom_smooth_resolve(montage: dict[str, Any]) -> bool:
     v = montage.get("zoom_smooth")
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _montage_prefer_video_resolve(montage: dict[str, Any]) -> bool:
+    v = montage.get("prefer_video") if isinstance(montage, dict) else None
     if isinstance(v, bool):
         return v
     if isinstance(v, (int, float)):
@@ -411,6 +421,14 @@ def prepare_montage(
     scenes = job.get("scenes") if isinstance(job.get("scenes"), list) else []
     total = len(scenes)
 
+    meta_for_montage = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+    montage_meta = (
+        meta_for_montage.get("montage")
+        if isinstance(meta_for_montage.get("montage"), dict)
+        else {}
+    )
+    prefer_video_flag = _montage_prefer_video_resolve(montage_meta)
+
     scene_media: list[dict[str, Any] | None] = []
     for i, s in enumerate(scenes):
         if cancel_check is not None and cancel_check():
@@ -424,7 +442,10 @@ def prepare_montage(
                 scene_media=[m or {} for m in scene_media] + [{} for _ in range(total - len(scene_media))],
             )
         stem = _safe_scene_stem(s, i)
-        pick = _pick_scene_media(s if isinstance(s, dict) else {})
+        pick = _pick_scene_media(
+            s if isinstance(s, dict) else {},
+            prefer_video=prefer_video_flag,
+        )
         push(
             "scene_start",
             index=i,

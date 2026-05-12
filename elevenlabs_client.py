@@ -434,6 +434,21 @@ def chars_to_words_ms(
             }
         )
         i = j
+    # Защита от «коллапсированного» alignment-а (модель отдаёт alignment, но все
+    # character_times равны 0): иначе words.json получится с одинаковыми
+    # start_ms/end_ms у большинства слов и тайминги сцен схлопнутся в одну точку.
+    if len(out) >= 4:
+        zero_dur = sum(1 for w in out if (w["end_ms"] - w["start_ms"]) <= 0)
+        same_start = sum(
+            1 for k in range(1, len(out)) if out[k]["start_ms"] == out[k - 1]["start_ms"]
+        )
+        if zero_dur / len(out) >= 0.6 and same_start / max(1, len(out) - 1) >= 0.6:
+            raise RuntimeError(
+                "ElevenLabs with-timestamps: модель вернула битый character-alignment "
+                "(у большинства слов одинаковые start/end). Перегенерируйте озвучку "
+                "с моделью Multilingual v2 / Turbo v2.5 / Flash v2.5 — eleven_v3 "
+                "сейчас часто отдаёт сломанный alignment на длинных чанках."
+            )
     return out
 
 
