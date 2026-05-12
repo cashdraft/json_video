@@ -33,7 +33,7 @@ from io import BytesIO
 from pathlib import Path
 from collections.abc import Iterator
 from typing import Any, Callable
-from urllib.parse import urlencode, urljoin, urlparse
+from urllib.parse import urlencode, urljoin, urlparse, urlunparse
 
 from dotenv import load_dotenv
 
@@ -222,11 +222,34 @@ def _job_file_lock(job_id: str):
         lk.release()
 
 
-_REWRITE_ID_RE = re.compile(r"^rewrite_\d{8}_\d{6}$")
+# Единый формат ID после слияния rewrite + job: разрешаем оба префикса,
+# чтобы существующие AJAX-роуты под `/rewrite/<id>/...` принимали как старые
+# rewrite_YYYYMMDD_HHMMSS, так и новые job_YYYYMMDD_HHMMSS.
+_REWRITE_ID_RE = re.compile(r"^(rewrite|job)_\d{8}_\d{6}$")
 
 
-def _latest_tts_words_doc_for_job(job_id: str) -> tuple[dict[str, Any] | None, str | None]:
-    """Последний по mtime MP3 в data/job_audio/<job_id>/ и парный <stem>.words.json."""
+def _timings_source_normalize(value: Any) -> str:
+    """Нормализует источник пословных таймингов: 'elevenlabs' (default) или 'whisper'."""
+    v = str(value or "").strip().lower()
+    if v == "whisper":
+        return "whisper"
+    return "elevenlabs"
+
+
+def _words_path_suffix_for_source(source: str) -> str:
+    """Суффикс файла со словами в зависимости от источника."""
+    return ".whisper.words.json" if _timings_source_normalize(source) == "whisper" else ".words.json"
+
+
+def _latest_tts_words_doc_for_job(
+    job_id: str,
+    source: str = "elevenlabs",
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Последний по mtime MP3 в data/job_audio/<job_id>/ и парный JSON со словами.
+
+    `source = "elevenlabs"` → `<stem>.words.json` (TTS от ElevenLabs).
+    `source = "whisper"`    → `<stem>.whisper.words.json` (локальный Whisper).
+    """
     audio_dir = JOB_AUDIO_DIR / job_id
     if not audio_dir.is_dir():
         return None, None
@@ -234,7 +257,7 @@ def _latest_tts_words_doc_for_job(job_id: str) -> tuple[dict[str, Any] | None, s
     if not mp3s:
         return None, None
     mp3 = mp3s[0]
-    words_path = audio_dir / f"{mp3.stem}.words.json"
+    words_path = audio_dir / f"{mp3.stem}{_words_path_suffix_for_source(source)}"
     if not words_path.is_file():
         return None, None
     try:
@@ -244,6 +267,17 @@ def _latest_tts_words_doc_for_job(job_id: str) -> tuple[dict[str, Any] | None, s
     if not isinstance(doc, dict):
         return None, None
     return doc, mp3.name
+
+
+def _job_has_words_for_source(job_id: str, source: str) -> bool:
+    """Быстрая проверка: есть ли для последнего MP3 файл слов выбранного источника."""
+    audio_dir = JOB_AUDIO_DIR / job_id
+    if not audio_dir.is_dir():
+        return False
+    mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not mp3s:
+        return False
+    return (audio_dir / f"{mp3s[0].stem}{_words_path_suffix_for_source(source)}").is_file()
 
 
 def _render_scenes_stripped_with_timing(scenes: list[dict]) -> str:
@@ -297,11 +331,20 @@ def _render_scenes_stripped_with_timing(scenes: list[dict]) -> str:
     return "\n".join(out)
 
 
-def _apply_tts_word_timings_to_scenes(job_id: str, scenes: list[dict]) -> None:
-    """Если у последнего TTS есть words.json — выравнивает сцены и пишет audio_timing (на месте)."""
+def _apply_tts_word_timings_to_scenes(
+    job_id: str,
+    scenes: list[dict],
+    source: str = "elevenlabs",
+) -> None:
+    """Если у выбранного источника есть words.json — выравнивает сцены и пишет audio_timing.
+
+    `source` ∈ {"elevenlabs", "whisper"} — какой файл слов использовать
+    (см. `_latest_tts_words_doc_for_job`). По умолчанию — ElevenLabs, чтобы не ломать
+    существующее поведение в worker'ах рендера.
+    """
     if not scenes:
         return
-    words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id)
+    words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id, source=source)
     if not words_doc or not audio_fname:
         return
     words = words_doc.get("words")
@@ -334,9 +377,9 @@ def _apply_tts_word_timings_to_scenes(job_id: str, scenes: list[dict]) -> None:
 
 
 def _safe_job_audio_filename(name: str) -> bool:
-    # Разрешаем озвучку (.mp3) и парный JSON с пословными таймингами (.words.json),
-    # который ElevenLabs `/with-timestamps` отдаёт рядом с MP3.
-    return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(mp3|words\.json)$", name))
+    # Разрешаем озвучку (.mp3), парный `.words.json` (ElevenLabs `/with-timestamps`)
+    # и `.whisper.words.json` (локальный faster-whisper).
+    return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(mp3|words\.json|whisper\.words\.json)$", name))
 
 
 def _safe_zip_archive_basename(name: str, fallback: str) -> str:
@@ -1708,8 +1751,8 @@ _YOUTUBE_YDL_BASE: dict = {
     "socket_timeout": 180,
     "retries": 20,
     "fragment_retries": 20,
-    # DASH/фрагменты: параллель (меньше = мягче к тому же IP при нескольких роликах подряд)
-    "concurrent_fragment_downloads": 2,
+    # Параллель фрагментов: см. также YT_DLP_CONCURRENT_FRAGMENTS в _youtube_ytdlp_perf_opts().
+    "concurrent_fragment_downloads": 5,
     # ~100 КиБ/с: при типичном троттлинге YouTube — повтор с новым format URL
     "throttledratelimit": 100_000,
 }
@@ -1732,6 +1775,216 @@ def _youtube_cookiefile_opts() -> dict[str, Any]:
     except OSError:
         pass
     return {}
+
+
+def _youtube_proxy_config_path() -> Path:
+    return (BASE_DIR / "data" / "secrets" / "yt_dlp_proxy.json").resolve()
+
+
+def _youtube_proxy_default_config() -> dict[str, Any]:
+    return {
+        "proxy_url": "",
+        "updated_at": None,
+        "last_test_ok": None,
+        "last_test_at": None,
+        "last_test_message": "",
+    }
+
+
+def _youtube_proxy_load() -> dict[str, Any]:
+    cfg = _youtube_proxy_default_config()
+    p = _youtube_proxy_config_path()
+    if not p.is_file():
+        return cfg
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return cfg
+    if not isinstance(data, dict):
+        return cfg
+    for k in cfg:
+        if k in data:
+            cfg[k] = data[k]
+    cfg["proxy_url"] = str(cfg.get("proxy_url") or "").strip()
+    return cfg
+
+
+def _youtube_proxy_save(cfg: dict[str, Any]) -> None:
+    p = _youtube_proxy_config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + f".{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def _youtube_proxy_normalize(raw: str) -> str:
+    """Принимает ``user:pass@host:port`` или полный URL; возвращает URL для yt-dlp/requests."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if "://" not in s:
+        s = "http://" + s
+    parsed = urlparse(s)
+    if not parsed.hostname:
+        raise ValueError(
+            "Некорректный прокси. Пример: user408609:пароль@185.198.233.243:4588 "
+            "или http://user:pass@host:port"
+        )
+    scheme = (parsed.scheme or "http").lower()
+    if scheme not in ("http", "https", "socks5", "socks5h"):
+        scheme = "http"
+    netloc = parsed.netloc or ""
+    if not netloc:
+        raise ValueError("В прокси не указан хост (netloc пустой).")
+    return urlunparse((scheme, netloc, "", "", "", ""))
+
+
+def _youtube_proxy_mask(proxy_url: str) -> str:
+    """Маскирует логин/пароль для отображения в UI и API."""
+    if not (proxy_url or "").strip():
+        return ""
+    try:
+        p = urlparse(proxy_url.strip())
+    except Exception:
+        return "***"
+    host = p.hostname or ""
+    port = f":{p.port}" if p.port else ""
+    user = p.username or ""
+    if user:
+        uvis = user[:3] + "…" if len(user) > 3 else "***"
+        tail = f"{uvis}@{host}{port}"
+    else:
+        tail = f"{host}{port}"
+    sch = (p.scheme or "http").lower()
+    return f"{sch}://{tail}"
+
+
+def _youtube_proxy_run_test(proxy_url: str) -> tuple[bool, str]:
+    """Проверка: HTTP(S) к YouTube через прокси (как в браузере)."""
+    if not proxy_url:
+        return False, "Пустой прокси"
+    proxies = {"http": proxy_url, "https": proxy_url}
+    try:
+        r = requests.get(
+            "https://www.youtube.com/",
+            proxies=proxies,
+            timeout=20,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (compatible; json-video-yt-proxy-check/1.0; "
+                    "+https://github.com/yt-dlp/yt-dlp)"
+                ),
+                "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            },
+            allow_redirects=True,
+        )
+        code = int(r.status_code)
+        if 200 <= code < 500:
+            return True, f"YouTube ответил HTTP {code}"
+        return False, f"YouTube HTTP {code}"
+    except requests.RequestException as e:
+        return False, (str(e) or "Ошибка сети")[:400]
+
+
+def _youtube_proxy_effective_url() -> str:
+    """Активный URL прокси: переменная окружения имеет приоритет над файлом UI."""
+    env_p = (os.getenv("YT_DLP_PROXY") or "").strip()
+    if env_p:
+        try:
+            return _youtube_proxy_normalize(env_p)
+        except ValueError:
+            return env_p
+    return str(_youtube_proxy_load().get("proxy_url") or "").strip()
+
+
+def youtube_proxy_status_dict() -> dict[str, Any]:
+    """Сводка для UI: маска, последний тест, приоритет .env над файлом."""
+    env_raw = (os.getenv("YT_DLP_PROXY") or "").strip()
+    cfg = _youtube_proxy_load()
+    file_url = str(cfg.get("proxy_url") or "").strip()
+    active = _youtube_proxy_effective_url()
+    env_overrides = bool(env_raw)
+    try:
+        masked_active = _youtube_proxy_mask(active) if active else ""
+    except Exception:
+        masked_active = "(прокси задан, маска недоступна)"
+    masked_file = _youtube_proxy_mask(file_url) if file_url else ""
+    last_ok = cfg.get("last_test_ok")
+    if last_ok is not None:
+        last_ok = bool(last_ok)
+    return {
+        "env_overrides_file": env_overrides,
+        "file_configured": bool(file_url),
+        "active_configured": bool(active),
+        "masked_active": masked_active,
+        "masked_file": masked_file,
+        "last_test_ok": last_ok,
+        "last_test_at": cfg.get("last_test_at"),
+        "last_test_message": str(cfg.get("last_test_message") or "")[:500],
+    }
+
+
+def _youtube_ytdlp_env_bool(name: str, *, default: bool) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    return default
+
+
+def _youtube_ytdlp_perf_opts() -> dict[str, Any]:
+    """Доп. опции YoutubeDL: IPv4, без кеша, параллель фрагментов, внешний загрузчик, прокси.
+
+    Переменные окружения (все опциональны):
+      YT_DLP_FORCE_IPV4=1|0 — как ``-4`` / ``--force-ipv4`` (по умолчанию 1).
+      YT_DLP_NOCACHE=1|0 — как ``--no-cache-dir`` (по умолчанию 1).
+      YT_DLP_CONCURRENT_FRAGMENTS=N — число параллельных фрагментов (1..32, по умолчанию 5).
+      YT_DLP_USE_ARIA2C=1|0 — если 1 и ``aria2c`` в PATH, задаёт ``external_downloader`` (по умолчанию 1).
+      YT_DLP_EXTERNAL_DOWNLOADER=aria2c|curl|… — явное имя загрузчика (первое слово должно быть в PATH).
+      YT_DLP_PROXY=URL — прокси для yt-dlp (перекрывает файл из UI). Либо задайте прокси
+      в блоке «Прокси yt-dlp» на странице job — сохранится в ``data/secrets/yt_dlp_proxy.json``.
+
+    Глобальные ``HTTP_PROXY`` / ``HTTPS_PROXY`` для процесса yt-dlp обычно подхватываются сами;
+    ``YT_DLP_PROXY`` или файл из UI — если нужен отдельный прокси только для YouTube.
+    """
+    out: dict[str, Any] = {}
+    if _youtube_ytdlp_env_bool("YT_DLP_FORCE_IPV4", default=True):
+        out["force_ipv4"] = True
+    if _youtube_ytdlp_env_bool("YT_DLP_NOCACHE", default=True):
+        out["nocachedir"] = True
+    try:
+        cfd = int((os.getenv("YT_DLP_CONCURRENT_FRAGMENTS") or "5").strip())
+    except (TypeError, ValueError):
+        cfd = 5
+    out["concurrent_fragment_downloads"] = max(1, min(32, cfd))
+
+    ext_raw = (os.getenv("YT_DLP_EXTERNAL_DOWNLOADER") or "").strip()
+    if ext_raw.lower() in ("", "0", "none", "native", "default"):
+        ext_bin = ""
+    else:
+        ext_bin = ext_raw.split()[0]
+    if ext_bin:
+        if shutil.which(ext_bin):
+            out["external_downloader"] = ext_raw
+        else:
+            try:
+                app.logger.warning(
+                    "YT_DLP_EXTERNAL_DOWNLOADER=%r: исполняемый файл не найден в PATH — встроенный загрузчик.",
+                    ext_raw,
+                )
+            except Exception:
+                pass
+    elif _youtube_ytdlp_env_bool("YT_DLP_USE_ARIA2C", default=True) and shutil.which("aria2c"):
+        out["external_downloader"] = "aria2c"
+
+    proxy = _youtube_proxy_effective_url()
+    if proxy:
+        out["proxy"] = proxy
+    return out
 
 
 def _youtube_cookies_age_human(seconds: float) -> str:
@@ -2017,6 +2270,7 @@ def _youtube_pick_audio_format_id(formats: list[dict]) -> str | None:
 def _youtube_probe_audio_format_id(url: str, cname: str, socket_timeout: int) -> str | None:
     opts: dict[str, Any] = {
         **_YOUTUBE_YDL_BASE,
+        **_youtube_ytdlp_perf_opts(),
         **_youtube_cookiefile_opts(),
         "socket_timeout": socket_timeout,
         "retries": 0,
@@ -2495,11 +2749,129 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
 
 
 def create_rewrite_job(project_name: str) -> str:
+    """Legacy: создание автономного rewrite-проекта.
+
+    Новые проекты создаются через `create_unified_project`, единая страница
+    `/job/<id>` рендерит и rewrite-блок, и job-блок. Функция оставлена для
+    обратной совместимости и тестов.
+    """
     REWRITE_JOBS_DIR.mkdir(parents=True, exist_ok=True)
     rewrite_id = f"rewrite_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     payload = new_rewrite_payload(rewrite_id, project_name)
     save_rewrite_job(rewrite_id, payload)
     return rewrite_id
+
+
+def create_unified_project(project_name: str) -> str:
+    """Создаёт единый проект (один ID для video-job и rewrite-проекта).
+
+    Создаются одновременно:
+      - `data/jobs/<id>.json`         — каркас video-job.
+      - `data/rewrite_jobs/<id>/`     — каркас rewrite-проекта с `project.json`.
+    Возвращает общий ID в формате `job_YYYYMMDD_HHMMSS`.
+    """
+    unified_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    name = (project_name or "").strip()
+
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    job_payload = new_video_job_payload(name)
+    job_path = JOBS_DIR / f"{unified_id}.json"
+    with open(job_path, "w", encoding="utf-8") as f:
+        json.dump(job_payload, f, ensure_ascii=False, indent=2)
+
+    rewrite_payload = new_rewrite_payload(unified_id, name)
+    save_rewrite_job(unified_id, rewrite_payload)
+    return unified_id
+
+
+def _ensure_job_file_for_id(unified_id: str, project_name: str = "") -> bool:
+    """Если для ID есть rewrite-папка, но нет `data/jobs/<id>.json` — создаёт пустой.
+
+    Возвращает True, если файл был создан, False — если уже существовал
+    или ID невалиден.
+    """
+    if not rewrite_id_ok(unified_id):
+        return False
+    job_path = JOBS_DIR / f"{unified_id}.json"
+    if job_path.is_file():
+        return False
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    payload = new_video_job_payload(project_name)
+    with open(job_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return True
+
+
+def list_unified_projects() -> list[dict]:
+    """Объединённый список всех проектов (job-JSON и/или rewrite-папка).
+
+    Возвращает по одной строке на уникальный ID, отсортированной по mtime
+    (новые сверху). Поля: `id`, `project_name`, `has_job`, `has_rewrite`,
+    `scenes_count`, `updated_at`.
+    """
+    rows: dict[str, dict] = {}
+
+    if JOBS_DIR.exists():
+        for f in JOBS_DIR.glob("job_*.json"):
+            jid = f.stem
+            try:
+                data = json.load(open(f, "r", encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            scenes = data.get("scenes") if isinstance(data, dict) else None
+            if not isinstance(scenes, list):
+                scenes = data.get("parsed_scenes") if isinstance(data, dict) else []
+                if not isinstance(scenes, list):
+                    scenes = []
+            rows[jid] = {
+                "id": jid,
+                "project_name": (data.get("project_name") if isinstance(data, dict) else "") or "",
+                "has_job": True,
+                "has_rewrite": _rewrite_project_dir(jid).is_dir(),
+                "scenes_count": len(scenes),
+                "updated_at": (data.get("created_at") if isinstance(data, dict) else "") or "",
+                "mtime": f.stat().st_mtime,
+            }
+
+    if REWRITE_JOBS_DIR.is_dir():
+        for d in REWRITE_JOBS_DIR.glob("*"):
+            if not d.is_dir():
+                continue
+            rid = d.name
+            if not rewrite_id_ok(rid):
+                continue
+            row = rows.get(rid)
+            mtime = d.stat().st_mtime
+            project_json = _rewrite_project_json_path(rid)
+            rw_name = ""
+            if project_json.is_file():
+                try:
+                    rw = json.load(open(project_json, "r", encoding="utf-8"))
+                    if isinstance(rw, dict):
+                        rw_name = str(rw.get("project_name") or "")
+                except (json.JSONDecodeError, OSError):
+                    rw_name = ""
+                mtime = max(mtime, project_json.stat().st_mtime)
+            if row is None:
+                rows[rid] = {
+                    "id": rid,
+                    "project_name": rw_name,
+                    "has_job": False,
+                    "has_rewrite": True,
+                    "scenes_count": 0,
+                    "updated_at": "",
+                    "mtime": mtime,
+                }
+            else:
+                row["has_rewrite"] = True
+                if not row.get("project_name") and rw_name:
+                    row["project_name"] = rw_name
+                if mtime > row.get("mtime", 0.0):
+                    row["mtime"] = mtime
+
+    items = list(rows.values())
+    items.sort(key=lambda r: r.get("mtime", 0.0), reverse=True)
+    return items
 
 
 def load_rewrite_job(rewrite_id: str) -> dict | None:
@@ -2747,41 +3119,23 @@ def render_index(**kwargs):
     return resp
 
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def index():
-    resp = make_response(render_template("home.html"))
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    return resp
+    """Единая главная: список всех проектов + создание нового unified-проекта.
 
-
-@app.route("/video")
-def video_index():
-    return render_index()
-
-
-@app.route("/video", methods=["POST"])
-def video_create():
-    project_name = request.form.get("project_name", "").strip()
-    payload = new_video_job_payload(project_name)
-    _filepath, job_id = save_job_file(payload)
-    flash("Video-проект создан.", "success")
-    return redirect(url_for("job_page", job_id=job_id))
-
-
-@app.route("/rewrite", methods=["GET", "POST"])
-def rewrite_index():
-    """Список проектов ReWrite Master + создание нового."""
+    POST: создаёт сразу и `data/jobs/<id>.json`, и `data/rewrite_jobs/<id>/`
+    под общим ID, редиректит на `/job/<id>`.
+    """
     if request.method == "POST":
         project_name = request.form.get("project_name", "").strip()
-        rid = create_rewrite_job(project_name)
+        unified_id = create_unified_project(project_name)
         flash("Проект создан.", "success")
-        return redirect(url_for("rewrite_project_page", rewrite_id=rid))
+        return redirect(url_for("job_page", job_id=unified_id))
 
     resp = make_response(
         render_template(
-            "rewrite_index.html",
-            rewrite_jobs=list_rewrite_jobs(),
+            "home.html",
+            projects=list_unified_projects(),
             openai_key_set=bool((os.getenv("OPENAI_API_KEY") or "").strip()),
         )
     )
@@ -2790,13 +3144,127 @@ def rewrite_index():
     return resp
 
 
+@app.route("/video")
+def video_index():
+    return redirect(url_for("index"))
+
+
+@app.route("/video", methods=["POST"])
+def video_create():
+    """Legacy POST: теперь создаёт единый проект (video + rewrite одним ID)."""
+    project_name = request.form.get("project_name", "").strip()
+    unified_id = create_unified_project(project_name)
+    flash("Проект создан.", "success")
+    return redirect(url_for("job_page", job_id=unified_id))
+
+
+@app.route("/rewrite", methods=["GET", "POST"])
+def rewrite_index():
+    """Legacy URL: создание/список ReWrite теперь живёт на главной."""
+    if request.method == "POST":
+        project_name = request.form.get("project_name", "").strip()
+        unified_id = create_unified_project(project_name)
+        flash("Проект создан.", "success")
+        return redirect(url_for("job_page", job_id=unified_id))
+    return redirect(url_for("index"))
+
+
 @app.route("/rewrite/<rewrite_id>")
 def rewrite_project_page(rewrite_id: str):
-    """Страница одного проекта ReWrite (форма + статусы + ответ)."""
+    """Legacy URL — все проекты теперь на единой странице `/job/<id>`."""
+    if not rewrite_id_ok(rewrite_id):
+        flash("Проект не найден.", "error")
+        return redirect(url_for("index"))
+    if _rewrite_project_dir(rewrite_id).is_dir():
+        _ensure_job_file_for_id(rewrite_id)
+    if load_job(rewrite_id) is None:
+        flash("Проект не найден.", "error")
+        return redirect(url_for("index"))
+    return redirect(url_for("job_page", job_id=rewrite_id), code=302)
+
+
+def _rewrite_template_context(rewrite_id: str) -> dict:
+    """Собирает контекст для рендера rewrite-блока внутри job-страницы.
+
+    Возвращает dict ровно с теми же ключами, что раньше передавала старая
+    `rewrite_project_page` в `rewrite_project.html`. Если rewrite-данных нет
+    (не валидный ID или папка отсутствует) — возвращает `{"rw": None}`,
+    `{% if rw %}` в `job.html` сам обрабатывает пустой случай.
+    """
+    if not rewrite_id_ok(rewrite_id):
+        return {"rw": None}
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return {"rw": None}
+    st = rw.get("stages")
+    if not isinstance(st, dict):
+        st = {}
+    if not (rw.get("youtube_channel_avatar") or "").strip() and (rw.get("youtube_url") or "").strip():
+        cache_path = _youtube_info_cache_path(rewrite_id)
+        cached_info: dict | None = None
+        try:
+            if cache_path.is_file():
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    cached_info = json.load(f)
+        except (OSError, ValueError):
+            cached_info = None
+        if isinstance(cached_info, dict):
+            try:
+                _youtube_enrich_channel_meta(rw, info=cached_info)
+                save_rewrite_job(rewrite_id, rw)
+            except Exception:
+                app.logger.exception("youtube channel meta backfill failed for %s", rewrite_id)
+    rewrite_preset_current = normalize_rewrite_preset(rw.get("rewrite_preset"))
+    rewrite_stage_run_ok = {
+        sk: stage_run_prerequisites_met(sk, st, preset=rewrite_preset_current)
+        for sk in REWRITE_STAGE_KEYS
+    }
+    rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
+    voiceover_final_text = str(rw.get("voiceover_final_text") or "")
+    if not voiceover_final_text.strip():
+        voiceover_final_text = _extract_edited_text(
+            str(((st.get("voiceover_editor") or {}).get("last_result")) or "")
+        )
+    # Совпадает с логикой `_rewrite_block.html` / прежнего шаблона: первые
+    # до 10 ключей текущего пресета, исключая `scene_writer*` (они не
+    # сворачиваются, отдельные карточки с собственным collapsible-чевроном).
+    preset_keys_current = REWRITE_PRESET_STAGE_KEYS.get(rewrite_preset_current, [])
+    collapsible_pipeline_stages: list[str] = []
+    for _k in preset_keys_current:
+        if _k in ("scene_writer", "scene_writer_live"):
+            continue
+        if len(collapsible_pipeline_stages) >= 10:
+            break
+        collapsible_pipeline_stages.append(_k)
+    return {
+        "rw": rw,
+        "rewrite_stages": REWRITE_STAGES,
+        "rewrite_stage_send_hints": REWRITE_STAGE_SEND_HINTS,
+        "rewrite_stage_help_hints": REWRITE_STAGE_HELP_HINTS,
+        "rewrite_stage_subtitles": REWRITE_STAGE_SUBTITLES,
+        "rewrite_stage_run_ok": rewrite_stage_run_ok,
+        "rewrite_stage_key_order": rewrite_stage_key_order,
+        "rewrite_preset_current": rewrite_preset_current,
+        "rewrite_preset_labels": REWRITE_PRESET_LABELS,
+        "rewrite_preset_stage_keys": REWRITE_PRESET_STAGE_KEYS,
+        "rewrite_preset_default": REWRITE_PRESET_DEFAULT,
+        "rewrite_models": REWRITE_MODELS,
+        "rewrite_template_names": list_rewrite_template_names(),
+        "voiceover_final_text": voiceover_final_text,
+        "youtube_cookies_status": youtube_cookies_status_dict(),
+        "youtube_proxy_status": youtube_proxy_status_dict(),
+        "collapsible_pipeline_stages": collapsible_pipeline_stages,
+    }
+
+
+def _rewrite_project_page_legacy_unused(rewrite_id: str):
+    """Старый рендер `rewrite_project.html` оставлен в репозитории как
+    референс для последующих этапов. Не подключён ни к одному маршруту.
+    """
     rw = load_rewrite_job(rewrite_id)
     if rw is None:
         flash("Проект ReWrite не найден.", "error")
-        return redirect(url_for("rewrite_index"))
+        return redirect(url_for("index"))
     key_set = bool((os.getenv("OPENAI_API_KEY") or "").strip())
     st = rw.get("stages")
     if not isinstance(st, dict):
@@ -2847,6 +3315,7 @@ def rewrite_project_page(rewrite_id: str):
                 openai_key_set=key_set,
                 voiceover_final_text=voiceover_final_text,
                 youtube_cookies_status=youtube_cookies_status_dict(),
+                youtube_proxy_status=youtube_proxy_status_dict(),
             )
         )
     except Exception:
@@ -2998,18 +3467,8 @@ def rewrite_project_rename(rewrite_id: str):
 
 @app.route("/rewrite/<rewrite_id>/delete", methods=["POST"])
 def rewrite_project_delete(rewrite_id: str):
-    fp = _rewrite_project_json_path(rewrite_id)
-    legacy_fp = _rewrite_legacy_filepath(rewrite_id)
-    d = _rewrite_project_dir(rewrite_id)
-    if rewrite_id_ok(rewrite_id) and (fp.is_file() or legacy_fp.is_file() or d.is_dir()):
-        if d.is_dir():
-            shutil.rmtree(d, ignore_errors=True)
-        if legacy_fp.is_file():
-            legacy_fp.unlink(missing_ok=True)
-        flash("Проект ReWrite удалён.", "success")
-    else:
-        flash("Проект не найден.", "error")
-    return redirect(url_for("rewrite_index"))
+    """Legacy route. После слияния делегирует на единое удаление проекта."""
+    return delete_job(rewrite_id)
 
 
 @app.route("/rewrite/<rewrite_id>/save", methods=["POST"])
@@ -3336,6 +3795,7 @@ def rewrite_youtube_verify(rewrite_id: str):
                 with YoutubeDL(
                     {
                         **_YOUTUBE_YDL_BASE,
+                        **_youtube_ytdlp_perf_opts(),
                         **_youtube_cookiefile_opts(),
                         "socket_timeout": v_socket,
                         "retries": 1,
@@ -3419,6 +3879,47 @@ def rewrite_youtube_cookies_upload(rewrite_id: str):
     return jsonify({"ok": True, **youtube_cookies_status_dict()})
 
 
+@app.route("/rewrite/<rewrite_id>/youtube/proxy/status", methods=["GET"])
+def rewrite_youtube_proxy_status(rewrite_id: str):
+    if load_rewrite_job(rewrite_id) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, **youtube_proxy_status_dict()})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/proxy", methods=["POST"])
+def rewrite_youtube_proxy_save(rewrite_id: str):
+    """Сохраняет прокси для yt-dlp в ``data/secrets/yt_dlp_proxy.json`` и проверяет запросом к YouTube."""
+    if load_rewrite_job(rewrite_id) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    raw = body.get("proxy")
+    if raw is None:
+        raw = ""
+    raw = str(raw).strip()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not raw:
+        cfg = _youtube_proxy_default_config()
+        cfg["updated_at"] = now_iso
+        cfg["last_test_ok"] = None
+        cfg["last_test_at"] = None
+        cfg["last_test_message"] = "Файл прокси очищен (используется только .env, если задан)."
+        _youtube_proxy_save(cfg)
+        return jsonify({"ok": True, "cleared": True, "test_ok": None, **youtube_proxy_status_dict()})
+    try:
+        norm = _youtube_proxy_normalize(raw)
+    except ValueError as e:
+        return jsonify({"ok": False, "message": str(e)}), 400
+    ok, msg = _youtube_proxy_run_test(norm)
+    cfg = _youtube_proxy_load()
+    cfg["proxy_url"] = norm
+    cfg["updated_at"] = now_iso
+    cfg["last_test_ok"] = ok
+    cfg["last_test_at"] = now_iso
+    cfg["last_test_message"] = msg
+    _youtube_proxy_save(cfg)
+    return jsonify({"ok": True, "cleared": False, "test_ok": ok, "test_message": msg, **youtube_proxy_status_dict()})
+
+
 def _rewrite_youtube_perform_download(
     rewrite_id: str,
     rw: dict,
@@ -3459,6 +3960,7 @@ def _rewrite_youtube_perform_download(
             same_re = _youtube_same_client_retries()
             ydl_opts: dict = {
                 **_YOUTUBE_YDL_BASE,
+                **_youtube_ytdlp_perf_opts(),
                 **_youtube_cookiefile_opts(),
                 "socket_timeout": stall_read_sec,
                 "retries": same_re,
@@ -4937,7 +5439,10 @@ def parse_for_job(job_id: str):
         job["selected_image_template"] = image_template
         job["job_meta"] = meta
         job["status"] = "ready" if scenes else "draft"
-        _apply_tts_word_timings_to_scenes(job_id, scenes)
+        _src_parse = _timings_source_normalize(job.get("apply_timings_source"))
+        if _src_parse == "whisper" and not _job_has_words_for_source(job_id, "whisper"):
+            _src_parse = "elevenlabs"
+        _apply_tts_word_timings_to_scenes(job_id, scenes, source=_src_parse)
         timings_applied = any(
             isinstance(s, dict) and isinstance(s.get("audio_timing"), dict) and (s["audio_timing"].get("badge"))
             for s in scenes
@@ -4953,13 +5458,18 @@ def parse_for_job(job_id: str):
 
 @app.route("/job/<job_id>/scenes/apply-tts-timings", methods=["POST"])
 def job_scenes_apply_tts_timings(job_id: str):
-    """Пересчитывает audio_timing у сцен по последнему `<stem>.words.json`.
+    """Пересчитывает audio_timing у сцен по выбранному источнику пословных таймингов.
 
     Используется кнопкой «Сгенерировать JSON-код сцен с таймингами»: если у
     проекта уже есть сцены и есть пословные тайминги озвучки, повторно
-    добавлять сцены не нужно — этот эндпоинт берёт `.words.json`, выравнивает
-    сцены и записывает audio_timing на месте.
+    добавлять сцены не нужно — этот эндпоинт берёт `.words.json`/`.whisper.words.json`,
+    выравнивает сцены и записывает audio_timing на месте. Выбранный источник
+    сохраняется в `job["apply_timings_source"]`, чтобы пережить рефреш страницы.
     """
+    body = request.get_json(silent=True) or {}
+    source = _timings_source_normalize(body.get("source") if isinstance(body, dict) else None)
+    words_suffix = _words_path_suffix_for_source(source)
+
     with _job_file_lock(job_id):
         job = load_job(job_id)
         if job is None:
@@ -4968,19 +5478,21 @@ def job_scenes_apply_tts_timings(job_id: str):
         if not isinstance(scenes, list) or not scenes:
             return jsonify({"ok": False, "error": "В проекте нет сцен."}), 400
 
-        words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id)
+        words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id, source=source)
         if not words_doc or not audio_fname:
+            src_label = "Whisper (.whisper.words.json)" if source == "whisper" else "ElevenLabs (.words.json)"
             return jsonify(
                 {
                     "ok": False,
+                    "source": source,
                     "error": (
-                        "У проекта нет пословных таймингов (.words.json). "
-                        "Сгенерируйте озвучку моделью, которая возвращает timestamps."
+                        f"У проекта нет пословных таймингов источника {src_label}. "
+                        f"Сгенерируйте их соответствующей кнопкой выше."
                     ),
                 }
             ), 400
 
-        _apply_tts_word_timings_to_scenes(job_id, scenes)
+        _apply_tts_word_timings_to_scenes(job_id, scenes, source=source)
         timings_applied = sum(
             1
             for s in scenes
@@ -4992,28 +5504,31 @@ def job_scenes_apply_tts_timings(job_id: str):
             return jsonify(
                 {
                     "ok": False,
+                    "source": source,
                     "error": (
                         "Не удалось сопоставить тайминги: проверьте, что текст сцен "
                         "совпадает с озвучкой."
                     ),
-                    "words_filename": audio_fname.replace(".mp3", ".words.json"),
+                    "words_filename": audio_fname.replace(".mp3", words_suffix),
                 }
             ), 400
 
+        job["apply_timings_source"] = source
         save_job(job_id, job)
         rendered = _render_scenes_stripped_with_timing(scenes)
 
     return jsonify(
         {
             "ok": True,
+            "source": source,
             "scenes_count": len(scenes),
             "timings_applied": timings_applied,
             "scenes_stripped_text": rendered,
             "audio_filename": audio_fname,
-            "words_filename": audio_fname.replace(".mp3", ".words.json"),
+            "words_filename": audio_fname.replace(".mp3", words_suffix),
             "message": (
-                f"Тайминги сопоставлены: {timings_applied}/{len(scenes)} сцен "
-                f"(озвучка: {audio_fname})."
+                f"Тайминги ({'Whisper' if source == 'whisper' else 'ElevenLabs'}) "
+                f"сопоставлены: {timings_applied}/{len(scenes)} сцен (озвучка: {audio_fname})."
             ),
         }
     )
@@ -5849,17 +6364,54 @@ def delete_job_scene(job_id: str):
 
 @app.route("/job/<job_id>/delete", methods=["POST"])
 def delete_job(job_id: str):
-    """Удаляет проект."""
+    """Удаляет проект целиком: и job-данные, и rewrite-данные под тем же ID.
+
+    Удаляются: `data/jobs/<id>.json`, `data/job_audio/<id>`, `data/job_pexels/<id>`,
+    `data/job_remotion/<id>`, `data/rewrite_jobs/<id>`, `data/rewrite_media/<id>`
+    и симлинк `remotion/public/jobs/<id>`.
+    """
+    deleted_any = False
     filepath = JOBS_DIR / f"{job_id}.json"
     if filepath.exists():
         filepath.unlink()
-        audio_dir = JOB_AUDIO_DIR / job_id
-        if audio_dir.is_dir():
-            shutil.rmtree(audio_dir, ignore_errors=True)
+        deleted_any = True
+    lock_path = JOBS_DIR / f"{job_id}.json.lock"
+    if lock_path.exists():
+        try:
+            lock_path.unlink()
+        except OSError:
+            pass
+    for d in (
+        JOB_AUDIO_DIR / job_id,
+        BASE_DIR / "data" / "job_pexels" / job_id,
+        BASE_DIR / "data" / "job_remotion" / job_id,
+        BASE_DIR / "data" / "rewrite_media" / job_id,
+    ):
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+            deleted_any = True
+    if rewrite_id_ok(job_id):
+        rw_dir = _rewrite_project_dir(job_id)
+        if rw_dir.is_dir():
+            shutil.rmtree(rw_dir, ignore_errors=True)
+            deleted_any = True
+        legacy_fp = _rewrite_legacy_filepath(job_id)
+        if legacy_fp.is_file():
+            legacy_fp.unlink(missing_ok=True)
+            deleted_any = True
+    remotion_public = BASE_DIR / "remotion" / "public" / "jobs" / job_id
+    try:
+        if remotion_public.is_symlink() or remotion_public.exists():
+            remotion_public.unlink()
+            deleted_any = True
+    except OSError:
+        pass
+
+    if deleted_any:
         flash("Проект удалён.", "success")
     else:
         flash("Проект не найден.", "error")
-    return redirect(url_for("video_index"))
+    return redirect(url_for("index"))
 
 
 @app.route("/job/<job_id>/elevenlabs/voices", methods=["GET"])
@@ -7396,7 +7948,12 @@ def job_montage_assemble(job_id: str):
                 scenes_w = job_work.get("scenes")
                 if isinstance(scenes_w, list) and scenes_w:
                     # Пересчитать audio_timing из words.json (алгоритм align мог обновиться).
-                    _apply_tts_word_timings_to_scenes(job_id, scenes_w)
+                    # Используем источник, выбранный пользователем (если сохранён);
+                    # иначе — ElevenLabs по умолчанию, как и раньше.
+                    _src = _timings_source_normalize(job_work.get("apply_timings_source"))
+                    if _src == "whisper" and not _job_has_words_for_source(job_id, "whisper"):
+                        _src = "elevenlabs"
+                    _apply_tts_word_timings_to_scenes(job_id, scenes_w, source=_src)
                     try:
                         save_job(job_id, job_work)
                     except Exception:
@@ -7916,8 +8473,15 @@ def job_page(job_id: str):
     with _job_file_lock(job_id):
         job = load_job(job_id)
         if job is None:
+            # Проект мог быть создан как rewrite-only (legacy) или прийти
+            # сюда после редиректа со старого `/rewrite/<id>` — в обоих случаях
+            # имеет смысл подхватить, если есть только rewrite-папка.
+            if rewrite_id_ok(job_id) and _rewrite_project_dir(job_id).is_dir():
+                _ensure_job_file_for_id(job_id)
+                job = load_job(job_id)
+        if job is None:
             flash("Проект не найден.", "error")
-            return redirect(url_for("video_index"))
+            return redirect(url_for("index"))
 
         # Совместимость со старыми job без project_name, job_meta
         job.setdefault("project_name", "")
@@ -7955,17 +8519,59 @@ def job_page(job_id: str):
     tts_last_audio_name: str | None = None
     tts_last_words_href: str | None = None
     tts_last_words_name: str | None = None
+    whisper_last_words_href: str | None = None
+    whisper_last_words_name: str | None = None
+    whisper_initial_final_ev: dict[str, Any] | None = None
     if job_has_audio and audio_dir.is_dir():
         mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
         if mp3s:
             tts_last_audio_name = mp3s[0].name
             tts_last_audio_href = url_for("job_audio_file", job_id=job_id, filename=mp3s[0].name)
             # Парный .words.json (если есть) — для авто-подгрузки блока «Тайминги слов».
-            words_candidate = mp3s[0].with_suffix("").name + ".words.json"  # base без .mp3 + .words.json
+            base_stem = mp3s[0].with_suffix("").name
+            words_candidate = base_stem + ".words.json"
             words_path = audio_dir / words_candidate
             if words_path.is_file():
                 tts_last_words_name = words_candidate
                 tts_last_words_href = url_for("job_audio_file", job_id=job_id, filename=words_candidate)
+            # Whisper-результат (если есть) — авто-восстановление блока после рефреша.
+            whisper_candidate = base_stem + ".whisper.words.json"
+            whisper_path = audio_dir / whisper_candidate
+            if whisper_path.is_file():
+                whisper_last_words_name = whisper_candidate
+                whisper_last_words_href = url_for(
+                    "job_audio_file", job_id=job_id, filename=whisper_candidate
+                )
+                # Snapshot для JS-функции renderWhisperWordsFromFinal(): только
+                # короткая meta, сам массив слов JS дотянет фоном через words_url.
+                try:
+                    _doc = json.loads(whisper_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    _doc = None
+                if isinstance(_doc, dict):
+                    _words_list = _doc.get("words") if isinstance(_doc.get("words"), list) else []
+                    _first_w = _words_list[0] if _words_list else None
+                    _last_w = _words_list[-1] if _words_list else None
+                    whisper_initial_final_ev = {
+                        "type": "final",
+                        "phase": "done",
+                        "audio_filename": mp3s[0].name,
+                        "words_filename": whisper_candidate,
+                        "words_url": whisper_last_words_href,
+                        "total_words": int(_doc.get("total_words") or len(_words_list)),
+                        "total_duration_ms": int(_doc.get("total_duration_ms") or 0),
+                        "language": _doc.get("language"),
+                        "language_probability": _doc.get("language_probability"),
+                        "model": _doc.get("model"),
+                        "device": _doc.get("device"),
+                        "compute_type": _doc.get("compute_type"),
+                        "first_word": _first_w,
+                        "last_word": _last_w,
+                        "message": (
+                            f"Сохранённый прогон: {len(_words_list)} слов, "
+                            f"язык={_doc.get('language')}, модель={_doc.get('model')}."
+                        ),
+                    }
     _mont = meta.get("montage") if isinstance(meta.get("montage"), dict) else {}
     montage_zoom_scale = _montage_zoom_scale_from_meta(_mont)
     montage_zoom_mode = _montage_zoom_mode_clamp(_mont.get("zoom_mode"))
@@ -7998,13 +8604,29 @@ def job_page(job_id: str):
             if _cand.get("job_id") == job_id and _cand.get("state") in ("queued", "running"):
                 montage_active_render_task_id = _tid
                 break
-    return render_template(
+    rewrite_ctx = _rewrite_template_context(job_id)
+    html = render_template(
         "job.html",
         job_id=job_id,
         job=job,
+        **rewrite_ctx,
         scenes=job.get("scenes", []),
         scenes_stripped_with_timing=_render_scenes_stripped_with_timing(job.get("scenes") or []),
         tts_words_available=bool(tts_last_words_href),
+        whisper_words_available=bool(whisper_last_words_href),
+        whisper_last_words_href=whisper_last_words_href,
+        whisper_last_words_name=whisper_last_words_name,
+        whisper_initial_final_ev=whisper_initial_final_ev,
+        apply_timings_source=(
+            # Источник, выбранный пользователем ранее (если до сих пор валиден),
+            # иначе — лучший доступный (Whisper при наличии, иначе ElevenLabs).
+            _timings_source_normalize(job.get("apply_timings_source"))
+            if (
+                (_timings_source_normalize(job.get("apply_timings_source")) == "elevenlabs" and bool(tts_last_words_href))
+                or (_timings_source_normalize(job.get("apply_timings_source")) == "whisper" and bool(whisper_last_words_href))
+            )
+            else ("whisper" if whisper_last_words_href else "elevenlabs")
+        ),
         job_has_audio=job_has_audio,
         tts_last_text=str(job.get("tts_last_text") or ""),
         tts_last_audio_href=tts_last_audio_href,
@@ -8039,6 +8661,15 @@ def job_page(job_id: str):
         montage_remotion_open_url=montage_remotion_open_url,
         montage_active_render_task_id=montage_active_render_task_id,
     )
+    # Запрещаем браузерный кеш страницы /job/<id>: HTML+inline-JS меняются часто
+    # (rewrite-блок, тайминги слов и т.д.), при кешировании старая копия страницы
+    # приводит к «не активным» полям — состояние UI принимает решение по
+    # серверным флагам, инжектированным прямо в HTML/JS.
+    resp = make_response(html)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 try:

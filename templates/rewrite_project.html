@@ -55,7 +55,7 @@
         <section class="scenes-section rewrite-pipeline">
             <div class="scene-card rewrite-youtube-card{% if rw_yt_transcript_trim %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_transcript_trim else '0' }}">
                 <div class="rewrite-youtube-block">
-                    <div class="scene-id rewrite-youtube-block__title">YouTube</div>
+                    <div class="scene-id rewrite-youtube-block__title">YouTube Transcriber</div>
                     <p class="scene-text rewrite-youtube-block__lead">
                         Ссылка на ролик: проверка, загрузка аудио и расшифровка. Готовый текст можно вставить в поле «Исходный текст».
                     </p>
@@ -83,8 +83,32 @@
                         </div>
                     </div>
                     <div class="rewrite-youtube-block__status-stack">
-                        <p class="rewrite-youtube-video-line{% if not (rw.youtube_title or '')|trim %} rewrite-youtube-video-line--empty{% endif %}" id="rewrite-youtube-video-line">
-                            <span class="rewrite-youtube-video-line__text" id="rewrite-youtube-video-title">{{ (rw.youtube_title or '')|trim }}</span>
+                        {% set _yt_ch_name = (rw.youtube_channel or '')|trim %}
+                        {% set _yt_ch_avatar = (rw.youtube_channel_avatar or '')|trim %}
+                        {% set _yt_ch_url = (rw.youtube_channel_url or '')|trim %}
+                        {% set _yt_video_title = (rw.youtube_title or '')|trim %}
+                        <p class="rewrite-youtube-video-line{% if not _yt_video_title and not _yt_ch_name %} rewrite-youtube-video-line--empty{% endif %}" id="rewrite-youtube-video-line">
+                            <span class="rewrite-youtube-channel" id="rewrite-youtube-channel">
+                                {% if _yt_ch_url %}
+                                <a id="rewrite-youtube-channel-link" class="rewrite-youtube-channel__link" href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube">
+                                {% endif %}
+                                <img
+                                    id="rewrite-youtube-channel-avatar"
+                                    class="rewrite-youtube-channel__avatar{% if not _yt_ch_avatar %} hidden{% endif %}"
+                                    src="{{ _yt_ch_avatar }}"
+                                    alt=""
+                                    referrerpolicy="no-referrer"
+                                    decoding="async"
+                                    loading="lazy"
+                                    width="28"
+                                    height="28"
+                                >
+                                <span class="rewrite-youtube-channel__name{% if not _yt_ch_name %} hidden{% endif %}" id="rewrite-youtube-channel-name">{{ _yt_ch_name }}</span>
+                                {% if _yt_ch_url %}
+                                </a>
+                                {% endif %}
+                            </span>
+                            <span class="rewrite-youtube-video-line__text" id="rewrite-youtube-video-title">{{ _yt_video_title }}</span>
                         </p>
                         <div class="rewrite-youtube-block__status-row">
                             <span id="rewrite-youtube-status" class="rewrite-youtube-status" aria-live="polite"></span>
@@ -794,6 +818,9 @@
     const ytStatusEl = document.getElementById('rewrite-youtube-status');
     const ytVideoLineEl = document.getElementById('rewrite-youtube-video-line');
     const ytVideoTitleTextEl = document.getElementById('rewrite-youtube-video-title');
+    const ytChannelAvatarEl = document.getElementById('rewrite-youtube-channel-avatar');
+    const ytChannelNameEl = document.getElementById('rewrite-youtube-channel-name');
+    const ytChannelLinkEl = document.getElementById('rewrite-youtube-channel-link');
     const ytCardEl = document.getElementById('rewrite-youtube-card');
     const ytLockOverlay = document.getElementById('rewrite-youtube-lock-overlay');
     const ytUnlockBtn = document.getElementById('rewrite-youtube-unlock-btn');
@@ -913,11 +940,47 @@
         ytStatusEl.classList.toggle('rewrite-youtube-status--error', !!isError);
     }
 
+    function _ytLineHasContent() {
+        var hasTitle = !!(ytVideoTitleTextEl && (ytVideoTitleTextEl.textContent || '').trim());
+        var hasChan = !!(ytChannelNameEl && (ytChannelNameEl.textContent || '').trim());
+        return hasTitle || hasChan;
+    }
+
     function setYtVideoTitle(t) {
         var s = (t == null || t === undefined) ? '' : String(t);
         s = s.trim();
         if (ytVideoTitleTextEl) ytVideoTitleTextEl.textContent = s;
-        if (ytVideoLineEl) ytVideoLineEl.classList.toggle('rewrite-youtube-video-line--empty', !s);
+        if (ytVideoLineEl) ytVideoLineEl.classList.toggle('rewrite-youtube-video-line--empty', !_ytLineHasContent());
+    }
+
+    function setYtChannelMeta(meta) {
+        var data = meta || {};
+        var name = (data.youtube_channel == null) ? '' : String(data.youtube_channel).trim();
+        var url = (data.youtube_channel_url == null) ? '' : String(data.youtube_channel_url).trim();
+        var avatar = (data.youtube_channel_avatar == null) ? '' : String(data.youtube_channel_avatar).trim();
+        if (ytChannelNameEl) {
+            ytChannelNameEl.textContent = name;
+            ytChannelNameEl.classList.toggle('hidden', !name);
+        }
+        if (ytChannelAvatarEl) {
+            if (avatar) {
+                ytChannelAvatarEl.src = avatar;
+                ytChannelAvatarEl.alt = name || '';
+                ytChannelAvatarEl.classList.remove('hidden');
+            } else {
+                ytChannelAvatarEl.removeAttribute('src');
+                ytChannelAvatarEl.classList.add('hidden');
+            }
+        }
+        if (ytChannelLinkEl) {
+            if (url) {
+                ytChannelLinkEl.href = url;
+                ytChannelLinkEl.title = name ? ('Открыть канал «' + name + '» на YouTube') : 'Открыть канал на YouTube';
+            } else {
+                ytChannelLinkEl.removeAttribute('href');
+            }
+        }
+        if (ytVideoLineEl) ytVideoLineEl.classList.toggle('rewrite-youtube-video-line--empty', !_ytLineHasContent());
     }
 
     function formatYtCookiesStatusLine(d) {
@@ -3110,6 +3173,7 @@
             if (d1.youtube_title) {
                 setYtVideoTitle(d1.youtube_title);
             }
+            setYtChannelMeta(d1);
             setYtStatus('Скачивание: запрашиваем поток с сервера…', false);
             const doneDl = await ytConsumeDownloadStream(signal);
             if (doneDl && doneDl.youtube_title) {
@@ -4725,6 +4789,7 @@
         ytUrlEl.addEventListener('input', function () {
             ytTranscriptReady = false;
             setYtVideoTitle('');
+            setYtChannelMeta({});
             applyYoutubeToolbar();
             var t = (ytUrlEl.value || '').trim();
             if (t) {
@@ -5276,6 +5341,9 @@
                 applyCardCollapsed(card, !!collapsed);
             });
         }
+        // Экспонируем наружу — нужно, чтобы переключение пресета могло
+        // принудительно свернуть верхние этапы нового пресета.
+        window.__rewriteSetAllCollapsed = setAllCollapsed;
         var collapseAllBtn = document.getElementById('rewrite-stages-collapse-all-btn');
         var expandAllBtn = document.getElementById('rewrite-stages-expand-all-btn');
         if (collapseAllBtn) collapseAllBtn.addEventListener('click', function () { setAllCollapsed(true); });
@@ -5413,6 +5481,12 @@
                 currentRewritePreset = preset;
                 syncPresetToggleButtonsUI(preset);
                 applyRewritePresetVisibility(preset);
+                // По умолчанию сворачиваем верхние этапы нового пресета — иначе
+                // после переключения видна полная простыня раскрытых карточек,
+                // даже если в прошлом пресете их сворачивали.
+                if (typeof window.__rewriteSetAllCollapsed === 'function') {
+                    try { window.__rewriteSetAllCollapsed(true); } catch (_) { /* ignore */ }
+                }
                 // Пересчитать кнопки запуска по новому пресету (иначе крестики
                 // остаются от логики предыдущего пресета).
                 try { syncStageRunButtons(); } catch (_) { /* ignore */ }

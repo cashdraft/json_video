@@ -6,7 +6,7 @@
     <title>Проект {{ job_id }} — Генерация</title>
     {% include '_stylesheet_link.html' %}
 </head>
-<body class="job-page">
+<body class="job-page" data-openai-key="{{ '1' if openai_key_set else '0' }}">
     <script>window.__JSON_VIDEO_ROOT__ = {{ request.script_root | tojson }};</script>
     {% macro template_no_image_visual() %}
     <span class="template-option-visual template-option-visual--placeholder" aria-hidden="true">
@@ -44,8 +44,7 @@
     {% endmacro %}
     <div class="container">
         <header>
-            <a href="{{ url_for('index') }}" class="back-link">← На главную</a>
-            <a href="{{ url_for('video_index') }}" class="back-link">← К разделу Video</a>
+            <a href="{{ url_for('index') }}" class="back-link">← К проектам</a>
             <div class="rewrite-project-header-bar">
                 <form method="post" action="{{ url_for('rename_job', job_id=job_id) }}" class="project-name-form">
                     <label for="project_name" class="sr-only">Название проекта</label>
@@ -68,7 +67,7 @@
                     <button type="submit" class="btn btn-danger btn-sm">Удалить проект</button>
                 </form>
             </div>
-            <p class="subtitle">Генерация изображений и видео по сценам · {{ job_id }}</p>
+            <p class="subtitle">ReWrite-конвейер и сборка видео в одном проекте · {{ job_id }}</p>
         </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -80,6 +79,10 @@
                 </div>
             {% endif %}
         {% endwith %}
+
+        {% if rw %}
+        {% include '_rewrite_block.html' %}
+        {% endif %}
 
         <section class="tts-section video-panel" id="elevenlabs-tts">
             <h2 class="scene-id rewrite-pipeline-runner__title">Озвучка ElevenLabs</h2>
@@ -195,6 +198,19 @@
                         <span class="tts-words-title">Тайминги слов</span>
                         <span class="tts-words-summary" id="tts-words-summary"></span>
                     </button>
+                    <div class="tts-words-source-row" title="Использовать этот источник при «Сгенерировать JSON-код сцен с таймингами»">
+                        <label class="tts-words-source-radio">
+                            <input
+                                type="radio"
+                                name="timings-source"
+                                value="elevenlabs"
+                                id="timings-source-elevenlabs"
+                                {% if apply_timings_source == 'elevenlabs' %}checked{% endif %}
+                                {% if not tts_words_available %}disabled{% endif %}
+                            >
+                            <span>Источник для JSON: ElevenLabs</span>
+                        </label>
+                    </div>
                     <div id="tts-words-body" class="tts-words-body" hidden>
                         <div class="tts-words-actions">
                             <button type="button" class="btn btn-secondary btn-sm" id="tts-words-download">Скачать .words.json</button>
@@ -209,11 +225,24 @@
                         <button type="button" class="btn btn-secondary btn-sm" id="whisper-words-run">Прогнать локальный Whisper по словам</button>
                         <span id="whisper-words-status" class="tts-template-status" aria-live="polite"></span>
                     </div>
-                    <button type="button" id="whisper-words-toggle" class="tts-words-toggle hidden" aria-controls="whisper-words-body">
+                    <button type="button" id="whisper-words-toggle" class="tts-words-toggle {% if not whisper_words_available %}hidden{% endif %}" aria-controls="whisper-words-body">
                         <span class="tts-words-chevron" aria-hidden="true">▸</span>
                         <span class="tts-words-title">Тайминги слов (Whisper)</span>
                         <span class="tts-words-summary" id="whisper-words-summary"></span>
                     </button>
+                    <div class="tts-words-source-row" title="Использовать этот источник при «Сгенерировать JSON-код сцен с таймингами»">
+                        <label class="tts-words-source-radio">
+                            <input
+                                type="radio"
+                                name="timings-source"
+                                value="whisper"
+                                id="timings-source-whisper"
+                                {% if apply_timings_source == 'whisper' %}checked{% endif %}
+                                {% if not whisper_words_available %}disabled{% endif %}
+                            >
+                            <span>Источник для JSON: Whisper</span>
+                        </label>
+                    </div>
                     <div id="whisper-words-body" class="tts-words-body" hidden>
                         <div class="tts-words-actions">
                             <button type="button" class="btn btn-secondary btn-sm" id="whisper-words-download">Скачать .whisper.words.json</button>
@@ -348,12 +377,13 @@
         </form>
 
         {% if scenes|length > 0 %}
+        {% set _any_words = tts_words_available or whisper_words_available %}
         <div class="scenes-apply-timings">
             <button
                 type="button"
                 class="btn btn-secondary btn-sm"
                 id="scenes-apply-timings-btn"
-                {% if not tts_words_available %}disabled title="Сначала сгенерируйте озвучку с пословными таймингами (.words.json)."{% else %}title="Применить тайминги из последнего .words.json к существующим сценам и обновить блок ниже."{% endif %}
+                {% if not _any_words %}disabled title="Сначала сгенерируйте пословные тайминги (ElevenLabs .words.json или локальный Whisper)."{% else %}title="Применить тайминги выбранного источника к существующим сценам и обновить блок ниже."{% endif %}
             >Сгенерировать JSON-код сцен с таймингами</button>
             <span class="scenes-apply-timings-status tts-template-status hidden" id="scenes-apply-timings-status" aria-live="polite"></span>
         </div>
@@ -3571,6 +3601,21 @@
             });
         }
 
+        // Авто-восстановление блока Whisper из сохранённого `.whisper.words.json`,
+        // чтобы после рефреша страницы данные не «исчезали»: бэкенд передал нам
+        // snapshot последнего прогона — рендерим его сразу при загрузке.
+        {% if whisper_initial_final_ev %}
+        try {
+            const _initialWhisperEv = {{ whisper_initial_final_ev|tojson }};
+            renderWhisperWordsFromFinal(_initialWhisperEv);
+            // По умолчанию свёрнуто, чтобы не перегружать страницу: блок и так
+            // показывает summary рядом с заголовком.
+            setWhisperWordsCollapsed(true);
+        } catch (_e) {
+            /* no-op: восстановление — best-effort */
+        }
+        {% endif %}
+
         /** Как на сервере: elevenlabs_client.sentences_split_by_dot + pack_sentences_into_chunks.
          *  Между предложениями вставляется ведущий пробел — иначе при склейке
          *  получится "…elit.Lorem ipsum…" и ElevenLabs прочитает стык слитно. */
@@ -4168,18 +4213,37 @@
             applyStatus.classList.toggle('hidden', !text);
             applyStatus.style.color = isError ? 'var(--danger, #ff6b6b)' : '';
         };
+        // --- Источник пословных таймингов: ElevenLabs / Whisper ---
+        const readTimingsSource = () => {
+            const checked = document.querySelector('input[name="timings-source"]:checked');
+            const val = checked ? String(checked.value || '').toLowerCase() : '';
+            return val === 'whisper' ? 'whisper' : 'elevenlabs';
+        };
+        const updateApplyBtnTitle = () => {
+            if (!applyBtn || applyBtn.disabled) return;
+            const src = readTimingsSource();
+            applyBtn.title = src === 'whisper'
+                ? 'Применить тайминги от локального Whisper (.whisper.words.json) к существующим сценам.'
+                : 'Применить тайминги от ElevenLabs (.words.json) к существующим сценам.';
+        };
+        document.querySelectorAll('input[name="timings-source"]').forEach((r) => {
+            r.addEventListener('change', updateApplyBtnTitle);
+        });
+        updateApplyBtnTitle();
         if (applyBtn) {
             applyBtn.addEventListener('click', async () => {
                 if (applyBtn.disabled) return;
                 applyBtn.disabled = true;
-                setApplyStatus('Сопоставляем тайминги…');
+                const src = readTimingsSource();
+                const srcLabel = src === 'whisper' ? 'Whisper' : 'ElevenLabs';
+                setApplyStatus(`Сопоставляем тайминги (${srcLabel})…`);
                 try {
                     const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
                     const r = await fetch(`${ROOT}/job/${jobId}/scenes/apply-tts-timings`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'same-origin',
-                        body: '{}',
+                        body: JSON.stringify({ source: src }),
                     });
                     const data = await parseJsonOrThrow(r, 'apply-tts-timings');
                     if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
@@ -4189,9 +4253,10 @@
                     wrapEl.classList.remove('hidden');
                     setCollapsed(false);
                     updateSummary();
+                    const usedLabel = (data.source === 'whisper') ? 'Whisper' : 'ElevenLabs';
                     setApplyStatus(
                         `Готово: ${data.timings_applied || 0}/${data.scenes_count || 0} сцен. `
-                        + `Источник: ${data.words_filename || 'words.json'}.`,
+                        + `Источник: ${usedLabel} (${data.words_filename || ''}).`,
                     );
                 } catch (e) {
                     setApplyStatus('Ошибка: ' + (e?.message || String(e)), true);
@@ -4226,5 +4291,8 @@
         updateSummary();
     })();
     </script>
+    {% if rw %}
+    {% include '_rewrite_block_scripts.html' %}
+    {% endif %}
 </body>
 </html>

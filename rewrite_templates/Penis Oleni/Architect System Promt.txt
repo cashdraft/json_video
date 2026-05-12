@@ -30,6 +30,7 @@
    — retention_opportunities
    — donor_voice_signals
    — recommended_block_logic
+8. Пиши на английском языке
 
 ЧТО НУЖНО СДЕЛАТЬ:
 
@@ -50,7 +51,9 @@
 - block_name
 - block_role
 - purpose
-- target_chars
+- target_chars_min
+- target_chars_ideal
+- target_chars_max
 - must_cover
 - must_not_cover
 - source_mapping:
@@ -65,7 +68,7 @@
 - next_block_hint
 
 4. Распредели длину по блокам так, чтобы:
-— сумма target_chars примерно совпадала с target_chars_total
+— сумма target_chars_ideal примерно совпадала с target_chars_total
 — важные блоки получали больше места
 — второстепенные блоки не раздувались
 — финал не был скомкан

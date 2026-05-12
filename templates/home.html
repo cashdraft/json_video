@@ -3,21 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON Video — Home</title>
+    <title>JSON Video — Проекты</title>
     {% include '_stylesheet_link.html' %}
 </head>
 <body>
     <div class="container">
         <header>
             <h1>JSON Video</h1>
-            <p class="subtitle">Выберите раздел</p>
+            <p class="subtitle">Один проект — ReWrite-конвейер и сборка видео на одной странице</p>
         </header>
 
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
         <section class="scene-card">
-            <h2>Разделы</h2>
-            <p><a href="{{ url_for('video_index') }}">Video</a> — генерация изображений и видео по JSON.</p>
-            <p><a href="{{ url_for('rewrite_index') }}">ReWrite</a> — конвейер редакторов и переписывание текста.</p>
+            <h2>Новый проект</h2>
+            <form method="post" action="{{ url_for('index') }}" class="project-name-form">
+                <input
+                    type="text"
+                    id="project_name"
+                    name="project_name"
+                    class="project-name-input"
+                    placeholder="Например: Статья для блога — правки"
+                >
+                <button type="submit" class="btn btn-primary">Создать</button>
+            </form>
+            <p class="hint" style="margin-top:8px;color:#777;font-size:13px;">
+                Создаётся единый проект: блок ReWrite (переписывание текста) и блок Video (сцены, озвучка, монтаж) под одним ID.
+            </p>
+        </section>
+
+        <section class="projects-section">
+            <h2>Проекты</h2>
+            {% if projects %}
+            <div class="projects-list">
+                {% for p in projects %}
+                <div class="project-card">
+                    <div class="project-main">
+                        <a href="{{ url_for('job_page', job_id=p.id) }}" class="project-name">{{ p.project_name or p.id }}</a>
+                        <span class="project-meta">
+                            {{ p.id }}
+                            {% if p.has_rewrite %} · <span class="project-badge project-badge--rewrite" title="Есть данные ReWrite">ReWrite</span>{% endif %}
+                            {% if p.has_job %} · <span class="project-badge project-badge--job" title="Есть данные Video-job">Video</span>{% endif %}
+                            {% if p.scenes_count %} · {{ p.scenes_count }} сцен{% endif %}
+                            {% if p.updated_at %} · {{ p.updated_at }}{% endif %}
+                        </span>
+                    </div>
+                    <form method="post" action="{{ url_for('delete_job', job_id=p.id) }}" class="project-delete-form" data-delete-confirm-form="1">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Удалить проект">✕</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="projects-empty">Нет проектов. Создайте первый через форму выше.</p>
+            {% endif %}
         </section>
     </div>
+
+    <div class="confirm-modal hidden" id="list-delete-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-list-delete-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="list-delete-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="list-delete-confirm-title">Удалить проект</h3>
+            </div>
+            <p class="confirm-modal__lead">Точно удалить проект целиком? Будут стёрты и rewrite-данные, и video-данные.</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="list-delete-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="list-delete-confirm-ok">Да, удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const modal = document.getElementById('list-delete-confirm-modal');
+        const cancelBtn = document.getElementById('list-delete-confirm-cancel');
+        const okBtn = document.getElementById('list-delete-confirm-ok');
+        let resolver = null;
+
+        function openModal() {
+            if (!modal || !cancelBtn || !okBtn) {
+                return Promise.resolve(window.confirm('Точно удалить проект целиком? Будут стёрты и rewrite-данные, и video-данные.'));
+            }
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            return new Promise(function (resolve) { resolver = resolve; });
+        }
+
+        function closeModal(accepted) {
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            if (resolver) {
+                const fn = resolver;
+                resolver = null;
+                fn(Boolean(accepted));
+            }
+        }
+
+        cancelBtn?.addEventListener('click', function () { closeModal(false); });
+        okBtn?.addEventListener('click', function () { closeModal(true); });
+        modal?.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-list-delete-confirm-close')) closeModal(false);
+        });
+
+        document.querySelectorAll('form[data-delete-confirm-form="1"]').forEach(function (form) {
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const ok = await openModal();
+                if (!ok) return;
+                form.submit();
+            });
+        });
+    })();
+    </script>
 </body>
 </html>

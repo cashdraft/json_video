@@ -872,6 +872,101 @@ textarea::placeholder {
     word-break: break-word;
 }
 
+/* Иконочные значки cookies / proxy в правом верхнем углу карточки YouTube
+   Transcriber — на одной линии с заголовком и с теми же отступами от края
+   карточки, что и сам заголовок. Сами значки всегда нейтрально-серые;
+   состояние подсвечивается только маленьким кружком-индикатором сверху-справа. */
+.rewrite-youtube-iconbar {
+    position: absolute;
+    top: 0.92rem;
+    right: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    /* Lock-overlay карточки лежит на z-index 5 — значки должны быть НИЖЕ него,
+       чтобы при сохранённой расшифровке они тоже блокировались (как поле URL
+       и кнопки). На «Редактировать» оверлей скрывается — значки снова доступны. */
+    z-index: 1;
+}
+
+.rewrite-youtube-icon-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 6px;
+    /* Совпадает с .btn-secondary: фон var(--bg-card), на hover var(--border). */
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-muted, #909098);
+    cursor: pointer;
+    transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.rewrite-youtube-icon-btn:hover:not(:disabled) {
+    color: var(--text, #e8e8ec);
+    background: var(--border);
+}
+
+.rewrite-youtube-icon-btn:focus-visible {
+    outline: 2px solid var(--accent, #7eb8ff);
+    outline-offset: 2px;
+}
+
+.rewrite-youtube-icon-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.rewrite-youtube-icon-led {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-muted, #909098);
+    border: 2px solid var(--bg-card, #252529);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.rewrite-youtube-icon-led--ok {
+    background: var(--success, #34c759);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.rewrite-youtube-icon-led--bad {
+    background: var(--error, #ff4d4f);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.rewrite-youtube-icon-led--env {
+    background: #e6b422;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.rewrite-youtube-proxy-input {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-input, #1e1e22);
+    color: var(--text, #e8e8ec);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+}
+
+.rewrite-youtube-cookies-modal__age {
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
 .rewrite-youtube-cookies-modal__file-wrap {
     display: flex;
     flex-direction: column;
@@ -945,6 +1040,10 @@ textarea::placeholder {
     font-size: 0.78rem;
     line-height: 1.45;
     word-break: break-word;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.55rem;
 }
 
 .rewrite-youtube-video-line--empty {
@@ -954,8 +1053,50 @@ textarea::placeholder {
 .rewrite-youtube-video-line__text {
     color: var(--text-muted);
     font-weight: 700;
-    display: block;
     min-width: 0;
+    flex: 1 1 100%;
+}
+
+.rewrite-youtube-channel {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.rewrite-youtube-channel__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: inherit;
+    text-decoration: none;
+    min-width: 0;
+}
+
+.rewrite-youtube-channel__link:hover .rewrite-youtube-channel__name {
+    text-decoration: underline;
+}
+
+.rewrite-youtube-channel__avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+    display: block;
+}
+
+.rewrite-youtube-channel__name {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.82rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    max-width: 280px;
 }
 
 .rewrite-youtube-block__status-row {
@@ -2812,6 +2953,38 @@ textarea::placeholder {
 
 .tts-words-toggle:hover { background: rgba(255, 255, 255, 0.04); }
 
+.tts-words-source-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem 0;
+    font-size: 0.85rem;
+}
+
+.tts-words-source-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    color: var(--text-muted, #aaa);
+}
+
+.tts-words-source-radio input[type="radio"] {
+    cursor: pointer;
+    accent-color: var(--accent, #7eb8ff);
+}
+
+.tts-words-source-radio input[type="radio"]:disabled,
+.tts-words-source-radio input[type="radio"]:disabled + span {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.tts-words-source-radio input[type="radio"]:checked + span {
+    color: var(--text, #f0f0f0);
+    font-weight: 600;
+}
+
 .tts-words-chevron {
     display: inline-block;
     transition: transform 0.15s ease;
@@ -4392,6 +4565,30 @@ button.job-download-all-link {
     color: var(--text-muted);
     font-size: 0.95rem;
     margin: 0;
+}
+
+.project-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
+    vertical-align: baseline;
+    border: 1px solid var(--border);
+}
+
+.project-badge--rewrite {
+    background: rgba(120, 90, 200, 0.18);
+    color: #b6a0ff;
+    border-color: rgba(120, 90, 200, 0.45);
+}
+
+.project-badge--job {
+    background: rgba(80, 160, 90, 0.18);
+    color: #9ad6a4;
+    border-color: rgba(80, 160, 90, 0.45);
 }
 
 #rewrite-template-create-modal .project-name-input {
