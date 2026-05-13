@@ -5,8 +5,16 @@
         {% endif %}
 
         {% set rw_yt_transcript_trim = (rw.youtube_transcript_text or '')|trim %}
+        {# YT-карточка лочится не только когда сервер хранит расшифровку, но и
+           когда в Source уже есть текст: типичный сценарий — пользователь уже
+           вытащил transcript в Source, прервал/перезапустил декод другой
+           ссылки и обновил страницу. Без этой защиты он мог бы случайно
+           перезаписать «Исходный текст» через «Расшифровать» — а Редактировать
+           по-прежнему доступен по клику на оверлей. #}
+        {% set rw_source_trim = (rw.source_text or rw.last_text or '')|trim %}
+        {% set rw_yt_lock_active = rw_yt_transcript_trim or rw_source_trim %}
         <section class="scenes-section rewrite-pipeline">
-            <div class="scene-card rewrite-youtube-card{% if rw_yt_transcript_trim %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_transcript_trim else '0' }}">
+            <div class="scene-card rewrite-youtube-card{% if rw_yt_lock_active %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_lock_active else '0' }}">
                 {% set yps = youtube_proxy_status|default({
                     'env_overrides_file': false,
                     'last_test_ok': none,
@@ -75,45 +83,61 @@
                             {% if not openai_key_set %}disabled{% endif %}
                         >
                         <div class="rewrite-youtube-block__actions">
-                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set %}disabled{% endif %}>Расшифровать</button>
-                            <button type="button" class="btn btn-danger btn-sm" id="rewrite-youtube-stop" disabled title="Прервать проверку ссылки, скачивание или расшифровку" aria-label="Остановить">Остановить</button>
+                            {% set _yt_url_empty = not (rw.youtube_url or '')|trim %}
+                            <button type="button" class="btn btn-primary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set or _yt_url_empty %}disabled{% endif %}>Расшифровать</button>
                             <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert" disabled>Вставить</button>
                         </div>
                     </div>
-                    <div class="rewrite-youtube-block__status-stack">
-                        {% set _yt_ch_name = (rw.youtube_channel or '')|trim %}
-                        {% set _yt_ch_avatar = (rw.youtube_channel_avatar or '')|trim %}
-                        {% set _yt_ch_url = (rw.youtube_channel_url or '')|trim %}
-                        {% set _yt_video_title = (rw.youtube_title or '')|trim %}
-                        <p class="rewrite-youtube-video-line{% if not _yt_video_title and not _yt_ch_name %} rewrite-youtube-video-line--empty{% endif %}" id="rewrite-youtube-video-line">
-                            <span class="rewrite-youtube-channel" id="rewrite-youtube-channel">
+                    {# Прогресс-блок: слева — превью канала (логотип, имя канала, заголовок видео),
+                       справа — dashed-плашка со статусом и Cancel в стиле Semantic. Видим, пока
+                       идёт задача или пока есть сохранённое превью на диске. #}
+                    {% set _yt_ch_name = (rw.youtube_channel or '')|trim %}
+                    {% set _yt_ch_avatar = (rw.youtube_channel_avatar or '')|trim %}
+                    {% set _yt_ch_url = (rw.youtube_channel_url or '')|trim %}
+                    {% set _yt_video_title = (rw.youtube_title or '')|trim %}
+                    {% set _yt_progress_visible = _yt_ch_name or _yt_video_title %}
+                    <div class="rewrite-youtube-block__progress{% if not _yt_progress_visible %} hidden{% endif %}" id="rewrite-youtube-progress-wrap" aria-hidden="{{ 'false' if _yt_progress_visible else 'true' }}">
+                        <div class="rewrite-youtube-info-left" id="rewrite-youtube-info-left">
+                            <div class="rewrite-youtube-info-left__avatar-col" id="rewrite-youtube-channel">
                                 {% if _yt_ch_url %}
-                                <a id="rewrite-youtube-channel-link" class="rewrite-youtube-channel__link" href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube">
+                                <a id="rewrite-youtube-channel-link" class="rewrite-youtube-channel__avatar-link" href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube">
                                 {% endif %}
                                 <img
                                     id="rewrite-youtube-channel-avatar"
-                                    class="rewrite-youtube-channel__avatar{% if not _yt_ch_avatar %} hidden{% endif %}"
-                                    src="{{ _yt_ch_avatar }}"
+                                    class="rewrite-youtube-channel__avatar{% if not _yt_ch_avatar %} rewrite-youtube-channel__avatar--placeholder{% endif %}"
+                                    src="{{ _yt_ch_avatar or url_for('static', filename='img/youtube_channel_placeholder.svg') }}"
+                                    data-placeholder-src="{{ url_for('static', filename='img/youtube_channel_placeholder.svg') }}"
                                     alt=""
                                     referrerpolicy="no-referrer"
                                     decoding="async"
                                     loading="lazy"
-                                    width="28"
-                                    height="28"
+                                    width="40"
+                                    height="40"
                                 >
-                                <span class="rewrite-youtube-channel__name{% if not _yt_ch_name %} hidden{% endif %}" id="rewrite-youtube-channel-name">{{ _yt_ch_name }}</span>
                                 {% if _yt_ch_url %}
                                 </a>
                                 {% endif %}
-                            </span>
-                            <span class="rewrite-youtube-video-line__text" id="rewrite-youtube-video-title">{{ _yt_video_title }}</span>
-                        </p>
-                        <div class="rewrite-youtube-block__status-row">
-                            <span id="rewrite-youtube-status" class="rewrite-youtube-status" aria-live="polite"></span>
+                            </div>
+                            <div class="rewrite-youtube-info-left__meta">
+                                {% if _yt_ch_url %}
+                                <a id="rewrite-youtube-channel-name-link" class="rewrite-youtube-channel__name-link" href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube">
+                                    <span class="rewrite-youtube-channel__name" id="rewrite-youtube-channel-name">{{ _yt_ch_name }}</span>
+                                </a>
+                                {% else %}
+                                <span class="rewrite-youtube-channel__name" id="rewrite-youtube-channel-name">{{ _yt_ch_name }}</span>
+                                {% endif %}
+                                <div class="rewrite-youtube-info-left__title" id="rewrite-youtube-video-title">{{ _yt_video_title }}</div>
+                            </div>
+                        </div>
+                        <div class="rewrite-youtube-progress-stage slot-placeholder rewrite-slot-placeholder hidden" id="rewrite-youtube-progress-stage" aria-hidden="true">
+                            <div class="slot-status-row">
+                                <span class="slot-status slot-status-with-spinner" id="rewrite-youtube-status" aria-live="polite"></span>
+                                <button type="button" class="btn-cancel-generation" id="rewrite-youtube-cancel-inline" disabled>Cancel</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="rewrite-youtube-lock-overlay{% if not rw_yt_transcript_trim %} hidden{% endif %}" id="rewrite-youtube-lock-overlay">
+                <div class="rewrite-youtube-lock-overlay{% if not rw_yt_lock_active %} hidden{% endif %}" id="rewrite-youtube-lock-overlay">
                     <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-unlock-btn">Редактировать</button>
                 </div>
             </div>
@@ -127,7 +151,8 @@
                     <input type="text" id="rewrite-source-title" class="rewrite-source-title-input rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
                 </div>
                 <div class="rewrite-source-toolbar slot-header">
-                    <span class="slot-badge badge-yes">Source</span>
+                    {% set _src_has_text = (rw.source_text or rw.last_text or '')|trim %}
+                    <span class="slot-badge badge-{{ 'yes' if _src_has_text else 'no' }}" id="rewrite-source-badge" data-text-badge-for="rewrite-source-text">Source</span>
                     <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.source_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                         <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                         <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -144,10 +169,84 @@
                 <div class="rewrite-source-translate-block">
                     {% set _tr_lp = (locked_prompts_state or {}).get('translate_to_ru') or {} %}
                     {% set _tr_present = _tr_lp.get('present')|default(false) %}
+                    {% set _ru_has_text = (rw.source_text_ru or '')|trim %}
+                    {% set _sa_result = (rw.semantic_text_analysis or '')|trim %}
+                    {# Локальный выбор модели — применяется только к Russian (перевод) и Semantic (структура).
+                       Дефолт всегда `gpt-4.1` (не зависит от глобальной «Model»). В payload идёт в `russian_semantic_model`.
+                       Claude из этого списка исключаем — два этапа гоняем только на GPT-моделях. #}
+                    {% set _rsm_cur = (rw.russian_semantic_model or '')|trim %}
+                    {% set _rsm_default_id = 'gpt-4.1' %}
+                    {% set _ns_rsm_list = namespace(items=[]) %}
+                    {% for m in rewrite_models %}
+                        {% if (m.id or '').startswith('gpt-') %}
+                            {% set _ = _ns_rsm_list.items.append(m) %}
+                        {% endif %}
+                    {% endfor %}
+                    {% set _rsm_models = _ns_rsm_list.items %}
+                    {% set _rsm_model_ids = _rsm_models|map(attribute='id')|list %}
+                    {% if _rsm_default_id not in _rsm_model_ids and _rsm_models %}
+                        {% set _rsm_default_id = _rsm_models[0].id %}
+                    {% endif %}
+                    {% set _rsm_active = _rsm_cur if (_rsm_cur and _rsm_cur in _rsm_model_ids) else _rsm_default_id %}
+                    {% set ns_rsm = namespace(label='—') %}
+                    {% if _rsm_models %}{% set ns_rsm.label = _rsm_models[0].label %}{% endif %}
+                    {% for m in _rsm_models %}{% if _rsm_active == m.id %}{% set ns_rsm.label = m.label %}{% endif %}{% endfor %}
+                    <div class="rewrite-stages-collapsible" id="rewrite-stages-collapsible" data-collapsed="true">
+                        <div class="rewrite-stages-collapsible__header">
+                            <button type="button"
+                                class="rewrite-stages-collapsible__toggle"
+                                id="rewrite-stages-collapsible-toggle"
+                                aria-expanded="false"
+                                aria-controls="rewrite-stages-collapsible-body">
+                                <span class="rewrite-stages-collapsible__chev" aria-hidden="true">▾</span>
+                                <span class="rewrite-stages-collapsible__title">Подробнее</span>
+                            </button>
+                            <div class="rewrite-stages-compact" id="rewrite-stages-compact" aria-live="polite">
+                                <span class="rewrite-stages-compact__pair">
+                                    <span class="slot-badge badge-{{ 'yes' if _ru_has_text else 'no' }}" id="rewrite-stages-compact-ru-badge">Russian</span>
+                                    <button type="button" class="btn-regenerate rewrite-stages-compact__run" id="rewrite-stages-compact-ru-btn" title="Перевести на русский" aria-label="Перевести на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                </span>
+                                <span class="rewrite-stages-compact__sep" aria-hidden="true">—</span>
+                                <span class="rewrite-stages-compact__pair">
+                                    <span class="slot-badge badge-{{ 'yes' if _sa_result else 'no' }}" id="rewrite-stages-compact-sa-badge">Semantic</span>
+                                    <button type="button" class="btn-regenerate rewrite-stages-compact__run" id="rewrite-stages-compact-sa-btn" title="Запустить Semantic" aria-label="Запустить Semantic" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                </span>
+                            </div>
+                            <div class="rewrite-stages-collapsible__right">
+                                <span class="rewrite-stages-compact__hint">При изменении «Исходный текст» перевод и структура запустятся автоматически.</span>
+                                <div class="rewrite-anim-field rewrite-anim-field--single rewrite-stages-lang-model" data-lang-model-field="1" title="Модель для Russian и Semantic (не влияет на остальные этапы)">
+                                    <button type="button" class="rewrite-anim-dropdown__btn rewrite-stages-lang-model__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Модель для Russian и Semantic">
+                                        <span class="rewrite-stages-lang-model__sizer">
+                                            <span class="rewrite-stages-lang-model__label rewrite-anim-dropdown__btn-label" data-lang-model-label>{{ ns_rsm.label }}</span>
+                                            {% for m in _rsm_models %}
+                                            <span class="rewrite-stages-lang-model__sizer-ghost" aria-hidden="true">{{ m.label }}</span>
+                                            {% endfor %}
+                                        </span>
+                                        <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                                    </button>
+                                    <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-stages-lang-model__panel" hidden role="listbox">
+                                        {% for m in _rsm_models %}
+                                        <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                            <input type="radio" name="rewrite-stages-lang-model-radio-{{ rw.rewrite_id }}" class="rewrite-anim-radio rewrite-stages-lang-model-radio visually-hidden-input" value="{{ m.id }}" {% if _rsm_active == m.id %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                            <span class="rewrite-anim-option__body">
+                                                <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                            </span>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <select id="rewrite-stages-lang-model" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                                    {% for m in _rsm_models %}
+                                    <option value="{{ m.id }}" {% if _rsm_active == m.id %}selected{% endif %}>{{ m.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="rewrite-stages-collapsible__body" id="rewrite-stages-collapsible-body">
                     <div class="rewrite-slot--source-ru-wrap" id="rewrite-source-text-ru-wrap">
                         {% set ru_locked = rw.source_text_ru_locked|default(false) %}
                         <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Russian</span>
+                            <span class="slot-badge badge-{{ 'yes' if _ru_has_text else 'no' }}" id="rewrite-source-ru-badge" data-text-badge-for="rewrite-source-text-ru">Russian</span>
                             <button type="button" class="btn-regenerate rewrite-stage-run rewrite-source-translate-ru-run-btn" id="rewrite-source-translate-ru-btn" title="Перевести на русский (запустить / повторить)" aria-label="Перевести на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if ru_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-ru-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
@@ -187,7 +286,7 @@
                         {% set sa_res_locked = rw.semantic_text_analysis_locked|default(true) %}
                         <div class="semantic-analyzer-block" id="semantic-analyzer-block">
                             <div class="semantic-analyzer-header">
-                                <span class="slot-badge badge-yes">Semantic</span>
+                                <span class="slot-badge badge-{{ 'yes' if _sa_result else 'no' }}" id="semantic-analyzer-badge" data-text-badge-for="semantic-analyzer-result">Semantic</span>
                                 <button type="button" class="btn-regenerate rewrite-stage-run semantic-analyzer-run-btn" id="semantic-analyzer-run-btn" title="Запустить Semantic" aria-label="Запустить Semantic" {% if not openai_key_set %}disabled{% endif %}>↻</button>
                                 <button type="button" class="rewrite-lock-toggle btn-icon semantic-analyzer-result-toggle{% if sa_res_locked %} rewrite-lock-toggle--locked{% endif %}" id="semantic-analyzer-result-toggle" title="Редактировать результат" aria-label="Редактировать результат" {% if not openai_key_set %}disabled{% endif %}>
                                     <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
@@ -211,10 +310,17 @@
                                 </div>
                             </div>
                             <div class="rewrite-scene-writer-check semantic-analyzer-textarea-wrap" id="semantic-analyzer-textarea-wrap">
-                                <textarea id="semantic-analyzer-result" class="semantic-analyzer-result-textarea{% if sa_res_locked %} rewrite-source-textarea--locked{% endif %}" rows="12" placeholder="Нажмите ↻ — результат анализа появится здесь." {% if not openai_key_set %}disabled{% elif sa_res_locked %}readonly{% endif %}>{{ rw.semantic_text_analysis or '' }}</textarea>
+                                <textarea id="semantic-analyzer-result" class="semantic-analyzer-result-textarea{% if sa_res_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Нажмите ↻ — результат анализа появится здесь." {% if not openai_key_set %}disabled{% elif sa_res_locked %}readonly{% endif %}>{{ rw.semantic_text_analysis or '' }}</textarea>
                             </div>
+                            {# Красивый JSON-рендер: title/summary + блоки с topics-чипами.
+                               Заполняется JS'ом из значения textarea (см. setupSemanticAnalyzerPreview).
+                               В locked-режиме мы показываем этот блок, а textarea прячем; в режиме
+                               редактирования наоборот. Если JSON битый/пустой — превью скрыто. #}
+                            <div class="rewrite-scene-writer-check semantic-analyzer-preview hidden" id="semantic-analyzer-preview" aria-hidden="true"></div>
                         </div>
                     </div>
+                        </div>{# /.rewrite-stages-collapsible__body #}
+                    </div>{# /.rewrite-stages-collapsible #}
                 </div>
             </div>
 
@@ -280,13 +386,14 @@
                         <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
                         <p class="rewrite-source-subhint">Описание героя озвучки. Добавляется во все этапы (в user-сообщение, вместе с ориентиром по символам).</p>
                         <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Hero</span>
+                            {% set _hero_has_text = (rw.hero_prompt or '')|trim %}
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _hero_has_text else 'no' }}" id="rewrite-hero-badge" data-text-badge-for="rewrite-hero-prompt">Hero Promt: {{ 'YES' if _hero_has_text else 'NO' }}</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if hero_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-hero-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                             </button>
                         </div>
-                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--hero-prompt">
                             <textarea id="rewrite-hero-prompt" class="rewrite-source-textarea{% if hero_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Герой, тон, контекст…" {% if not openai_key_set %}disabled{% elif hero_locked %}readonly{% endif %}>{{ rw.hero_prompt or '' }}</textarea>
                         </div>
                     </div>
@@ -294,7 +401,8 @@
                         <h3 class="rewrite-source-subtitle">Master Prompt</h3>
                         <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
                         <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Master</span>
+                            {% set _master_has_text = (rw.master_prompt or '')|trim %}
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _master_has_text else 'no' }}" id="rewrite-master-badge" data-text-badge-for="rewrite-master-prompt">Master Promt: {{ 'YES' if _master_has_text else 'NO' }}</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.master_prompt_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-master-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -352,7 +460,7 @@
                                 </button>
                             </div>
                             <div class="tts-slider-block rewrite-source-duration">
-                                <label class="tts-slider-label" for="rewrite-target-chars">Символы <span class="tts-slider-val" id="rewrite-target-chars-val">{{ (rw.target_chars|default(1500))|int }}</span></label>
+                                <label class="tts-slider-label" for="rewrite-target-chars">Символы <span class="tts-slider-val" id="rewrite-target-chars-val">{{ (rw.target_chars|default(1500))|int|fmt_num_ru }}</span></label>
                                 <input type="range" id="rewrite-target-chars" name="target_chars" min="500" max="40000" step="500" value="{{ (rw.target_chars|default(1500))|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="500" aria-valuemax="40000">
                                 <div class="tts-slider-ends">
                                     <span>500</span>

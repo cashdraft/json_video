@@ -1,0 +1,310 @@
+{
+  "analysis_mode": "full_analysis",
+  "core_thesis": "Truly wealthy individuals exhibit distinct, often invisible behavioral and financial patterns that set them apart from the general population, and these patterns are accessible and replicable by anyone regardless of current income.",
+  "core_promise": "By understanding and adopting the seven additional behavioral signs of quietly wealthy people, viewers can begin to build the habits and mindset that lead to long-term financial security and wealth accumulation.",
+  "target_audience_in_source": "Individuals interested in personal finance, wealth-building, and understanding the habits of the wealthy; likely middle-class viewers seeking practical, actionable advice.",
+  "content_type_in_source": "Educational, listicle-style YouTube video with a personal finance/self-improvement focus.",
+  "key_ideas": [
+    {
+      "idea_id": "idea_01",
+      "title": "Avoidance of Credit Card Debt",
+      "description": "Wealthy people never carry credit card debt, understanding both its direct and opportunity costs, and use credit cards as tools rather than sources of debt."
+    },
+    {
+      "idea_id": "idea_02",
+      "title": "Boring Jobs and Businesses",
+      "description": "Most millionaires have stable, unglamorous jobs or own businesses in unexciting but essential industries, which provide steady income and low social spending pressure."
+    },
+    {
+      "idea_id": "idea_03",
+      "title": "Self-Made Wealth",
+      "description": "The majority of American millionaires are first-generation wealthy, having built their fortunes from scratch without significant inheritance, developing disciplined financial habits in the process."
+    },
+    {
+      "idea_id": "idea_04",
+      "title": "Modest Housing Choices",
+      "description": "Wealthy individuals typically live in homes well below their means, avoiding the lifestyle inflation and social pressures that come with expensive neighborhoods."
+    },
+    {
+      "idea_id": "idea_05",
+      "title": "Strategic Financial Ambiguity",
+      "description": "They deliberately downplay or obscure their wealth to avoid social friction, requests for help, and security risks associated with visible affluence."
+    },
+    {
+      "idea_id": "idea_06",
+      "title": "Multiple Invisible Income Streams",
+      "description": "Quietly wealthy people have several sources of income beyond their primary job, providing financial security and the freedom to take risks."
+    },
+    {
+      "idea_id": "idea_07",
+      "title": "Long-Term Thinking and Patience",
+      "description": "They approach financial decisions with a multi-decade perspective, allowing compounding to work and resisting short-term reactions."
+    }
+  ],
+  "facts_and_numbers": [
+    {
+      "fact_id": "fact_01",
+      "content": "The National Study of Millionaires surveyed 10,000 American millionaires.",
+      "type": "research",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_02",
+      "content": "Three out of four millionaires had never carried credit card debt.",
+      "type": "statistic",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_03",
+      "content": "The average American carries $6,715 in credit card debt.",
+      "type": "number",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_04",
+      "content": "Average credit card interest rate is 21.5%.",
+      "type": "number",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_05",
+      "content": "On a minimum payment schedule, $1,300 out of every $1,500 in annual payments goes to interest.",
+      "type": "claim",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_06",
+      "content": "$1,300 invested annually at 8% for 30 years grows to approximately $147,000.",
+      "type": "claim",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_07",
+      "content": "Terry Kahn accumulated $13 million as a building superintendent and donated it all to charity.",
+      "type": "example",
+      "precision_importance": "medium"
+    },
+    {
+      "fact_id": "fact_08",
+      "content": "79% of American millionaires did not receive significant inheritance.",
+      "type": "statistic",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_09",
+      "content": "Only 3% of millionaires received an inheritance of $1 million or more.",
+      "type": "statistic",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_10",
+      "content": "Average American home is priced at 6-7 times annual income; median household income is ~$80,000; typical home value $480,000-$560,000.",
+      "type": "number",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_11",
+      "content": "Typical millionaire buys a home at 1.5-3 times annual income.",
+      "type": "statistic",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_12",
+      "content": "Warren Buffett bought his house in 1958 for $31,500; his net worth is over $100 billion.",
+      "type": "example",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_13",
+      "content": "In 2026, displayed wealth is a documented security risk.",
+      "type": "claim",
+      "precision_importance": "medium"
+    },
+    {
+      "fact_id": "fact_14",
+      "content": "Rental properties generating $2,800/month after expenses (example of invisible income stream).",
+      "type": "example",
+      "precision_importance": "medium"
+    },
+    {
+      "fact_id": "fact_15",
+      "content": "People in highest net worth brackets typically have three or more income streams; middle-class usually have one or two.",
+      "type": "research",
+      "precision_importance": "high"
+    },
+    {
+      "fact_id": "fact_16",
+      "content": "Warren Buffett's net worth at age 50 was $300 million; over 97% of his wealth accumulated after age 60.",
+      "type": "example",
+      "precision_importance": "high"
+    }
+  ],
+  "argument_flow": [
+    {
+      "step_id": "step_01",
+      "function": "setup",
+      "summary": "Author introduces the topic: identifying quietly wealthy people through behavioral signs, expanding on previous content."
+    },
+    {
+      "step_id": "step_02",
+      "function": "hook",
+      "summary": "Promises to reveal seven additional signs of secret wealth, building on prior nine."
+    },
+    {
+      "step_id": "step_03",
+      "function": "explanation",
+      "summary": "Each sign is introduced with supporting evidence, statistics, and examples."
+    },
+    {
+      "step_id": "step_04",
+      "function": "proof",
+      "summary": "Research studies, statistics, and real-life examples (e.g., Terry Kahn, Warren Buffett) are used to validate each behavioral pattern."
+    },
+    {
+      "step_id": "step_05",
+      "function": "contrast",
+      "summary": "Contrasts quietly wealthy behaviors with typical American financial behaviors (e.g., debt, housing, job choices)."
+    },
+    {
+      "step_id": "step_06",
+      "function": "payoff",
+      "summary": "Shows how adopting these behaviors leads to financial freedom, security, and compounding wealth."
+    },
+    {
+      "step_id": "step_07",
+      "function": "conclusion",
+      "summary": "Summarizes the seven signs, encourages viewers to self-assess and apply the lessons, and includes calls to action."
+    }
+  ],
+  "content_map": {
+    "A_preserve_exactly": [
+      "National Study of Millionaires: 10,000 surveyed",
+      "Three out of four millionaires never carried credit card debt",
+      "$6,715 average American credit card debt",
+      "21.5% average credit card interest rate",
+      "$1,300 out of $1,500 in annual payments goes to interest",
+      "$1,300 invested at 8% for 30 years = ~$147,000",
+      "79% of millionaires self-made; 3% inherited $1M+",
+      "Average home price: 6-7x income; median income ~$80,000; home $480,000-$560,000",
+      "Millionaire home price: 1.5-3x income",
+      "Warren Buffett: $31,500 house, $100B+ net worth",
+      "Three or more income streams for top net worth; one or two for middle class",
+      "Warren Buffett: $300M at 50, 97% of wealth after 60"
+    ],
+    "B_preserve_meaning": [
+      "Wealthy avoid credit card debt and use cards as tools",
+      "Boring jobs/businesses provide stability and low social spending pressure",
+      "Self-made millionaires develop disciplined habits",
+      "Modest housing prevents lifestyle inflation",
+      "Strategic ambiguity protects from social and security risks",
+      "Multiple income streams provide security and risk tolerance",
+      "Long-term thinking enables compounding and extraordinary outcomes"
+    ],
+    "C_can_adapt": [
+      "Examples of boring jobs (engineers, teachers, etc.)",
+      "Terry Kahn's story",
+      "Descriptions of invisible income streams (rental, dividends, royalties)",
+      "Warren Buffett's lifestyle details",
+      "Descriptions of social pressures in expensive neighborhoods"
+    ],
+    "D_must_rewrite": [
+      "YouTube-specific calls to action (like, subscribe, comments)",
+      "Direct audience engagement",
+      "Personal anecdotes or casual asides",
+      "References to previous or next videos",
+      "Blog-style conversational transitions"
+    ]
+  },
+  "weak_segments": [
+    {
+      "location": "Intro and outro",
+      "problem_type": "blogger_offtopic",
+      "description": "Repeated calls to like, subscribe, and watch other videos; not relevant for core content."
+    },
+    {
+      "location": "Throughout sign explanations",
+      "problem_type": "padding",
+      "description": "Occasional over-explanation and reiteration of points that could be more concise."
+    },
+    {
+      "location": "Sign 5 (Strategic Ambiguity)",
+      "problem_type": "flat_explanation",
+      "description": "Somewhat lengthy justification of ambiguity; could be tightened for clarity."
+    }
+  ],
+  "retention_opportunities": [
+    {
+      "location": "Opening",
+      "opportunity_type": "hook",
+      "description": "Potential for a stronger, curiosity-driven hook about hidden wealth behaviors."
+    },
+    {
+      "location": "Between signs",
+      "opportunity_type": "rehook",
+      "description": "Opportunity to use mini-hooks or contrasts to maintain engagement between each sign."
+    },
+    {
+      "location": "Sign 7 (Long-term thinking)",
+      "opportunity_type": "payoff_pull",
+      "description": "Potential to amplify the emotional and logical payoff of compounding over decades."
+    },
+    {
+      "location": "Sign 4 (Modest housing)",
+      "opportunity_type": "contrast",
+      "description": "Could heighten contrast between typical and wealthy housing choices for impact."
+    }
+  ],
+  "donor_voice_signals": [
+    {
+      "location": "Intro/outro and transitions",
+      "signal_type": "audience_address",
+      "description": "Direct appeals to like, subscribe, comment, and watch other videos."
+    },
+    {
+      "location": "Throughout",
+      "signal_type": "blogger_offtopic",
+      "description": "Casual asides, personal research journey, and conversational filler."
+    },
+    {
+      "location": "Outro",
+      "signal_type": "persona_mismatch",
+      "description": "Overly informal, blog-style sign-off not suitable for all channel personas."
+    }
+  ],
+  "narrative_value": {
+    "high_value_segments": [
+      "Statistical findings about millionaire behaviors",
+      "Detailed breakdown of opportunity cost of debt",
+      "Contrast between quietly wealthy and typical financial behaviors",
+      "Explanation of compounding and long-term thinking",
+      "Insights into social and psychological costs of visible wealth"
+    ],
+    "low_value_segments": [
+      "YouTube engagement prompts",
+      "Personal anecdotes not directly supporting key ideas",
+      "Overly detailed transitions and conversational filler"
+    ]
+  },
+  "recommended_block_logic": [
+    {
+      "block_hint_id": "block_hint_01",
+      "purpose": "Open with a compelling, curiosity-driven hook about invisible wealth behaviors."
+    },
+    {
+      "block_hint_id": "block_hint_02",
+      "purpose": "Present each behavioral sign with supporting research, statistics, and clear contrasts to typical behaviors."
+    },
+    {
+      "block_hint_id": "block_hint_03",
+      "purpose": "Use real-life examples and case studies to illustrate each sign, but adapt for tone and persona."
+    },
+    {
+      "block_hint_id": "block_hint_04",
+      "purpose": "Summarize the cumulative impact of these behaviors, emphasizing the payoff of compounding and long-term thinking."
+    },
+    {
+      "block_hint_id": "block_hint_05",
+      "purpose": "Conclude with a motivational call to action focused on self-assessment and practical application, not channel engagement."
+    }
+  ]
+}

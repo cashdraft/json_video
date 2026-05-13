@@ -1,0 +1,337 @@
+{
+  "target_chars_total": 18000,
+  "narrative_arc": {
+    "opening_function": "Spark curiosity and establish the premise that quietly wealthy people follow hidden, replicable patterns.",
+    "middle_function": "Reveal and explore each of the seven behavioral signs, supporting each with research, statistics, and vivid contrasts to typical financial behaviors, while maintaining engagement through hooks and stakes escalation.",
+    "ending_function": "Deliver a strong payoff by synthesizing the cumulative impact of these behaviors, motivating viewers to self-assess and adopt these patterns for long-term wealth.",
+    "arc_summary": "The video begins with a curiosity-driven hook about invisible wealth behaviors, then systematically unpacks seven actionable signs of quietly wealthy individuals, each illustrated with research, statistics, and real-world examples. Contrasts and re-hooks maintain engagement, culminating in a motivational synthesis that empowers viewers to apply these lessons for their own financial transformation."
+  },
+  "global_rules": {
+    "language": "English",
+    "voice_style": "for_voiceover",
+    "avoid_repetition": true,
+    "maintain_semantic_progression": true,
+    "hook_density": "controlled",
+    "tone_goal": "inspiring, authoritative, practical"
+  },
+  "blocks": [
+    {
+      "block_id": 1,
+      "block_name": "Invisible Wealth: The Hidden Patterns",
+      "block_role": "hook",
+      "purpose": "Grab attention with a curiosity-driven hook about the unseen behaviors of the quietly wealthy, setting up the core thesis and promise.",
+      "target_chars_min": 800,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Introduce the concept of invisible wealth behaviors",
+        "Imply that these patterns are accessible to anyone",
+        "Set up the promise of revealing seven actionable signs"
+      ],
+      "must_not_cover": [
+        "Direct calls to like/subscribe",
+        "Personal anecdotes",
+        "Overly casual tone"
+      ],
+      "source_mapping": {
+        "A": ["National Study of Millionaires: 10,000 surveyed"],
+        "B": ["Wealthy avoid credit card debt and use cards as tools"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": true,
+        "mid_hooks": 0,
+        "open_loop": true
+      },
+      "next_block_hint": "Transition to the first behavioral sign with a mini-hook."
+    },
+    {
+      "block_id": 2,
+      "block_name": "Sign 1: Avoidance of Credit Card Debt",
+      "block_role": "explanation|proof|contrast",
+      "purpose": "Demonstrate how quietly wealthy people treat credit card debt, using statistics and contrasts to typical behaviors.",
+      "target_chars_min": 1400,
+      "target_chars_ideal": 1800,
+      "target_chars_max": 2000,
+      "must_cover": [
+        "Statistical findings on credit card debt among millionaires",
+        "Contrast with average American credit card debt and interest rates",
+        "Opportunity cost of carrying debt"
+      ],
+      "must_not_cover": [
+        "Personal finance tips unrelated to credit cards",
+        "General debt advice not tied to the wealthy"
+      ],
+      "source_mapping": {
+        "A": [
+          "Three out of four millionaires never carried credit card debt",
+          "$6,715 average American credit card debt",
+          "21.5% average credit card interest rate",
+          "$1,300 out of $1,500 in annual payments goes to interest",
+          "$1,300 invested at 8% for 30 years = ~$147,000"
+        ],
+        "B": ["Wealthy avoid credit card debt and use cards as tools"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Segue to the next sign with a mini-hook about unexpected career choices."
+    },
+    {
+      "block_id": 3,
+      "block_name": "Sign 2: Boring Jobs and Businesses",
+      "block_role": "explanation|proof|contrast",
+      "purpose": "Reveal how most millionaires build wealth through stable, unglamorous careers, contrasting with popular perceptions.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1600,
+      "target_chars_max": 1800,
+      "must_cover": [
+        "Examples of 'boring' jobs and businesses",
+        "How these roles provide stability and reduce social spending pressure",
+        "Contrast with high-status, high-spending professions"
+      ],
+      "must_not_cover": [
+        "Celebrity or influencer career paths",
+        "Personal anecdotes"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": ["Boring jobs/businesses provide stability and low social spending pressure"],
+        "C": ["Examples of boring jobs (engineers, teachers, etc.)"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Introduce the prevalence of self-made wealth among millionaires."
+    },
+    {
+      "block_id": 4,
+      "block_name": "Sign 3: Self-Made Wealth",
+      "block_role": "explanation|proof",
+      "purpose": "Highlight that most millionaires are self-made, using research and examples to dispel the inheritance myth.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1600,
+      "target_chars_max": 1800,
+      "must_cover": [
+        "Statistics on self-made millionaires vs. inherited wealth",
+        "Examples like Terry Kahn",
+        "Emphasis on disciplined financial habits"
+      ],
+      "must_not_cover": [
+        "General rags-to-riches stories not supported by data",
+        "Overly detailed personal stories"
+      ],
+      "source_mapping": {
+        "A": [
+          "79% of millionaires self-made; 3% inherited $1M+"
+        ],
+        "B": ["Self-made millionaires develop disciplined habits"],
+        "C": ["Terry Kahn's story"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Transition to housing choices with a contrast hook."
+    },
+    {
+      "block_id": 5,
+      "block_name": "Sign 4: Modest Housing Choices",
+      "block_role": "explanation|proof|contrast",
+      "purpose": "Show how quietly wealthy people live below their means in housing, using data and high-impact contrasts.",
+      "target_chars_min": 1400,
+      "target_chars_ideal": 1800,
+      "target_chars_max": 2000,
+      "must_cover": [
+        "Average home price vs. millionaire home price ratios",
+        "Examples like Warren Buffett",
+        "Contrast with typical American housing choices and lifestyle inflation"
+      ],
+      "must_not_cover": [
+        "General real estate advice",
+        "Personal housing anecdotes"
+      ],
+      "source_mapping": {
+        "A": [
+          "Average home price: 6-7x income; median income ~$80,000; home $480,000-$560,000",
+          "Millionaire home price: 1.5-3x income",
+          "Warren Buffett: $31,500 house, $100B+ net worth"
+        ],
+        "B": ["Modest housing prevents lifestyle inflation"],
+        "C": ["Warren Buffett's lifestyle details", "Descriptions of social pressures in expensive neighborhoods"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 2,
+        "open_loop": true
+      },
+      "next_block_hint": "Introduce the concept of strategic financial ambiguity."
+    },
+    {
+      "block_id": 6,
+      "block_name": "Sign 5: Strategic Financial Ambiguity",
+      "block_role": "explanation|proof",
+      "purpose": "Explain why quietly wealthy people obscure their wealth, focusing on social and security motivations.",
+      "target_chars_min": 1000,
+      "target_chars_ideal": 1300,
+      "target_chars_max": 1500,
+      "must_cover": [
+        "Reasons for downplaying wealth",
+        "Social and security risks of visible affluence",
+        "Relevant research or claims"
+      ],
+      "must_not_cover": [
+        "Overly lengthy justifications",
+        "Personal stories"
+      ],
+      "source_mapping": {
+        "A": ["In 2026, displayed wealth is a documented security risk"],
+        "B": ["Strategic ambiguity protects from social and security risks"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Segue to the importance of multiple income streams."
+    },
+    {
+      "block_id": 7,
+      "block_name": "Sign 6: Multiple Invisible Income Streams",
+      "block_role": "explanation|proof",
+      "purpose": "Demonstrate how quietly wealthy people build security and freedom through multiple, often hidden, income sources.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1600,
+      "target_chars_max": 1800,
+      "must_cover": [
+        "Research on number of income streams among wealthy vs. middle class",
+        "Examples of invisible income (rental, dividends, royalties)",
+        "How this enables risk-taking and security"
+      ],
+      "must_not_cover": [
+        "General investment advice",
+        "Personal income stories"
+      ],
+      "source_mapping": {
+        "A": [
+          "Three or more income streams for top net worth; one or two for middle class",
+          "Rental properties generating $2,800/month after expenses"
+        ],
+        "B": ["Multiple income streams provide security and risk tolerance"],
+        "C": ["Descriptions of invisible income streams (rental, dividends, royalties)"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": true
+      },
+      "next_block_hint": "Lead into the final sign: long-term thinking and patience."
+    },
+    {
+      "block_id": 8,
+      "block_name": "Sign 7: Long-Term Thinking and Patience",
+      "block_role": "explanation|proof|payoff",
+      "purpose": "Highlight the power of long-term thinking and patience, using compounding as the ultimate payoff.",
+      "target_chars_min": 1400,
+      "target_chars_ideal": 1800,
+      "target_chars_max": 2000,
+      "must_cover": [
+        "Examples of compounding (e.g., Warren Buffett's wealth after age 60)",
+        "How long-term perspective differentiates the quietly wealthy",
+        "Emotional and logical payoff of patience"
+      ],
+      "must_not_cover": [
+        "Short-term investment tips",
+        "Personal time management stories"
+      ],
+      "source_mapping": {
+        "A": [
+          "Warren Buffett: $300M at 50, 97% of wealth after 60"
+        ],
+        "B": ["Long-term thinking enables compounding and extraordinary outcomes"],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 2,
+        "open_loop": false
+      },
+      "next_block_hint": "Transition to synthesis and motivational payoff."
+    },
+    {
+      "block_id": 9,
+      "block_name": "Synthesis: The Cumulative Power of Quiet Wealth",
+      "block_role": "payoff|turn",
+      "purpose": "Synthesize the seven signs, emphasizing how their combination leads to financial freedom and security, and escalate the stakes for adopting these behaviors.",
+      "target_chars_min": 1200,
+      "target_chars_ideal": 1600,
+      "target_chars_max": 1800,
+      "must_cover": [
+        "Summarize the cumulative impact of the seven signs",
+        "Highlight the transformation possible for viewers",
+        "Escalate stakes: what is lost by ignoring these patterns"
+      ],
+      "must_not_cover": [
+        "Direct calls to like/subscribe",
+        "Personal anecdotes"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
+        "open_loop": false
+      },
+      "next_block_hint": "Move to a motivational, action-oriented conclusion."
+    },
+    {
+      "block_id": 10,
+      "block_name": "Conclusion: Your Path to Quiet Wealth",
+      "block_role": "conclusion",
+      "purpose": "Motivate viewers to self-assess and apply the seven signs, closing with a practical, inspiring call to action (not channel engagement).",
+      "target_chars_min": 800,
+      "target_chars_ideal": 1200,
+      "target_chars_max": 1400,
+      "must_cover": [
+        "Encourage self-assessment and practical application",
+        "Reinforce that these behaviors are accessible to anyone",
+        "End with an inspiring, forward-looking note"
+      ],
+      "must_not_cover": [
+        "YouTube engagement prompts",
+        "Personal sign-off stories"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 0,
+        "open_loop": false
+      },
+      "next_block_hint": "End of script."
+    }
+  ]
+}

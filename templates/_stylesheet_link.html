@@ -6,4 +6,74 @@ html { background: #1a1a1e; color: #e8e8ec; }
 body { margin: 0; min-height: 100vh; font-family: system-ui, "Segoe UI", sans-serif; line-height: 1.5; }
 body .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
 </style>
-<link rel="stylesheet" href="{{ config.STATIC_STYLE_HREF or url_for('static', filename='style.css') }}">
+{# Cache-bust: к URL добавляем mtime style.css, чтобы браузер не подсовывал старую версию. #}
+<link rel="stylesheet" href="{{ config.STATIC_STYLE_HREF or (url_for('static', filename='style.css') ~ '?v=' ~ static_style_mtime) }}">
+{# Глобальная мини-фича: двойной клик в правом нижнем углу любого
+   resizable-элемента (textarea, div с resize:vertical) разворачивает поле
+   на всю высоту содержимого; повторный двойной клик — возврат к дефолтной
+   высоте. Сделано общим скриптом, чтобы работало во всех формах/страницах. #}
+<script>
+(function () {
+    'use strict';
+    var CORNER_HIT = 22;
+
+    function isResizable(el) {
+        if (!el || !el.nodeType || el.nodeType !== 1) return false;
+        var cs = window.getComputedStyle(el);
+        var r = cs.resize;
+        return r === 'vertical' || r === 'both' || r === 'horizontal';
+    }
+
+    function inCorner(el, ev) {
+        var r = el.getBoundingClientRect();
+        var dx = r.right - ev.clientX;
+        var dy = r.bottom - ev.clientY;
+        return dx >= 0 && dx <= CORNER_HIT && dy >= 0 && dy <= CORNER_HIT;
+    }
+
+    function isTextarea(el) { return el && el.tagName === 'TEXTAREA'; }
+
+    function expand(el) {
+        if (el.dataset.resizeAutofitBase == null) {
+            el.dataset.resizeAutofitBase = el.style.height || '';
+        }
+        el.style.height = 'auto';
+        var h = el.scrollHeight;
+        el.style.height = (h + (isTextarea(el) ? 2 : 0)) + 'px';
+        el.dataset.resizeAutofit = '1';
+    }
+
+    function collapse(el) {
+        el.style.height = el.dataset.resizeAutofitBase || '';
+        el.dataset.resizeAutofit = '0';
+        try {
+            var r = el.getBoundingClientRect();
+            if (r.top < 0 || r.top > window.innerHeight - 80) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } catch (e) { /* no-op */ }
+    }
+
+    function clearSel(el) {
+        try {
+            if (isTextarea(el)) {
+                var p = el.selectionStart || 0;
+                el.setSelectionRange(p, p);
+            } else {
+                var s = window.getSelection();
+                if (s && s.removeAllRanges) s.removeAllRanges();
+            }
+        } catch (e) { /* no-op */ }
+    }
+
+    document.addEventListener('dblclick', function (ev) {
+        var el = ev.target;
+        if (!isResizable(el)) return;
+        if (!inCorner(el, ev)) return;
+        ev.preventDefault();
+        if (el.dataset.resizeAutofit === '1') collapse(el);
+        else expand(el);
+        clearSel(el);
+    }, true);
+})();
+</script>

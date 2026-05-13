@@ -52,8 +52,10 @@
         {% endif %}
 
         {% set rw_yt_transcript_trim = (rw.youtube_transcript_text or '')|trim %}
+        {% set rw_source_trim = (rw.source_text or rw.last_text or '')|trim %}
+        {% set rw_yt_lock_active = rw_yt_transcript_trim or rw_source_trim %}
         <section class="scenes-section rewrite-pipeline">
-            <div class="scene-card rewrite-youtube-card{% if rw_yt_transcript_trim %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_transcript_trim else '0' }}">
+            <div class="scene-card rewrite-youtube-card{% if rw_yt_lock_active %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_lock_active else '0' }}">
                 <div class="rewrite-youtube-block">
                     <div class="scene-id rewrite-youtube-block__title">YouTube Transcriber</div>
                     <p class="scene-text rewrite-youtube-block__lead">
@@ -77,8 +79,8 @@
                             {% if not openai_key_set %}disabled{% endif %}
                         >
                         <div class="rewrite-youtube-block__actions">
-                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set %}disabled{% endif %}>Расшифровать</button>
-                            <button type="button" class="btn btn-danger btn-sm" id="rewrite-youtube-stop" disabled title="Прервать проверку ссылки, скачивание или расшифровку" aria-label="Остановить">Остановить</button>
+                            {% set _yt_url_empty = not (rw.youtube_url or '')|trim %}
+                            <button type="button" class="btn btn-primary btn-sm" id="rewrite-youtube-decode" {% if not openai_key_set or _yt_url_empty %}disabled{% endif %}>Расшифровать</button>
                             <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-insert" disabled>Вставить</button>
                         </div>
                     </div>
@@ -120,7 +122,7 @@
                     <span class="rewrite-youtube-cookies-bar__age" id="rewrite-youtube-cookies-age" aria-live="polite">{% if youtube_cookies_status.present %}файл · {{ youtube_cookies_status.age_human }} · {{ youtube_cookies_status.size_bytes }} байт{% else %}нет файла (опционально){% endif %}</span>
                     <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-cookies-open">Загрузить cookies.txt…</button>
                 </div>
-                <div class="rewrite-youtube-lock-overlay{% if not rw_yt_transcript_trim %} hidden{% endif %}" id="rewrite-youtube-lock-overlay">
+                <div class="rewrite-youtube-lock-overlay{% if not rw_yt_lock_active %} hidden{% endif %}" id="rewrite-youtube-lock-overlay">
                     <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-unlock-btn">Редактировать</button>
                 </div>
             </div>
@@ -240,13 +242,14 @@
                         <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
                         <p class="rewrite-source-subhint">Описание героя озвучки. Добавляется во все этапы (в user-сообщение, вместе с ориентиром по символам).</p>
                         <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Hero</span>
+                            {% set _hero_has_text = (rw.hero_prompt or '')|trim %}
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _hero_has_text else 'no' }}" id="rewrite-hero-badge" data-text-badge-for="rewrite-hero-prompt">Hero Promt: {{ 'YES' if _hero_has_text else 'NO' }}</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if hero_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-hero-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
                             </button>
                         </div>
-                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--hero-prompt">
                             <textarea id="rewrite-hero-prompt" class="rewrite-source-textarea{% if hero_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Герой, тон, контекст…" {% if not openai_key_set %}disabled{% elif hero_locked %}readonly{% endif %}>{{ rw.hero_prompt or '' }}</textarea>
                         </div>
                     </div>
@@ -254,7 +257,8 @@
                         <h3 class="rewrite-source-subtitle">Master Prompt</h3>
                         <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
                         <div class="rewrite-source-toolbar slot-header">
-                            <span class="slot-badge badge-yes">Master</span>
+                            {% set _master_has_text = (rw.master_prompt or '')|trim %}
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _master_has_text else 'no' }}" id="rewrite-master-badge" data-text-badge-for="rewrite-master-prompt">Master Promt: {{ 'YES' if _master_has_text else 'NO' }}</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.master_prompt_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-master-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -312,7 +316,7 @@
                                 </button>
                             </div>
                             <div class="tts-slider-block rewrite-source-duration">
-                                <label class="tts-slider-label" for="rewrite-target-chars">Символы <span class="tts-slider-val" id="rewrite-target-chars-val">{{ (rw.target_chars|default(1500))|int }}</span></label>
+                                <label class="tts-slider-label" for="rewrite-target-chars">Символы <span class="tts-slider-val" id="rewrite-target-chars-val">{{ (rw.target_chars|default(1500))|int|fmt_num_ru }}</span></label>
                                 <input type="range" id="rewrite-target-chars" name="target_chars" min="500" max="40000" step="500" value="{{ (rw.target_chars|default(1500))|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="500" aria-valuemax="40000">
                                 <div class="tts-slider-ends">
                                     <span>500</span>
@@ -847,7 +851,7 @@
     const templateDeleteLeadEl = document.getElementById('rewrite-template-delete-lead');
     const templateDeleteCancelBtn = document.getElementById('rewrite-template-delete-cancel');
     const templateDeleteOkBtn = document.getElementById('rewrite-template-delete-ok');
-    let youtubeLocked = {{ (rw_yt_transcript_trim != '')|tojson }};
+    let youtubeLocked = {{ ((rw_yt_transcript_trim != '') or (rw_source_trim != ''))|tojson }};
     let youtubeEditConfirmResolver = null;
     let youtubeInsertConfirmResolver = null;
     let templateApplyConfirmResolver = null;
@@ -985,7 +989,7 @@
     function formatYtCookiesStatusLine(d) {
         if (!d || !d.present) return 'нет файла (опционально)';
         var age = d.age_human != null ? String(d.age_human) : '—';
-        var sz = d.size_bytes != null ? String(d.size_bytes) : '—';
+        var sz = d.size_bytes != null ? formatNumRu(d.size_bytes) : '—';
         return 'файл · ' + age + ' · ' + sz + ' байт';
     }
 
@@ -1329,7 +1333,10 @@
             return;
         }
         if (ytUrlEl) ytUrlEl.disabled = ytWorking;
-        if (ytDecodeBtn) ytDecodeBtn.disabled = ytWorking;
+        if (ytDecodeBtn) {
+            var _ytUrlEmpty = !ytUrlEl || !String(ytUrlEl.value || '').trim();
+            ytDecodeBtn.disabled = ytWorking || _ytUrlEmpty;
+        }
         if (ytStopBtn) ytStopBtn.disabled = !ytWorking || !ytAbortController;
         if (ytInsertBtn) ytInsertBtn.disabled = ytWorking || !ytTranscriptReady;
     }
@@ -1503,14 +1510,14 @@
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer</strong> <span class="' + okClass + '">' + (s.ok ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__hint">';
-        html += 'Блоков: <strong>' + String(s.blocks || 0) + '</strong> | ';
-        html += 'Ответов: <strong>' + String(s.responses || 0) + '</strong> | ';
-        html += 'Сцен: <strong>' + String(s.scenes || 0) + '</strong> | ';
-        html += 'С start: <strong>' + String(s.with_start || 0) + '</strong> | ';
-        html += 'С end: <strong>' + String(s.with_end || 0) + '</strong> | ';
-        html += 'С video: <strong>' + String(s.with_video || 0) + '</strong>';
+        html += 'Блоков: <strong>' + formatNumRu(s.blocks || 0) + '</strong> | ';
+        html += 'Ответов: <strong>' + formatNumRu(s.responses || 0) + '</strong> | ';
+        html += 'Сцен: <strong>' + formatNumRu(s.scenes || 0) + '</strong> | ';
+        html += 'С start: <strong>' + formatNumRu(s.with_start || 0) + '</strong> | ';
+        html += 'С end: <strong>' + formatNumRu(s.with_end || 0) + '</strong> | ';
+        html += 'С video: <strong>' + formatNumRu(s.with_video || 0) + '</strong>';
         html += '</div>';
-        html += '<div class="rewrite-scene-writer-check__hint">Средняя длина сцены: <strong>' + String(s.avg_scene_chars || 0) + '</strong> симв.</div>';
+        html += '<div class="rewrite-scene-writer-check__hint">Средняя длина сцены: <strong>' + formatNumRu(s.avg_scene_chars || 0) + '</strong> симв.</div>';
         html += '<div class="rewrite-scene-writer-check__divider"></div>';
         if (rows.length) {
             var colCount = 3;
@@ -1524,9 +1531,9 @@
                     var r = rows[i] || {};
                     html += '<div class="rewrite-scene-writer-check__block-item">';
                     html += '<span>Блок ' + String(r.index || (i + 1)) + '</span>';
-                    html += '<span>симв: ' + String(r.block_chars || 0) + '</span>';
-                    html += '<span>сцен: ' + String(r.scenes || 0) + '</span>';
-                    html += '<span>avg: ' + String(r.avg_scene_chars || 0) + '</span>';
+                    html += '<span>симв: ' + formatNumRu(r.block_chars || 0) + '</span>';
+                    html += '<span>сцен: ' + formatNumRu(r.scenes || 0) + '</span>';
+                    html += '<span>avg: ' + formatNumRu(r.avg_scene_chars || 0) + '</span>';
                     html += '<span class="' + (r.ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (r.ok ? 'OK' : 'NO') + '</span>';
                     html += '</div>';
                 }
@@ -1551,14 +1558,14 @@
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer Live</strong> <span class="' + okClass + '">' + (s.ok ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__hint">';
-        html += 'Батчей: <strong>' + String(s.batches || 0) + '</strong> | ';
-        html += 'Ответов: <strong>' + String(s.responses || 0) + '</strong> | ';
-        html += 'Сцен IN: <strong>' + String(s.scenes_in || 0) + '</strong> | ';
-        html += 'Сцен OUT: <strong>' + String(s.scenes_out || 0) + '</strong> | ';
+        html += 'Батчей: <strong>' + formatNumRu(s.batches || 0) + '</strong> | ';
+        html += 'Ответов: <strong>' + formatNumRu(s.responses || 0) + '</strong> | ';
+        html += 'Сцен IN: <strong>' + formatNumRu(s.scenes_in || 0) + '</strong> | ';
+        html += 'Сцен OUT: <strong>' + formatNumRu(s.scenes_out || 0) + '</strong> | ';
         html += 'Тип: <strong>' + String(s.content_type || 'photos') + '</strong> | ';
         html += 'Target: <strong>' + String(s.target_percent || 0) + '%</strong>';
         html += '</div>';
-        html += '<div class="rewrite-scene-writer-check__hint">С target-content: <strong>' + String(s.with_target_content || 0) + '</strong> | Средняя длина сцены: <strong>' + String(s.avg_scene_chars || 0) + '</strong> симв.</div>';
+        html += '<div class="rewrite-scene-writer-check__hint">С target-content: <strong>' + formatNumRu(s.with_target_content || 0) + '</strong> | Средняя длина сцены: <strong>' + formatNumRu(s.avg_scene_chars || 0) + '</strong> симв.</div>';
         html += '<div class="rewrite-scene-writer-check__divider"></div>';
         if (rows.length) {
             var colCount = 3;
@@ -1572,9 +1579,9 @@
                     var r = rows[i] || {};
                     html += '<div class="rewrite-scene-writer-check__block-item">';
                     html += '<span>Batch ' + String(r.index || (i + 1)) + '</span>';
-                    html += '<span>IN: ' + String(r.input_scenes || 0) + '</span>';
-                    html += '<span>OUT: ' + String(r.output_scenes || 0) + '</span>';
-                    html += '<span>chars: ' + String(r.output_chars || 0) + '</span>';
+                    html += '<span>IN: ' + formatNumRu(r.input_scenes || 0) + '</span>';
+                    html += '<span>OUT: ' + formatNumRu(r.output_scenes || 0) + '</span>';
+                    html += '<span>chars: ' + formatNumRu(r.output_chars || 0) + '</span>';
                     html += '<span class="' + (r.ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (r.ok ? 'OK' : 'NO') + '</span>';
                     html += '</div>';
                 }
@@ -1610,18 +1617,18 @@
         var structureOk = (Number(s.blocks || 0) > 0) && (Number(s.output_compact_chars || s.output_chars || 0) > 0);
         var okClass = structureOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
         var delta = Number(s.delta_chars || 0);
-        var deltaStr = (delta > 0 ? '+' : '') + String(delta);
+        var deltaStr = formatNumRuSigned(delta);
         var compactOk = structureOk;
         var compactDelta = Number(s.delta_compact_chars || 0);
-        var compactDeltaStr = (compactDelta > 0 ? '+' : '') + String(compactDelta);
+        var compactDeltaStr = formatNumRuSigned(compactDelta);
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Structure Splitter</strong> <span class="' + okClass + '">' + (structureOk ? 'OK' : ('NO (' + deltaStr + ')')) + '</span></div>';
         html += '<div class="rewrite-structure-splitter-check-line">';
-        html += '<span class="rewrite-structure-splitter-check-line__in">IN: <strong>' + String(s.input_chars || 0) + '</strong></span>';
+        html += '<span class="rewrite-structure-splitter-check-line__in">IN: <strong>' + formatNumRu(s.input_chars || 0) + '</strong></span>';
         html += '<span class="rewrite-structure-splitter-check-line__sep">|</span>';
-        html += '<span class="rewrite-structure-splitter-check-line__out">OUT: <strong>' + String(s.output_chars || 0) + '</strong> (' + deltaStr + ')</span>';
+        html += '<span class="rewrite-structure-splitter-check-line__out">OUT: <strong>' + formatNumRu(s.output_chars || 0) + '</strong> (' + deltaStr + ')</span>';
         html += '<span class="rewrite-structure-splitter-check-line__sep">|</span>';
-        html += '<span class="rewrite-structure-splitter-check-line__blocks">Блоков: <strong>' + String(s.blocks || 0) + '</strong></span>';
+        html += '<span class="rewrite-structure-splitter-check-line__blocks">Блоков: <strong>' + formatNumRu(s.blocks || 0) + '</strong></span>';
         html += '</div>';
         html += '<div class="rewrite-scene-writer-check__hint">Без пробелов/переносов: <span class="' + (compactOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (compactOk ? 'OK' : ('NO (' + compactDeltaStr + ')')) + '</span></div>';
         wrap.innerHTML = html;
@@ -1922,13 +1929,13 @@
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="' + (ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (ok ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
-        html += '<div>blocks: <strong>' + String(metrics.blocks_total) + '</strong></div>';
+        html += '<div>blocks: <strong>' + formatNumRu(metrics.blocks_total) + '</strong></div>';
         html += '</div>';
-        var d = (metrics.delta > 0 ? '+' : '') + String(metrics.delta);
+        var d = formatNumRuSigned(metrics.delta);
         html += '<div class="rewrite-scene-writer-check__hint rewrite-block-writer-check__total">';
-        html += '<span class="rewrite-block-writer-check__total-left">Target: <strong>' + String(metrics.target_chars_total) + '</strong></span>';
+        html += '<span class="rewrite-block-writer-check__total-left">Target: <strong>' + formatNumRu(metrics.target_chars_total) + '</strong></span>';
         html += '<span class="rewrite-block-writer-check__total-sep">|</span>';
-        html += '<span class="rewrite-block-writer-check__total-right">Chars OUT: <strong>' + String(metrics.blocks_target_chars_sum) + '</strong> (' + d + ')</span>';
+        html += '<span class="rewrite-block-writer-check__total-right">Chars OUT: <strong>' + formatNumRu(metrics.blocks_target_chars_sum) + '</strong> (' + d + ')</span>';
         html += '</div>';
         wrap.innerHTML = html;
     }
@@ -1964,18 +1971,18 @@
             var delta = Number(r.delta || 0);
             totalIn += inChars;
             totalOut += outChars;
-            var d = (delta > 0 ? '+' : '') + String(delta);
+            var d = formatNumRuSigned(delta);
             html += '<div class="rewrite-scene-writer-check__row rewrite-block-writer-check__row">';
             html += '<span class="rewrite-block-writer-check__left">Block ' + String(idx) + ' <span class="' + (existsOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (existsOk ? '✓' : '✕') + '</span></span>';
-            html += '<span class="rewrite-block-writer-check__right">Chars OUT: <strong>' + String(outChars) + '</strong> (' + d + ')</span>';
+            html += '<span class="rewrite-block-writer-check__right">Chars OUT: <strong>' + formatNumRu(outChars) + '</strong> (' + d + ')</span>';
             html += '</div>';
         }
         var totalDelta = totalOut - totalIn;
-        var totalDeltaStr = (totalDelta > 0 ? '+' : '') + String(totalDelta);
+        var totalDeltaStr = formatNumRuSigned(totalDelta);
         html += '<div class="rewrite-scene-writer-check__hint rewrite-block-writer-check__total">';
-        html += '<span class="rewrite-block-writer-check__total-left">Chars IN: <strong>' + String(totalIn) + '</strong></span>';
+        html += '<span class="rewrite-block-writer-check__total-left">Chars IN: <strong>' + formatNumRu(totalIn) + '</strong></span>';
         html += '<span class="rewrite-block-writer-check__total-sep">|</span>';
-        html += '<span class="rewrite-block-writer-check__total-right">Chars OUT: <strong>' + String(totalOut) + '</strong> (' + totalDeltaStr + ')</span>';
+        html += '<span class="rewrite-block-writer-check__total-right">Chars OUT: <strong>' + formatNumRu(totalOut) + '</strong> (' + totalDeltaStr + ')</span>';
         html += '</div>';
         html += '</div>';
         wrap.innerHTML = html;
@@ -2027,19 +2034,19 @@
         html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--left">';
         html += '<div>core_thesis: ' + yesNo(metrics.core_thesis_ok) + '</div>';
         html += '<div>core_promise: ' + yesNo(metrics.core_promise_ok) + '</div>';
-        html += '<div>key_ideas: <strong>' + String(metrics.key_ideas) + '</strong></div>';
-        html += '<div>facts_and_numbers: <strong>' + String(metrics.facts_and_numbers) + '</strong></div>';
-        html += '<div>argument_flow: <strong>' + String(metrics.argument_flow) + '</strong></div>';
-        html += '<div>weak_segments: <strong>' + String(metrics.weak_segments) + '</strong></div>';
-        html += '<div class="rewrite-analysis-check__nowrap">retention_opportunities: <strong>' + String(metrics.retention_opportunities) + '</strong></div>';
-        html += '<div>donor_voice_signals: <strong>' + String(metrics.donor_voice_signals) + '</strong></div>';
-        html += '<div class="rewrite-analysis-check__nowrap">recommended_block_logic: <strong>' + String(metrics.recommended_block_logic) + '</strong></div>';
+        html += '<div>key_ideas: <strong>' + formatNumRu(metrics.key_ideas) + '</strong></div>';
+        html += '<div>facts_and_numbers: <strong>' + formatNumRu(metrics.facts_and_numbers) + '</strong></div>';
+        html += '<div>argument_flow: <strong>' + formatNumRu(metrics.argument_flow) + '</strong></div>';
+        html += '<div>weak_segments: <strong>' + formatNumRu(metrics.weak_segments) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">retention_opportunities: <strong>' + formatNumRu(metrics.retention_opportunities) + '</strong></div>';
+        html += '<div>donor_voice_signals: <strong>' + formatNumRu(metrics.donor_voice_signals) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">recommended_block_logic: <strong>' + formatNumRu(metrics.recommended_block_logic) + '</strong></div>';
         html += '</div>';
         html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--right">';
-        html += '<div>content_map A: <strong>' + String(metrics.content_map_a) + '</strong></div>';
-        html += '<div>content_map B: <strong>' + String(metrics.content_map_b) + '</strong></div>';
-        html += '<div>content_map C: <strong>' + String(metrics.content_map_c) + '</strong></div>';
-        html += '<div>content_map D: <strong>' + String(metrics.content_map_d) + '</strong></div>';
+        html += '<div>content_map A: <strong>' + formatNumRu(metrics.content_map_a) + '</strong></div>';
+        html += '<div>content_map B: <strong>' + formatNumRu(metrics.content_map_b) + '</strong></div>';
+        html += '<div>content_map C: <strong>' + formatNumRu(metrics.content_map_c) + '</strong></div>';
+        html += '<div>content_map D: <strong>' + formatNumRu(metrics.content_map_d) + '</strong></div>';
         html += '</div>';
         html += '</div>';
         wrap.innerHTML = html;
@@ -2251,10 +2258,10 @@
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>YouTube packaging</strong> <span class="rewrite-scene-writer-check__ok">OK</span></div>';
         html += '<div class="rewrite-scene-writer-check__hint">';
-        html += 'top_5: <strong>' + String(rawTop5.length) + '</strong> | ';
+        html += 'top_5: <strong>' + formatNumRu(rawTop5.length) + '</strong> | ';
         html += 'описание: <strong>' + (hasDesc ? 'да' : 'нет') + '</strong> | ';
-        html += 'хештеги: <strong>' + String(tags.length) + '</strong> | ';
-        html += 'превью: <strong>' + String(thumbs.length) + '</strong>';
+        html += 'хештеги: <strong>' + formatNumRu(tags.length) + '</strong> | ';
+        html += 'превью: <strong>' + formatNumRu(thumbs.length) + '</strong>';
         html += '</div>';
         html += '<div class="rewrite-scene-writer-check__divider"></div>';
 
@@ -2349,16 +2356,16 @@
             var inChars = prevParsedStrict.editedText.length;
             var outChars = currParsedStrict.editedText.length;
             var delta = outChars - inChars;
-            var deltaStr = (delta > 0 ? '+' : '') + String(delta);
+            var deltaStr = formatNumRuSigned(delta);
             var okClass = hasPayload ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
             var htmlStrict = '';
             htmlStrict += '<div class="rewrite-scene-writer-check__head"><strong>Проверка ' + stageLabel + '</strong> <span class="' + okClass + '">' + (hasPayload ? 'OK' : 'NO') + '</span></div>';
             htmlStrict += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
-            htmlStrict += '<span class="rewrite-editor-check-line__left">IN: <strong>' + String(inChars) + '</strong></span>';
+            htmlStrict += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(inChars) + '</strong></span>';
             htmlStrict += '<span class="rewrite-editor-check-line__sep">|</span>';
-            htmlStrict += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + String(outChars) + '</strong> (' + deltaStr + ')</span>';
+            htmlStrict += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(outChars) + '</strong> (' + deltaStr + ')</span>';
             htmlStrict += '<span class="rewrite-editor-check-line__sep">|</span>';
-            htmlStrict += '<span class="rewrite-editor-check-line__right">Changes: <strong>' + String(currParsedStrict.changesCount) + '</strong></span>';
+            htmlStrict += '<span class="rewrite-editor-check-line__right">Changes: <strong>' + formatNumRu(currParsedStrict.changesCount) + '</strong></span>';
             htmlStrict += '</div>';
             wrap.innerHTML = htmlStrict;
             return;
@@ -2381,14 +2388,14 @@
         var delta = outChars - inChars;
         var ok = inChars === outChars;
         var okClass = ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
-        var deltaStr = (delta > 0 ? '+' : '') + String(delta);
+        var deltaStr = formatNumRuSigned(delta);
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка</strong> <span class="' + okClass + '">' + (ok ? 'OK' : ('NO (' + deltaStr + ')')) + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__grid">';
-        html += '<div>Вход: <strong>' + String(inChars) + '</strong></div>';
-        html += '<div>Выход: <strong>' + String(outChars) + '</strong></div>';
-        html += '<div>Блоков в changes: <strong>' + String(currParsed.changesCount) + '</strong></div>';
-        html += '<div>Правок: <strong>' + String(currParsed.changesCount) + '</strong></div>';
+        html += '<div>Вход: <strong>' + formatNumRu(inChars) + '</strong></div>';
+        html += '<div>Выход: <strong>' + formatNumRu(outChars) + '</strong></div>';
+        html += '<div>Блоков в changes: <strong>' + formatNumRu(currParsed.changesCount) + '</strong></div>';
+        html += '<div>Правок: <strong>' + formatNumRu(currParsed.changesCount) + '</strong></div>';
         html += '</div>';
         wrap.innerHTML = html;
     }
@@ -2569,12 +2576,24 @@
         return t.split(/\s+/).filter(Boolean).length;
     }
 
+    function formatNumRuSigned(n) {
+        var v = Number(n);
+        if (!isFinite(v)) return String(n == null ? '' : n);
+        return (v > 0 ? '+' : '') + formatNumRu(v);
+    }
+
+    function formatNumRu(n) {
+        var v = Number(n);
+        if (!isFinite(v)) return String(n == null ? '' : n);
+        return String(Math.trunc(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202F');
+    }
+
     function updateSourceCounts() {
         if (!sourceCountsEl || !sourceEl) return;
         var text = sourceEl.value;
         var chars = text.length;
         var words = countWords(text);
-        sourceCountsEl.textContent = chars + ' симв. · ' + words + ' сл.';
+            sourceCountsEl.textContent = formatNumRu(chars) + ' симв. · ' + formatNumRu(words) + ' сл.';
     }
 
     function updateSourceRuCounts() {
@@ -2582,7 +2601,7 @@
         var text = sourceRuEl.value;
         var chars = text.length;
         var words = countWords(text);
-        sourceRuCountsEl.textContent = chars + ' симв. · ' + words + ' сл.';
+            sourceRuCountsEl.textContent = formatNumRu(chars) + ' симв. · ' + formatNumRu(words) + ' сл.';
     }
 
     if (sourceEl) {
@@ -2797,7 +2816,7 @@
     if (targetCharsRangeEl && targetCharsValEl) {
         targetCharsRangeEl.addEventListener('input', function () {
             var tc = clampTargetChars(targetCharsRangeEl.value);
-            targetCharsValEl.textContent = String(tc);
+            targetCharsValEl.textContent = formatNumRu(tc);
         });
     }
 
@@ -2832,7 +2851,7 @@
                         dt = clampTargetChars(dt != null ? dt : 1500);
                     }
                     targetCharsRangeEl.value = String(dt);
-                    if (targetCharsValEl) targetCharsValEl.textContent = String(dt);
+                    if (targetCharsValEl) targetCharsValEl.textContent = formatNumRu(dt);
                 }
                 if (masterEl) masterEl.value = data.master_prompt || '';
                 var st = data.stages || {};
@@ -2934,7 +2953,7 @@
             if (!txt) return;
             ytTranscriptReady = true;
             setYoutubeLocked(true);
-            setYtStatus('Готово текст ' + txt.length + ' символов · ' + countWords(txt) + ' слов', false);
+            setYtStatus('Готово - ' + formatNumRu(txt.length) + ' символов · ' + formatNumRu(countWords(txt)) + ' слов', false);
         } catch (e) { /* ignore */ }
         finally {
             applyYoutubeToolbar();
@@ -2980,7 +2999,7 @@
         }
         if (ev.phase === 'chunk' && ev.action === 'done') {
             return 'OpenAI, часть ' + String(ev.index) + '/' + String(ev.total) + ' — готово'
-                + (ev.text_chars != null ? ', ' + String(ev.text_chars) + ' симв. в сегменте' : '') + '…';
+                + (ev.text_chars != null ? ', ' + formatNumRu(ev.text_chars) + ' симв. в сегменте' : '') + '…';
         }
         if (ev.phase === 'join') {
             return ev.message || 'Склейка частей в один текст…';
@@ -3186,13 +3205,13 @@
             const d3 = await ytConsumeTranscribeStream(signal);
             var ch = typeof d3.chars === 'number' ? d3.chars : 0;
             var wd = typeof d3.words === 'number' ? d3.words : 0;
-            setYtStatus('Готово текст ' + ch + ' символов · ' + wd + ' слов', false);
+            setYtStatus('Готово - ' + formatNumRu(ch) + ' символов · ' + formatNumRu(wd) + ' слов', false);
             ytTranscriptReady = true;
             // Не затемняем сразу после конвейера: удобно вставить текст, сменить ссылку.
             // После F5 с сохранённой расшифровкой сервер снова отдаёт locked (как защита).
         } catch (e) {
             if (e && e.name === 'AbortError') {
-                setYtStatus('Остановлено (кнопка «Остановить»).', false);
+                setYtStatus('Остановлено', true);
             } else {
                 setYtStatus(String(e), true);
             }
@@ -3235,7 +3254,7 @@
             if (!ok) {
                 setYtStatus('Текст вставлен, но не удалось сохранить.', true);
             } else {
-                setYtStatus('Текст и название подставлены в поля исходника.', false);
+                setYtStatus('Текст и название подставлены в поля «Исходный текст».', false);
             }
         } catch (e) {
             setYtStatus(String(e), true);
@@ -3748,7 +3767,7 @@
         if (!ta || !el) return;
         if (el.getAttribute('data-copy-hold') === '1') return;
         var text = ta.value || '';
-        el.textContent = text.length + ' симв. · ' + countWords(text) + ' сл.';
+        el.textContent = formatNumRu(text.length) + ' симв. · ' + formatNumRu(countWords(text)) + ' сл.';
     }
 
     function syncStageErrorBorder(block) {
@@ -4443,7 +4462,7 @@
                             var now = Date.now();
                             if (now - lastDeltaLog > 1500) {
                                 lastDeltaLog = now;
-                                pipelineStatusForward('[' + stageKey + '] поток токенов: накоплено ' + streamBuf.length + ' симв.…');
+                                pipelineStatusForward('[' + stageKey + '] поток токенов: накоплено ' + formatNumRu(streamBuf.length) + ' симв.…');
                             }
                         }
                     } else if (ev.type === 'error' && ev.message) {
@@ -4484,7 +4503,7 @@
                             resultContent = injectPastPromptIntoSceneWriterResult(resultContent, pastVal);
                         }
                         if (pipelineStatusForward) {
-                            pipelineStatusForward('[' + stageKey + '] событие result: длина текста ' + resultContent.length + ' симв.');
+                            pipelineStatusForward('[' + stageKey + '] событие result: длина текста ' + formatNumRu(resultContent.length) + ' симв.');
                         }
                         if (resTextarea) {
                             resTextarea.value = resultContent;
@@ -4636,7 +4655,7 @@
                 var existingResEl = block.querySelector('.rewrite-stage-result');
                 var existingRes = existingResEl ? (existingResEl.value || '').trim() : '';
                 if (existingRes) {
-                    appendPipelineRunnerLog('• Пропуск: у этапа уже есть Result (' + existingRes.length + ' симв.) — повторный запуск не нужен.');
+                    appendPipelineRunnerLog('• Пропуск: у этапа уже есть Result (' + formatNumRu(existingRes.length) + ' симв.) — повторный запуск не нужен.');
                     continue;
                 }
                 if (sk === 'inbox') {
@@ -4895,7 +4914,7 @@
         function updateCounts() {
             if (!counts) return;
             var v = ta.value || '';
-            counts.textContent = v.length + ' симв. · ' + countWords(v) + ' сл.';
+            counts.textContent = formatNumRu(v.length) + ' симв. · ' + formatNumRu(countWords(v)) + ' сл.';
         }
         function applyVfLockUI() {
             if (!ta) return;
@@ -5011,7 +5030,7 @@
         function updateVfrCounts() {
             if (!ruCounts || !ruTa) return;
             var t = ruTa.value || '';
-            ruCounts.textContent = t.length + ' симв. · ' + countWords(t) + ' сл.';
+            ruCounts.textContent = formatNumRu(t.length) + ' симв. · ' + formatNumRu(countWords(t)) + ' сл.';
         }
         if (ruTa) {
             ruTa.addEventListener('input', function () { updateVfrCounts(); scheduleAutosave(500); });

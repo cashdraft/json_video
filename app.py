@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import difflib
+import hashlib
 from html import escape as html_escape
 import json
 import mimetypes
@@ -662,12 +663,35 @@ app.secret_key = os.urandom(24)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+
+def _fmt_num_ru_filter(n: object) -> str:
+    """Jinja-фильтр-обёртка над `_fmt_num_ru` (он определён ниже по файлу).
+    Используется в шаблонах: `{{ value|fmt_num_ru }}` для разделения разрядов
+    тонким неразрывным пробелом."""
+    return _fmt_num_ru(n)
+
+
+app.jinja_env.filters["fmt_num_ru"] = _fmt_num_ru_filter
 # Large scene batches can exceed Werkzeug's form defaults.
 # Allow bigger payloads for `/parse` and similar form submissions.
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
 app.config["MAX_FORM_MEMORY_SIZE"] = 64 * 1024 * 1024
 # Если nginx не отдаёт /static/ с того же хоста: STATIC_STYLE_HREF=https://…/static/style.css
 app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
+
+
+@app.context_processor
+def _inject_static_style_mtime() -> dict[str, str]:
+    """Cache-bust для style.css: добавляем `?v=<mtime>` к URL.
+    После любой правки CSS браузер автоматически подтягивает свежую версию,
+    без ручного Ctrl+F5. Если файла нет — отдаём пустую строку (link останется без ?v=)."""
+    try:
+        p = Path(app.static_folder) / "style.css"
+        v = str(int(p.stat().st_mtime))
+    except (OSError, AttributeError, TypeError):
+        v = ""
+    return {"static_style_mtime": v}
 GENERATION_TASKS: dict[str, dict] = {}
 
 
@@ -1424,6 +1448,31 @@ def _rewrite_legacy_filepath(rewrite_id: str) -> Path:
 # пин-коду (см. модуль `locked_prompts.py`). Дефолт лежит в реестре.
 def _translate_to_ru_system_prompt() -> str:
     return get_locked_prompt("translate_to_ru")
+
+
+def _fmt_num_ru(n: object) -> str:
+    """Целое число с тонким неразрывным пробелом (U+202F) в качестве
+    разделителя разрядов: 18034 → "18 034", -15766 → "-15 766", "abc" → "abc".
+    Применяем во всех пользовательских строках со счётчиками символов,
+    слов, байтов и т. п. — чтобы UI читался единообразно, как в локали ru-RU.
+    """
+    try:
+        v = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    sign = "-" if v < 0 else ""
+    return sign + format(abs(v), ",d").replace(",", "\u202f")
+
+
+def _locked_prompt_fingerprint(text: str) -> str:
+    """Короткий отпечаток системного промта: «<длина> симв., #<sha1[:8]>».
+    Используется в статус-сообщениях задач, чтобы пользователь мог глазами
+    убедиться, что после редактирования промта в OpenAI ушёл свежий текст,
+    а не закэшированный старый. Это диагностика, не криптография."""
+    if not text:
+        return "0 симв., #00000000"
+    h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+    return f"{_fmt_num_ru(len(text))} симв., #{h}"
 
 
 def _split_text_into_translation_batches(text: str, max_chars: int = 5000) -> list[str]:
@@ -3513,6 +3562,9 @@ def rewrite_project_save(rewrite_id: str):
         rw["rewrite_template"] = str(body.get("rewrite_template") or "").strip()
     if "rewrite_preset" in body:
         rw["rewrite_preset"] = normalize_rewrite_preset(body.get("rewrite_preset"))
+    if "russian_semantic_model" in body:
+        rsm_raw = str(body.get("russian_semantic_model") or "").strip()
+        rw["russian_semantic_model"] = normalize_rewrite_model(rsm_raw) if rsm_raw else ""
     merge_stages_from_request(rw, body.get("stages"))
     if "semantic_text_analysis" in body:
         rw["semantic_text_analysis"] = str(body.get("semantic_text_analysis") or "")
@@ -3610,7 +3662,7 @@ def _iter_translate_source_ru_events(
     nb = len(batches)
     yield {
         "type": "status",
-        "message": f"Разбиение текста на батчи готово: {nb} шт. (≤5000 симв./батч).",
+        "message": f"Разбиение текста на батчи готово: {nb} шт. (≤{_fmt_num_ru(5000)} симв./батч).",
     }
     yield {"type": "status", "message": f"Модель: {model}"}
     parts: list[str] = []
@@ -3618,15 +3670,24 @@ def _iter_translate_source_ru_events(
         if cancel_event is not None and cancel_event.is_set():
             yield {"type": "error", "message": "Задача отменена пользователем."}
             return
-        tag = f"[Батч {bi + 1}/{nb}, {len(chunk)} симв.] "
-        yield {"type": "status", "message": tag + "Старт перевода батча…"}
+        tag = f"[Батч {bi + 1}/{nb}, {_fmt_num_ru(len(chunk))} симв.] "
+        sys_prompt = _translate_to_ru_system_prompt()
+        yield {
+            "type": "status",
+            "message": (
+                tag
+                + "Старт перевода батча… (System Promt: "
+                + _locked_prompt_fingerprint(sys_prompt)
+                + ")"
+            ),
+        }
         user_msg = chunk
         got_result = False
         err_text: str | None = None
         for ev in iter_rewrite_completion(
             api_key,
             model,
-            _translate_to_ru_system_prompt(),
+            sys_prompt,
             user_msg,
         ):
             etype = str(ev.get("type") or "")
@@ -3640,7 +3701,7 @@ def _iter_translate_source_ru_events(
                 got_result = True
                 yield {
                     "type": "status",
-                    "message": tag + f"Готово: получено {len(parts[-1])} симв.",
+                    "message": tag + f"Готово: получено {_fmt_num_ru(len(parts[-1]))} симв.",
                 }
         if err_text is not None:
             yield {"type": "error", "message": tag + err_text}
@@ -3690,7 +3751,9 @@ def rewrite_translate_source_ru_start(rewrite_id: str):
     api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
     stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
     ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
-    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
+    model = normalize_rewrite_model(
+        str(body.get("model") or rw.get("russian_semantic_model") or "")
+    )
     if not source_text.strip():
         return jsonify({"ok": False, "error": "no_source_text", "message": "Нет текста для перевода."}), 400
     if not api_key_present or not (os.getenv("OPENAI_API_KEY") or "").strip():
@@ -3759,8 +3822,17 @@ def _iter_semantic_text_analyzer_events(
     system_prompt = get_locked_prompt("semantic_text_analyzer_system")
     user_template = get_locked_prompt("semantic_text_analyzer_user")
     user_msg = (user_template or "").rstrip() + "\n\n" + src_ru.strip()
-    yield {"type": "status", "message": f"Модель: {model}; вход: {len(src_ru)} симв."}
-    yield {"type": "status", "message": "Старт запроса…"}
+    yield {"type": "status", "message": f"Модель: {model}; вход: {_fmt_num_ru(len(src_ru))} симв."}
+    yield {
+        "type": "status",
+        "message": (
+            "Старт запроса… (System Promt: "
+            + _locked_prompt_fingerprint(system_prompt)
+            + "; User Promt: "
+            + _locked_prompt_fingerprint(user_template)
+            + ")"
+        ),
+    }
     got_result = False
     err_text: str | None = None
     result_text = ""
@@ -3824,7 +3896,9 @@ def rewrite_semantic_text_analyzer_start(rewrite_id: str):
     api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
     stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
     ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
-    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
+    model = normalize_rewrite_model(
+        str(body.get("model") or rw.get("russian_semantic_model") or "")
+    )
     if not src_ru.strip():
         return jsonify(
             {
@@ -3917,16 +3991,25 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
         yield json.dumps(
             {
                 "type": "status",
-                "message": f"Разбиение текста на батчи готово: {nb} шт. (≤5000 симв./батч).",
+                "message": f"Разбиение текста на батчи готово: {nb} шт. (≤{_fmt_num_ru(5000)} симв./батч).",
             },
             ensure_ascii=False,
         ) + "\n"
         yield json.dumps({"type": "status", "message": f"Модель: {model}"}, ensure_ascii=False) + "\n"
         parts: list[str] = []
         for bi, chunk in enumerate(batches):
-            tag = f"[Батч {bi + 1}/{nb}, {len(chunk)} симв.] "
+            tag = f"[Батч {bi + 1}/{nb}, {_fmt_num_ru(len(chunk))} симв.] "
+            sys_prompt = _translate_to_ru_system_prompt()
             yield json.dumps(
-                {"type": "status", "message": tag + "Старт перевода батча…"},
+                {
+                    "type": "status",
+                    "message": (
+                        tag
+                        + "Старт перевода батча… (System Promt: "
+                        + _locked_prompt_fingerprint(sys_prompt)
+                        + ")"
+                    ),
+                },
                 ensure_ascii=False,
             ) + "\n"
             user_msg = chunk
@@ -3935,7 +4018,7 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
             for ev in iter_rewrite_completion(
                 api_key,
                 model,
-                _translate_to_ru_system_prompt(),
+                sys_prompt,
                 user_msg,
             ):
                 etype = str(ev.get("type") or "")
@@ -3953,7 +4036,7 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
                     yield json.dumps(
                         {
                             "type": "status",
-                            "message": tag + f"Готово: получено {len(parts[-1])} симв.",
+                            "message": tag + f"Готово: получено {_fmt_num_ru(len(parts[-1]))} симв.",
                         },
                         ensure_ascii=False,
                     ) + "\n"
@@ -4172,8 +4255,7 @@ def _rewrite_youtube_perform_download(
         for fi, fmt in enumerate(format_chain):
             if status_callback is not None:
                 status_callback(
-                    f"YT-DLP: YouTube client «{cname}» ({ci + 1}/{n_cli}), формат ({fi + 1}/{n_fmt}), "
-                    f"тайм-аут сокета {stall_read_sec} с; если нет ответа/формата — следующий вариант…"
+                    f"YouTube {ci + 1}/{n_cli}: «{cname}», вариант аудио {fi + 1}/{n_fmt}…"
                 )
             same_re = _youtube_same_client_retries()
             ydl_opts: dict = {
@@ -4230,7 +4312,7 @@ def _rewrite_youtube_perform_download(
                     if dynamic_format_id:
                         if status_callback is not None:
                             status_callback(
-                                f"Формат недоступен для client «{cname}». Нашли доступный format_id={dynamic_format_id}, повторяем…"
+                                f"Формат недоступен («{cname}»). Подобран id={dynamic_format_id}, повтор…"
                             )
                         _rewrite_youtube_clear_partial_downloads(media_dir)
                         try:
@@ -4259,19 +4341,14 @@ def _rewrite_youtube_perform_download(
                             )
                 has_next_format = fi + 1 < n_fmt
                 has_next_client = ci + 1 < n_cli
-                short = (str(e) or "")[:220]
                 _rewrite_youtube_clear_partial_downloads(media_dir)
                 if has_next_format:
                     if status_callback is not None:
-                        status_callback(
-                            f"Формат недоступен/ошибка для client «{cname}» ({short}). Пробуем другой формат…"
-                        )
+                        status_callback(f"«{cname}»: пробуем другой формат…")
                     continue
                 if has_next_client:
                     if status_callback is not None:
-                        status_callback(
-                            f"Ошибка с YouTube client «{cname}» ({short}). Следующий client из цепочки…"
-                        )
+                        status_callback(f"«{cname}» не подошёл, следующий клиент…")
                     break
                 raise
         if isinstance(info, dict):
@@ -4334,7 +4411,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
         rewrite_id,
         processing=True,
         phase="download",
-        status="YT-DLP скачивание: только аудио (bestaudio), скоро появится прогресс…",
+        status="Скачивание аудио с YouTube…",
     )
 
     def persist_runtime_status(msg: str, *, force: bool = False) -> None:
@@ -4367,7 +4444,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
                 }
             )
             try:
-                persist_runtime_status(f"Скачивание аудио: {int(got or 0)} байт…")
+                persist_runtime_status(f"Скачивание аудио: {_fmt_num_ru(int(got or 0))} байт…")
             except Exception:
                 pass
         elif st == "finished":
@@ -4437,7 +4514,7 @@ def rewrite_youtube_download_stream(rewrite_id: str):
                 {
                     "type": "progress",
                     "phase": "status",
-                    "message": "YT-DLP скачивание: только аудио (bestaudio), скоро появится прогресс…",
+                    "message": "Скачивание аудио с YouTube…",
                 },
                 ensure_ascii=False,
             )
@@ -4570,7 +4647,9 @@ def rewrite_youtube_transcribe_stream(rewrite_id: str):
                     rw2["youtube_processing"] = False
                     rw2["youtube_phase"] = "transcribe_done"
                     rw2["youtube_status"] = (
-                        f"Готово текст {len(result_holder['text'])} символов · {len(result_holder['text'].split())} слов"
+                        "Готово - "
+                        f"{_fmt_num_ru(len(result_holder['text']))} символов · "
+                        f"{_fmt_num_ru(len(result_holder['text'].split()))} слов"
                     )
                     save_rewrite_job(rewrite_id, rw2)
         except Exception as e:
@@ -4626,6 +4705,27 @@ def rewrite_youtube_transcript_get(rewrite_id: str):
         return jsonify({"ok": False, "error": "not_found"}), 404
     txt = str(rw.get("youtube_transcript_text") or "")
     return jsonify({"ok": True, "text": txt})
+
+
+@app.route("/rewrite/<rewrite_id>/youtube/state", methods=["POST"])
+def rewrite_youtube_state_save(rewrite_id: str):
+    """Сохранить серверно-видимый статус YouTube-блока. Используется клиентом,
+    когда «Остановлено» (или другое финальное сообщение) формируется на стороне
+    браузера после AbortController.abort() — чтобы после F5 пользователь увидел
+    то же самое сообщение, а не последнюю запись из фонового потока."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    status = str(body.get("youtube_status") or "").strip()
+    phase = str(body.get("youtube_phase") or "").strip()
+    _rewrite_youtube_set_runtime_state(
+        rewrite_id,
+        processing=False,
+        phase=phase,
+        status=status,
+    )
+    return jsonify({"ok": True})
 
 
 @app.route("/rewrite/<rewrite_id>/youtube/state", methods=["GET"])
@@ -6913,7 +7013,7 @@ def job_elevenlabs_tts_stream(job_id: str):
             {
                 "type": "status",
                 "phase": "prepare",
-                "message": f"Подготовлено: {total_chunks} кусков, {total_chars} символов (лимит {max_c} на запрос).",
+                "message": f"Подготовлено: {total_chunks} кусков, {_fmt_num_ru(total_chars)} символов (лимит {_fmt_num_ru(max_c)} на запрос).",
                 "total_chunks": total_chunks,
                 "total_chars": total_chars,
                 "sum_chunk_chars": sum_chunk_chars,
@@ -6949,7 +7049,7 @@ def job_elevenlabs_tts_stream(job_id: str):
                             "chunk_chars": len(ch),
                             "message": (
                                 f"[{i}/{total_chunks}] Отправили в ElevenLabs (with-timestamps): "
-                                f"{len(ch)} символов. Ожидание ответа…"
+                                f"{_fmt_num_ru(len(ch))} символов. Ожидание ответа…"
                             ),
                             "elapsed_seconds": elapsed(),
                         }
@@ -7013,8 +7113,8 @@ def job_elevenlabs_tts_stream(job_id: str):
                             "audio_bytes": len(part_bytes),
                             "chunk_wait_seconds": round(max(0.0, time.monotonic() - chunk_started), 1),
                             "message": (
-                                f"[{i}/{total_chunks}] Ответ получен: {len(part_bytes)} байт, "
-                                f"{len(chunk_words)} слов, длительность {chunk_duration_sec:.2f}с."
+                                f"[{i}/{total_chunks}] Ответ получен: {_fmt_num_ru(len(part_bytes))} байт, "
+                                f"{_fmt_num_ru(len(chunk_words))} слов, длительность {chunk_duration_sec:.2f}с."
                             ),
                             "elapsed_seconds": elapsed(),
                         }
@@ -7167,7 +7267,7 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "ok": True,
                 **entry,
                 "scene_audio_timings": scene_audio_timings,
-                "message": f"Готово: {len(chunks)} кусков, {len(text)} символов, ожидание {elapsed()}с.",
+                "message": f"Готово: {len(chunks)} кусков, {_fmt_num_ru(len(text))} символов, ожидание {elapsed()}с.",
                 "elapsed_seconds": elapsed(),
             }
         )
@@ -7861,7 +7961,7 @@ def job_whisper_words(job_id: str):
                     payload["progress_pct"] = round(max(0.0, min(100.0, pct)), 1)
                     payload["message"] = (
                         f"Сегмент {ev.get('segment_index')}: {cur_ms / 1000:.1f}s "
-                        f"/ {(total_ms / 1000):.1f}s · слов накоплено {ev.get('words_so_far')}."
+                        f"/ {(total_ms / 1000):.1f}s · слов накоплено {_fmt_num_ru(ev.get('words_so_far'))}."
                     )
                 yield _ev(payload)
         except Exception as e:  # noqa: BLE001
@@ -7916,7 +8016,7 @@ def job_whisper_words(job_id: str):
                 "first_word": first_w,
                 "last_word": last_w,
                 "message": (
-                    f"Готово: {len(words_list)} слов, "
+                    f"Готово: {_fmt_num_ru(len(words_list))} слов, "
                     f"язык={final_doc.get('language')}, "
                     f"модель={final_doc.get('model')} ({final_doc.get('device')})."
                 ),
@@ -8765,7 +8865,7 @@ def job_page(job_id: str):
                         "first_word": _first_w,
                         "last_word": _last_w,
                         "message": (
-                            f"Сохранённый прогон: {len(_words_list)} слов, "
+                            f"Сохранённый прогон: {_fmt_num_ru(len(_words_list))} слов, "
                             f"язык={_doc.get('language')}, модель={_doc.get('model')}."
                         ),
                     }
