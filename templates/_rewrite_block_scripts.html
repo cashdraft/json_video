@@ -19,6 +19,8 @@
     const rewriteTemplateRadioGroup = 'rewrite-template-radio-' + openaiExportRewriteId;
     const saveUrl = {{ url_for('rewrite_project_save', rewrite_id=rw.rewrite_id) | tojson }};
     const translateRuUrl = {{ url_for('rewrite_translate_source_ru', rewrite_id=rw.rewrite_id) | tojson }};
+    const translateRuStartUrl = {{ url_for('rewrite_translate_source_ru_start', rewrite_id=rw.rewrite_id) | tojson }};
+    const semanticAnalyzerStartUrl = {{ url_for('rewrite_semantic_text_analyzer_start', rewrite_id=rw.rewrite_id) | tojson }};
     const translateVoFinalRuUrl = {{ url_for('rewrite_translate_voiceover_final_ru', rewrite_id=rw.rewrite_id) | tojson }};
     const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
@@ -47,6 +49,7 @@
     const audioToggleBtn = document.getElementById('rewrite-audio-toggle');
     let sourceLocked = {{ rw.source_locked|default(false)|tojson }};
     let sourceRuLocked = {{ rw.source_text_ru_locked|default(false)|tojson }};
+    let semanticAnalysisLocked = {{ rw.semantic_text_analysis_locked|default(true)|tojson }};
     let voiceoverFinalLocked = {{ rw.voiceover_final_locked|default(true)|tojson }};
     let voiceoverFinalTextRuLocked = {{ rw.voiceover_final_text_ru_locked|default(false)|tojson }};
     let masterLocked = {{ rw.master_prompt_locked|default(false)|tojson }};
@@ -1902,6 +1905,24 @@
         if (sourceRuToggleBtn) sourceRuToggleBtn.disabled = false;
     }
 
+    function applySemanticResultLockUI() {
+        var saTa = document.getElementById('semantic-analyzer-result');
+        var saTog = document.getElementById('semantic-analyzer-result-toggle');
+        if (!saTa) return;
+        if (!openaiOk) {
+            saTa.disabled = true;
+            if (saTog) saTog.disabled = true;
+            return;
+        }
+        saTa.disabled = false;
+        saTa.readOnly = semanticAnalysisLocked;
+        saTa.classList.toggle('rewrite-source-textarea--locked', semanticAnalysisLocked);
+        if (saTog) {
+            styleToggleBtn(saTog, semanticAnalysisLocked);
+            saTog.disabled = false;
+        }
+    }
+
     function stageResultNonEmpty(block) {
         const ta = block.querySelector('.rewrite-stage-result');
         if (!ta) return false;
@@ -1923,9 +1944,9 @@
             || cards.some(function (c) { return c.classList.contains('rewrite-stage-card--running'); })
             || !!document.querySelector('.rewrite-stage-status-row:not(.hidden)');
         // Цепочка предусловий строится в пределах текущего пресета: иначе для
-        // «Глубокого» этапы после draft1 видят пустые distiller/author и
-        // считают предков невыполненными → ставят крестик, даже если все
-        // нужные этапы пресета на самом деле сохранены.
+        // «Глубокого» этапы после draft1 видели бы пустых соседей из чужих
+        // пресетов и считали предков невыполненными → ставили бы крестик,
+        // даже если все нужные этапы пресета на самом деле сохранены.
         const presetOrder = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[currentRewritePreset])
             ? REWRITE_PRESET_STAGE_KEYS[currentRewritePreset].slice()
             : STAGE_KEYS_ORDER.slice();
@@ -1945,6 +1966,11 @@
                         continue;
                     }
                     if (sk === 'youtube_packaging' && prevKey === 'scene_writer_live') {
+                        continue;
+                    }
+                    // Пресет «Я уже ЗАrewriteИЛ»: Rewrite опционален — сервер берёт Voiceover/Title/Splitter
+                    // из Inbox, если Result Rewrite пустой; не блокируем ↻ из‑за пустого rewrite.
+                    if (currentRewritePreset === 'prewritten' && sk !== 'rewrite' && prevKey === 'rewrite') {
                         continue;
                     }
                     const prev = byKey[prevKey];
@@ -1981,6 +2007,7 @@
         applyMasterLockUI();
         applySourceLockUI();
         applySourceRuLockUI();
+        applySemanticResultLockUI();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             applyPromptLockUI(block);
             applyAnalysisUserPromptLockUI(block);
@@ -2096,9 +2123,11 @@
     updateSourceCounts();
     updateSourceRuCounts();
 
-    if (translateRuBtn && translateRuUrl) {
+    if (translateRuBtn && translateRuStartUrl) {
         let translateRuAbort = null;
         let translateRuRunning = false;
+        var translateRuTaskId = null;
+        var translateRuTextareaWrap = document.getElementById('rewrite-source-translate-ru-textarea-wrap');
 
         function setTranslateRuBusy(on) {
             translateRuRunning = !!on;
@@ -2114,6 +2143,9 @@
                     translateRuStatusWrap.removeAttribute('data-status');
                 }
             }
+            if (translateRuTextareaWrap) {
+                translateRuTextareaWrap.classList.toggle('hidden', !!on);
+            }
             if (translateRuCancelBtn) {
                 translateRuCancelBtn.disabled = !on;
             }
@@ -2123,19 +2155,72 @@
             if (translateRuStatusEl) translateRuStatusEl.textContent = text || '';
         }
 
-        function showTranslateRuResultBlock(show) {
-            if (!sourceRuWrap) return;
-            if (show) {
-                sourceRuWrap.classList.remove('hidden');
-                sourceRuWrap.removeAttribute('aria-hidden');
-            } else {
-                sourceRuWrap.classList.add('hidden');
-                sourceRuWrap.setAttribute('aria-hidden', 'true');
+        async function followTranslateRuEventStream(taskId, signal) {
+            var res = await fetch(rewriteTaskEventsUrl(taskId, -1), {
+                method: 'GET',
+                headers: { 'Accept': 'application/x-ndjson' },
+                signal: signal
+            });
+            if (!res.ok) {
+                setTranslateRuStatus('Ошибка подписки на задачу: HTTP ' + res.status);
+                return false;
             }
+            var reader = res.body && res.body.getReader();
+            if (!reader) {
+                setTranslateRuStatus('Браузер не поддерживает потоковое чтение ответа.');
+                return false;
+            }
+            var dec = new TextDecoder('utf-8');
+            var buf = '';
+            var translatedText = '';
+            var hadError = false;
+            var gotResult = false;
+            while (true) {
+                var rd = await reader.read();
+                if (rd.done) break;
+                buf += dec.decode(rd.value, { stream: true });
+                var idx;
+                while ((idx = buf.indexOf('\n')) !== -1) {
+                    var line = buf.slice(0, idx);
+                    buf = buf.slice(idx + 1);
+                    if (!line.trim()) continue;
+                    var ev = null;
+                    try { ev = JSON.parse(line); } catch (e2) { continue; }
+                    var msg = String((ev && ev.message) || '');
+                    if (ev && ev.type === 'status') {
+                        setTranslateRuStatus(msg);
+                    } else if (ev && ev.type === 'error') {
+                        hadError = true;
+                        setTranslateRuStatus('Ошибка: ' + msg);
+                    } else if (ev && ev.type === 'result') {
+                        translatedText = String(ev.content || '');
+                        gotResult = true;
+                    }
+                }
+            }
+            if (hadError && !gotResult) {
+                return false;
+            }
+            if (gotResult && sourceRuEl) {
+                sourceRuEl.value = translatedText;
+                sourceRuLocked = true;
+                applySourceRuLockUI();
+                updateSourceRuCounts();
+                scheduleAutosave(0);
+            }
+            return gotResult && !hadError;
         }
 
         if (translateRuCancelBtn) {
             translateRuCancelBtn.addEventListener('click', function () {
+                if (translateRuTaskId) {
+                    try {
+                        fetch(rewriteTaskCancelUrl(translateRuTaskId), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } catch (_) {}
+                }
                 if (translateRuAbort) {
                     try { translateRuAbort.abort(); } catch (e) {}
                 }
@@ -2151,77 +2236,77 @@
                 setTimeout(function () { setTranslateRuBusy(false); }, 1800);
                 return;
             }
-            showTranslateRuResultBlock(false);
             setTranslateRuBusy(true);
-            setTranslateRuStatus('Подготовка запроса…');
-
-            translateRuAbort = ('AbortController' in window) ? new AbortController() : null;
-            var translatedText = '';
+            setTranslateRuStatus('Запуск фоновой задачи перевода…');
+            translateRuTaskId = null;
+            translateRuAbort = new AbortController();
             var hadError = false;
             try {
                 var modelVal = globalModelEl ? (globalModelEl.value || '').trim() : '';
-                var resp = await fetch(translateRuUrl, {
+                var startResp = await fetch(translateRuStartUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({ source_text: raw, model: modelVal }),
-                    signal: translateRuAbort ? translateRuAbort.signal : undefined
+                    signal: translateRuAbort.signal
                 });
-                if (!resp.body) {
-                    setTranslateRuStatus('Ошибка: сервер не отдал поток.');
+                var startData = null;
+                try { startData = await startResp.json(); } catch (_) { startData = null; }
+                if (!startResp.ok || !startData || !startData.ok || !startData.task || !startData.task.task_id) {
+                    hadError = true;
+                    var se = (startData && (startData.message || startData.error)) || ('HTTP ' + startResp.status);
+                    setTranslateRuStatus('Не удалось запустить: ' + se);
                     return;
                 }
-                var reader = resp.body.getReader();
-                var dec = new TextDecoder('utf-8');
-                var buf = '';
-                while (true) {
-                    var rd = await reader.read();
-                    if (rd.done) break;
-                    buf += dec.decode(rd.value, { stream: true });
-                    var idx;
-                    while ((idx = buf.indexOf('\n')) !== -1) {
-                        var line = buf.slice(0, idx);
-                        buf = buf.slice(idx + 1);
-                        if (!line.trim()) continue;
-                        var ev = null;
-                        try { ev = JSON.parse(line); } catch (e2) { continue; }
-                        var msg = String((ev && ev.message) || '');
-                        if (ev && ev.type === 'status') {
-                            setTranslateRuStatus(msg);
-                        } else if (ev && ev.type === 'error') {
-                            hadError = true;
-                            setTranslateRuStatus('Ошибка: ' + msg);
-                        } else if (ev && ev.type === 'result') {
-                            translatedText = String(ev.content || '');
-                        }
-                    }
-                }
-                if (hadError && !translatedText) {
-                    return;
-                }
-                if (sourceRuEl) sourceRuEl.value = translatedText;
-                sourceRuLocked = true;
-                showTranslateRuResultBlock(true);
-                applySourceRuLockUI();
-                updateSourceRuCounts();
-                scheduleAutosave(0);
+                translateRuTaskId = startData.task.task_id;
+                setTranslateRuStatus('Задача запущена, подключаюсь к событиям…');
+                var okFollow = await followTranslateRuEventStream(translateRuTaskId, translateRuAbort.signal);
+                if (!okFollow) hadError = true;
             } catch (e) {
                 if (e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1)) {
                     setTranslateRuStatus('Отменено.');
                 } else {
-                    setTranslateRuStatus('Ошибка сети: ' + String(e));
+                    hadError = true;
+                    setTranslateRuStatus('Ошибка: ' + String(e && e.message ? e.message : e));
                 }
             } finally {
+                translateRuTaskId = null;
                 translateRuAbort = null;
-                if (!hadError) {
-                    setTranslateRuBusy(false);
+                if (hadError) {
+                    setTimeout(function () { setTranslateRuBusy(false); }, 3200);
                 } else {
-                    if (translateRuBtn) translateRuBtn.disabled = !openaiOk;
-                    translateRuRunning = false;
-                    if (translateRuCancelBtn) translateRuCancelBtn.disabled = true;
-                    setTimeout(function () { setTranslateRuBusy(false); }, 3500);
+                    setTranslateRuBusy(false);
                 }
             }
         });
+
+        /** Подключение к уже running-задаче перевода после F5 / новой вкладки. */
+        window.__rewriteTranslateRuAttach = async function (taskId) {
+            if (!taskId || !openaiOk || translateRuRunning) return;
+            setTranslateRuBusy(true);
+            translateRuAbort = new AbortController();
+            translateRuTaskId = taskId;
+            var hadError = false;
+            try {
+                setTranslateRuStatus('Восстановление прогресса перевода…');
+                var ok = await followTranslateRuEventStream(taskId, translateRuAbort.signal);
+                if (!ok) hadError = true;
+            } catch (e) {
+                if (e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1)) {
+                    setTranslateRuStatus('Отменено.');
+                } else {
+                    hadError = true;
+                    setTranslateRuStatus('Ошибка: ' + String(e && e.message ? e.message : e));
+                }
+            } finally {
+                translateRuTaskId = null;
+                translateRuAbort = null;
+                if (hadError) {
+                    setTimeout(function () { setTranslateRuBusy(false); }, 3200);
+                } else {
+                    setTranslateRuBusy(false);
+                }
+            }
+        };
     }
 
     if (targetCharsRangeEl && targetCharsValEl) {
@@ -2277,7 +2362,7 @@
                             syncPromptBadge(block);
                         }
                     }
-                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'distiller' || key === 'author' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
+                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'rewrite' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
                         var uta = block.querySelector('.rewrite-stage-user-prompt');
                         if (uta) {
                             uta.value = cell.user_prompt;
@@ -2314,7 +2399,7 @@
                         if (tv) tv.textContent = String(n);
                     }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'distiller' || key === 'author' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
+                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'rewrite' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
@@ -2714,6 +2799,8 @@
             voiceover_final_locked: voiceoverFinalLocked,
             voiceover_final_text_ru: (function () { var el = document.getElementById('rewrite-voiceover-final-text-ru'); return el ? (el.value || '') : ''; })(),
             voiceover_final_text_ru_locked: voiceoverFinalTextRuLocked,
+            semantic_text_analysis: (function () { var el = document.getElementById('semantic-analyzer-result'); return el ? (el.value || '') : ''; })(),
+            semantic_text_analysis_locked: semanticAnalysisLocked,
             master_prompt: masterEl ? masterEl.value : '',
             master_prompt_locked: masterLocked,
             target_chars: targetCharsRangeEl ? clampTargetChars(targetCharsRangeEl.value) : 1500,
@@ -2896,7 +2983,7 @@
     function applyAnalysisUserPromptLockUI(block) {
         if (!block) return;
         var sk = block.getAttribute('data-stage-key');
-        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'distiller' && sk !== 'author' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
+        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'rewrite' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
         const locked = block.getAttribute('data-user-prompt-locked') === '1';
         const ta = block.querySelector('.rewrite-stage-user-prompt');
         const toggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
@@ -3077,7 +3164,7 @@
         const dis = on || !openaiOk;
         if (pipelineRunBtn) pipelineRunBtn.disabled = dis;
         syncPipelineStopButton();
-        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn)').forEach(function (b) { b.disabled = dis; });
+        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn):not(.semantic-analyzer-result-copy-btn):not(.semantic-analyzer-result-toggle)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
@@ -3108,6 +3195,11 @@
             sourceRuEl.disabled = !openaiOk;
             sourceRuEl.readOnly = dis || sourceRuLocked;
         }
+        var semanticTa = document.getElementById('semantic-analyzer-result');
+        if (semanticTa) {
+            semanticTa.disabled = !openaiOk;
+            semanticTa.readOnly = dis || semanticAnalysisLocked;
+        }
         if (templateSelectEl) templateSelectEl.disabled = dis;
         if (templateCreateBtn) templateCreateBtn.disabled = dis;
         if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
@@ -3137,7 +3229,7 @@
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
             }
-            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'distiller' || block.getAttribute('data-stage-key') === 'author' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
+            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
                 const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
                 const uTa = block.querySelector('.rewrite-stage-user-prompt');
                 if (uTa) {
@@ -3823,7 +3915,7 @@
             }
             const dec = new TextDecoder();
             let buf = '';
-            const useOpenAIStreamUi = (stageKey === 'draft1' || stageKey === 'author');
+            const useOpenAIStreamUi = (stageKey === 'draft1');
             let streamBuf = '';
             var lastDeltaLog = 0;
             while (true) {
@@ -4609,7 +4701,7 @@
             });
         }
     })();
-    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="title_strategist"], .rewrite-stage-card[data-stage-key="scene_writer_live"]').forEach(function (block) {
+    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="rewrite"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="title_strategist"], .rewrite-stage-card[data-stage-key="scene_writer_live"]').forEach(function (block) {
         renderEditorCheck(block);
         var ta = block.querySelector('.rewrite-stage-result');
         if (ta) {
@@ -4841,7 +4933,24 @@
             var data = await resp.json();
             if (!data || !data.ok || !Array.isArray(data.tasks) || data.tasks.length === 0) return;
             data.tasks.forEach(function (t) {
-                if (!t || t.kind !== 'stage' || !t.task_id || !t.ref_id) return;
+                if (!t || !t.task_id) return;
+                if (t.kind === 'translate_source_ru' && String(t.ref_id || '') === 'source') {
+                    if (typeof window.__rewriteTranslateRuAttach === 'function') {
+                        window.__rewriteTranslateRuAttach(t.task_id).catch(function (e) {
+                            console.warn('[rewrite] reattach translate RU failed', e);
+                        });
+                    }
+                    return;
+                }
+                if (t.kind === 'semantic_text_analyzer' && String(t.ref_id || '') === 'semantic') {
+                    if (typeof window.__rewriteSemanticAttach === 'function') {
+                        window.__rewriteSemanticAttach(t.task_id).catch(function (e) {
+                            console.warn('[rewrite] reattach semantic analyzer failed', e);
+                        });
+                    }
+                    return;
+                }
+                if (!t || t.kind !== 'stage' || !t.ref_id) return;
                 var stageKey = String(t.ref_id || '').trim();
                 if (!stageKey) return;
                 var card = document.querySelector('.rewrite-stage-card[data-stage-key="' + stageKey + '"]');
@@ -4950,6 +5059,447 @@
         applyRewritePresetVisibility(currentRewritePreset);
         syncPresetToggleButtonsUI(currentRewritePreset);
         try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+    })();
+
+    // ===== Semantic Text Analyzer =====
+    // Фоновая задача (task_manager): после F5 подключаемся к /tasks/<id>/events.
+    // На время работы прячем textarea-обёртку и показываем синий dashed
+    // .slot-placeholder со спиннером и Cancel (как у Russian / этапов).
+    (function setupSemanticAnalyzer() {
+        var block = document.getElementById('semantic-analyzer-block');
+        if (!block) return;
+        var runBtn = document.getElementById('semantic-analyzer-run-btn');
+        var cancelBtn = document.getElementById('semantic-analyzer-cancel-btn');
+        var statusEl = document.getElementById('semantic-analyzer-result-status');
+        var statusWrap = document.getElementById('semantic-analyzer-status-wrap');
+        var resultEl = document.getElementById('semantic-analyzer-result');
+        var textareaWrap = document.getElementById('semantic-analyzer-textarea-wrap');
+        var copyBtn = document.getElementById('semantic-analyzer-result-copy-btn');
+        var toggleBtn = document.getElementById('semantic-analyzer-result-toggle');
+        if (!runBtn || !statusEl || !resultEl || !semanticAnalyzerStartUrl) return;
+
+        var semanticAbort = null;
+        var semanticRunning = false;
+        var semanticTaskId = null;
+
+        function setSemanticStatus(text, kind) {
+            statusEl.textContent = text || '';
+            if (statusWrap) {
+                if (kind === 'err') statusWrap.setAttribute('data-status', 'error');
+                else statusWrap.setAttribute('data-status', 'generating');
+            }
+        }
+
+        function setSemanticBusy(on) {
+            semanticRunning = !!on;
+            if (runBtn) {
+                runBtn.disabled = on || !openaiOk;
+                runBtn.hidden = !!on;
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = !on;
+            }
+            if (statusWrap) {
+                statusWrap.classList.toggle('hidden', !on);
+                if (on) statusWrap.removeAttribute('aria-hidden');
+                else statusWrap.setAttribute('aria-hidden', 'true');
+            }
+            if (textareaWrap) {
+                textareaWrap.classList.toggle('hidden', !!on);
+            }
+            if (!on) {
+                statusEl.textContent = '';
+                if (statusWrap) statusWrap.removeAttribute('data-status');
+            }
+        }
+
+        function getRuSourceText() {
+            var ta = document.getElementById('rewrite-source-text-ru');
+            return ta ? String(ta.value || '') : '';
+        }
+
+        async function followSemanticEventStream(taskId, signal) {
+            var res = await fetch(rewriteTaskEventsUrl(taskId, -1), {
+                method: 'GET',
+                headers: { 'Accept': 'application/x-ndjson' },
+                signal: signal
+            });
+            if (!res.ok) {
+                setSemanticStatus('Ошибка подписки на задачу: HTTP ' + res.status, 'err');
+                return false;
+            }
+            var reader = res.body && res.body.getReader();
+            if (!reader) {
+                setSemanticStatus('Браузер не поддерживает потоковое чтение ответа.', 'err');
+                return false;
+            }
+            var dec = new TextDecoder('utf-8');
+            var buf = '';
+            var outText = '';
+            var hadError = false;
+            var gotResult = false;
+            while (true) {
+                var rd = await reader.read();
+                if (rd.done) break;
+                buf += dec.decode(rd.value, { stream: true });
+                var idx;
+                while ((idx = buf.indexOf('\n')) !== -1) {
+                    var line = buf.slice(0, idx);
+                    buf = buf.slice(idx + 1);
+                    if (!line.trim()) continue;
+                    var ev = null;
+                    try { ev = JSON.parse(line); } catch (e2) { continue; }
+                    var msg = String((ev && ev.message) || '');
+                    if (ev && ev.type === 'status') {
+                        setSemanticStatus(msg, null);
+                    } else if (ev && ev.type === 'error') {
+                        hadError = true;
+                        setSemanticStatus(msg || 'Ошибка', 'err');
+                    } else if (ev && ev.type === 'result') {
+                        outText = String(ev.content || '');
+                        gotResult = true;
+                    }
+                }
+            }
+            if (gotResult && resultEl) {
+                resultEl.value = outText;
+                semanticAnalysisLocked = true;
+                applySemanticResultLockUI();
+                scheduleAutosave(0);
+                return true;
+            }
+            return false;
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function () {
+                if (semanticTaskId) {
+                    try {
+                        fetch(rewriteTaskCancelUrl(semanticTaskId), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } catch (_) {}
+                }
+                if (semanticAbort) {
+                    try { semanticAbort.abort(); } catch (e) {}
+                }
+            });
+        }
+
+        runBtn.addEventListener('click', async function (ev) {
+            ev.preventDefault();
+            if (!openaiOk || semanticRunning) return;
+            var src = getRuSourceText();
+            if (!src.trim()) {
+                setSemanticBusy(true);
+                setSemanticStatus('Нет русского текста. Сначала запустите «Перевести на русский».', 'err');
+                setTimeout(function () { setSemanticBusy(false); }, 2800);
+                return;
+            }
+            setSemanticBusy(true);
+            setSemanticStatus('Запуск фоновой задачи Semantic…', null);
+            semanticTaskId = null;
+            semanticAbort = new AbortController();
+            var hadError = false;
+            try {
+                var modelVal = globalModelEl ? (globalModelEl.value || '').trim() : '';
+                var startResp = await fetch(semanticAnalyzerStartUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ source_text_ru: src, model: modelVal }),
+                    signal: semanticAbort.signal
+                });
+                var startData = null;
+                try { startData = await startResp.json(); } catch (_) { startData = null; }
+                if (!startResp.ok || !startData || !startData.ok || !startData.task || !startData.task.task_id) {
+                    hadError = true;
+                    var se = (startData && (startData.message || startData.error)) || ('HTTP ' + startResp.status);
+                    setSemanticStatus('Не удалось запустить: ' + se, 'err');
+                    return;
+                }
+                semanticTaskId = startData.task.task_id;
+                setSemanticStatus('Задача запущена, подключаюсь к событиям…', null);
+                var okFollow = await followSemanticEventStream(semanticTaskId, semanticAbort.signal);
+                if (!okFollow) hadError = true;
+            } catch (e) {
+                if (e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1)) {
+                    setSemanticStatus('Отменено.', null);
+                } else {
+                    hadError = true;
+                    setSemanticStatus('Ошибка: ' + String(e && e.message ? e.message : e), 'err');
+                }
+            } finally {
+                semanticTaskId = null;
+                semanticAbort = null;
+                if (hadError) {
+                    setTimeout(function () { setSemanticBusy(false); }, 3200);
+                } else {
+                    setSemanticBusy(false);
+                }
+            }
+        });
+
+        window.__rewriteSemanticAttach = async function (taskId) {
+            if (!taskId || !openaiOk || semanticRunning) return;
+            setSemanticBusy(true);
+            semanticAbort = new AbortController();
+            semanticTaskId = taskId;
+            var hadError = false;
+            try {
+                setSemanticStatus('Восстановление прогресса Semantic…', null);
+                var ok = await followSemanticEventStream(taskId, semanticAbort.signal);
+                if (!ok) hadError = true;
+            } catch (e) {
+                if (e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1)) {
+                    setSemanticStatus('Отменено.', null);
+                } else {
+                    hadError = true;
+                    setSemanticStatus('Ошибка: ' + String(e && e.message ? e.message : e), 'err');
+                }
+            } finally {
+                semanticTaskId = null;
+                semanticAbort = null;
+                if (hadError) {
+                    setTimeout(function () { setSemanticBusy(false); }, 3200);
+                } else {
+                    setSemanticBusy(false);
+                }
+            }
+        };
+
+        if (copyBtn && resultEl) {
+            copyBtn.addEventListener('click', function () {
+                var raw = resultEl.value || '';
+                var prevTitle = copyBtn.getAttribute('title') || 'Копировать результат в буфер обмена';
+                function flashTitle(t) {
+                    copyBtn.setAttribute('title', t);
+                    setTimeout(function () { copyBtn.setAttribute('title', prevTitle); }, 1500);
+                }
+                if (!raw.trim()) { flashTitle('Нет текста для копирования'); return; }
+                function fallback() {
+                    try {
+                        var prevRo = resultEl.readOnly;
+                        var prevDis = resultEl.disabled;
+                        resultEl.readOnly = false;
+                        resultEl.disabled = false;
+                        resultEl.focus();
+                        resultEl.select();
+                        document.execCommand('copy');
+                        resultEl.readOnly = prevRo;
+                        resultEl.disabled = prevDis;
+                        flashTitle('Скопировано');
+                    } catch (e) { flashTitle('Не удалось скопировать'); }
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(raw)
+                        .then(function () { flashTitle('Скопировано'); })
+                        .catch(fallback);
+                } else { fallback(); }
+            });
+        }
+
+        if (toggleBtn) {
+            wireTextLockToggle(toggleBtn, {
+                get: function () { return semanticAnalysisLocked; },
+                set: function (v) { semanticAnalysisLocked = v; },
+                apply: applySemanticResultLockUI,
+                focusEl: resultEl
+            });
+        }
+
+        resultEl.addEventListener('input', function () { scheduleAutosave(500); });
+        resultEl.addEventListener('change', function () { scheduleAutosave(0); });
+    })();
+
+    // ===== Locked prompts (промты «под пин-кодом») =====
+    // Один диалог обслуживает все защищённые промты. Какой именно
+    // редактируем — определяется по data-locked-prompt-edit="<name>" на
+    // кнопке-карандашике. Текущее активное имя живёт в `state.name`.
+    (function setupLockedPromptModal() {
+        const modal = document.getElementById('locked-prompt-modal');
+        if (!modal) return;
+        const card = modal.querySelector('.confirm-modal__card');
+        const title = document.getElementById('locked-prompt-modal-title');
+        const textarea = document.getElementById('locked-prompt-modal-textarea');
+        const msg = document.getElementById('locked-prompt-modal-msg');
+        const dotsWrap = document.getElementById('locked-prompt-modal-pin-dots');
+        const keypad = document.getElementById('locked-prompt-modal-keypad');
+        const cancelBtn = document.getElementById('locked-prompt-modal-cancel');
+        const resetBtn = document.getElementById('locked-prompt-modal-reset');
+        if (!textarea || !msg || !dotsWrap || !keypad) return;
+        const dots = Array.from(dotsWrap.querySelectorAll('.locked-prompt-modal__pin-dot'));
+        const PIN_LEN = 4;
+        const state = { name: null, label: '', pin: '', loadedContent: '', saving: false };
+
+        function setMsg(text, kind) {
+            msg.textContent = text || '';
+            msg.classList.remove('hidden', 'locked-prompt-modal__msg--err', 'locked-prompt-modal__msg--ok');
+            if (!text) { msg.classList.add('hidden'); return; }
+            if (kind === 'err') msg.classList.add('locked-prompt-modal__msg--err');
+            else if (kind === 'ok') msg.classList.add('locked-prompt-modal__msg--ok');
+        }
+        function renderDots() {
+            dots.forEach((d, i) => {
+                if (i < state.pin.length) d.classList.add('locked-prompt-modal__pin-dot--filled');
+                else d.classList.remove('locked-prompt-modal__pin-dot--filled');
+            });
+        }
+        function openModal() {
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            try { textarea.focus(); } catch (_) {}
+        }
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            state.name = null;
+            state.pin = '';
+            state.loadedContent = '';
+            state.saving = false;
+            textarea.value = '';
+            setMsg('', null);
+            renderDots();
+        }
+        async function loadContent(name) {
+            setMsg('Загрузка…', null);
+            try {
+                const resp = await fetch('/api/locked-prompts/' + encodeURIComponent(name), { method: 'GET' });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.ok) {
+                    setMsg('Не удалось загрузить промт: ' + (data && data.error ? data.error : resp.status), 'err');
+                    return false;
+                }
+                state.loadedContent = String(data.content || '');
+                textarea.value = state.loadedContent;
+                if (data.label) title.textContent = String(data.label);
+                updateBadge(name, !!data.present);
+                setMsg('', null);
+                return true;
+            } catch (e) {
+                setMsg('Сеть/сервер недоступны: ' + (e && e.message ? e.message : e), 'err');
+                return false;
+            }
+        }
+        function updateBadge(name, present) {
+            const badge = document.querySelector('[data-locked-prompt-badge="' + name + '"]');
+            if (!badge) return;
+            var label = (String(name).slice(-5) === '_user') ? 'User Promt: ' : 'System Promt: ';
+            badge.textContent = label + (present ? 'YES' : 'NO');
+            badge.classList.toggle('locked-prompt-badge--yes', present);
+            badge.classList.toggle('locked-prompt-badge--no', !present);
+        }
+        async function save() {
+            if (!state.name || state.saving) return;
+            if (state.pin.length !== PIN_LEN) {
+                setMsg('Введите ' + PIN_LEN + ' цифр пин-кода.', 'err');
+                return;
+            }
+            state.saving = true;
+            setMsg('Сохраняем…', null);
+            try {
+                const resp = await fetch('/api/locked-prompts/' + encodeURIComponent(state.name), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: state.pin, content: textarea.value })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.status === 401) {
+                    setMsg('Неверный пин-код.', 'err');
+                    state.pin = '';
+                    renderDots();
+                    state.saving = false;
+                    return;
+                }
+                if (!resp.ok || !data.ok) {
+                    setMsg('Не удалось сохранить: ' + (data && data.error ? data.error : resp.status), 'err');
+                    state.saving = false;
+                    return;
+                }
+                state.loadedContent = textarea.value;
+                updateBadge(state.name, !!data.present);
+                setMsg('Сохранено.', 'ok');
+                state.pin = '';
+                renderDots();
+                state.saving = false;
+                setTimeout(closeModal, 600);
+            } catch (e) {
+                setMsg('Сеть/сервер недоступны: ' + (e && e.message ? e.message : e), 'err');
+                state.saving = false;
+            }
+        }
+        function pushDigit(d) {
+            if (state.pin.length >= PIN_LEN) return;
+            state.pin += d;
+            renderDots();
+            if (state.pin.length === PIN_LEN) {
+                // Автосохранение по полному пину — как «нажал OK на клавиатуре телефона».
+                save();
+            }
+        }
+        function popDigit() {
+            if (state.pin.length === 0) return;
+            state.pin = state.pin.slice(0, -1);
+            renderDots();
+        }
+
+        // ----- Глобальный делегат для кнопок ✎ возле защищённых промтов -----
+        document.addEventListener('click', async (ev) => {
+            const btn = ev.target.closest && ev.target.closest('[data-locked-prompt-edit]');
+            if (!btn) return;
+            ev.preventDefault();
+            const name = btn.getAttribute('data-locked-prompt-edit');
+            const label = btn.getAttribute('data-locked-prompt-label') || 'Промт';
+            if (!name) return;
+            state.name = name;
+            state.label = label;
+            state.pin = '';
+            renderDots();
+            title.textContent = label;
+            textarea.value = '';
+            openModal();
+            await loadContent(name);
+        });
+
+        // ----- Кнопки модалки -----
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                textarea.value = state.loadedContent;
+                setMsg('Текст возвращён к сохранённому на сервере.', 'ok');
+            });
+        }
+        modal.addEventListener('click', (ev) => {
+            const t = ev.target;
+            if (t && t.hasAttribute && t.hasAttribute('data-locked-prompt-modal-close')) closeModal();
+        });
+
+        // ----- Keypad -----
+        keypad.addEventListener('click', (ev) => {
+            const k = ev.target.closest && ev.target.closest('button');
+            if (!k) return;
+            const d = k.getAttribute('data-pin-digit');
+            const a = k.getAttribute('data-pin-action');
+            if (d != null) { pushDigit(d); return; }
+            if (a === 'clear') { popDigit(); return; }
+            if (a === 'ok') { save(); return; }
+        });
+
+        // ----- Клавиатура: цифры/Backspace/Enter/Escape пока открыто -----
+        document.addEventListener('keydown', (ev) => {
+            if (modal.classList.contains('hidden')) return;
+            const tgt = ev.target;
+            const inTextarea = tgt && tgt.tagName === 'TEXTAREA';
+            if (inTextarea) {
+                // Не перехватываем ввод в textarea, кроме Escape.
+                if (ev.key === 'Escape') { ev.preventDefault(); closeModal(); }
+                return;
+            }
+            if (ev.key === 'Escape') { ev.preventDefault(); closeModal(); return; }
+            if (ev.key === 'Enter') { ev.preventDefault(); save(); return; }
+            if (ev.key === 'Backspace') { ev.preventDefault(); popDigit(); return; }
+            if (/^[0-9]$/.test(ev.key)) { ev.preventDefault(); pushDigit(ev.key); return; }
+        });
     })();
 })();
     </script>

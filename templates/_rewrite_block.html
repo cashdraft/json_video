@@ -123,8 +123,8 @@
                     <div class="scene-id rewrite-source-body-title">Исходный текст</div>
                     <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
                 </div>
-                <div class="rewrite-source-title-field">
-                    <input type="text" id="rewrite-source-title" class="rewrite-source-title-input{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
+                <div class="rewrite-source-title-field slot-placeholder rewrite-slot-placeholder rewrite-slot--source-title">
+                    <input type="text" id="rewrite-source-title" class="rewrite-source-title-input rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
                 </div>
                 <div class="rewrite-source-toolbar slot-header">
                     <span class="slot-badge badge-yes">Source</span>
@@ -142,19 +142,13 @@
                     <textarea id="rewrite-source-text" class="rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Вставьте текст…" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %}>{{ rw.source_text or rw.last_text or '' }}</textarea>
                 </div>
                 <div class="rewrite-source-translate-block">
-                    <div class="rewrite-source-translate-actions">
-                        <button type="button" class="btn btn-secondary btn-sm" id="rewrite-source-translate-ru-btn" {% if not openai_key_set %}disabled{% endif %}>Перевести на русский</button>
-                    </div>
-                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-source-translate-ru-status-wrap" aria-hidden="true">
-                        <div class="slot-status-row">
-                            <span class="slot-status slot-status-with-spinner" id="rewrite-source-translate-ru-status" aria-live="polite"></span>
-                            <button type="button" class="btn-cancel-generation" id="rewrite-source-translate-ru-cancel">Cancel</button>
-                        </div>
-                    </div>
-                    <div class="rewrite-slot--source-ru-wrap{% if not (rw.source_text_ru or '')|trim %} hidden{% endif %}" id="rewrite-source-text-ru-wrap"{% if not (rw.source_text_ru or '')|trim %} aria-hidden="true"{% endif %}>
+                    {% set _tr_lp = (locked_prompts_state or {}).get('translate_to_ru') or {} %}
+                    {% set _tr_present = _tr_lp.get('present')|default(false) %}
+                    <div class="rewrite-slot--source-ru-wrap" id="rewrite-source-text-ru-wrap">
                         {% set ru_locked = rw.source_text_ru_locked|default(false) %}
                         <div class="rewrite-source-toolbar slot-header">
                             <span class="slot-badge badge-yes">Russian</span>
+                            <button type="button" class="btn-regenerate rewrite-stage-run rewrite-source-translate-ru-run-btn" id="rewrite-source-translate-ru-btn" title="Перевести на русский (запустить / повторить)" aria-label="Перевести на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if ru_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-ru-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                                 <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -162,10 +156,63 @@
                             <button type="button" class="rewrite-lock-toggle btn-icon rewrite-source-ru-copy-btn" id="rewrite-source-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
                                 <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                             </button>
-                            <span class="rewrite-source-counts" id="rewrite-source-ru-counts" aria-live="polite"></span>
+                            {# Правая группа: счётчик символов/слов + System Promt + ✎. #}
+                            <span class="locked-prompts-group">
+                                <span class="rewrite-source-counts rewrite-source-counts--inline" id="rewrite-source-ru-counts" aria-live="polite"></span>
+                                <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _tr_present else 'no' }}" id="locked-prompt-badge-translate_to_ru" data-locked-prompt-badge="translate_to_ru" title="Системный промт перевода (под пин-кодом)">System Promt: {{ 'YES' if _tr_present else 'NO' }}</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="translate_to_ru" data-locked-prompt-label="Промт перевода на русский" title="Редактировать промт перевода (пин-код)" aria-label="Редактировать промт перевода"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                            </span>
                         </div>
-                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--source-ru">
-                            <textarea id="rewrite-source-text-ru" class="rewrite-source-textarea{% if ru_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Появится после нажатия «Перевести на русский»…" {% if not openai_key_set %}disabled{% elif ru_locked %}readonly{% endif %}>{{ rw.source_text_ru or '' }}</textarea>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-source-translate-ru-status-wrap" aria-hidden="true">
+                            <div class="slot-status-row">
+                                <span class="slot-status slot-status-with-spinner" id="rewrite-source-translate-ru-status" aria-live="polite"></span>
+                                <button type="button" class="btn-cancel-generation" id="rewrite-source-translate-ru-cancel">Cancel</button>
+                            </div>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-source-translate-ru-textarea-wrap" id="rewrite-source-translate-ru-textarea-wrap">
+                            <textarea id="rewrite-source-text-ru" class="rewrite-source-textarea{% if ru_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Нажмите ↻ справа от «Russian» — перевод появится здесь." {% if not openai_key_set %}disabled{% elif ru_locked %}readonly{% endif %}>{{ rw.source_text_ru or '' }}</textarea>
+                        </div>
+
+                        {# ---- Semantic Text Analyzer ----
+                           Идёт сразу под textarea русского перевода. System Promt и
+                           User Promt хранятся в каталоге locked_prompts/ (под пин-кодом)
+                           и редактируются через общий диалог. Результат сохраняется
+                           в `rw.semantic_text_analysis` и отображается «синим блоком»
+                           ниже (стиль повторяет .rewrite-scene-writer-check). #}
+                        {% set _sa_sys = (locked_prompts_state or {}).get('semantic_text_analyzer_system') or {} %}
+                        {% set _sa_user = (locked_prompts_state or {}).get('semantic_text_analyzer_user') or {} %}
+                        {% set _sa_sys_present = _sa_sys.get('present')|default(false) %}
+                        {% set _sa_user_present = _sa_user.get('present')|default(false) %}
+                        {% set _sa_result = (rw.semantic_text_analysis or '')|trim %}
+                        {% set sa_res_locked = rw.semantic_text_analysis_locked|default(true) %}
+                        <div class="semantic-analyzer-block" id="semantic-analyzer-block">
+                            <div class="semantic-analyzer-header">
+                                <span class="slot-badge badge-yes">Semantic</span>
+                                <button type="button" class="btn-regenerate rewrite-stage-run semantic-analyzer-run-btn" id="semantic-analyzer-run-btn" title="Запустить Semantic" aria-label="Запустить Semantic" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                <button type="button" class="rewrite-lock-toggle btn-icon semantic-analyzer-result-toggle{% if sa_res_locked %} rewrite-lock-toggle--locked{% endif %}" id="semantic-analyzer-result-toggle" title="Редактировать результат" aria-label="Редактировать результат" {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="rewrite-lock-toggle btn-icon semantic-analyzer-result-copy-btn" id="semantic-analyzer-result-copy-btn" title="Копировать результат в буфер обмена" aria-label="Копировать результат">
+                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                </button>
+                                {# System / User Promt — отдельная группа, прижатая к правому краю шапки. #}
+                                <span class="locked-prompts-group">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _sa_sys_present else 'no' }}" data-locked-prompt-badge="semantic_text_analyzer_system" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if _sa_sys_present else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="semantic_text_analyzer_system" data-locked-prompt-label="Semantic Text Analyzer — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _sa_user_present else 'no' }}" data-locked-prompt-badge="semantic_text_analyzer_user" title="User Promt (под пин-кодом). К нему автоматически добавляется русский переведённый текст.">User Promt: {{ 'YES' if _sa_user_present else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="semantic_text_analyzer_user" data-locked-prompt-label="Semantic Text Analyzer — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder semantic-analyzer-status-wrap hidden" id="semantic-analyzer-status-wrap" aria-hidden="true">
+                                <div class="slot-status-row">
+                                    <span class="slot-status slot-status-with-spinner" id="semantic-analyzer-result-status" aria-live="polite"></span>
+                                    <button type="button" class="btn-cancel-generation" id="semantic-analyzer-cancel-btn">Cancel</button>
+                                </div>
+                            </div>
+                            <div class="rewrite-scene-writer-check semantic-analyzer-textarea-wrap" id="semantic-analyzer-textarea-wrap">
+                                <textarea id="semantic-analyzer-result" class="semantic-analyzer-result-textarea{% if sa_res_locked %} rewrite-source-textarea--locked{% endif %}" rows="12" placeholder="Нажмите ↻ — результат анализа появится здесь." {% if not openai_key_set %}disabled{% elif sa_res_locked %}readonly{% endif %}>{{ rw.semantic_text_analysis or '' }}</textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -338,9 +385,7 @@
             {% set collapsible_pipeline_stages = ns_col.lst %}
             {% set collapsible_extra_stages = ['scene_writer_live', 'youtube_packaging'] %}
             {# Объединение по ВСЕМ пресетам — нужно, чтобы при переключении пресета на клиенте
-               карточки уже имели класс --collapsible и обёртку rewrite-stage-collapsible-inner.
-               Иначе после переключения preset → soft карточки Distiller/Author есть, но без
-               обёртки и без класса, и «Свернуть все» не может их свернуть. #}
+               карточки уже имели класс --collapsible и обёртку rewrite-stage-collapsible-inner. #}
             {% set ns_union = namespace(lst=[]) %}
             {% for _preset_id, _plist in rewrite_preset_stage_keys.items() %}
                 {% set ns_each = namespace(cnt=0) %}
@@ -357,7 +402,6 @@
                 <span class="rewrite-preset-toggle__label">Пресет:</span>
                 <div class="rewrite-preset-toggle__group">
                     <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'deep' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="deep">{{ rewrite_preset_labels['deep'] }}</button>
-                    <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'soft' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="soft">{{ rewrite_preset_labels['soft'] }}</button>
                     <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'prewritten' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="prewritten">{{ rewrite_preset_labels['prewritten'] }}</button>
                 </div>
             </div>
@@ -449,7 +493,7 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'distiller' or stage_key == 'author' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'rewrite' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_user_prompt else 'no' }} rewrite-stage-user-prompt-badge">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
@@ -558,7 +602,7 @@
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
                             {% endif %}
-                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist'] %}
+                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'rewrite', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist'] %}
                             <div class="rewrite-scene-writer-check" data-editor-check></div>
                             {% endif %}
                         </div>
@@ -742,6 +786,50 @@
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-proxy-clear" title="Удалить сохранённый прокси (использовать прямое соединение или YT_DLP_PROXY из .env, если задан)">Очистить</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-proxy-modal-cancel">Отмена</button>
                 <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-proxy-save">OK</button>
+            </div>
+        </div>
+    </div>
+
+    {# Глобальная модалка для редактирования промтов из каталога locked_prompts/.
+       Открывается по клику на ✎ рядом с любым «защищённым» промтом
+       (см. JS-функцию `openLockedPromptModal` в _rewrite_block_scripts.html). #}
+    <div class="confirm-modal locked-prompt-modal hidden" id="locked-prompt-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-locked-prompt-modal-close></div>
+        <div class="confirm-modal__card locked-prompt-modal__card" role="dialog" aria-modal="true" aria-labelledby="locked-prompt-modal-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="locked-prompt-modal-title">Редактирование промта</h3>
+            </div>
+            <p class="confirm-modal__lead">Промт хранится в каталоге <code>locked_prompts/</code>. Для сохранения изменений введите пин-код (4 цифры). Пин лежит в переменной окружения <code>LOCKED_PROMPTS_PIN</code> — это барьер от случайной правки, а не криптозащита.</p>
+            <div class="locked-prompt-modal__textarea-wrap">
+                <textarea id="locked-prompt-modal-textarea" class="locked-prompt-modal__textarea" rows="14" spellcheck="false"></textarea>
+            </div>
+            <p class="confirm-modal__lead locked-prompt-modal__msg hidden" id="locked-prompt-modal-msg" aria-live="polite"></p>
+            <div class="locked-prompt-modal__pin-row">
+                <span class="locked-prompt-modal__pin-label">Пин-код:</span>
+                <div class="locked-prompt-modal__pin-dots" id="locked-prompt-modal-pin-dots" aria-live="polite">
+                    <span class="locked-prompt-modal__pin-dot"></span>
+                    <span class="locked-prompt-modal__pin-dot"></span>
+                    <span class="locked-prompt-modal__pin-dot"></span>
+                    <span class="locked-prompt-modal__pin-dot"></span>
+                </div>
+            </div>
+            <div class="locked-prompt-modal__keypad" id="locked-prompt-modal-keypad" role="group" aria-label="Числовая клавиатура">
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="1">1</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="2">2</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="3">3</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="4">4</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="5">5</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="6">6</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="7">7</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="8">8</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="9">9</button>
+                <button type="button" class="locked-prompt-modal__key locked-prompt-modal__key--util" data-pin-action="clear" aria-label="Очистить">⌫</button>
+                <button type="button" class="locked-prompt-modal__key" data-pin-digit="0">0</button>
+                <button type="button" class="locked-prompt-modal__key locked-prompt-modal__key--ok" data-pin-action="ok" aria-label="Подтвердить и сохранить">OK</button>
+            </div>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="locked-prompt-modal-reset" title="Вернуть исходный текст из файла на сервере (изменения в textarea будут сброшены)">Сбросить</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="locked-prompt-modal-cancel">Закрыть</button>
             </div>
         </div>
     </div>

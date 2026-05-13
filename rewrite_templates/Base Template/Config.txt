@@ -1,1 +1,1 @@
-target_chars: 10000
+target_chars: 18000

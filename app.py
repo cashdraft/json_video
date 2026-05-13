@@ -98,7 +98,6 @@ from rewrite_openai import (
     REWRITE_MODELS,
     iter_draft1_blockwise_completion,
     iter_rewrite_completion,
-    iter_rewrite_completion_stream,
     list_draft1_wire_chat_payloads_for_export,
     normalize_rewrite_model,
     rewrite_chat_completion_wire_payload,
@@ -130,13 +129,20 @@ from rewrite_pipeline import (
     snapshot_pipeline_extras_from_body,
     snapshot_stages_from_body,
     stage_run_prerequisites_met,
-    strip_author_stream_end_marker,
 )
 from rewrite_templates import (
     REWRITE_TEMPLATES_DIR,
     list_rewrite_template_names,
     load_rewrite_template,
     save_rewrite_template_to_disk,
+)
+from locked_prompts import (
+    LOCKED_PROMPTS as LOCKED_PROMPTS_REGISTRY,
+    get_locked_prompt,
+    is_known_prompt as locked_prompt_is_known,
+    public_state as locked_prompt_public_state,
+    save_locked_prompt,
+    verify_pin as verify_locked_prompts_pin,
 )
 from claude_kie import strip_markdown_code_fence
 from task_manager import (
@@ -1414,43 +1420,10 @@ def _rewrite_legacy_filepath(rewrite_id: str) -> Path:
 
 
 # System prompt for «Перевести на русский» (исходный текст, батчи ~5000 симв.).
-REWRITE_SOURCE_RU_TRANSLATE_SYSTEM_PROMPT = """Ты — профессиональный переводчик и редактор русского языка.
-
-Твоя задача — перевести входной текст на русский язык максимально естественно, понятно и живо.
-
-КРИТИЧЕСКИЕ ПРАВИЛА:
-
-— Сохраняй исходный смысл на 100%
-— Не сокращай текст
-— Не добавляй новую информацию
-— Не меняй факты, цифры, даты и имена
-— Не упрощай смысл
-— Не делай пересказ
-— Не цензурируй эмоциональность автора
-
-СТИЛЬ ПЕРЕВОДА:
-
-— Русский текст должен звучать естественно для носителя языка
-— Избегай дословного "машинного" перевода
-— Сохраняй ритм и эмоциональную подачу оригинала
-— Если в тексте есть сарказм, напряжение, ирония или агрессия — сохраняй это
-— Если текст разговорный — перевод тоже должен быть разговорным
-— Если текст экспертный — сохраняй экспертную подачу
-
-ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА:
-
-— Числа и факты сохраняй точно
-— Денежные суммы не искажай
-— Термины переводи корректно по контексту
-— Английские названия брендов, компаний и сервисов не переводи без необходимости
-— Сохраняй структуру абзацев
-
-ФОРМАТ ОТВЕТА:
-
-Верни ТОЛЬКО готовый перевод на русском языке.
-Без комментариев.
-Без пояснений.
-Без оригинального текста."""
+# Хранится в каталоге `locked_prompts/` и редактируется из UI только по
+# пин-коду (см. модуль `locked_prompts.py`). Дефолт лежит в реестре.
+def _translate_to_ru_system_prompt() -> str:
+    return get_locked_prompt("translate_to_ru")
 
 
 def _split_text_into_translation_batches(text: str, max_chars: int = 5000) -> list[str]:
@@ -3254,6 +3227,10 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         "youtube_cookies_status": youtube_cookies_status_dict(),
         "youtube_proxy_status": youtube_proxy_status_dict(),
         "collapsible_pipeline_stages": collapsible_pipeline_stages,
+        "locked_prompts_state": {
+            name: locked_prompt_public_state(name)
+            for name in LOCKED_PROMPTS_REGISTRY.keys()
+        },
     }
 
 
@@ -3537,6 +3514,11 @@ def rewrite_project_save(rewrite_id: str):
     if "rewrite_preset" in body:
         rw["rewrite_preset"] = normalize_rewrite_preset(body.get("rewrite_preset"))
     merge_stages_from_request(rw, body.get("stages"))
+    if "semantic_text_analysis" in body:
+        rw["semantic_text_analysis"] = str(body.get("semantic_text_analysis") or "")
+    sa_lock_in = body.get("semantic_text_analysis_locked") if "semantic_text_analysis_locked" in body else None
+    if sa_lock_in is not None:
+        rw["semantic_text_analysis_locked"] = bool(sa_lock_in)
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
     if "last_prompt" in body:
@@ -3549,9 +3531,157 @@ def rewrite_project_save(rewrite_id: str):
     return jsonify({"ok": True})
 
 
-@app.route("/rewrite/<rewrite_id>/translate-source-ru", methods=["POST"])
-def rewrite_translate_source_ru(rewrite_id: str):
-    """Перевод исходного текста на русский (батчи ~5000 симв., OpenAI). Ответ — NDJSON стрим."""
+@app.route("/api/locked-prompts/<name>", methods=["GET"])
+def api_locked_prompt_get(name: str):
+    """Отдать содержимое защищённого промта (без пин-кода).
+
+    Просмотр доступен всем — пин-код требуется только для записи. Это
+    осознанный выбор: задача защиты — предотвратить случайную правку,
+    а не скрыть содержимое. См. модуль `locked_prompts.py`.
+    """
+    if not locked_prompt_is_known(name):
+        return jsonify({"ok": False, "error": "unknown_prompt"}), 404
+    state = locked_prompt_public_state(name)
+    content = get_locked_prompt(name)
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "label": state.get("label"),
+        "present": bool(state.get("present")),
+        "content": content,
+    })
+
+
+@app.route("/api/locked-prompts/<name>", methods=["POST"])
+def api_locked_prompt_save(name: str):
+    """Сохранить защищённый промт. Body: {pin: "1234", content: "…"}.
+
+    pin сверяется с env переменной `LOCKED_PROMPTS_PIN` (дефолт `1234`).
+    """
+    if not locked_prompt_is_known(name):
+        return jsonify({"ok": False, "error": "unknown_prompt"}), 404
+    body = request.get_json(silent=True) or {}
+    pin = body.get("pin")
+    if not verify_locked_prompts_pin(pin):
+        return jsonify({"ok": False, "error": "bad_pin"}), 401
+    content = body.get("content")
+    if not isinstance(content, str):
+        return jsonify({"ok": False, "error": "bad_content"}), 400
+    try:
+        save_locked_prompt(name, content)
+    except OSError as e:
+        return jsonify({"ok": False, "error": f"write_failed: {e}"}), 500
+    state = locked_prompt_public_state(name)
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "label": state.get("label"),
+        "present": bool(state.get("present")),
+    })
+
+
+TRANSLATE_SOURCE_RU_TASK_KIND = "translate_source_ru"
+TRANSLATE_SOURCE_RU_TASK_REF_ID = "source"
+
+SEMANTIC_TEXT_ANALYZER_TASK_KIND = "semantic_text_analyzer"
+SEMANTIC_TEXT_ANALYZER_TASK_REF_ID = "semantic"
+
+
+def _iter_translate_source_ru_events(
+    rewrite_id: str,
+    source_text: str,
+    model: str,
+    *,
+    cancel_event: threading.Event | None = None,
+) -> Iterator[dict[str, Any]]:
+    """События перевода (status / error / result) — для NDJSON-стрима и для task_manager."""
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not source_text.strip():
+        yield {"type": "error", "message": "Нет текста для перевода."}
+        return
+    if not api_key_present or not api_key:
+        yield {"type": "error", "message": "Не задан OPENAI_API_KEY."}
+        return
+    batches = _split_text_into_translation_batches(source_text, 5000)
+    if not batches:
+        yield {"type": "error", "message": "Нет текста для перевода."}
+        return
+    nb = len(batches)
+    yield {
+        "type": "status",
+        "message": f"Разбиение текста на батчи готово: {nb} шт. (≤5000 симв./батч).",
+    }
+    yield {"type": "status", "message": f"Модель: {model}"}
+    parts: list[str] = []
+    for bi, chunk in enumerate(batches):
+        if cancel_event is not None and cancel_event.is_set():
+            yield {"type": "error", "message": "Задача отменена пользователем."}
+            return
+        tag = f"[Батч {bi + 1}/{nb}, {len(chunk)} симв.] "
+        yield {"type": "status", "message": tag + "Старт перевода батча…"}
+        user_msg = chunk
+        got_result = False
+        err_text: str | None = None
+        for ev in iter_rewrite_completion(
+            api_key,
+            model,
+            _translate_to_ru_system_prompt(),
+            user_msg,
+        ):
+            etype = str(ev.get("type") or "")
+            if etype == "status":
+                yield {"type": "status", "message": tag + str(ev.get("message") or "")}
+            elif etype == "error":
+                err_text = str(ev.get("message") or "Ошибка OpenAI")
+                break
+            elif etype == "result":
+                parts.append(str(ev.get("content") or ""))
+                got_result = True
+                yield {
+                    "type": "status",
+                    "message": tag + f"Готово: получено {len(parts[-1])} симв.",
+                }
+        if err_text is not None:
+            yield {"type": "error", "message": tag + err_text}
+            return
+        if not got_result:
+            yield {"type": "error", "message": tag + "Пустой ответ модели."}
+            return
+    combined = "".join(parts).strip()
+    rw_save = load_rewrite_job(rewrite_id)
+    if rw_save is None:
+        yield {"type": "error", "message": "Проект не найден при сохранении перевода."}
+        return
+    try:
+        rw_save["source_text_ru"] = combined
+        save_rewrite_job(rewrite_id, rw_save)
+        yield {"type": "status", "message": "Сохранено в project.json (поле source_text_ru)."}
+    except Exception as e:
+        yield {"type": "status", "message": f"Не удалось сохранить project.json: {e}"}
+    yield {"type": "result", "content": combined, "batches": nb, "chars": len(combined)}
+
+
+def _translate_source_ru_task_target(
+    emit: Callable[[dict[str, Any]], None],
+    cancel_event: threading.Event,
+    request_payload: dict[str, Any],
+) -> None:
+    """Фоновый target для task_manager: перевод source → RU."""
+    rewrite_id = str(request_payload.get("rewrite_id") or "").strip()
+    source_text = str(request_payload.get("source_text") or "")
+    model = str(request_payload.get("model") or "")
+    for ev in _iter_translate_source_ru_events(
+        rewrite_id, source_text, model, cancel_event=cancel_event
+    ):
+        emit(ev)
+
+
+@app.route("/rewrite/<rewrite_id>/translate-source-ru/start", methods=["POST"])
+def rewrite_translate_source_ru_start(rewrite_id: str):
+    """Браузер-независимый запуск перевода source → RU (фон + task_manager)."""
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
     rw = load_rewrite_job(rewrite_id)
     if rw is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
@@ -3561,94 +3691,182 @@ def rewrite_translate_source_ru(rewrite_id: str):
     stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
     ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
     model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
-    batches = _split_text_into_translation_batches(source_text, 5000)
+    if not source_text.strip():
+        return jsonify({"ok": False, "error": "no_source_text", "message": "Нет текста для перевода."}), 400
+    if not api_key_present or not (os.getenv("OPENAI_API_KEY") or "").strip():
+        return jsonify({"ok": False, "error": "no_api_key", "message": "Не задан OPENAI_API_KEY."}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    meta = _tm_start_task(
+        proj_dir,
+        kind=TRANSLATE_SOURCE_RU_TASK_KIND,
+        ref_id=TRANSLATE_SOURCE_RU_TASK_REF_ID,
+        target=_translate_source_ru_task_target,
+        request_payload={
+            "rewrite_id": rewrite_id,
+            "source_text": source_text,
+            "model": model,
+        },
+        reuse_active=True,
+    )
+    return jsonify({"ok": True, "task": meta})
+
+
+@app.route("/rewrite/<rewrite_id>/translate-source-ru", methods=["POST"])
+def rewrite_translate_source_ru(rewrite_id: str):
+    """Перевод исходного текста на русский (батчи ~5000 симв., OpenAI). Ответ — NDJSON стрим.
+
+    Оставлен для обратной совместимости; UI переведён на `/translate-source-ru/start` + `/tasks/.../events`.
+    """
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    source_text = str(body.get("source_text") if "source_text" in body else rw.get("source_text") or "")
+    stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+    ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
+    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
 
     def gen():
-        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-        if not source_text.strip():
-            yield json.dumps({"type": "error", "message": "Нет текста для перевода."}, ensure_ascii=False) + "\n"
+        for ev in _iter_translate_source_ru_events(rewrite_id, source_text, model, cancel_event=None):
+            yield json.dumps(ev, ensure_ascii=False) + "\n"
+
+    return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
+
+
+def _iter_semantic_text_analyzer_events(
+    rewrite_id: str,
+    src_ru: str,
+    model: str,
+    *,
+    cancel_event: threading.Event | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Semantic Text Analyzer: события для NDJSON и task_manager."""
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not src_ru.strip():
+        yield {
+            "type": "error",
+            "message": "Нет русского текста (source_text_ru). Сначала запустите «Перевести на русский».",
+        }
+        return
+    if not api_key_present or not api_key:
+        yield {"type": "error", "message": "Не задан OPENAI_API_KEY."}
+        return
+    if cancel_event is not None and cancel_event.is_set():
+        yield {"type": "error", "message": "Задача отменена пользователем."}
+        return
+    system_prompt = get_locked_prompt("semantic_text_analyzer_system")
+    user_template = get_locked_prompt("semantic_text_analyzer_user")
+    user_msg = (user_template or "").rstrip() + "\n\n" + src_ru.strip()
+    yield {"type": "status", "message": f"Модель: {model}; вход: {len(src_ru)} симв."}
+    yield {"type": "status", "message": "Старт запроса…"}
+    got_result = False
+    err_text: str | None = None
+    result_text = ""
+    for ev in iter_rewrite_completion(api_key, model, system_prompt, user_msg):
+        if cancel_event is not None and cancel_event.is_set():
+            yield {"type": "error", "message": "Задача отменена пользователем."}
             return
-        if not api_key_present or not api_key:
-            yield json.dumps({"type": "error", "message": "Не задан OPENAI_API_KEY."}, ensure_ascii=False) + "\n"
-            return
-        if not batches:
-            yield json.dumps({"type": "error", "message": "Нет текста для перевода."}, ensure_ascii=False) + "\n"
-            return
-        nb = len(batches)
-        yield json.dumps(
+        etype = str(ev.get("type") or "")
+        if etype == "status":
+            yield {"type": "status", "message": str(ev.get("message") or "")}
+        elif etype == "error":
+            err_text = str(ev.get("message") or "Ошибка OpenAI")
+            break
+        elif etype == "result":
+            result_text = str(ev.get("content") or "").strip()
+            got_result = True
+    if err_text is not None:
+        yield {"type": "error", "message": err_text}
+        return
+    if not got_result or not result_text:
+        yield {"type": "error", "message": "Пустой ответ модели."}
+        return
+    rw_save = load_rewrite_job(rewrite_id)
+    if rw_save is None:
+        yield {"type": "error", "message": "Проект не найден при сохранении анализа."}
+        return
+    try:
+        rw_save["semantic_text_analysis"] = result_text
+        rw_save["semantic_text_analysis_at"] = datetime.now(timezone.utc).isoformat()
+        save_rewrite_job(rewrite_id, rw_save)
+        yield {"type": "status", "message": "Сохранено в project.json (поле semantic_text_analysis)."}
+    except Exception as e:
+        yield {"type": "status", "message": f"Не удалось сохранить project.json: {e}"}
+    yield {"type": "result", "content": result_text, "chars": len(result_text)}
+
+
+def _semantic_text_analyzer_task_target(
+    emit: Callable[[dict[str, Any]], None],
+    cancel_event: threading.Event,
+    request_payload: dict[str, Any],
+) -> None:
+    rewrite_id = str(request_payload.get("rewrite_id") or "").strip()
+    src_ru = str(request_payload.get("source_text_ru") or "")
+    model = str(request_payload.get("model") or "")
+    for ev in _iter_semantic_text_analyzer_events(
+        rewrite_id, src_ru, model, cancel_event=cancel_event
+    ):
+        emit(ev)
+
+
+@app.route("/rewrite/<rewrite_id>/semantic-text-analyzer/start", methods=["POST"])
+def rewrite_semantic_text_analyzer_start(rewrite_id: str):
+    """Фоновый запуск Semantic Text Analyzer (task_manager)."""
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    src_ru = str(body.get("source_text_ru") if "source_text_ru" in body else rw.get("source_text_ru") or "")
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+    ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
+    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
+    if not src_ru.strip():
+        return jsonify(
             {
-                "type": "status",
-                "message": f"Разбиение текста на батчи готово: {nb} шт. (≤5000 симв./батч).",
-            },
-            ensure_ascii=False,
-        ) + "\n"
-        yield json.dumps({"type": "status", "message": f"Модель: {model}"}, ensure_ascii=False) + "\n"
-        parts: list[str] = []
-        for bi, chunk in enumerate(batches):
-            tag = f"[Батч {bi + 1}/{nb}, {len(chunk)} симв.] "
-            yield json.dumps(
-                {"type": "status", "message": tag + "Старт перевода батча…"},
-                ensure_ascii=False,
-            ) + "\n"
-            user_msg = "ТЕКСТ ДЛЯ ПЕРЕВОДА:\n\n" + chunk
-            got_result = False
-            err_text: str | None = None
-            for ev in iter_rewrite_completion(
-                api_key,
-                model,
-                REWRITE_SOURCE_RU_TRANSLATE_SYSTEM_PROMPT,
-                user_msg,
-            ):
-                etype = str(ev.get("type") or "")
-                if etype == "status":
-                    yield json.dumps(
-                        {"type": "status", "message": tag + str(ev.get("message") or "")},
-                        ensure_ascii=False,
-                    ) + "\n"
-                elif etype == "error":
-                    err_text = str(ev.get("message") or "Ошибка OpenAI")
-                    break
-                elif etype == "result":
-                    parts.append(str(ev.get("content") or ""))
-                    got_result = True
-                    yield json.dumps(
-                        {
-                            "type": "status",
-                            "message": tag + f"Готово: получено {len(parts[-1])} симв.",
-                        },
-                        ensure_ascii=False,
-                    ) + "\n"
-            if err_text is not None:
-                yield json.dumps({"type": "error", "message": tag + err_text}, ensure_ascii=False) + "\n"
-                return
-            if not got_result:
-                yield json.dumps(
-                    {"type": "error", "message": tag + "Пустой ответ модели."},
-                    ensure_ascii=False,
-                ) + "\n"
-                return
-        combined = "".join(parts).strip()
-        try:
-            rw["source_text_ru"] = combined
-            save_rewrite_job(rewrite_id, rw)
-            yield json.dumps(
-                {"type": "status", "message": "Сохранено в project.json (поле source_text_ru)."},
-                ensure_ascii=False,
-            ) + "\n"
-        except Exception as e:
-            yield json.dumps(
-                {"type": "status", "message": f"Не удалось сохранить project.json: {e}"},
-                ensure_ascii=False,
-            ) + "\n"
-        yield json.dumps(
-            {
-                "type": "result",
-                "content": combined,
-                "batches": nb,
-                "chars": len(combined),
-            },
-            ensure_ascii=False,
-        ) + "\n"
+                "ok": False,
+                "error": "no_source_text_ru",
+                "message": "Нет русского текста (source_text_ru). Сначала запустите «Перевести на русский».",
+            }
+        ), 400
+    if not api_key_present or not (os.getenv("OPENAI_API_KEY") or "").strip():
+        return jsonify({"ok": False, "error": "no_api_key", "message": "Не задан OPENAI_API_KEY."}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    meta = _tm_start_task(
+        proj_dir,
+        kind=SEMANTIC_TEXT_ANALYZER_TASK_KIND,
+        ref_id=SEMANTIC_TEXT_ANALYZER_TASK_REF_ID,
+        target=_semantic_text_analyzer_task_target,
+        request_payload={
+            "rewrite_id": rewrite_id,
+            "source_text_ru": src_ru,
+            "model": model,
+        },
+        reuse_active=True,
+    )
+    return jsonify({"ok": True, "task": meta})
+
+
+@app.route("/rewrite/<rewrite_id>/semantic-text-analyzer", methods=["POST"])
+def rewrite_semantic_text_analyzer(rewrite_id: str):
+    """Semantic Text Analyzer: NDJSON-стрим (легаси). UI использует `/semantic-text-analyzer/start`."""
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    src_ru = str(body.get("source_text_ru") if "source_text_ru" in body else rw.get("source_text_ru") or "")
+    stages = rw.get("stages") if isinstance(rw.get("stages"), dict) else {}
+    ana = stages.get("analysis") if isinstance(stages.get("analysis"), dict) else {}
+    model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
+
+    def gen():
+        for ev in _iter_semantic_text_analyzer_events(rewrite_id, src_ru, model, cancel_event=None):
+            yield json.dumps(ev, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
 
@@ -3711,13 +3929,13 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
                 {"type": "status", "message": tag + "Старт перевода батча…"},
                 ensure_ascii=False,
             ) + "\n"
-            user_msg = "ТЕКСТ ДЛЯ ПЕРЕВОДА:\n\n" + chunk
+            user_msg = chunk
             got_result = False
             err_text: str | None = None
             for ev in iter_rewrite_completion(
                 api_key,
                 model,
-                REWRITE_SOURCE_RU_TRANSLATE_SYSTEM_PROMPT,
+                _translate_to_ru_system_prompt(),
                 user_msg,
             ):
                 etype = str(ev.get("type") or "")
@@ -4454,27 +4672,11 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
     preset = snapshot_rewrite_preset_from_body(body, rw_job)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
-    # Author: в user уходит Result Distiller — подмешиваем с диска, если в снимке пусто.
-    if stage_key == "author" and isinstance(stages_snap, dict):
-        _snap = dict(stages_snap)
-        _dist_cell = dict(_snap.get("distiller") or {}) if isinstance(_snap.get("distiller"), dict) else {}
-        _dres = str(_dist_cell.get("last_result") or "").strip()
-        if not _dres:
-            _dp = _rewrite_stage_result_path(rewrite_id, "distiller")
-            if _dp.exists():
-                try:
-                    _dres = _dp.read_text(encoding="utf-8")
-                except OSError:
-                    _dres = ""
-        if _dres:
-            _dist_cell["last_result"] = _dres
-            _snap["distiller"] = _dist_cell
-        stages_snap = _snap
-
     # Voiceover Editor / Title Strategist / Structure Splitter в пресете
-    # «Я уже ЗАrewriteИЛ» (prewritten) все читают исходник из inbox.last_result.
-    # Если в снимке inbox пришёл пустым (рестарт вкладки и т.п.), подтягиваем
-    # последнее сохранённое значение из JSON проекта.
+    # «Я уже ЗАrewriteИЛ» (prewritten) читают исходник из rewrite.last_result
+    # (если Rewrite выполнен) либо из inbox.last_result (фолбэк).
+    # Если в снимке соответствующие ячейки пришли пустыми (рестарт вкладки и т.п.),
+    # подтягиваем последнее сохранённое значение из JSON проекта.
     if (
         preset == REWRITE_PRESET_PREWRITTEN
         and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
@@ -4488,7 +4690,30 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
         if _ibx:
             _ibx_cell["last_result"] = _ibx
             _snap["inbox"] = _ibx_cell
+        _rw_cell = dict(_snap.get("rewrite") or {}) if isinstance(_snap.get("rewrite"), dict) else {}
+        _rw_res = str(_rw_cell.get("last_result") or "").strip()
+        if not _rw_res:
+            _rw_res = str(((rw_job.get("stages") or {}).get("rewrite") or {}).get("last_result") or "").strip()
+        if _rw_res:
+            _rw_cell["last_result"] = _rw_res
+            _snap["rewrite"] = _rw_cell
         stages_snap = _snap
+    # Сам этап Rewrite в prewritten тоже опирается на inbox.last_result —
+    # подгрузим его из project.json, если в снапе пусто.
+    if (
+        preset == REWRITE_PRESET_PREWRITTEN
+        and stage_key == "rewrite"
+        and isinstance(stages_snap, dict)
+    ):
+        _snap_rw = dict(stages_snap)
+        _ibx_cell_rw = dict(_snap_rw.get("inbox") or {}) if isinstance(_snap_rw.get("inbox"), dict) else {}
+        _ibx_rw = str(_ibx_cell_rw.get("last_result") or "").strip()
+        if not _ibx_rw:
+            _ibx_rw = str(((rw_job.get("stages") or {}).get("inbox") or {}).get("last_result") or "").strip()
+        if _ibx_rw:
+            _ibx_cell_rw["last_result"] = _ibx_rw
+            _snap_rw["inbox"] = _ibx_cell_rw
+        stages_snap = _snap_rw
 
     def gen():
         if stage_key not in REWRITE_STAGE_KEYS:
@@ -4509,7 +4734,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             "scene_writer",
             "scene_writer_live",
             "youtube_packaging",
-            "author",
+            "rewrite",
         ) and not (source_text or "").strip():
             yield json.dumps(
                 {"type": "error", "message": "Введите исходный текст в верхнем поле."},
@@ -4518,24 +4743,12 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             return
         block_writer_full_text = ""
         if stage_key == "retention_editor":
-            # В Мягком пресете Retention Editor читает не block_writer/full_text.txt,
-            # а Result этапа Author (он играет роль склейки full_text).
-            if preset == "soft":
-                author_path = _rewrite_stage_result_path(rewrite_id, "author")
-                if author_path.exists():
-                    try:
-                        block_writer_full_text = author_path.read_text(encoding="utf-8")
-                    except OSError:
-                        block_writer_full_text = ""
-                else:
-                    block_writer_full_text = str((stages_snap.get("author") or {}).get("last_result") or "")
-            else:
-                full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
-                if full_text_path.exists():
-                    try:
-                        block_writer_full_text = full_text_path.read_text(encoding="utf-8")
-                    except OSError:
-                        block_writer_full_text = ""
+            full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
+            if full_text_path.exists():
+                try:
+                    block_writer_full_text = full_text_path.read_text(encoding="utf-8")
+                except OSError:
+                    block_writer_full_text = ""
         retention_editor_text = ""
         if stage_key == "hook_editor":
             p = _rewrite_stage_result_path(rewrite_id, "retention_editor")
@@ -4917,29 +5130,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 ensure_ascii=False,
             ) + "\n"
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
-        elif stage_key == "author":
-            for item in iter_rewrite_completion_stream(api_key, model, prompt, user_text):
-                t_item = str(item.get("type") or "")
-                if t_item == "delta":
-                    yield json.dumps(item, ensure_ascii=False) + "\n"
-                    continue
-                if t_item == "status":
-                    yield json.dumps(item, ensure_ascii=False) + "\n"
-                    continue
-                if t_item == "error":
-                    yield json.dumps(item, ensure_ascii=False) + "\n"
-                    return
-                if t_item == "result":
-                    raw = str(item.get("content") or "")
-                    cleaned = strip_author_stream_end_marker(strip_markdown_code_fence(raw))
-                    out_item = dict(item)
-                    out_item["content"] = cleaned
-                    yield json.dumps(out_item, ensure_ascii=False) + "\n"
-                    return
-            yield json.dumps(
-                {"type": "error", "message": "Author: поток завершился без итогового result."},
-                ensure_ascii=False,
-            ) + "\n"
         else:
             for item in iter_rewrite_completion(api_key, model, prompt, user_text):
                 t_item = str(item.get("type") or "")
@@ -5193,24 +5383,10 @@ def rewrite_project_api_payload(rewrite_id: str):
                     title_strategist_result_text = p.read_text(encoding="utf-8")
                 except OSError:
                     title_strategist_result_text = ""
-    if stage_key == "author" and isinstance(stages_snap, dict):
-        _snap_ap = dict(stages_snap)
-        _dist_cell_ap = dict(_snap_ap.get("distiller") or {}) if isinstance(_snap_ap.get("distiller"), dict) else {}
-        _dres_ap = str(_dist_cell_ap.get("last_result") or "").strip()
-        if not _dres_ap:
-            _dp_ap = _rewrite_stage_result_path(rewrite_id, "distiller")
-            if _dp_ap.exists():
-                try:
-                    _dres_ap = _dp_ap.read_text(encoding="utf-8")
-                except OSError:
-                    _dres_ap = ""
-        if _dres_ap:
-            _dist_cell_ap["last_result"] = _dres_ap
-            _snap_ap["distiller"] = _dist_cell_ap
-        stages_snap = _snap_ap
     preset_ap = snapshot_rewrite_preset_from_body(body, rw_job)
     # api-payload в пресете «Я уже ЗАrewriteИЛ»: то же тело, что при запуске стадии.
-    # Voiceover Editor / Title Strategist / Structure Splitter все читают inbox.
+    # Voiceover Editor / Title Strategist / Structure Splitter читают сначала Rewrite.Result,
+    # затем Inbox.Result; сам Rewrite — только Inbox.Result.
     if (
         preset_ap == REWRITE_PRESET_PREWRITTEN
         and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
@@ -5224,7 +5400,28 @@ def rewrite_project_api_payload(rewrite_id: str):
         if _ibx_ap:
             _ibx_cell_ap["last_result"] = _ibx_ap
             _snap_ib["inbox"] = _ibx_cell_ap
+        _rw_cell_ap = dict(_snap_ib.get("rewrite") or {}) if isinstance(_snap_ib.get("rewrite"), dict) else {}
+        _rw_res_ap = str(_rw_cell_ap.get("last_result") or "").strip()
+        if not _rw_res_ap:
+            _rw_res_ap = str(((rw_job.get("stages") or {}).get("rewrite") or {}).get("last_result") or "").strip()
+        if _rw_res_ap:
+            _rw_cell_ap["last_result"] = _rw_res_ap
+            _snap_ib["rewrite"] = _rw_cell_ap
         stages_snap = _snap_ib
+    if (
+        preset_ap == REWRITE_PRESET_PREWRITTEN
+        and stage_key == "rewrite"
+        and isinstance(stages_snap, dict)
+    ):
+        _snap_rw_ap = dict(stages_snap)
+        _ibx_cell_rw_ap = dict(_snap_rw_ap.get("inbox") or {}) if isinstance(_snap_rw_ap.get("inbox"), dict) else {}
+        _ibx_rw_ap = str(_ibx_cell_rw_ap.get("last_result") or "").strip()
+        if not _ibx_rw_ap:
+            _ibx_rw_ap = str(((rw_job.get("stages") or {}).get("inbox") or {}).get("last_result") or "").strip()
+        if _ibx_rw_ap:
+            _ibx_cell_rw_ap["last_result"] = _ibx_rw_ap
+            _snap_rw_ap["inbox"] = _ibx_cell_rw_ap
+        stages_snap = _snap_rw_ap
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,

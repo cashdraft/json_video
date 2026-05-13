@@ -1362,6 +1362,14 @@ textarea::placeholder {
     margin-bottom: 0.6rem;
 }
 
+/* Slot-обёртка названия — 1:1 как у Source: dashed-рамка, фон, padding=0;
+   текст-инпут внутри прозрачен и наследует .rewrite-source-textarea. */
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--source-title {
+    min-height: 0;
+    aspect-ratio: unset;
+    align-items: stretch;
+}
+
 .rewrite-source-title-field__label {
     display: block;
     font-size: 0.95rem;
@@ -1370,20 +1378,23 @@ textarea::placeholder {
     margin-bottom: 0.3rem;
 }
 
-.rewrite-source-title-input {
-    display: block;
+input.rewrite-source-title-input,
+input.rewrite-source-title-input.rewrite-source-textarea {
     width: 100%;
-    max-width: 100%;
     box-sizing: border-box;
-    /* Совпадает с .slot-placeholder у textarea «Исходный текст» */
-    padding: 0.55rem 0.65rem;
-    border-radius: 4px;
-    border: 1px dashed var(--border);
-    background: var(--bg-input);
+    background: transparent;
+    border: none;
+    outline: none;
     color: var(--text);
+    font-family: inherit;
+    margin: 0;
+    min-height: 0;
+    height: auto;
+    flex: 0 0 auto;
+    resize: none;
+    padding: 0.55rem 0.65rem;
     font-size: 0.85rem;
     line-height: 1.45;
-    font-family: inherit;
 }
 
 .rewrite-source-title-input::placeholder {
@@ -1392,8 +1403,7 @@ textarea::placeholder {
 }
 
 .rewrite-source-title-input:focus {
-    outline: 1px solid var(--accent);
-    outline-offset: 1px;
+    outline: none;
 }
 
 .rewrite-slot--master-prompt {
@@ -2567,6 +2577,12 @@ textarea::placeholder {
     margin-bottom: 0.6rem;
 }
 
+/* Статус перевода RU — внутри блока Russian, под тулбаром */
+.rewrite-slot--source-ru-wrap > .rewrite-source-translate-ru-status-wrap {
+    margin-top: 0.35rem;
+    margin-bottom: 0.45rem;
+}
+
 .rewrite-slot--source-ru {
     min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
 }
@@ -2576,9 +2592,10 @@ textarea::placeholder {
     padding-bottom: 0.85rem;
 }
 
-#rewrite-source-text-ru {
-    min-height: calc(5 * 1.45em + 1.1rem);
-    flex: 0 0 auto;
+/* Russian: пока идёт перевод — скрываем обёртку textarea, показываем
+   только синий .slot-placeholder со статусом и Cancel. */
+.rewrite-source-translate-ru-textarea-wrap.hidden {
+    display: none;
 }
 
 .rewrite-slot-select {
@@ -4765,3 +4782,262 @@ button.job-download-all-link {
     color: var(--text-muted);
     opacity: 0.9;
 }
+
+/* ===== Locked prompts (под пин-кодом) =====
+   Бэйдж + карандашик рядом с кнопками вроде «Перевести на русский».
+   Цвет осознанно НЕ зелёный — чтобы визуально отличать от обычных
+   System/User Promt бэйджей. Используем индиго/фиолетовый. */
+.locked-prompt-badge {
+    margin-left: 0.35rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    user-select: none;
+}
+
+/* Группа защищённых промтов — справа в шапке. Тот же зазор между бэйджем и его
+   ✎, что и в родительских тулбарах (`.rewrite-source-toolbar` использует 0.5rem,
+   `.semantic-analyzer-header` — 0.35rem). Чтобы группа лепилась к правому краю,
+   ставим margin-left: auto. */
+.locked-prompts-group {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-left: auto;
+}
+
+.rewrite-source-toolbar .locked-prompts-group {
+    gap: 0.5rem;
+}
+
+/* Когда счётчик символов/слов лежит ВНУТРИ .locked-prompts-group, отключаем
+   у него собственный margin-left:auto — отступ задаёт уже сама группа. */
+.locked-prompts-group .rewrite-source-counts,
+.rewrite-source-counts--inline {
+    margin-left: 0;
+}
+
+/* YES — приглушённый фиолетовый (как раньше был NO). */
+.locked-prompt-badge--yes {
+    background: rgba(129, 99, 245, 0.08);
+    color: #9a93b8;
+    border: 1px solid rgba(129, 99, 245, 0.22);
+}
+
+/* NO — очень бледный «призрак»: почти прозрачный фон/бордер, тусклый текст. */
+.locked-prompt-badge--no {
+    background: rgba(255, 255, 255, 0.015);
+    color: #55555c;
+    border: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+/* Карандашик «защищённого» промта реюзит стиль .rewrite-lock-toggle.btn-icon,
+   чтобы визуально не отличаться от других ✎-кнопок на странице. Единственная
+   правка — отменить общее правило display:none для .rewrite-lock-toggle__edit
+   у кнопок без модификатора --locked (style.css ≈1336). У того правила
+   специфичность 0,3,0, поэтому здесь нужен !important либо аналогичный
+   уровень специфичности.
+   margin-left не задаём — отступ от бэйджа диктуется flex `gap` родительского
+   тулбара, точно так же как и для прочих ✎/копий/↻. */
+.rewrite-lock-toggle.locked-prompt-edit-btn {
+    margin-left: 0;
+}
+
+.rewrite-lock-toggle.locked-prompt-edit-btn .rewrite-lock-toggle__edit {
+    display: inline-flex !important;
+}
+
+/* Модалка с textarea + цифровой клавиатурой. Реюзим базу .confirm-modal,
+   добавляем чуть-чуть свободного места под textarea и keypad. */
+.locked-prompt-modal__card {
+    max-width: 560px;
+    width: min(96vw, 560px);
+}
+
+.locked-prompt-modal__textarea-wrap {
+    margin: 0.5rem 0 0.25rem;
+}
+
+.locked-prompt-modal__textarea {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    padding: 0.6rem 0.7rem;
+    background: var(--bg-elev-1, #1b1b22);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+}
+
+.locked-prompt-modal__textarea:focus {
+    border-color: rgba(129, 99, 245, 0.55);
+    box-shadow: 0 0 0 2px rgba(129, 99, 245, 0.15);
+}
+
+.locked-prompt-modal__msg {
+    font-size: 0.78rem;
+    margin: 0.25rem 0;
+}
+
+.locked-prompt-modal__msg--err {
+    color: #ff6b6b;
+}
+
+.locked-prompt-modal__msg--ok {
+    color: #7dd99a;
+}
+
+.locked-prompt-modal__pin-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.4rem 0 0.35rem;
+}
+
+.locked-prompt-modal__pin-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.locked-prompt-modal__pin-dots {
+    display: inline-flex;
+    gap: 0.35rem;
+}
+
+.locked-prompt-modal__pin-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid rgba(129, 99, 245, 0.5);
+    transition: background 0.12s ease;
+}
+
+.locked-prompt-modal__pin-dot--filled {
+    background: #8163f5;
+    border-color: #8163f5;
+}
+
+.locked-prompt-modal__keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+    margin: 0.35rem 0 0.5rem;
+}
+
+.locked-prompt-modal__key {
+    appearance: none;
+    background: rgba(129, 99, 245, 0.12);
+    color: var(--text);
+    border: 1px solid rgba(129, 99, 245, 0.3);
+    border-radius: 6px;
+    padding: 0.55rem 0;
+    font-size: 1.05rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s ease, transform 0.05s ease;
+    user-select: none;
+}
+
+.locked-prompt-modal__key:hover {
+    background: rgba(129, 99, 245, 0.22);
+}
+
+.locked-prompt-modal__key:active {
+    transform: translateY(1px);
+}
+
+.locked-prompt-modal__key--util {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--text-muted);
+}
+
+.locked-prompt-modal__key--util:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+}
+
+.locked-prompt-modal__key--ok {
+    background: rgba(129, 99, 245, 0.35);
+    border-color: rgba(129, 99, 245, 0.6);
+    color: #ffffff;
+}
+
+.locked-prompt-modal__key--ok:hover {
+    background: rgba(129, 99, 245, 0.55);
+}
+
+.locked-prompt-modal__key[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ===== Semantic Text Analyzer =====
+   Шапка как у «Russian»: badge + ✎ + копия + System/User Promt + ↻.
+   Блок вывода — 1:1 в стиле «Проверка Analysis» (dashed-рамка
+   .rewrite-scene-writer-check). На время работы textarea-обёртка скрывается,
+   вместо неё показывается синий dashed-плейсхолдер с статусом и Cancel. */
+.semantic-analyzer-block {
+    margin-top: 0.7rem;
+}
+
+.semantic-analyzer-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+
+.semantic-analyzer-status-wrap {
+    margin-top: 0.45rem;
+    margin-bottom: 0;
+}
+
+/* Обёртка наследует все стили `.rewrite-scene-writer-check` (рамка/радиус/фон/
+   шрифт/цвет). Здесь только обнуляем padding — его берёт на себя внутренняя
+   textarea, чтобы ручка resize осталась прижатой к нижне-правому углу. */
+.semantic-analyzer-textarea-wrap.rewrite-scene-writer-check {
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.semantic-analyzer-textarea-wrap.hidden {
+    display: none;
+}
+
+/* Textarea внутри — прозрачна; шрифт/цвет наследуются от обёртки, поэтому
+   совпадают с «Проверка Analysis» 1:1. Padding повторяет .rewrite-scene-writer-check. */
+.semantic-analyzer-result-textarea {
+    display: block;
+    width: 100%;
+    min-height: 12rem;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    outline: none;
+    margin: 0;
+    padding: 0.55rem 0.65rem;
+    color: inherit;
+    font: inherit;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.semantic-analyzer-result-textarea:focus {
+    outline: none;
+}
+
+/* В locked-режиме не гасим цвет/яркость дополнительно — чтобы текст
+   совпадал по цвету с «Проверка Analysis» (--text-muted без затемнения). */
+.semantic-analyzer-result-textarea.rewrite-source-textarea--locked {
+    opacity: 1;
+    filter: none;
+    color: inherit;
+}
+
