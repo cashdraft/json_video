@@ -3650,6 +3650,47 @@ def _normalize_locked_prompt_route_name(raw: str | None) -> str:
     return s
 
 
+@app.route("/api/locked-prompts", methods=["GET", "POST"])
+def api_locked_prompt_query():
+    """Тот же locked-promt, но имя только в query `?name=` — стабильнее за nginx/префиксами.
+
+    Путь без динамического сегмента не теряется и не подменяется на плейсхолдеры в прокси.
+    """
+    name_key = _normalize_locked_prompt_route_name(request.args.get("name"))
+    if not name_key:
+        return jsonify({"ok": False, "error": "missing_name", "message": "Укажите query-параметр name."}), 400
+    if not locked_prompt_is_known(name_key):
+        return jsonify({"ok": False, "error": "unknown_prompt", "requested": name_key}), 404
+    if request.method == "GET":
+        state = locked_prompt_public_state(name_key)
+        content = get_locked_prompt(name_key)
+        return jsonify({
+            "ok": True,
+            "name": name_key,
+            "label": state.get("label"),
+            "present": bool(state.get("present")),
+            "content": content,
+        })
+    body = request.get_json(silent=True) or {}
+    pin = body.get("pin")
+    if not verify_locked_prompts_pin(pin):
+        return jsonify({"ok": False, "error": "bad_pin"}), 401
+    content = body.get("content")
+    if not isinstance(content, str):
+        return jsonify({"ok": False, "error": "bad_content"}), 400
+    try:
+        save_locked_prompt(name_key, content)
+    except OSError as e:
+        return jsonify({"ok": False, "error": f"write_failed: {e}"}), 500
+    state = locked_prompt_public_state(name_key)
+    return jsonify({
+        "ok": True,
+        "name": name_key,
+        "label": state.get("label"),
+        "present": bool(state.get("present")),
+    })
+
+
 @app.route("/api/locked-prompts/<name>", methods=["GET"])
 def api_locked_prompt_get(name: str):
     """Отдать содержимое защищённого промта (без пин-кода).

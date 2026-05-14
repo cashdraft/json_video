@@ -31,21 +31,11 @@
     const translateRuStartUrl = {{ url_for('rewrite_translate_source_ru_start', rewrite_id=rw.rewrite_id) | tojson }};
     const semanticAnalyzerStartUrl = {{ url_for('rewrite_semantic_text_analyzer_start', rewrite_id=rw.rewrite_id) | tojson }};
     const translateVoFinalRuUrl = {{ url_for('rewrite_translate_voiceover_final_ru', rewrite_id=rw.rewrite_id) | tojson }};
-    /** URL GET/POST /api/locked-prompts/<name> — всегда с учётом SCRIPT_NAME. */
-    const lockedPromptUrlTemplate = {{ url_for('api_locked_prompt_get', name='LOCKPROMNAME') | tojson }};
+    /** GET/POST: только query `?name=` — путь фиксированный, имя не режет прокси (см. api_locked_prompt_query). */
+    const lockedPromptApiBase = {{ url_for('api_locked_prompt_query') | tojson }};
     function lockedPromptApiUrl(nm) {
         var s = (nm == null || nm === undefined) ? '' : String(nm).trim();
-        var enc = encodeURIComponent(s);
-        var root = (typeof window.__JSON_VIDEO_ROOT__ === 'string')
-            ? window.__JSON_VIDEO_ROOT__.replace(/\/+$/, '')
-            : '';
-        if (root) {
-            return root + '/api/locked-prompts/' + enc;
-        }
-        if (typeof lockedPromptUrlTemplate === 'string' && lockedPromptUrlTemplate.indexOf('LOCKPROMNAME') !== -1) {
-            return lockedPromptUrlTemplate.replace('LOCKPROMNAME', enc);
-        }
-        return '/api/locked-prompts/' + enc;
+        return lockedPromptApiBase + '?name=' + encodeURIComponent(s);
     }
     const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
