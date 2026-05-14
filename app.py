@@ -108,6 +108,7 @@ from rewrite_pipeline import (
     REWRITE_PRESET_KEYS,
     REWRITE_PRESET_LABELS,
     REWRITE_PRESET_PREWRITTEN,
+    REWRITE_PRESET_SOFT,
     REWRITE_PRESET_STAGE_KEYS,
     REWRITE_STAGE_HELP_HINTS,
     REWRITE_STAGE_KEYS,
@@ -119,6 +120,7 @@ from rewrite_pipeline import (
     clamp_target_chars,
     apply_title_strategist_original_title_to_user_json,
     compose_rewrite_openai_request_body,
+    normalize_rewrite_pipeline_language,
     normalize_rewrite_preset,
     snapshot_rewrite_preset_from_body,
     stages_for_preset,
@@ -673,6 +675,7 @@ def _fmt_num_ru_filter(n: object) -> str:
 
 
 app.jinja_env.filters["fmt_num_ru"] = _fmt_num_ru_filter
+app.jinja_env.filters["rewrite_pipeline_lang"] = normalize_rewrite_pipeline_language
 # Large scene batches can exceed Werkzeug's form defaults.
 # Allow bigger payloads for `/parse` and similar form submissions.
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
@@ -2756,6 +2759,7 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "hero_prompt": "",
         "chars_per_minute": 344,
         "rewrite_template": "",
+        "rewrite_pipeline_language": "ru",
         "hero_prompt_locked": False,
         "audio_timing_locked": False,
         "youtube_url": "",
@@ -3237,8 +3241,11 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
             except Exception:
                 app.logger.exception("youtube channel meta backfill failed for %s", rewrite_id)
     rewrite_preset_current = normalize_rewrite_preset(rw.get("rewrite_preset"))
+    _src_for_preset = str(rw.get("source_text") or rw.get("last_text") or "")
     rewrite_stage_run_ok = {
-        sk: stage_run_prerequisites_met(sk, st, preset=rewrite_preset_current)
+        sk: stage_run_prerequisites_met(
+            sk, st, preset=rewrite_preset_current, source_text=_src_for_preset
+        )
         for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
@@ -3311,8 +3318,11 @@ def _rewrite_project_page_legacy_unused(rewrite_id: str):
             except Exception:
                 app.logger.exception("youtube channel meta backfill failed for %s", rewrite_id)
     rewrite_preset_current = normalize_rewrite_preset(rw.get("rewrite_preset"))
+    _src_for_preset = str(rw.get("source_text") or rw.get("last_text") or "")
     rewrite_stage_run_ok = {
-        sk: stage_run_prerequisites_met(sk, st, preset=rewrite_preset_current)
+        sk: stage_run_prerequisites_met(
+            sk, st, preset=rewrite_preset_current, source_text=_src_for_preset
+        )
         for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
@@ -3562,6 +3572,10 @@ def rewrite_project_save(rewrite_id: str):
         rw["rewrite_template"] = str(body.get("rewrite_template") or "").strip()
     if "rewrite_preset" in body:
         rw["rewrite_preset"] = normalize_rewrite_preset(body.get("rewrite_preset"))
+    if "rewrite_pipeline_language" in body:
+        rw["rewrite_pipeline_language"] = normalize_rewrite_pipeline_language(
+            body.get("rewrite_pipeline_language")
+        )
     if "russian_semantic_model" in body:
         rsm_raw = str(body.get("russian_semantic_model") or "").strip()
         rw["russian_semantic_model"] = normalize_rewrite_model(rsm_raw) if rsm_raw else ""
@@ -4772,9 +4786,9 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
     preset = snapshot_rewrite_preset_from_body(body, rw_job)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
-    # Voiceover Editor / Title Strategist / Structure Splitter в пресете
-    # «Я уже ЗАrewriteИЛ» (prewritten) читают исходник из rewrite.last_result
-    # (если Rewrite выполнен) либо из inbox.last_result (фолбэк).
+    # Voiceover Editor / Title Strategist / Structure Splitter в пресетах
+    # «Я уже ЗАrewriteИЛ» и «Мягкий Rewrite» читают исходник из rewrite.last_result
+    # (если Rewrite выполнен) либо из inbox.last_result / поля Source (фолбэк).
     # Если в снимке соответствующие ячейки пришли пустыми (рестарт вкладки и т.п.),
     # подтягиваем последнее сохранённое значение из JSON проекта.
     if (
@@ -4798,6 +4812,21 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             _rw_cell["last_result"] = _rw_res
             _snap["rewrite"] = _rw_cell
         stages_snap = _snap
+    # «Мягкий Rewrite»: те же три агента, но без Inbox — подтягиваем только Rewrite.Result с диска.
+    if (
+        preset == REWRITE_PRESET_SOFT
+        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and isinstance(stages_snap, dict)
+    ):
+        _snap_s = dict(stages_snap)
+        _rw_cell_s = dict(_snap_s.get("rewrite") or {}) if isinstance(_snap_s.get("rewrite"), dict) else {}
+        _rw_res_s = str(_rw_cell_s.get("last_result") or "").strip()
+        if not _rw_res_s:
+            _rw_res_s = str(((rw_job.get("stages") or {}).get("rewrite") or {}).get("last_result") or "").strip()
+        if _rw_res_s:
+            _rw_cell_s["last_result"] = _rw_res_s
+            _snap_s["rewrite"] = _rw_cell_s
+        stages_snap = _snap_s
     # Сам этап Rewrite в prewritten тоже опирается на inbox.last_result —
     # подгрузим его из project.json, если в снапе пусто.
     if (
@@ -5508,6 +5537,20 @@ def rewrite_project_api_payload(rewrite_id: str):
             _rw_cell_ap["last_result"] = _rw_res_ap
             _snap_ib["rewrite"] = _rw_cell_ap
         stages_snap = _snap_ib
+    if (
+        preset_ap == REWRITE_PRESET_SOFT
+        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and isinstance(stages_snap, dict)
+    ):
+        _snap_sap = dict(stages_snap)
+        _rw_cell_sap = dict(_snap_sap.get("rewrite") or {}) if isinstance(_snap_sap.get("rewrite"), dict) else {}
+        _rw_res_sap = str(_rw_cell_sap.get("last_result") or "").strip()
+        if not _rw_res_sap:
+            _rw_res_sap = str(((rw_job.get("stages") or {}).get("rewrite") or {}).get("last_result") or "").strip()
+        if _rw_res_sap:
+            _rw_cell_sap["last_result"] = _rw_res_sap
+            _snap_sap["rewrite"] = _rw_cell_sap
+        stages_snap = _snap_sap
     if (
         preset_ap == REWRITE_PRESET_PREWRITTEN
         and stage_key == "rewrite"

@@ -305,6 +305,34 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
+                        {% set _plang = 'en' if _plang_raw in ['en', 'english', 'англ'] else 'ru' %}
+                        <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
+                            <h3 class="rewrite-source-subtitle">Язык</h3>
+                            <p class="rewrite-source-subhint">Язык для последующих шагов конвейера (пока только сохраняется в проект).</p>
+                            <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Выбор языка конвейера">
+                                <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% else %}Русский{% endif %}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ru" {% if _plang != 'en' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">Русский</span>
+                                    </span>
+                                </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="en" {% if _plang == 'en' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">English</span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <select id="rewrite-pipeline-language" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                            <option value="ru" {% if _plang != 'en' %}selected{% endif %}>Русский</option>
+                            <option value="en" {% if _plang == 'en' %}selected{% endif %}>English</option>
+                        </select>
                         <div class="rewrite-prompts-duration-row__duration-block">
                             <h3 class="rewrite-source-subtitle">Duration</h3>
                             <p class="rewrite-source-subhint">Ориентир длины озвучки в символах (500–40 000, шаг 500).</p>
@@ -365,11 +393,12 @@
             {% set union_collapsible_stages = ns_union.lst %}
 
             <div class="rewrite-preset-toggle" role="group" aria-label="Пресет ReWrite" data-rewrite-preset-current="{{ rewrite_preset_current }}">
-                <span class="rewrite-preset-toggle__label">Пресет:</span>
-                <div class="rewrite-preset-toggle__group">
-                    <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'deep' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="deep">{{ rewrite_preset_labels['deep'] }}</button>
-                    <button type="button" class="rewrite-preset-toggle__btn{% if rewrite_preset_current == 'prewritten' %} rewrite-preset-toggle__btn--active{% endif %}" data-rewrite-preset="prewritten">{{ rewrite_preset_labels['prewritten'] }}</button>
-                </div>
+                <label class="rewrite-preset-toggle__label" for="rewrite-preset-select">Пресет:</label>
+                <select id="rewrite-preset-select" class="rewrite-preset-select" {% if not openai_key_set %}disabled{% endif %} aria-label="Выбор пресета конвейера ReWrite">
+                    <option value="deep" {% if rewrite_preset_current == 'deep' %}selected{% endif %}>{{ (rewrite_preset_labels.get('deep') or 'Глубокий Rewrite')|e }}</option>
+                    <option value="soft" {% if rewrite_preset_current == 'soft' %}selected{% endif %}>{{ (rewrite_preset_labels.get('soft') or 'Мягкий Rewrite')|e }}</option>
+                    <option value="prewritten" {% if rewrite_preset_current == 'prewritten' %}selected{% endif %}>{{ (rewrite_preset_labels.get('prewritten') or 'Я уже ЗАrewriteИЛ')|e }}</option>
+                </select>
             </div>
 
             <div class="rewrite-stages-collapse-bar" role="toolbar" aria-label="Сворачивание верхних этапов пресета">
@@ -864,6 +893,7 @@
     var rewriteStageBusy = false;
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
+    const pipelineLanguageEl = document.getElementById('rewrite-pipeline-language');
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
     const pipelineRunBtn = document.getElementById('rewrite-pipeline-run-btn');
     const pipelineStopBtn = document.getElementById('rewrite-pipeline-stop-btn');
@@ -2521,7 +2551,7 @@
                     if (sk === 'youtube_packaging' && prevKey === 'scene_writer_live') {
                         continue;
                     }
-                    if (currentRewritePreset === 'prewritten' && sk !== 'rewrite' && prevKey === 'rewrite') {
+                    if ((currentRewritePreset === 'prewritten' || currentRewritePreset === 'soft') && sk !== 'rewrite' && prevKey === 'rewrite') {
                         continue;
                     }
                     const prev = byKey[prevKey];
@@ -3311,6 +3341,13 @@
             audio_timing_locked: audioTimingLocked,
             rewrite_template: templateSelectEl ? (templateSelectEl.value || '').trim() : '',
             rewrite_preset: currentRewritePreset || 'deep',
+            rewrite_pipeline_language: (function () {
+                if (pipelineLanguageEl) {
+                    var v = String(pipelineLanguageEl.value || '').trim().toLowerCase();
+                    return v === 'en' ? 'en' : 'ru';
+                }
+                return 'ru';
+            })(),
             stages: stages
         };
     }
@@ -3701,12 +3738,23 @@
         if (templateCreateBtn) templateCreateBtn.disabled = dis;
         if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
         if (templateApplyBtn) templateApplyBtn.disabled = dis;
+        var presetSelectBusy = document.getElementById('rewrite-preset-select');
+        if (presetSelectBusy) presetSelectBusy.disabled = dis;
         if (globalModelEl) globalModelEl.disabled = dis;
         var globalModelField = document.querySelector('[data-global-model-field="1"]');
         if (globalModelField) {
             var gmb = globalModelField.querySelector('.rewrite-anim-dropdown__btn');
             if (gmb) gmb.disabled = dis;
             globalModelField.querySelectorAll('.rewrite-global-model-radio').forEach(function (rb) {
+                rb.disabled = dis;
+            });
+        }
+        if (pipelineLanguageEl) pipelineLanguageEl.disabled = dis;
+        var pipelineLanguageField = document.querySelector('[data-pipeline-language-field="1"]');
+        if (pipelineLanguageField) {
+            var plb = pipelineLanguageField.querySelector('.rewrite-anim-dropdown__btn');
+            if (plb) plb.disabled = dis;
+            pipelineLanguageField.querySelectorAll('.rewrite-pipeline-lang-radio').forEach(function (rb) {
                 rb.disabled = dis;
             });
         }
@@ -4836,6 +4884,12 @@
             try { await saveToServer(); } catch (e) {}
         });
     }
+    if (pipelineLanguageEl) {
+        pipelineLanguageEl.addEventListener('change', async function () {
+            if (!openaiOk || pipelineLanguageEl.disabled) return;
+            try { await saveToServer(); } catch (e) {}
+        });
+    }
     var sceneWriterBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"]');
     if (sceneWriterBlockInit) {
         renderSceneWriterCheck(sceneWriterBlockInit, readSceneWriterCheckFromBlock(sceneWriterBlockInit));
@@ -5271,6 +5325,61 @@
         });
     })();
 
+    (function initPipelineLanguageDropdown() {
+        var field = document.querySelector('[data-pipeline-language-field="1"]');
+        var select = document.getElementById('rewrite-pipeline-language');
+        if (!field || !select) return;
+        var btn = field.querySelector('.rewrite-anim-dropdown__btn');
+        var panel = field.querySelector('.rewrite-anim-dropdown__panel');
+        function syncSelectFromRadios() {
+            var checked = field.querySelector('input.rewrite-pipeline-lang-radio:checked');
+            if (checked) select.value = checked.value;
+        }
+        function updateBtnLabel() {
+            var lbl = field.querySelector('[data-pipeline-language-label]');
+            var checked = field.querySelector('input.rewrite-pipeline-lang-radio:checked');
+            if (!lbl || !checked) return;
+            var lab = checked.closest('label');
+            var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
+            lbl.textContent = title ? String(title.textContent || '').trim() : (checked.value === 'en' ? 'English' : 'Русский');
+        }
+        function closePanel() {
+            if (panel) panel.hidden = true;
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+        function closeAllPanelsExcept(except) {
+            document.querySelectorAll('.rewrite-anim-dropdown__panel').forEach(function (p) {
+                if (p === except) return;
+                p.hidden = true;
+                var b = p.parentElement && p.parentElement.querySelector('.rewrite-anim-dropdown__btn');
+                if (b) b.setAttribute('aria-expanded', 'false');
+            });
+        }
+        syncSelectFromRadios();
+        updateBtnLabel();
+        if (btn && panel) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = !panel.hidden;
+                if (open) {
+                    closePanel();
+                } else {
+                    closeAllPanelsExcept(panel);
+                    panel.hidden = false;
+                    btn.setAttribute('aria-expanded', 'true');
+                }
+            });
+        }
+        field.querySelectorAll('input.rewrite-pipeline-lang-radio').forEach(function (rb) {
+            rb.addEventListener('change', function () {
+                syncSelectFromRadios();
+                updateBtnLabel();
+                closePanel();
+                scheduleAutosave(0);
+            });
+        });
+    })();
+
     (function initTemplateDropdown() {
         var field = document.querySelector('[data-template-picker-field="1"]');
         var select = document.getElementById('rewrite-template-select');
@@ -5433,7 +5542,22 @@
     // чтобы кнопки сворачивали именно «первые 10» текущего пресета. Сохраняем
     // выбор пользователя через общий saveToServer (поле rewrite_preset).
     function applyRewritePresetVisibility(preset) {
-        var presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[preset]) || [];
+        var validPresets = { deep: true, soft: true, prewritten: true };
+        var presetKey = String(preset || '').trim() || 'deep';
+        if (!validPresets[presetKey]) {
+            console.warn('[rewrite] invalid preset, using deep:', preset);
+            presetKey = 'deep';
+            currentRewritePreset = presetKey;
+            syncPresetToggleButtonsUI(presetKey);
+        }
+        var presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[presetKey]) || [];
+        if (!presetKeys.length) {
+            console.warn('[rewrite] no stages for preset, using deep:', presetKey);
+            presetKey = 'deep';
+            presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[presetKey]) || [];
+            currentRewritePreset = presetKey;
+            syncPresetToggleButtonsUI(presetKey);
+        }
         var presetSet = {};
         presetKeys.forEach(function (k) { presetSet[k] = true; });
         var indexByKey = {};
@@ -5485,6 +5609,10 @@
         });
     }
     function syncPresetToggleButtonsUI(preset) {
+        var sel = document.getElementById('rewrite-preset-select');
+        if (sel) {
+            try { sel.value = preset; } catch (_) { /* ignore */ }
+        }
         document.querySelectorAll('.rewrite-preset-toggle__btn').forEach(function (btn) {
             var p = btn.getAttribute('data-rewrite-preset') || '';
             btn.classList.toggle('rewrite-preset-toggle__btn--active', p === preset);
@@ -5493,31 +5621,48 @@
         if (wrap) wrap.setAttribute('data-rewrite-preset-current', preset);
     }
     (function bindRewritePresetToggle() {
+        var REWRITE_PRESET_IDS = ['deep', 'soft', 'prewritten'];
+        if (REWRITE_PRESET_IDS.indexOf(String(currentRewritePreset || '')) < 0) {
+            currentRewritePreset = 'deep';
+        }
+        async function applyPresetChange(preset) {
+            if (preset === currentRewritePreset) return;
+            currentRewritePreset = preset;
+            syncPresetToggleButtonsUI(preset);
+            applyRewritePresetVisibility(preset);
+            if (typeof window.__rewriteSetAllCollapsed === 'function') {
+                try { window.__rewriteSetAllCollapsed(true); } catch (_) { /* ignore */ }
+            }
+            try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+            try { await saveToServer(); } catch (e) {
+                console.warn('[rewrite] preset save failed:', e);
+            }
+        }
+        var presetSel = document.getElementById('rewrite-preset-select');
+        if (presetSel) {
+            var sv = String(presetSel.value || '');
+            if (REWRITE_PRESET_IDS.indexOf(sv) < 0) {
+                try { presetSel.value = 'deep'; } catch (_) { /* ignore */ }
+                currentRewritePreset = 'deep';
+            }
+            presetSel.addEventListener('change', async function () {
+                var preset = String(presetSel.value || 'deep').trim() || 'deep';
+                if (REWRITE_PRESET_IDS.indexOf(preset) < 0) preset = 'deep';
+                await applyPresetChange(preset);
+            });
+            applyRewritePresetVisibility(currentRewritePreset);
+            syncPresetToggleButtonsUI(currentRewritePreset);
+            try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+            return;
+        }
         var buttons = document.querySelectorAll('.rewrite-preset-toggle__btn');
         if (!buttons.length) return;
         buttons.forEach(function (btn) {
             btn.addEventListener('click', async function () {
                 var preset = btn.getAttribute('data-rewrite-preset') || 'deep';
-                if (preset === currentRewritePreset) return;
-                currentRewritePreset = preset;
-                syncPresetToggleButtonsUI(preset);
-                applyRewritePresetVisibility(preset);
-                // По умолчанию сворачиваем верхние этапы нового пресета — иначе
-                // после переключения видна полная простыня раскрытых карточек,
-                // даже если в прошлом пресете их сворачивали.
-                if (typeof window.__rewriteSetAllCollapsed === 'function') {
-                    try { window.__rewriteSetAllCollapsed(true); } catch (_) { /* ignore */ }
-                }
-                // Пересчитать кнопки запуска по новому пресету (иначе крестики
-                // остаются от логики предыдущего пресета).
-                try { syncStageRunButtons(); } catch (_) { /* ignore */ }
-                try { await saveToServer(); } catch (e) {
-                    console.warn('[rewrite] preset save failed:', e);
-                }
+                await applyPresetChange(preset);
             });
         });
-        // На случай рассинхрона server-side и runtime — применяем актуальный preset
-        // сразу: подтянет visibility и label на старте.
         applyRewritePresetVisibility(currentRewritePreset);
         syncPresetToggleButtonsUI(currentRewritePreset);
         try { syncStageRunButtons(); } catch (_) { /* ignore */ }

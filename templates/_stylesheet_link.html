@@ -47,10 +47,12 @@ body .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
         el.style.height = el.dataset.resizeAutofitBase || '';
         el.dataset.resizeAutofit = '0';
         try {
-            var r = el.getBoundingClientRect();
-            if (r.top < 0 || r.top > window.innerHeight - 80) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            var prevMargin = el.style.scrollMarginTop;
+            el.style.scrollMarginTop = Math.round(window.innerHeight / 2) + 'px';
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(function () {
+                el.style.scrollMarginTop = prevMargin || '';
+            }, 800);
         } catch (e) { /* no-op */ }
     }
 

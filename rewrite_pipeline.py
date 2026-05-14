@@ -443,11 +443,13 @@ REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
 _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_STAGES)}
 
 
-# --- Presets: «Глубокий Rewrite» и «Я уже ЗАrewriteИЛ» ----------------------
+# --- Presets: «Глубокий Rewrite», «Я уже ЗАrewriteИЛ», «Мягкий Rewrite» -----
 #
 # Глубокий       = текущий пайплайн (Analysis → Architect → Block Writer → редакторы …).
 # Я уже ЗАrewriteИЛ = текст уже готов, его вставляют в Inbox, далее опциональный
 #                     Rewrite → Voiceover Editor / Title Strategist / Structure Splitter.
+# Мягкий Rewrite  = то же, что «Я уже ЗАrewriteИЛ», но без карточки Inbox: исходник
+#                   берётся из поля Source (верх страницы); дальше Rewrite → …
 #
 # Эти пресеты используются:
 #   - валидатором предусловий (`validate_prerequisites`) — чтобы preset_X не
@@ -456,14 +458,16 @@ _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_ST
 #   - runner-ом запуска этапов.
 REWRITE_PRESET_DEEP = "deep"
 REWRITE_PRESET_PREWRITTEN = "prewritten"
+REWRITE_PRESET_SOFT = "soft"
 REWRITE_PRESET_KEYS: frozenset[str] = frozenset(
-    {REWRITE_PRESET_DEEP, REWRITE_PRESET_PREWRITTEN}
+    {REWRITE_PRESET_DEEP, REWRITE_PRESET_PREWRITTEN, REWRITE_PRESET_SOFT}
 )
 REWRITE_PRESET_DEFAULT = REWRITE_PRESET_DEEP
 
 REWRITE_PRESET_LABELS: dict[str, str] = {
     REWRITE_PRESET_DEEP: "Глубокий Rewrite",
     REWRITE_PRESET_PREWRITTEN: "Я уже ЗАrewriteИЛ",
+    REWRITE_PRESET_SOFT: "Мягкий Rewrite",
 }
 
 REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
@@ -498,6 +502,16 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "scene_writer_live",
         "youtube_packaging",
     ],
+    # «Мягкий Rewrite» — как prewritten, но без Inbox: исходник в поле Source.
+    REWRITE_PRESET_SOFT: [
+        "rewrite",
+        "voiceover_editor",
+        "title_strategist",
+        "structure_splitter",
+        "scene_writer",
+        "scene_writer_live",
+        "youtube_packaging",
+    ],
 }
 
 
@@ -506,6 +520,14 @@ def normalize_rewrite_preset(value: Any) -> str:
     if v in REWRITE_PRESET_KEYS:
         return v
     return REWRITE_PRESET_DEFAULT
+
+
+def normalize_rewrite_pipeline_language(value: Any) -> str:
+    """Язык конвейера (UI): ru | en. Значение хранится в project.json как `rewrite_pipeline_language`."""
+    v = str(value or "").strip().lower()
+    if v in ("en", "english", "англ"):
+        return "en"
+    return "ru"
 
 
 def stages_for_preset(preset: str) -> list[str]:
@@ -517,7 +539,9 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Пресет «Я уже ЗАrewriteИЛ» — Rewrite. В System: Rewrite System Promt. "
         "В User (по порядку): Rewrite User Promt и Result этапа Inbox (вставленный готовый текст). "
         "Если Result Rewrite заполнен — следующие Voiceover Editor / Title Strategist / Structure Splitter "
-        "берут текст уже из Rewrite, иначе продолжают читать Inbox.Result."
+        "берут текст уже из Rewrite, иначе продолжают читать Inbox.Result. "
+        "Пресет «Мягкий Rewrite» — то же без Inbox: в User подставляется текст из поля Source (верх страницы); "
+        "три следующих агента берут Rewrite.Result, если он есть, иначе тот же Source."
     ),
     "analysis": (
         "Отправляем. В System (по порядку): Master Prompt, Analysis Prompt. "
@@ -724,6 +748,9 @@ def new_stages_dict() -> dict[str, dict[str, Any]]:
 def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     """Приводит job к схеме с source_text и stages; миграция со старых полей."""
     job["rewrite_preset"] = normalize_rewrite_preset(job.get("rewrite_preset"))
+    job["rewrite_pipeline_language"] = normalize_rewrite_pipeline_language(
+        job.get("rewrite_pipeline_language")
+    )
     job.setdefault("source_text", "")
     job.setdefault("source_text_ru", "")
     job["source_text_ru"] = str(job.get("source_text_ru") or "")
@@ -946,6 +973,7 @@ def validate_prerequisites(
     stages: dict[str, Any],
     *,
     preset: str = REWRITE_PRESET_DEFAULT,
+    source_text: str = "",
 ) -> str | None:
     """None если ок, иначе текст ошибки для пользователя.
 
@@ -968,6 +996,11 @@ def validate_prerequisites(
         # результат не влияет на пайплайн другого пресета.
         return None
     idx = preset_order.index(stage_key)
+    # «Мягкий Rewrite»: первый этап — Rewrite, ему нужен непустой Source (без Inbox).
+    if preset == REWRITE_PRESET_SOFT and stage_key == "rewrite":
+        if not str(source_text or "").strip():
+            return "Сначала вставьте исходный текст в поле Source (верх страницы)."
+        return None
     if idx == 0:
         return None
     # В пресете «Я уже ЗАrewriteИЛ» Rewrite — отдельный лёгкий агент после Inbox,
@@ -994,6 +1027,18 @@ def validate_prerequisites(
         if not str(ibx.get("last_result") or "").strip():
             return "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
         return None
+    # «Мягкий Rewrite» — те же три агента, но фолбэк к Inbox заменён на Source.
+    if preset == REWRITE_PRESET_SOFT and stage_key in (
+        "voiceover_editor",
+        "title_strategist",
+        "structure_splitter",
+    ):
+        rw_res = str((stages.get("rewrite") or {}).get("last_result") or "").strip()
+        if rw_res:
+            return None
+        if str(source_text or "").strip():
+            return None
+        return "Сначала вставьте текст в Source или прогоните Rewrite."
     for i in range(idx):
         pk = preset_order[i]
         plabel = _STAGE_LABEL_BY_KEY.get(pk, pk)
@@ -1014,9 +1059,10 @@ def stage_run_prerequisites_met(
     stages: dict[str, Any],
     *,
     preset: str = REWRITE_PRESET_DEFAULT,
+    source_text: str = "",
 ) -> bool:
     """True, если для этапа можно запускать генерацию (у предыдущих этапов есть сохранённый Result)."""
-    return validate_prerequisites(stage_key, stages, preset=preset) is None
+    return validate_prerequisites(stage_key, stages, preset=preset, source_text=source_text) is None
 
 
 def compose_rewrite_openai_request_body(
@@ -1062,7 +1108,7 @@ def compose_rewrite_openai_request_body(
         "rewrite",
     ) and not (source_text or "").strip():
         return None, "Введите исходный текст в верхнем поле."
-    pre_err = validate_prerequisites(stage_key, stages_snap, preset=preset)
+    pre_err = validate_prerequisites(stage_key, stages_snap, preset=preset, source_text=source_text)
     if pre_err:
         return None, pre_err
     cell = stages_snap.get(stage_key) or {}
@@ -1134,11 +1180,17 @@ def compose_rewrite_openai_request_body(
             flow_editor_text,
         )
     elif stage_key == "rewrite":
-        # Пресет «Я уже ЗАrewriteИЛ»: Rewrite — лёгкий доработчик готового текста.
-        # System: Rewrite System Promt. User: Rewrite User Promt + Inbox.Result (plain text).
-        inbox_text = str((stages_snap.get("inbox") or {}).get("last_result") or "")
-        if not inbox_text.strip():
-            return None, "Сначала вставьте готовый текст в Inbox (Result)."
+        preset_n = normalize_rewrite_preset(preset)
+        if preset_n == REWRITE_PRESET_SOFT:
+            inbox_text = str(source_text or "").strip()
+            if not inbox_text:
+                return None, "Сначала вставьте исходный текст в поле Source."
+        elif preset_n == REWRITE_PRESET_PREWRITTEN:
+            inbox_text = str((stages_snap.get("inbox") or {}).get("last_result") or "")
+            if not inbox_text.strip():
+                return None, "Сначала вставьте готовый текст в Inbox (Result)."
+        else:
+            return None, "Этап Rewrite в этом пресете не используется."
         prompt = build_rewrite_stage_system_prompt(str(cell.get("prompt") or ""))
         user_text = build_rewrite_stage_user_message(
             str(cell.get("user_prompt") or ""),
@@ -1152,13 +1204,19 @@ def compose_rewrite_openai_request_body(
         # после Inbox/Rewrite: на вход подаём Result Rewrite (если запускали Rewrite),
         # иначе — Inbox.Result.
         ve_input_text = persona_editor_text
-        if normalize_rewrite_preset(preset) == REWRITE_PRESET_PREWRITTEN:
+        preset_n = normalize_rewrite_preset(preset)
+        if preset_n == REWRITE_PRESET_PREWRITTEN:
             rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
             ve_input_text = rw_res if rw_res.strip() else str(
                 (stages_snap.get("inbox") or {}).get("last_result") or ""
             )
             if not ve_input_text.strip():
                 return None, "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
+        elif preset_n == REWRITE_PRESET_SOFT:
+            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
+            ve_input_text = rw_res if rw_res.strip() else str(source_text or "")
+            if not ve_input_text.strip():
+                return None, "Сначала вставьте текст в Source или прогоните Rewrite."
         user_text = build_voiceover_editor_user_message(
             str(cell.get("user_prompt") or ""),
             ve_input_text,
@@ -1172,13 +1230,19 @@ def compose_rewrite_openai_request_body(
         # чтобы все три финальных агента работали с одним и тем же исходником
         # уже после (опционального) прогонa через Rewrite.
         ts_input_text = voiceover_editor_text
-        if normalize_rewrite_preset(preset) == REWRITE_PRESET_PREWRITTEN:
+        preset_n = normalize_rewrite_preset(preset)
+        if preset_n == REWRITE_PRESET_PREWRITTEN:
             rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
             ts_input_text = rw_res if rw_res.strip() else str(
                 (stages_snap.get("inbox") or {}).get("last_result") or ""
             )
             if not ts_input_text.strip():
                 return None, "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
+        elif preset_n == REWRITE_PRESET_SOFT:
+            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
+            ts_input_text = rw_res if rw_res.strip() else str(source_text or "")
+            if not ts_input_text.strip():
+                return None, "Сначала вставьте текст в Source или прогоните Rewrite."
         user_text = build_title_strategist_user_message(
             str(cell.get("user_prompt") or ""),
             ts_input_text,
@@ -1191,13 +1255,19 @@ def compose_rewrite_openai_request_body(
         # В пресете «Я уже ЗАrewriteИЛ» Structure Splitter берёт исходный текст
         # из Rewrite.Result (если есть) или из Inbox.Result.
         ss_input_text = voiceover_editor_text
-        if normalize_rewrite_preset(preset) == REWRITE_PRESET_PREWRITTEN:
+        preset_n = normalize_rewrite_preset(preset)
+        if preset_n == REWRITE_PRESET_PREWRITTEN:
             rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
             ss_input_text = rw_res if rw_res.strip() else str(
                 (stages_snap.get("inbox") or {}).get("last_result") or ""
             )
             if not ss_input_text.strip():
                 return None, "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
+        elif preset_n == REWRITE_PRESET_SOFT:
+            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
+            ss_input_text = rw_res if rw_res.strip() else str(source_text or "")
+            if not ss_input_text.strip():
+                return None, "Сначала вставьте текст в Source или прогоните Rewrite."
         user_text = build_structure_splitter_user_message(
             str(cell.get("user_prompt") or ""),
             ss_input_text,

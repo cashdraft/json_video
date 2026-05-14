@@ -1670,12 +1670,12 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     border-radius: 8px;
 }
 
-/* --- Rewrite preset toggle (Глубокий / Мягкий) --- */
+/* --- Пресет ReWrite: нативный select — все три варианта всегда в списке (не режется вёрсткой). --- */
 .rewrite-preset-toggle {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
     margin: 0 0 0.75rem;
     padding: 0.45rem 0.75rem;
     background: var(--bg-input);
@@ -1687,42 +1687,34 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     font-size: 0.78rem;
     color: var(--text-muted);
     line-height: 1.35;
-    margin-right: 0.25rem;
 }
 
-.rewrite-preset-toggle__group {
-    display: inline-flex;
-    background: var(--bg-card, rgba(0, 0, 0, 0.18));
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 2px;
-    gap: 2px;
-}
-
-.rewrite-preset-toggle__btn {
-    appearance: none;
-    -webkit-appearance: none;
-    background: transparent;
-    color: var(--text-muted);
-    border: 0;
-    padding: 0.35rem 0.95rem;
-    font-size: 0.82rem;
+.rewrite-preset-select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    font: inherit;
+    font-size: 0.88rem;
     font-weight: 500;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-    line-height: 1.2;
-}
-
-.rewrite-preset-toggle__btn:hover {
+    line-height: 1.3;
+    padding: 0.5rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card, rgba(0, 0, 0, 0.22));
     color: var(--text);
+    cursor: pointer;
 }
 
-.rewrite-preset-toggle__btn--active,
-.rewrite-preset-toggle__btn--active:hover {
-    background: var(--accent, #3b82f6);
-    color: #ffffff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+.rewrite-preset-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.rewrite-preset-select:focus {
+    outline: none;
+    border-color: var(--accent, #3b82f6);
+    box-shadow: none;
 }
 
 /* Карточки этапов, не входящие в выбранный пресет, полностью скрываем. */
@@ -5423,9 +5415,8 @@ button.job-download-all-link {
     padding: 0.45rem 0.75rem;
 }
 
-/* «Подробнее» — размер обычной кнопки (как .btn-secondary.btn-sm), стиль —
-   тот же ненавязчивый, что был раньше: прозрачный фон, обводка border-цвет,
-   подсветка акцентом на hover. */
+/* «Подробнее» — размер обычной кнопки (как .btn-secondary.btn-sm). Hover: только
+   фон, без ореола (box-shadow) и без смены/утолщения обводки. */
 .rewrite-stages-collapsible__toggle {
     appearance: none;
     background: transparent;
@@ -5441,20 +5432,15 @@ button.job-download-all-link {
     gap: 0.4rem;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    transition: background 0.18s ease, color 0.18s ease;
 }
 
 .rewrite-stages-collapsible__toggle:hover {
-    color: var(--accent-hover);
-    border-color: var(--accent-hover);
-    background: rgba(74, 158, 255, 0.1);
-    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.18);
-    transform: translateY(-1px);
+    background: rgba(74, 158, 255, 0.12);
 }
 
 .rewrite-stages-collapsible__toggle:active {
-    transform: translateY(0);
-    box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.22);
+    background: rgba(74, 158, 255, 0.18);
 }
 
 .rewrite-stages-collapsible__toggle:focus-visible {
