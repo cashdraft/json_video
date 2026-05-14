@@ -255,11 +255,12 @@
                             <button type="button" class="rewrite-lock-toggle btn-icon rewrite-source-ru-copy-btn" id="rewrite-source-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
                                 <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                             </button>
-                            {# Правая группа: счётчик символов/слов + System Promt + ✎. #}
+                            {# Правая группа: счётчик символов/слов + System Promt + ✎ + J (как на этапах пайплайна). #}
                             <span class="locked-prompts-group">
                                 <span class="rewrite-source-counts rewrite-source-counts--inline" id="rewrite-source-ru-counts" aria-live="polite"></span>
                                 <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _tr_present else 'no' }}" id="locked-prompt-badge-translate_to_ru" data-locked-prompt-badge="translate_to_ru" title="Системный промт перевода (под пин-кодом)">System Promt: {{ 'YES' if _tr_present else 'NO' }}</span>
                                 <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="translate_to_ru" data-locked-prompt-label="Промт перевода на русский" title="Редактировать промт перевода (пин-код)" aria-label="Редактировать промт перевода"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                <button type="button" class="rewrite-json-export-btn rewrite-aux-api-export" id="rewrite-translate-ru-api-export" data-aux-api-stage="translate_source_ru" title="Скачать тело POST к OpenAI (JSON, как при переводе)" aria-label="Скачать JSON запроса перевода" {% if not openai_key_set %}disabled{% endif %}>J</button>
                             </span>
                         </div>
                         <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-source-translate-ru-status-wrap" aria-hidden="true">
@@ -295,12 +296,13 @@
                                 <button type="button" class="rewrite-lock-toggle btn-icon semantic-analyzer-result-copy-btn" id="semantic-analyzer-result-copy-btn" title="Копировать результат в буфер обмена" aria-label="Копировать результат">
                                     <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                                 </button>
-                                {# System / User Promt — отдельная группа, прижатая к правому краю шапки. #}
+                                {# System / User Promt + ✎ + J (как на этапах пайплайна). #}
                                 <span class="locked-prompts-group">
                                     <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _sa_sys_present else 'no' }}" data-locked-prompt-badge="semantic_text_analyzer_system" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if _sa_sys_present else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="semantic_text_analyzer_system" data-locked-prompt-label="Semantic Text Analyzer — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
                                     <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _sa_user_present else 'no' }}" data-locked-prompt-badge="semantic_text_analyzer_user" title="User Promt (под пин-кодом). К нему автоматически добавляется русский переведённый текст.">User Promt: {{ 'YES' if _sa_user_present else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="semantic_text_analyzer_user" data-locked-prompt-label="Semantic Text Analyzer — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    <button type="button" class="rewrite-json-export-btn rewrite-aux-api-export" id="rewrite-semantic-api-export" data-aux-api-stage="semantic_text_analyzer" title="Скачать тело POST к OpenAI (JSON, как при Semantic)" aria-label="Скачать JSON запроса Semantic" {% if not openai_key_set %}disabled{% endif %}>J</button>
                                 </span>
                             </div>
                             <div class="slot-placeholder rewrite-slot-placeholder semantic-analyzer-status-wrap hidden" id="semantic-analyzer-status-wrap" aria-hidden="true">
@@ -450,17 +452,27 @@
                             </select>
                         </div>
                         {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
-                        {% set _plang = 'en' if _plang_raw in ['en', 'english', 'англ'] else 'ru' %}
+                        {% if _plang_raw in ['en', 'english', 'англ'] %}
+                            {% set _plang = 'en' %}
+                        {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
+                            {% set _plang = 'es' %}
+                        {% elif _plang_raw in ['ja', 'jp', 'japanese'] %}
+                            {% set _plang = 'ja' %}
+                        {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
+                            {% set _plang = _plang_raw %}
+                        {% else %}
+                            {% set _plang = 'ru' %}
+                        {% endif %}
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
                             <h3 class="rewrite-source-subtitle">Язык</h3>
                             <p class="rewrite-source-subhint">Язык для последующих шагов конвейера (пока только сохраняется в проект).</p>
                             <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Выбор языка конвейера">
-                                <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% else %}Русский{% endif %}</span>
+                                <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% elif _plang == 'es' %}Spanish{% elif _plang == 'ja' %}Japanese{% else %}Русский{% endif %}</span>
                                 <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
                             </button>
                             <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
                                 <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
-                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ru" {% if _plang != 'en' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ru" {% if _plang == 'ru' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
                                     <span class="rewrite-anim-option__body">
                                         <span class="rewrite-anim-option__title">Русский</span>
                                     </span>
@@ -471,11 +483,25 @@
                                         <span class="rewrite-anim-option__title">English</span>
                                     </span>
                                 </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="es" {% if _plang == 'es' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">Spanish</span>
+                                    </span>
+                                </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ja" {% if _plang == 'ja' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">Japanese</span>
+                                    </span>
+                                </label>
                             </div>
                         </div>
                         <select id="rewrite-pipeline-language" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
-                            <option value="ru" {% if _plang != 'en' %}selected{% endif %}>Русский</option>
+                            <option value="ru" {% if _plang == 'ru' %}selected{% endif %}>Русский</option>
                             <option value="en" {% if _plang == 'en' %}selected{% endif %}>English</option>
+                            <option value="es" {% if _plang == 'es' %}selected{% endif %}>Spanish</option>
+                            <option value="ja" {% if _plang == 'ja' %}selected{% endif %}>Japanese</option>
                         </select>
                         <div class="rewrite-prompts-duration-row__duration-block">
                             <h3 class="rewrite-source-subtitle">Duration</h3>
@@ -493,6 +519,20 @@
                                 <div class="tts-slider-ends">
                                     <span>500</span>
                                     <span>40000</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% set _ct_saved = rw.chat_temperature|default(default_chat_temperature, true) %}
+                        {% set _ct_model_openai = (cur_model not in claude_rewrite_model_ids) %}
+                        <div class="rewrite-prompts-duration-row__duration-block" id="rewrite-chat-temperature-block">
+                            <h3 class="rewrite-source-subtitle">Temperature</h3>
+                            <p class="rewrite-source-subhint">Только для моделей OpenAI (Chat Completions). Для Claude через Kie.ai поле отключено.</p>
+                            <div class="tts-slider-block rewrite-source-duration">
+                                <label class="tts-slider-label" for="rewrite-chat-temperature">Значение <span class="tts-slider-val" id="rewrite-chat-temperature-val">{{ '%.2f'|format(_ct_saved|float) }}</span></label>
+                                <input type="range" id="rewrite-chat-temperature" name="chat_temperature" min="0" max="2" step="0.05" value="{{ '%.2f'|format(_ct_saved|float) }}" class="tts-range" {% if not openai_key_set or not _ct_model_openai %}disabled{% endif %} aria-valuemin="0" aria-valuemax="2">
+                                <div class="tts-slider-ends">
+                                    <span>0</span>
+                                    <span>2</span>
                                 </div>
                             </div>
                         </div>
@@ -623,11 +663,13 @@
                                 <div class="rewrite-stage-header-tools">
                                     <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
                                         <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
-                                        <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
+                                        <span class="rewrite-stage-help__tip">{% if stage_key == 'rewrite' and rewrite_preset_current == 'soft' %}Пресет «Мягкий Rewrite». Rewrite — лёгкая правка готового текста из поля Source (исходный текст вверху страницы): в System кладётся Rewrite System Promt, в User — Rewrite User Promt и текст из Source (простой склейкой через пустую строку, без обёртки в JSON). Когда Result Rewrite заполнен, следующие Voiceover Editor / Title Strategist / Structure Splitter берут текст уже из Rewrite. Если Rewrite не запускали — они продолжают читать Source.{% else %}{{ rewrite_stage_help_hints[stage_key] }}{% endif %}</span>
                                     </div>
                                 </div>
                             </div>
-                            {% if rewrite_stage_subtitles[stage_key] %}
+                            {% if stage_key == 'rewrite' and rewrite_preset_current == 'soft' %}
+                            <div class="rewrite-stage-subtitle">Агент-доработчик готового текста данные берутся из <code>Исходный текст</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Source</code></div>
+                            {% elif rewrite_stage_subtitles[stage_key] %}
                             <div class="rewrite-stage-subtitle">{{ rewrite_stage_subtitles[stage_key] }}</div>
                             {% endif %}
                         </div>
@@ -648,9 +690,41 @@
                                     {% endfor %}
                                 </select>
                             </div>
+                            {% if stage_key == 'rewrite' %}
+                            {% set _rsr_lp = (locked_prompts_state|default({}, true)).get('rewrite_system_rules') or {} %}
+                            {% set has_rewrite_system_rules = _rsr_lp.get('present')|default(false) %}
+                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
+                            {% set has_user_prompt = (_up_lp.get('present'))|default(false) or ((cell.user_prompt or '')|trim|length) > 0 %}
+                            {% set _up_lock = 'user_prompt_' ~ stage_key %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
+                                <div class="rewrite-stage-json-export-row">
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+                                </div>
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">System Promt: {{ 'YES' if has_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-prompt-toggle{% if prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                    </button>
+                                </div>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline">
+                                    <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
+                                </div>
+                                <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
+                                    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_rewrite_system_rules else 'no' }}" id="locked-prompt-badge-rewrite_system_rules" data-locked-prompt-badge="rewrite_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_rewrite_system_rules else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="rewrite_system_rules" data-locked-prompt-label="Rewrite — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    </div>
+                                    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
                             <div class="rewrite-stage-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-system-cell{% endif %}">
                                 <div class="rewrite-stage-json-export-row">
-                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
                                 </div>
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">System Promt: {{ 'YES' if has_prompt else 'NO' }}</span>
@@ -663,25 +737,12 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            {% if stage_key == 'rewrite' %}
-                            {% set _rsr_lp = (locked_prompts_state|default({}, true)).get('rewrite_system_rules') or {} %}
-                            {% set has_rewrite_system_rules = _rsr_lp.get('present')|default(false) %}
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-system-rules-cell">
-                                <div class="rewrite-stage-json-export-row rewrite-stage-json-export-row--rules-spacer" aria-hidden="true"></div>
-                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_rewrite_system_rules else 'no' }}" id="locked-prompt-badge-rewrite_system_rules" data-locked-prompt-badge="rewrite_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_rewrite_system_rules else 'NO' }}</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="rewrite_system_rules" data-locked-prompt-label="Rewrite — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
-                                </div>
-                            </div>
                             {% endif %}
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'rewrite' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
                             {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
                             {% set has_user_prompt = (_up_lp.get('present'))|default(false) or ((cell.user_prompt or '')|trim|length) > 0 %}
                             {% set _up_lock = 'user_prompt_' ~ stage_key %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
-                                {% if stage_key == 'rewrite' %}
-                                <div class="rewrite-stage-json-export-row rewrite-stage-json-export-row--rules-spacer" aria-hidden="true"></div>
-                                {% endif %}
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>

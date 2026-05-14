@@ -5,7 +5,7 @@
 
 Токены (как в UI: «Promt»):
 - {{LANGUAGE}} — язык конвейера (одна строка, без переносов)
-- {{DURATION}} — сводка Duration (одна строка)
+- {{DURATION}} — целевое число символов (одно число, без единиц и пояснений)
 - {{ORIGINAL_TITLE}} — исходное название ролика (одна строка)
 - {{MASTER_PROMT}} — Master Promt (вставка с двойным переноса \\n\\n вокруг непустого текста)
 - {{HERO_PROMT}} — Hero Promt (аналогично)
@@ -46,11 +46,25 @@ def _normalize_pipeline_language(value: Any) -> str:
     v = str(value or "").strip().lower()
     if v in ("en", "english", "англ"):
         return "en"
+    if v in ("es", "spa", "spanish", "espanol", "español"):
+        return "es"
+    if v in ("ja", "jp", "japanese"):
+        return "ja"
+    if v in ("ru", "en", "es", "ja"):
+        return v
     return "ru"
 
 
+_PIPELINE_LANG_LABELS = {
+    "ru": "Русский",
+    "en": "English",
+    "es": "Spanish",
+    "ja": "Japanese",
+}
+
+
 def language_display(pipeline_language: Any) -> str:
-    return "English" if _normalize_pipeline_language(pipeline_language) == "en" else "Русский"
+    return _PIPELINE_LANG_LABELS.get(_normalize_pipeline_language(pipeline_language), "Русский")
 
 
 def format_duration_placeholder_line(
@@ -59,6 +73,7 @@ def format_duration_placeholder_line(
     chars_per_minute: int,
     target_chars: int,
 ) -> str:
+    """Только целевое число символов для {{DURATION}} (как на слайдере Duration)."""
     try:
         dm = int(duration_minutes)
     except (TypeError, ValueError):
@@ -73,7 +88,7 @@ def format_duration_placeholder_line(
         tc = int(target_chars)
     except (TypeError, ValueError):
         tc = dm * cpm
-    return _single_line(f"{dm} мин · {cpm} симв./мин · цель ~{tc} симв.")
+    return str(tc)
 
 
 def apply_prompt_placeholders(

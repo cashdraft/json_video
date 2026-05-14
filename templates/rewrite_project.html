@@ -171,6 +171,7 @@
                             <button type="button" class="rewrite-lock-toggle btn-icon rewrite-source-ru-copy-btn" id="rewrite-source-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
                                 <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                             </button>
+                            <button type="button" class="rewrite-json-export-btn rewrite-aux-api-export" id="rewrite-translate-ru-api-export" data-aux-api-stage="translate_source_ru" title="Скачать JSON запроса перевода" aria-label="Скачать JSON запроса перевода" {% if not openai_key_set %}disabled{% endif %}>J</button>
                             <span class="rewrite-source-counts" id="rewrite-source-ru-counts" aria-live="polite"></span>
                         </div>
                         <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--source-ru">
@@ -306,17 +307,27 @@
                             </select>
                         </div>
                         {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
-                        {% set _plang = 'en' if _plang_raw in ['en', 'english', 'англ'] else 'ru' %}
+                        {% if _plang_raw in ['en', 'english', 'англ'] %}
+                            {% set _plang = 'en' %}
+                        {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
+                            {% set _plang = 'es' %}
+                        {% elif _plang_raw in ['ja', 'jp', 'japanese'] %}
+                            {% set _plang = 'ja' %}
+                        {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
+                            {% set _plang = _plang_raw %}
+                        {% else %}
+                            {% set _plang = 'ru' %}
+                        {% endif %}
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
                             <h3 class="rewrite-source-subtitle">Язык</h3>
                             <p class="rewrite-source-subhint">Язык для последующих шагов конвейера (пока только сохраняется в проект).</p>
                             <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Выбор языка конвейера">
-                                <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% else %}Русский{% endif %}</span>
+                                <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% elif _plang == 'es' %}Spanish{% elif _plang == 'ja' %}Japanese{% else %}Русский{% endif %}</span>
                                 <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
                             </button>
                             <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
                                 <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
-                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ru" {% if _plang != 'en' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ru" {% if _plang == 'ru' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
                                     <span class="rewrite-anim-option__body">
                                         <span class="rewrite-anim-option__title">Русский</span>
                                     </span>
@@ -327,11 +338,25 @@
                                         <span class="rewrite-anim-option__title">English</span>
                                     </span>
                                 </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="es" {% if _plang == 'es' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">Spanish</span>
+                                    </span>
+                                </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ja" {% if _plang == 'ja' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">Japanese</span>
+                                    </span>
+                                </label>
                             </div>
                         </div>
                         <select id="rewrite-pipeline-language" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
-                            <option value="ru" {% if _plang != 'en' %}selected{% endif %}>Русский</option>
+                            <option value="ru" {% if _plang == 'ru' %}selected{% endif %}>Русский</option>
                             <option value="en" {% if _plang == 'en' %}selected{% endif %}>English</option>
+                            <option value="es" {% if _plang == 'es' %}selected{% endif %}>Spanish</option>
+                            <option value="ja" {% if _plang == 'ja' %}selected{% endif %}>Japanese</option>
                         </select>
                         <div class="rewrite-prompts-duration-row__duration-block">
                             <h3 class="rewrite-source-subtitle">Duration</h3>
@@ -463,11 +488,13 @@
                                 <div class="rewrite-stage-header-tools">
                                     <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
                                         <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
-                                        <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
+                                        <span class="rewrite-stage-help__tip">{% if stage_key == 'rewrite' and rewrite_preset_current == 'soft' %}Пресет «Мягкий Rewrite». Rewrite — лёгкая правка готового текста из поля Source (исходный текст вверху страницы): в System кладётся Rewrite System Promt, в User — Rewrite User Promt и текст из Source (простой склейкой через пустую строку, без обёртки в JSON). Когда Result Rewrite заполнен, следующие Voiceover Editor / Title Strategist / Structure Splitter берут текст уже из Rewrite. Если Rewrite не запускали — они продолжают читать Source.{% else %}{{ rewrite_stage_help_hints[stage_key] }}{% endif %}</span>
                                     </div>
                                 </div>
                             </div>
-                            {% if rewrite_stage_subtitles[stage_key] %}
+                            {% if stage_key == 'rewrite' and rewrite_preset_current == 'soft' %}
+                            <div class="rewrite-stage-subtitle">Агент-доработчик готового текста данные берутся из <code>Исходный текст</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Source</code></div>
+                            {% elif rewrite_stage_subtitles[stage_key] %}
                             <div class="rewrite-stage-subtitle">{{ rewrite_stage_subtitles[stage_key] }}</div>
                             {% endif %}
                         </div>
@@ -490,7 +517,7 @@
                             </div>
                             <div class="rewrite-stage-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-system-cell{% endif %}">
                                 <div class="rewrite-stage-json-export-row">
-                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
                                 </div>
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">System Promt: {{ 'YES' if has_prompt else 'NO' }}</span>
@@ -2635,6 +2662,9 @@
                 apiBtn.disabled = anyRunning || !ok || !openaiOk;
             }
         });
+        document.querySelectorAll('.rewrite-aux-api-export').forEach(function (b) {
+            b.disabled = anyRunning || !openaiOk;
+        });
     }
 
     function applyAllLockUIs() {
@@ -3409,7 +3439,7 @@
             rewrite_pipeline_language: (function () {
                 if (pipelineLanguageEl) {
                     var v = String(pipelineLanguageEl.value || '').trim().toLowerCase();
-                    return v === 'en' ? 'en' : 'ru';
+                    if (v === 'en' || v === 'es' || v === 'ja' || v === 'ru') return v;
                 }
                 return 'ru';
             })(),
@@ -4419,6 +4449,20 @@
         }
     });
 
+    function scrubRewriteStreamEndMarkers(s) {
+        if (typeof s !== 'string' || !s) return s;
+        var t = s.replace(/\uff3bEND\uff3d/gi, '').replace(/\uff3b\s+END\s+\uff3d/gi, '');
+        var i;
+        for (i = 0; i < 32; i++) {
+            var u = t.replace(/^\s*\[\s*END\s*\]\s*$/gim, '');
+            u = u.replace(/\[\s*END\s*\]\s*$/gi, '');
+            if (u === t) break;
+            t = u;
+        }
+        t = t.replace(/\[\s*END\s*\]/gi, '');
+        return t.replace(/[ \t\r]+$/g, '').replace(/\n+$/g, '');
+    }
+
     async function runStage(stageKey, block, options) {
         options = options || {};
         var manageBusy = options.manageBusy !== false;
@@ -4541,7 +4585,7 @@
             }
             const dec = new TextDecoder();
             let buf = '';
-            const useOpenAIStreamUi = (stageKey === 'draft1');
+            const useOpenAIStreamUi = (stageKey === 'draft1' || stageKey === 'rewrite');
             let streamBuf = '';
             var lastDeltaLog = 0;
             while (true) {
@@ -4621,6 +4665,9 @@
                     } else if (ev.type === 'result' && typeof ev.content === 'string') {
                         gotFinalResult = true;
                         var resultContent = ev.content;
+                        if (stageKey === 'rewrite') {
+                            resultContent = scrubRewriteStreamEndMarkers(resultContent);
+                        }
                         if (stageKey === 'scene_writer') {
                             var pastEl = block.querySelector('.rewrite-stage-past-prompt');
                             var pastVal = pastEl ? (pastEl.value || '') : '';
@@ -4864,6 +4911,56 @@
             syncStageRunButtons();
         }
     }
+
+    async function downloadAuxApiPayload(stageKey, btn) {
+        if (!openaiOk) return;
+        if (btn) btn.disabled = true;
+        try {
+            const r = await fetch(apiPayloadUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ stage: stageKey }, collectSnapshot()))
+            });
+            var fname = openaiExportRewriteId + '_' + stageKey + '_openai_request.json';
+            var cd = r.headers.get('Content-Disposition');
+            if (cd) {
+                var fromHdr = parseContentDispositionFilename(cd);
+                if (fromHdr) {
+                    fname = fromHdr;
+                }
+            }
+            if (/\.txt$/i.test(fname)) {
+                fname = fname.replace(/\.txt$/i, '.json');
+            }
+            if (!r.ok) {
+                var errData = await r.json().catch(function () { return {}; });
+                alert(errData.message || 'Не удалось сформировать запрос');
+                return;
+            }
+            var blob = await r.blob();
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert(String(e));
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.querySelectorAll('[data-aux-api-stage]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var sk = btn.getAttribute('data-aux-api-stage');
+            if (!sk || !openaiOk || btn.disabled) return;
+            if (rewriteStageBusy) return;
+            downloadAuxApiPayload(sk, btn);
+        });
+    });
 
     if (pipelineRunBtn) {
         pipelineRunBtn.addEventListener('click', function () {
@@ -5422,7 +5519,8 @@
             if (!lbl || !checked) return;
             var lab = checked.closest('label');
             var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
-            lbl.textContent = title ? String(title.textContent || '').trim() : (checked.value === 'en' ? 'English' : 'Русский');
+            var fall = { ru: 'Русский', en: 'English', es: 'Spanish', ja: 'Japanese' };
+            lbl.textContent = title ? String(title.textContent || '').trim() : (fall[checked.value] || 'Русский');
         }
         function closePanel() {
             if (panel) panel.hidden = true;

@@ -1,5 +1,8 @@
 """
-ReWrite Master — вызов OpenAI Chat Completions (system = промпт, user = текст).
+ReWrite Master — вызов OpenAI Chat Completions.
+
+Единое тело запроса (OpenAI): ``{"model", "temperature", "messages"}`` с ролями
+``system`` и ``user``; см. ``openai_chat_completions_request_dict``.
 """
 
 from __future__ import annotations
@@ -35,7 +38,96 @@ REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}
 
 REWRITE_DEFAULT_MODEL = "gpt-4.1"
 
-REWRITE_CHAT_TEMPERATURE = 0.1
+# Единый формат POST /v1/chat/completions (OpenAI): model, temperature, messages[system,user].
+REWRITE_CHAT_TEMPERATURE = 0.7
+
+# Маркер конца ответа в тексте ассистента (Rewrite): System Promt просит модель
+# завершать каждый фрагмент или весь ответ этим токеном; HTTP-стрим обрываем
+# сразу после первого вхождения, в Result уходит текст без маркеров, сегменты
+# между маркерами склеиваются подряд.
+REWRITE_STREAM_USER_TERMINATOR = "[END]"
+
+# Маркер в ответе модели может отличаться пробелами/регистром: [END], [ END ], [end].
+_RW_END_TOKEN_RE = re.compile(r"\[\s*END\s*\]", re.IGNORECASE)
+_RW_END_LINE_ONLY_RE = re.compile(r"(?m)^\s*\[\s*END\s*\]\s*$", re.IGNORECASE)
+_RW_END_TAIL_RE = re.compile(r"\[\s*END\s*\]\s*$", re.IGNORECASE)
+
+
+def accumulated_matches_rewrite_stream_terminator(acc: str, terminator: str | None) -> bool:
+    if not terminator:
+        return False
+    if terminator == REWRITE_STREAM_USER_TERMINATOR or terminator.strip().upper() == "[END]":
+        return _RW_END_TOKEN_RE.search(acc or "") is not None
+    return terminator in (acc or "")
+
+
+def scrub_rewrite_end_markers(text: str) -> str:
+    """Удаляет типичные варианты маркера ``[END]`` (строка целиком, хвост, fullwidth-скобки)."""
+    s = text or ""
+    s = s.replace("\uff3bEND\uff3d", "").replace("\uff3b END \uff3d", "")
+    while True:
+        t = s
+        s = _RW_END_LINE_ONLY_RE.sub("", s)
+        s = _RW_END_TAIL_RE.sub("", s.rstrip("\n\r \t"))
+        if s == t:
+            break
+    s = _RW_END_TOKEN_RE.sub("", s)
+    return s.rstrip("\n\r \t")
+
+
+def finalize_rewrite_stream_join_segments(raw: str, terminator: str) -> str:
+    """Склеивает части ответа между маркерами `terminator` подряд; маркеры удаляются.
+
+    Если `terminator` ни разу не встретился — возвращаем весь `raw` (как раньше
+    для стримов без протокола завершения).
+    """
+    if not raw:
+        return ""
+    if not terminator:
+        return raw
+    if terminator == REWRITE_STREAM_USER_TERMINATOR or terminator.strip().upper() == "[END]":
+        if not _RW_END_TOKEN_RE.search(raw):
+            return raw
+        parts = _RW_END_TOKEN_RE.split(raw)
+    elif terminator in raw:
+        parts = raw.split(terminator)
+    else:
+        return raw
+    while parts and parts[-1] == "":
+        parts.pop()
+    return "".join(parts)
+
+
+def strip_rewrite_stream_terminator_suffix(text: str, marker: str) -> str:
+    """Убирает хвостовой маркер (например ``[END]``) с конца текста: суффиксом или отдельной строкой."""
+    if not marker:
+        return scrub_rewrite_end_markers(text or "")
+    s = text or ""
+    m = marker.strip()
+    while True:
+        t = s.rstrip("\n\r \t")
+        lines = t.splitlines()
+        if lines and lines[-1].strip() == m:
+            s = "\n".join(lines[:-1])
+            continue
+        if t.endswith(marker):
+            s = t[: -len(marker)].rstrip("\n\r \t")
+            continue
+        break
+    return scrub_rewrite_end_markers(s)
+
+
+def clamp_chat_temperature(val: Any) -> float:
+    """Диапазон 0…2 (шаг не фиксируем — UI может слать 0.05). Невалидное → дефолт конвейера."""
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        return float(REWRITE_CHAT_TEMPERATURE)
+    if x < 0.0:
+        return 0.0
+    if x > 2.0:
+        return 2.0
+    return round(x, 4)
 
 
 def normalize_rewrite_model(model: str) -> str:
@@ -89,27 +181,54 @@ def _openai_error_message(r: requests.Response) -> str:
     return err_body or (r.reason or str(r.status_code))
 
 
+def openai_chat_completions_request_dict(
+    model: str,
+    system_content: str,
+    user_content: str,
+    *,
+    sanitize: bool = True,
+    temperature: float | None = None,
+) -> dict[str, Any]:
+    """Строго формат Chat Completions для OpenAI: model, temperature, messages (system + user).
+
+    При stream добавляется ключ ``stream`` снаружи (см. ``iter_rewrite_completion_stream``).
+    """
+    mid = normalize_rewrite_model(model)
+    if sanitize:
+        sy = _sanitize_for_openai_json((system_content or "").strip())
+        us = _sanitize_for_openai_json((user_content or "").strip())
+    else:
+        sy = system_content or ""
+        us = user_content or ""
+    t = float(REWRITE_CHAT_TEMPERATURE) if temperature is None else clamp_chat_temperature(temperature)
+    return {
+        "model": mid,
+        "temperature": t,
+        "messages": [
+            {"role": "system", "content": sy},
+            {"role": "user", "content": us},
+        ],
+    }
+
+
 def rewrite_chat_completion_wire_payload(
     model: str,
     system_prompt: str,
     user_content: str,
+    *,
+    chat_temperature: float | None = None,
 ) -> dict[str, Any]:
     """Тело POST для текущего движка (OpenAI или Claude через Kie.ai) — как в iter_rewrite_completion.
 
-    Для OpenAI — POST /v1/chat/completions (messages: system + user, temperature).
+    Для OpenAI — POST /v1/chat/completions: ``openai_chat_completions_request_dict`` (model, temperature, messages).
     Для Claude — POST /claude/v1/messages (system отдельным полем, messages: только user, max_tokens).
     """
     model = normalize_rewrite_model(model)
     if is_claude_model(model):
         return claude_messages_wire_payload(model, system_prompt, user_content)
-    return {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": _sanitize_for_openai_json((system_prompt or "").strip())},
-            {"role": "user", "content": _sanitize_for_openai_json((user_content or "").strip())},
-        ],
-        "temperature": REWRITE_CHAT_TEMPERATURE,
-    }
+    return openai_chat_completions_request_dict(
+        model, system_prompt, user_content, sanitize=True, temperature=chat_temperature
+    )
 
 
 def _draft1_wire_payload_for_block(
@@ -119,6 +238,8 @@ def _draft1_wire_payload_for_block(
     block_writer_user_prompt_sanitized: str,
     b: dict[str, Any],
     short_summaries_before: list[list[str]],
+    *,
+    chat_temperature: float | None = None,
 ) -> dict[str, Any]:
     """Один POST Block Writer для блока b; short_summaries_before — уже завершённые блоки (до 3 последних в user).
 
@@ -148,14 +269,9 @@ def _draft1_wire_payload_for_block(
     user_msg = _sanitize_for_openai_json(json.dumps(user_payload, ensure_ascii=False, indent=2))
     if is_claude_model(model):
         return claude_messages_wire_payload(model, system_prompt_sanitized, user_msg)
-    return {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt_sanitized},
-            {"role": "user", "content": user_msg},
-        ],
-        "temperature": REWRITE_CHAT_TEMPERATURE,
-    }
+    return openai_chat_completions_request_dict(
+        model, system_prompt_sanitized, user_msg, sanitize=False, temperature=chat_temperature
+    )
 
 
 def list_draft1_wire_chat_payloads_for_export(
@@ -165,6 +281,8 @@ def list_draft1_wire_chat_payloads_for_export(
     hero_prompt: str,
     block_writer_user_prompt: str,
     saved_short_summaries: list[list[str]] | None,
+    *,
+    chat_temperature: float | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Список тел POST по блокам. bool: True если контекст short_summary для всех блоков совпадает с сохранёнными данными."""
     model = normalize_rewrite_model(model)
@@ -187,6 +305,7 @@ def list_draft1_wire_chat_payloads_for_export(
                 bw_san,
                 b,
                 short_summaries,
+                chat_temperature=chat_temperature,
             )
         )
         if saved_short_summaries is not None and bi < len(saved_short_summaries):
@@ -230,6 +349,7 @@ def iter_rewrite_completion(
     text: str,
     *,
     timeout: int | None = None,
+    chat_temperature: float | None = None,
 ) -> Iterator[dict[str, Any]]:
     """
     Yields события для NDJSON-стрима:
@@ -261,7 +381,7 @@ def iter_rewrite_completion(
     yield {"type": "status", "message": f"Модель: {model}"}
     yield {"type": "status", "message": "Формирование запроса к OpenAI (system + user)…"}
 
-    payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st)
+    payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st, chat_temperature=chat_temperature)
 
     yield {"type": "status", "message": "Отправка chat/completions на api.openai.com…"}
 
@@ -332,6 +452,8 @@ def iter_rewrite_completion_stream(
     text: str,
     *,
     timeout: int | None = None,
+    chat_temperature: float | None = None,
+    content_stream_terminator: str | None = None,
 ) -> Iterator[dict[str, Any]]:
     """
     Поток chat/completions (stream=true). События для NDJSON:
@@ -339,6 +461,11 @@ def iter_rewrite_completion_stream(
     {"type": "delta", "content": "..."} — фрагмент ответа (подряд склеиваются в полный текст)
     {"type": "error", "message": "..."}
     {"type": "result", "content": "..."} — полный накопленный ответ в конце
+
+    Если задан ``content_stream_terminator`` (для Rewrite: ``[END]``), после первого
+    вхождения маркера в накопленный текст HTTP-стрим читается дальше не обязателен —
+    соединение закрывается; в ``result`` уходит текст без маркеров, сегменты между
+    маркерами склеиваются подряд (см. ``finalize_rewrite_stream_join_segments``).
     """
     model = normalize_rewrite_model(model)
     if timeout is None:
@@ -347,7 +474,13 @@ def iter_rewrite_completion_stream(
     text_st = (text or "").strip()
 
     if is_claude_model(model):
-        yield from iter_claude_completion_stream(model, prompt_st, text_st, timeout=timeout)
+        yield from iter_claude_completion_stream(
+            model,
+            prompt_st,
+            text_st,
+            timeout=timeout,
+            content_stream_terminator=content_stream_terminator,
+        )
         return
 
     yield {"type": "status", "message": "Проверка ввода…"}
@@ -364,7 +497,7 @@ def iter_rewrite_completion_stream(
     yield {"type": "status", "message": f"Модель: {model}"}
     yield {"type": "status", "message": "Потоковый запрос к OpenAI (stream)…"}
 
-    payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st)
+    payload = rewrite_chat_completion_wire_payload(model, prompt_st, text_st, chat_temperature=chat_temperature)
     payload["stream"] = True
 
     acc = ""
@@ -409,16 +542,27 @@ def iter_rewrite_completion_stream(
                         continue
                     acc += piece
                     yield {"type": "delta", "content": piece}
+                if content_stream_terminator and accumulated_matches_rewrite_stream_terminator(
+                    acc, content_stream_terminator
+                ):
+                    break
     except requests.RequestException as e:
         yield {"type": "error", "message": f"Сеть / таймаут: {e}"}
         return
 
-    if not acc.strip():
+    out = (
+        finalize_rewrite_stream_join_segments(acc, content_stream_terminator)
+        if content_stream_terminator
+        else acc
+    )
+    if content_stream_terminator:
+        out = strip_rewrite_stream_terminator_suffix(out, content_stream_terminator)
+    if not (out or "").strip():
         yield {"type": "error", "message": "Пустой ответ в потоке (нет текста от модели)."}
         return
 
     yield {"type": "status", "message": "Готово."}
-    yield {"type": "result", "content": acc}
+    yield {"type": "result", "content": out}
 
 
 def _post_chat_completion_sync(
@@ -608,6 +752,7 @@ def iter_draft1_blockwise_completion(
     on_block_completed: Callable[[dict[str, Any]], None] | None = None,
     on_all_completed: Callable[[dict[str, Any]], None] | None = None,
     timeout: int | None = None,
+    chat_temperature: float | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Block Writer: один API вызов на каждый блок из architect.json."""
     model = normalize_rewrite_model(model)
@@ -680,6 +825,7 @@ def iter_draft1_blockwise_completion(
             block_writer_user_prompt,
             b,
             short_summaries,
+            chat_temperature=chat_temperature,
         )
         # Длина user-сообщения для статус-логов; payload может быть OpenAI-формата
         # (messages=[system,user]) либо Claude-формата (messages=[user] + top-level system).
@@ -798,6 +944,7 @@ def iter_draft1_blockwise_completion_legacy(
     *,
     timeout: int | None = None,
     max_attempts_per_block: int = 3,
+    chat_temperature: float | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Draft1: по одному блоку. Принятие строго при target_chars_min <= len <= target_chars_max.
 
@@ -895,14 +1042,9 @@ def iter_draft1_blockwise_completion_legacy(
                     indent=2,
                 )
             user_msg = _sanitize_for_openai_json(user_msg)
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-                "temperature": REWRITE_CHAT_TEMPERATURE,
-            }
+            payload = openai_chat_completions_request_dict(
+                model, system_prompt, user_msg, sanitize=False, temperature=chat_temperature
+            )
             out: queue.Queue = queue.Queue(maxsize=1)
             th = threading.Thread(
                 target=_post_chat_completion,

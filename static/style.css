@@ -1884,16 +1884,6 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     margin-top: 0.2rem;
 }
 
-.rewrite-voiceover-final-card .rewrite-stage-subtitle code {
-    font-family: ui-monospace, monospace;
-    font-size: 0.74rem;
-    color: var(--accent);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0 0.3em;
-}
-
 .rewrite-voiceover-final-slot {
     min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
 }
@@ -2026,6 +2016,29 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     box-sizing: border-box;
 }
 
+/* Имена полей в подзаголовке этапа — как <code> на карточке «Итоговый текст». */
+.rewrite-stage-card .rewrite-stage-subtitle code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3em;
+}
+
+/* Второй pill в подзаголовке (англ. имя поля UI) — зелёный моноширинный, тот же каркас. */
+.rewrite-stage-card .rewrite-stage-subtitle code.rewrite-stage-subtitle-code--source-en {
+    color: var(--badge-yes, #2d8a4e);
+}
+
+.rewrite-stage-card .rewrite-stage-subtitle .rewrite-stage-subtitle__code-sep {
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    user-select: none;
+    margin: 0 0.12em;
+}
+
 .rewrite-stage-header-row {
     display: flex;
     flex-direction: column;
@@ -2068,7 +2081,7 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     line-height: 1.25;
 }
 
-/* Кнопка json над строкой System Promt (в колонке system), по горизонтали у правого края как ✎. */
+/* Кнопка «J» (экспорт JSON) над строкой System Promt (в колонке system), по горизонтали у правого края как ✎. */
 .rewrite-stage-json-export-row {
     display: flex;
     justify-content: flex-end;
@@ -2081,12 +2094,77 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     flex-shrink: 0;
 }
 
+/* Экспорт JSON («J»): как ✎ по размеру/рамке, фон внутри кнопки прозрачный (без заливки).
+   Те же правила для Russian/Semantic (`rewrite-aux-api-export`), иначе браузер рисует «белую» J. */
+button.rewrite-json-export-btn.rewrite-stage-api-export,
+button.rewrite-json-export-btn.rewrite-aux-api-export {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    margin: 0;
+    border-radius: 4px;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+    flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+button.rewrite-json-export-btn.rewrite-stage-api-export:hover:not(:disabled),
+button.rewrite-json-export-btn.rewrite-aux-api-export:hover:not(:disabled) {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: transparent;
+}
+
+button.rewrite-json-export-btn.rewrite-stage-api-export:disabled,
+button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 /* Колонка System Rules без кнопки json — пустая строка той же высоты, что под json,
    чтобы бейдж и ✎ совпали по вертикали с System / User. */
 .rewrite-stage-json-export-row--rules-spacer {
     margin: 0 0 0.35rem;
     min-height: 30px;
     box-sizing: border-box;
+}
+
+/* Rewrite: System Promt + textarea под ним; ниже — один ряд с System Rules и User (locked + ✎). */
+.rewrite-stage-badges-toolbar-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.65rem;
+    margin: 0 0 0.35rem;
+    min-width: 0;
+}
+
+.rewrite-stage-rewrite-prompts-cluster .rewrite-stage-json-export-row {
+    margin-bottom: 0.28rem;
+}
+
+.rewrite-stage-rewrite-prompts-cluster .rewrite-stage-badges-toolbar-row .rewrite-stage-compact-header {
+    margin-bottom: 0;
+}
+
+.rewrite-stage-rewrite-prompts-cluster .rewrite-stage-rewrite-locked-badges-row {
+    margin-top: 0.4rem;
 }
 
 .rewrite-stage-header-tools {
@@ -2184,7 +2262,7 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     }
 
     .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls {
-        grid-template-columns: auto repeat(3, minmax(0, 1fr));
+        grid-template-columns: auto minmax(0, 1fr);
     }
 
     .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
@@ -2209,7 +2287,7 @@ input.rewrite-source-title-input.rewrite-source-textarea {
         }
 
         .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls {
-            grid-template-columns: auto repeat(3, minmax(0, 1fr));
+            grid-template-columns: auto minmax(0, 1fr);
         }
 
         .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {

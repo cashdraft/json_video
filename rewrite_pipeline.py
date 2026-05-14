@@ -10,7 +10,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from rewrite_openai import REWRITE_CHAT_TEMPERATURE, REWRITE_DEFAULT_MODEL, normalize_rewrite_model
+from rewrite_openai import (
+    REWRITE_CHAT_TEMPERATURE,
+    REWRITE_DEFAULT_MODEL,
+    clamp_chat_temperature,
+    normalize_rewrite_model,
+    openai_chat_completions_request_dict,
+)
 
 from locked_prompts import get_locked_prompt
 
@@ -95,8 +101,29 @@ def build_duration_length_spec_payload(
     }
 
 
-def _json_user_message(payload: dict[str, Any]) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+def _join_user_sections(*parts: str) -> str:
+    """Склеивает непустые куски в одно user-сообщение (OpenAI: content — одна строка)."""
+    xs = [str(p).strip() for p in parts if p is not None and str(p).strip()]
+    return "\n\n".join(xs)
+
+
+def _format_duration_user_preamble(dur_payload: dict[str, Any]) -> str:
+    """Краткий текстовый блок с ориентиром длины (раньше вкладывали JSON length_spec в user)."""
+    if not isinstance(dur_payload, dict):
+        return ""
+    spec = dur_payload.get("length_spec")
+    if not isinstance(spec, dict):
+        return ""
+    try:
+        t = int(spec.get("target_chars_ideal") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if t <= 0:
+        return ""
+    return (
+        f"Ориентир длины озвучки: примерно {t} символов "
+        f"(ориентир по длительности; придерживайся по возможности)."
+    )
 
 
 def _normalize_edited_text(raw_text: str) -> str:
@@ -143,26 +170,17 @@ def build_rewrite_system_prompt(
 
 
 def build_structure_user_message(analysis_last_result: str, structure_user_prompt: str) -> str:
-    """User для этапа Architect: JSON с analysis.json + User Promt."""
-    ar = (analysis_last_result or "").strip()
+    """User для этапа Architect: User Promt и результат Analysis (plain text)."""
+    ar = (analysis_last_result or "").strip() or "(пусто)"
     up = (structure_user_prompt or "").strip()
-    return _json_user_message(
-        {
-            "architect_user_promt": up or "",
-            "analysis.json": ar or "(пусто)",
-        }
-    )
+    return build_rewrite_stage_user_message(up, ar)
 
 
 def build_analysis_user_message(source_text: str, analysis_user_prompt: str) -> str:
-    """User для этапа Analysis: JSON с User Promt + Input text."""
+    """User для этапа Analysis: User Promt + исходный текст (plain text)."""
     up = (analysis_user_prompt or "").strip()
-    return _json_user_message(
-        {
-            "analysis_user_promt": up or "",
-            "input_text": (source_text or "").strip() or "(пусто)",
-        }
-    )
+    body = (source_text or "").strip() or "(пусто)"
+    return build_rewrite_stage_user_message(up, body)
 
 
 def build_structure_system_prompt(
@@ -201,19 +219,12 @@ def build_draft1_rewriter_user_message(
     draft1_user_prompt: str,
     hero_prompt: str,
 ) -> str:
-    """User для draft1: JSON с Hero + User Promt + analysis.json + architect.json."""
+    """User для draft1 (один общий запрос до blockwise): Hero, User Promt, Analysis, Architect — plain text."""
     ar = (analysis_last_result or "").strip() or "(пусто)"
     sr = (structure_last_result or "").strip() or "(пусто)"
     up = (draft1_user_prompt or "").strip()
     hp = (hero_prompt or "").strip()
-    return _json_user_message(
-        {
-            "hero_prompt": hp or "",
-            "block_writer_user_promt": up or "",
-            "analysis.json": ar,
-            "architect.json": sr,
-        }
-    )
+    return _join_user_sections(hp, up, ar, sr)
 
 
 def build_retention_editor_system_prompt(
@@ -227,14 +238,10 @@ def build_retention_editor_user_message(
     retention_editor_user_prompt: str,
     block_writer_full_text: str = "",
 ) -> str:
-    """User для retention_editor: User Promt + full_text.txt из Block Writer."""
+    """User для retention_editor: User Promt + полный текст Block Writer (plain text)."""
     up = (retention_editor_user_prompt or "").strip()
     ft = str(block_writer_full_text or "")
-    payload: dict[str, Any] = {
-        "retention_editor_user_promt": up or "",
-        "full_text.txt": ft,
-    }
-    return _json_user_message(payload)
+    return build_rewrite_stage_user_message(up, ft)
 
 
 def build_hook_editor_system_prompt(
@@ -248,14 +255,10 @@ def build_hook_editor_user_message(
     hook_editor_user_prompt: str,
     edited_text: str = "",
 ) -> str:
-    """User для hook_editor: User Promt + edited_text."""
+    """User для hook_editor: User Promt + edited_text (plain text)."""
     up = (hook_editor_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    payload: dict[str, Any] = {
-        "hook_editor_user_promt": up or "",
-        "edited_text": et,
-    }
-    return _json_user_message(payload)
+    return build_rewrite_stage_user_message(up, et)
 
 
 def build_flow_editor_system_prompt(
@@ -269,14 +272,10 @@ def build_flow_editor_user_message(
     flow_editor_user_prompt: str,
     edited_text: str = "",
 ) -> str:
-    """User для flow_editor: User Promt + edited_text."""
+    """User для flow_editor: User Promt + edited_text (plain text)."""
     up = (flow_editor_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    payload: dict[str, Any] = {
-        "flow_editor_user_promt": up or "",
-        "edited_text": et,
-    }
-    return _json_user_message(payload)
+    return build_rewrite_stage_user_message(up, et)
 
 
 def build_persona_editor_system_prompt(
@@ -291,16 +290,11 @@ def build_persona_editor_user_message(
     hero_prompt: str = "",
     edited_text: str = "",
 ) -> str:
-    """User для persona_editor: User Promt + Hero Prompt + edited_text."""
+    """User для persona_editor: User Promt + Hero + edited_text (plain text)."""
     up = (persona_editor_user_prompt or "").strip()
     hp = (hero_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    payload: dict[str, Any] = {
-        "persona_editor_user_promt": up or "",
-        "hero_prompt": hp,
-        "edited_text": et,
-    }
-    return _json_user_message(payload)
+    return _join_user_sections(up, hp, et)
 
 
 def build_rewrite_stage_system_prompt(
@@ -341,14 +335,10 @@ def build_voiceover_editor_user_message(
     voiceover_editor_user_prompt: str,
     edited_text: str = "",
 ) -> str:
-    """User для voiceover_editor: User Promt + edited_text (без Hero Prompt)."""
+    """User для voiceover_editor: User Promt + edited_text (plain text, без Hero)."""
     up = (voiceover_editor_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    payload: dict[str, Any] = {
-        "voiceover_editor_user_promt": up or "",
-        "edited_text": et,
-    }
-    return _json_user_message(payload)
+    return build_rewrite_stage_user_message(up, et)
 
 
 def build_title_strategist_system_prompt(
@@ -364,49 +354,38 @@ def build_title_strategist_user_message(
     *,
     original_title: str = "",
 ) -> str:
-    """User для title_strategist: original_title + User Promt + edited_text из Voiceover Editor.
+    """User для title_strategist: исходное название, User Promt, текст после Voiceover (plain text).
 
-    В user JSON поле original_title идёт первым (удобно в экспорте). В тексте user-promt подставляется
-    плейсхолдер {{ORIGINAL_TITLE}}, если он есть в шаблоне.
+    Плейсхолдер {{ORIGINAL_TITLE}} в user-promt подставляется здесь; дополнительно см.
+    ``apply_title_strategist_original_title_to_user_json`` после compose.
     """
     up = (title_strategist_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
     tit = (original_title or "").strip()
     repl = tit if tit else "(пусто)"
-    up = up.replace("{{ORIGINAL_TITLE}}", repl)
-    payload: dict[str, Any] = {
-        "original_title": repl,
-        "title_strategist_user_promt": up or "",
-        "edited_text": et,
-    }
-    return _json_user_message(payload)
+    up = up.replace("{{ORIGINAL_TITLE}}", repl).replace("{{ ORIGINAL_TITLE }}", repl)
+    head = f"Исходное название видео (YouTube): {repl}"
+    return _join_user_sections(head, up, et)
 
 
-def apply_title_strategist_original_title_to_user_json(user_json_str: str, original_title: str) -> str:
-    """Всегда добавляет/обновляет original_title в user JSON Title Strategist и подставляет {{ORIGINAL_TITLE}} в промпт.
+def apply_title_strategist_original_title_to_user_json(user_text: str, original_title: str) -> str:
+    """Подставляет {{ORIGINAL_TITLE}} и синхронизирует первую строку про исходное название (plain text).
 
-    Вызывается из app после compose — чтобы в экспорте и в реальном POST поле не терялось при рассинхроне кода.
+    Имя функции историческое (раньше user был JSON). Вызывается из app после compose.
     """
     val_raw = (original_title or "").strip()
     val_disp = val_raw if val_raw else "(пусто)"
-    try:
-        obj = json.loads(user_json_str)
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return user_json_str
-    if not isinstance(obj, dict):
-        return user_json_str
-    tsp = obj.get("title_strategist_user_promt")
-    if isinstance(tsp, str):
-        s = tsp.replace("{{ORIGINAL_TITLE}}", val_disp)
-        s = s.replace("{{ ORIGINAL_TITLE }}", val_disp)
-        obj["title_strategist_user_promt"] = s
-    obj["original_title"] = val_disp
-    ordered: dict[str, Any] = {"original_title": val_disp}
-    for k, v in obj.items():
-        if k == "original_title":
-            continue
-        ordered[k] = v
-    return json.dumps(ordered, ensure_ascii=False, indent=2)
+    s = str(user_text or "")
+    s = s.replace("{{ORIGINAL_TITLE}}", val_disp).replace("{{ ORIGINAL_TITLE }}", val_disp)
+    head = f"Исходное название видео (YouTube): {val_disp}"
+    marker = "Исходное название видео (YouTube):"
+    t = s.lstrip("\ufeff")
+    if t.startswith(marker):
+        nl = s.find("\n")
+        if nl == -1:
+            return head
+        return (head + s[nl:]).strip()
+    return s
 
 
 def build_structure_splitter_system_prompt(
@@ -420,14 +399,10 @@ def build_structure_splitter_user_message(
     structure_splitter_user_prompt: str,
     voiceover_full_text: str = "",
 ) -> str:
-    """User для structure_splitter: User Promt + full_text.txt из Voiceover Editor."""
+    """User для structure_splitter: User Promt + полный текст озвучки (plain text)."""
     up = (structure_splitter_user_prompt or "").strip()
     raw = str(voiceover_full_text or "").strip()
-    payload: dict[str, Any] = {
-        "structure_splitter_user_promt": up or "",
-        "full_text.txt": raw,
-    }
-    return _json_user_message(payload)
+    return build_rewrite_stage_user_message(up, raw)
 
 
 def build_youtube_packaging_system_prompt(packaging_prompt: str) -> str:
@@ -439,14 +414,10 @@ def build_youtube_packaging_user_message(
     user_prompt: str,
     title_strategist_result: str = "",
 ) -> str:
-    """User: YouTube packaging User Promt + Result этапа Title Strategist."""
+    """User: YouTube packaging User Promt + результат Title Strategist (plain text)."""
     up = (user_prompt or "").strip()
     raw = str(title_strategist_result or "").strip()
-    payload: dict[str, Any] = {
-        "youtube_packaging_user_promt": up or "",
-        "title_strategist_result": raw or "(пусто)",
-    }
-    return _json_user_message(payload)
+    return build_rewrite_stage_user_message(up, raw or "(пусто)")
 
 
 # (ключ в JSON, заголовок в UI)
@@ -561,10 +532,16 @@ def normalize_rewrite_preset(value: Any) -> str:
 
 
 def normalize_rewrite_pipeline_language(value: Any) -> str:
-    """Язык конвейера (UI): ru | en. Значение хранится в project.json как `rewrite_pipeline_language`."""
+    """Язык конвейера (UI): ru | en | es | ja. Значение хранится в project.json как `rewrite_pipeline_language`."""
     v = str(value or "").strip().lower()
     if v in ("en", "english", "англ"):
         return "en"
+    if v in ("es", "spa", "spanish", "espanol", "español"):
+        return "es"
+    if v in ("ja", "jp", "japanese"):
+        return "ja"
+    if v in ("ru", "en", "es", "ja"):
+        return v
     return "ru"
 
 
@@ -945,6 +922,9 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     job.setdefault("audio_timing_locked", False)
     job["audio_timing_locked"] = bool(job.get("audio_timing_locked"))
 
+    job.setdefault("chat_temperature", REWRITE_CHAT_TEMPERATURE)
+    job["chat_temperature"] = clamp_chat_temperature(job.get("chat_temperature"))
+
     job.setdefault("source_title", "")
     job["source_title"] = str(job.get("source_title") or "")
 
@@ -1144,6 +1124,7 @@ def compose_rewrite_openai_request_body(
     original_title: str = "",
     preset: str = REWRITE_PRESET_DEFAULT,
     pipeline_language: str = "ru",
+    chat_temperature: float | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -1363,11 +1344,7 @@ def compose_rewrite_openai_request_body(
         prompt = stage_prompt_t.strip()
         style_prompt = subp(str(cell.get("style_prompt") or "")).strip()
         up = up_txt
-        payload = {
-            "scene_writer_user_promt": up,
-            "style_promt": style_prompt,
-        }
-        user_text = _json_user_message(payload)
+        user_text = _join_user_sections(up, style_prompt)
     elif stage_key == "youtube_packaging":
         ts = (title_strategist_result_text or "").strip()
         if not ts:
@@ -1383,12 +1360,7 @@ def compose_rewrite_openai_request_body(
         sw = str(scene_writer_result_text or "").strip()
         if not sw:
             return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
-        user_text = _json_user_message(
-            {
-                "scene_writer_live_user_promt": up,
-                "scene_writer_result": sw,
-            }
-        )
+        user_text = _join_user_sections(up, sw)
     else:
         prompt = build_rewrite_system_prompt(
             master_use,
@@ -1420,26 +1392,16 @@ def compose_rewrite_openai_request_body(
             target_chars=target_chars,
         )
         if dur_payload:
-            try:
-                user_obj = json.loads(user_text) if user_text else {}
-            except json.JSONDecodeError:
-                user_obj = {"input": user_text}
-            if isinstance(user_obj, dict):
-                merged = {"duration": dur_payload}
-                merged.update(user_obj)
-                user_text = _json_user_message(merged)
+            dur_head = _format_duration_user_preamble(dur_payload)
+            if dur_head:
+                user_text = (dur_head + "\n\n" + user_text).strip() if user_text else dur_head
     if not prompt:
         return None, "Введите промпт (инструкцию для модели)."
     if not user_text:
         return None, "Введите текст для обработки."
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_text},
-        ],
-        "temperature": REWRITE_CHAT_TEMPERATURE,
-    }
+    payload = openai_chat_completions_request_dict(
+        model, prompt, user_text, sanitize=True, temperature=chat_temperature
+    )
     return payload, None
 
 
@@ -1450,29 +1412,27 @@ def build_stage_user_message(
     *,
     hero_prompt: str = "",
 ) -> str:
-    """User-сообщение: JSON с Hero (кроме analysis), исходником и результатами предыдущих этапов.
+    """User одной строкой текста: Hero (кроме analysis), исходник, результаты предыдущих этапов.
 
-    Duration и length_spec добавляется в user на этапе compose.
+    Ориентир длины (length_spec) добавляется в ``compose_rewrite_openai_request_body``.
     """
-    payload: dict[str, Any] = {}
+    parts: list[str] = []
     h = (hero_prompt or "").strip()
     if h and stage_key != "analysis":
-        payload["hero_promt"] = h
-    payload["input_text"] = (source_text or "").strip() or "(пусто)"
-    prev_results: dict[str, str] = {}
+        parts.append(h)
+    parts.append((source_text or "").strip() or "(пусто)")
     idx = _STAGE_ORDER_INDEX[stage_key]
     for i in range(idx):
-        pk, plabel = REWRITE_STAGES[i]
+        pk, _plabel = REWRITE_STAGES[i]
         block = (stages.get(pk) or {}).get("last_result") or ""
+        body = block.strip() or "(пусто)"
         if pk == "analysis":
-            prev_results["analysis.json"] = block.strip() or "(пусто)"
+            parts.append(f"analysis.json\n\n{body}")
         elif pk == "structure":
-            prev_results["architect.json"] = block.strip() or "(пусто)"
+            parts.append(f"architect.json\n\n{body}")
         else:
-            prev_results[f"{pk}_result"] = block.strip() or "(пусто)"
-    if prev_results:
-        payload["previous_stage_results"] = prev_results
-    return _json_user_message(payload)
+            parts.append(f"{pk}_result\n\n{body}")
+    return _join_user_sections(*parts)
 
 
 def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict[str, Any]]]:
@@ -1533,7 +1493,7 @@ def rewrite_placeholder_apply_from_request(
     """
     snap: dict[str, Any] = {**(job or {}), **(body or {})}
     master_raw = snapshot_master_prompt_from_body(snap)
-    hero_raw, target_chars, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(snap)
+    hero_raw, target_chars, duration_minutes, chars_per_minute, _chat_temp_unused = snapshot_pipeline_extras_from_body(snap)
     hero_raw = str(hero_raw or "")
     ot = snapshot_original_title_from_body(snap, job or {})
     lang = snapshot_rewrite_pipeline_language_from_body(snap, job or {})
@@ -1561,8 +1521,8 @@ def snapshot_rewrite_preset_from_body(body: dict[str, Any], job: dict[str, Any] 
     return normalize_rewrite_preset((job or {}).get("rewrite_preset"))
 
 
-def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int, int, int]:
-    """hero_prompt, target_chars (500–40 000), duration_minutes, chars_per_minute."""
+def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int, int, int, float]:
+    """hero_prompt, target_chars (500–40 000), duration_minutes, chars_per_minute, chat_temperature (0…2)."""
     hero = str(body.get("hero_prompt") or "")
     try:
         dm = int(body.get("duration_minutes", 5))
@@ -1576,7 +1536,10 @@ def snapshot_pipeline_extras_from_body(body: dict[str, Any]) -> tuple[str, int, 
         cpm = 344
     if "target_chars" in body and body.get("target_chars") is not None and str(body.get("target_chars", "")).strip() != "":
         try:
-            return hero, clamp_target_chars(int(body["target_chars"])), dm, cpm
+            tc = clamp_target_chars(int(body["target_chars"]))
         except (TypeError, ValueError):
-            pass
-    return hero, clamp_target_chars(dm * cpm), dm, cpm
+            tc = clamp_target_chars(dm * cpm)
+    else:
+        tc = clamp_target_chars(dm * cpm)
+    chat_temp = clamp_chat_temperature(body.get("chat_temperature"))
+    return hero, tc, dm, cpm, chat_temp

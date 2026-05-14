@@ -34,6 +34,69 @@ import requests
 
 CLAUDE_API_URL = "https://api.kie.ai/claude/v1/messages"
 
+_CL_END_TOKEN_RE = re.compile(r"\[\s*END\s*\]", re.IGNORECASE)
+_CL_END_LINE_ONLY_RE = re.compile(r"(?m)^\s*\[\s*END\s*\]\s*$", re.IGNORECASE)
+_CL_END_TAIL_RE = re.compile(r"\[\s*END\s*\]\s*$", re.IGNORECASE)
+
+
+def _scrub_cl_end_markers(text: str) -> str:
+    s = text or ""
+    s = s.replace("\uff3bEND\uff3d", "").replace("\uff3b END \uff3d", "")
+    while True:
+        t = s
+        s = _CL_END_LINE_ONLY_RE.sub("", s)
+        s = _CL_END_TAIL_RE.sub("", s.rstrip("\n\r \t"))
+        if s == t:
+            break
+    s = _CL_END_TOKEN_RE.sub("", s)
+    return s.rstrip("\n\r \t")
+
+
+def _acc_has_flexible_end_marker(acc: str, term: str | None) -> bool:
+    if not term:
+        return False
+    if term.strip().upper() == "[END]":
+        return _CL_END_TOKEN_RE.search(acc or "") is not None
+    return term in (acc or "")
+
+
+def _finalize_stream_terminator_join(raw: str, terminator: str | None) -> str:
+    """Склеивает сегменты между маркерами `terminator`; маркеры удаляются (как в Rewrite)."""
+    if not raw:
+        return ""
+    if not terminator:
+        return raw
+    if terminator.strip().upper() == "[END]":
+        if not _CL_END_TOKEN_RE.search(raw):
+            return raw
+        parts = _CL_END_TOKEN_RE.split(raw)
+    elif terminator in raw:
+        parts = raw.split(terminator)
+    else:
+        return raw
+    while parts and parts[-1] == "":
+        parts.pop()
+    return "".join(parts)
+
+
+def _strip_stream_terminator_suffix(text: str, marker: str | None) -> str:
+    """Хвостовой маркер (например ``[END]``) — суффиксом или отдельной последней строкой."""
+    if not marker:
+        return _scrub_cl_end_markers(text or "")
+    s = text or ""
+    m = marker.strip()
+    while True:
+        t = s.rstrip("\n\r \t")
+        lines = t.splitlines()
+        if lines and lines[-1].strip() == m:
+            s = "\n".join(lines[:-1])
+            continue
+        if t.endswith(marker):
+            s = t[: -len(marker)].rstrip("\n\r \t")
+            continue
+        break
+    return _scrub_cl_end_markers(s)
+
 
 # Regex для распознавания markdown code-fence от LLM-ответов.
 # Поддерживает: ```json ... ```, ``` ... ```, ```jsonc ... ```, ```python ... ``` и т.п.
@@ -326,6 +389,7 @@ def iter_claude_completion_stream(
     user_content: str,
     *,
     timeout: int,
+    content_stream_terminator: str | None = None,
 ) -> Iterator[dict[str, Any]]:
     """NDJSON-события для потокового (SSE) вызова Claude через Kie.ai."""
     yield {"type": "status", "message": "Проверка ввода…"}
@@ -395,6 +459,8 @@ def iter_claude_completion_stream(
                             continue
                         acc += piece
                         yield {"type": "delta", "content": piece}
+                        if content_stream_terminator and _acc_has_flexible_end_marker(acc, content_stream_terminator):
+                            break
                 elif typ == "message_stop":
                     break
                 elif typ == "error":
@@ -408,9 +474,12 @@ def iter_claude_completion_stream(
         yield {"type": "error", "message": f"Сеть / таймаут: {e}"}
         return
 
-    if not acc.strip():
+    out = _finalize_stream_terminator_join(acc, content_stream_terminator)
+    if content_stream_terminator:
+        out = _strip_stream_terminator_suffix(out, content_stream_terminator)
+    if not (out or "").strip():
         yield {"type": "error", "message": "Пустой ответ в потоке Claude (нет текста)."}
         return
 
     yield {"type": "status", "message": "Готово."}
-    yield {"type": "result", "content": strip_markdown_code_fence(acc)}
+    yield {"type": "result", "content": strip_markdown_code_fence(out)}

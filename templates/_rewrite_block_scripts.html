@@ -134,6 +134,10 @@
     })();
     const targetCharsRangeEl = document.getElementById('rewrite-target-chars');
     const targetCharsValEl = document.getElementById('rewrite-target-chars-val');
+    const chatTemperatureRangeEl = document.getElementById('rewrite-chat-temperature');
+    const chatTemperatureValEl = document.getElementById('rewrite-chat-temperature-val');
+    const defaultChatTemperature = {{ default_chat_temperature | tojson }};
+    const REWRITE_CLAUDE_MODEL_IDS = new Set(({{ claude_rewrite_model_ids | default([]) | tojson }}).map(String));
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
     const templateSelectEl = document.getElementById('rewrite-template-select');
     const templateCreateBtn = document.getElementById('rewrite-template-create');
@@ -217,6 +221,28 @@
         if (langStagesModelEl && langStagesModelEl.value) return String(langStagesModelEl.value).trim();
         if (globalModelEl && globalModelEl.value) return String(globalModelEl.value).trim();
         return '';
+    }
+    function selectedRewriteModelIsOpenAI() {
+        if (!globalModelEl) return false;
+        var m = String(globalModelEl.value || '').trim();
+        if (!m) return false;
+        return !REWRITE_CLAUDE_MODEL_IDS.has(m);
+    }
+    function readChatTemperatureFromUi() {
+        if (!chatTemperatureRangeEl) return defaultChatTemperature;
+        var v = parseFloat(String(chatTemperatureRangeEl.value), 10);
+        if (!isFinite(v)) return defaultChatTemperature;
+        if (v < 0) return 0;
+        if (v > 2) return 2;
+        return v;
+    }
+    function syncChatTemperatureValDisplay() {
+        if (!chatTemperatureValEl || !chatTemperatureRangeEl) return;
+        chatTemperatureValEl.textContent = readChatTemperatureFromUi().toFixed(2);
+    }
+    function applyChatTemperatureAvailability() {
+        if (!chatTemperatureRangeEl) return;
+        chatTemperatureRangeEl.disabled = !openaiOk || rewriteStageBusy || !selectedRewriteModelIsOpenAI();
     }
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
     const pipelineRunBtn = document.getElementById('rewrite-pipeline-run-btn');
@@ -2148,11 +2174,15 @@
                 apiBtn.disabled = anyRunning || !ok || !openaiOk;
             }
         });
+        document.querySelectorAll('.rewrite-aux-api-export').forEach(function (b) {
+            b.disabled = anyRunning || !openaiOk;
+        });
     }
 
     function applyAllLockUIs() {
         applyHeroLockUI();
         applyAudioLockUI();
+        applyChatTemperatureAvailability();
         applyMasterLockUI();
         applySourceLockUI();
         applySourceRuLockUI();
@@ -2603,6 +2633,17 @@
         targetCharsRangeEl.addEventListener('input', function () {
             var tc = clampTargetChars(targetCharsRangeEl.value);
             targetCharsValEl.textContent = formatNumRu(tc);
+        });
+    }
+
+    if (chatTemperatureRangeEl && chatTemperatureValEl) {
+        chatTemperatureRangeEl.addEventListener('input', function () {
+            syncChatTemperatureValDisplay();
+            if (openaiOk && selectedRewriteModelIsOpenAI()) scheduleAutosave(500);
+        });
+        chatTemperatureRangeEl.addEventListener('change', function () {
+            syncChatTemperatureValDisplay();
+            if (openaiOk && selectedRewriteModelIsOpenAI()) scheduleAutosave(0);
         });
     }
 
@@ -3126,6 +3167,7 @@
             master_prompt: masterEl ? masterEl.value : '',
             master_prompt_locked: masterLocked,
             target_chars: targetCharsRangeEl ? clampTargetChars(targetCharsRangeEl.value) : 1500,
+            chat_temperature: readChatTemperatureFromUi(),
             hero_prompt: heroPromptEl ? heroPromptEl.value : '',
             hero_prompt_locked: heroLocked,
             audio_timing_locked: audioTimingLocked,
@@ -3134,7 +3176,7 @@
             rewrite_pipeline_language: (function () {
                 if (pipelineLanguageEl) {
                     var v = String(pipelineLanguageEl.value || '').trim().toLowerCase();
-                    return v === 'en' ? 'en' : 'ru';
+                    if (v === 'en' || v === 'es' || v === 'ja' || v === 'ru') return v;
                 }
                 return 'ru';
             })(),
@@ -3567,6 +3609,7 @@
                 rTa.readOnly = dis || rLocked;
             }
         });
+        applyChatTemperatureAvailability();
         busy.classList.toggle('hidden', !on);
         if (!on) {
             applyAllLockUIs();
@@ -4047,6 +4090,21 @@
         }
     });
 
+    /* Маркер [END] в Rewrite — убираем любые оставшиеся вхождения (как scrub_rewrite_end_markers на сервере). */
+    function scrubRewriteStreamEndMarkers(s) {
+        if (typeof s !== 'string' || !s) return s;
+        var t = s.replace(/\uff3bEND\uff3d/gi, '').replace(/\uff3b\s+END\s+\uff3d/gi, '');
+        var i;
+        for (i = 0; i < 32; i++) {
+            var u = t.replace(/^\s*\[\s*END\s*\]\s*$/gim, '');
+            u = u.replace(/\[\s*END\s*\]\s*$/gi, '');
+            if (u === t) break;
+            t = u;
+        }
+        t = t.replace(/\[\s*END\s*\]/gi, '');
+        return t.replace(/[ \t\r]+$/g, '').replace(/\n+$/g, '');
+    }
+
     async function runStage(stageKey, block, options) {
         options = options || {};
         var manageBusy = options.manageBusy !== false;
@@ -4169,7 +4227,7 @@
             }
             const dec = new TextDecoder();
             let buf = '';
-            const useOpenAIStreamUi = (stageKey === 'draft1');
+            const useOpenAIStreamUi = (stageKey === 'draft1' || stageKey === 'rewrite');
             let streamBuf = '';
             var lastDeltaLog = 0;
             while (true) {
@@ -4249,6 +4307,9 @@
                     } else if (ev.type === 'result' && typeof ev.content === 'string') {
                         gotFinalResult = true;
                         var resultContent = ev.content;
+                        if (stageKey === 'rewrite') {
+                            resultContent = scrubRewriteStreamEndMarkers(resultContent);
+                        }
                         if (stageKey === 'scene_writer') {
                             var pastEl = block.querySelector('.rewrite-stage-past-prompt');
                             var pastVal = pastEl ? (pastEl.value || '') : '';
@@ -4493,6 +4554,56 @@
         }
     }
 
+    async function downloadAuxApiPayload(stageKey, btn) {
+        if (!openaiOk) return;
+        if (btn) btn.disabled = true;
+        try {
+            const r = await fetch(apiPayloadUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ stage: stageKey }, collectSnapshot()))
+            });
+            var fname = openaiExportRewriteId + '_' + stageKey + '_openai_request.json';
+            var cd = r.headers.get('Content-Disposition');
+            if (cd) {
+                var fromHdr = parseContentDispositionFilename(cd);
+                if (fromHdr) {
+                    fname = fromHdr;
+                }
+            }
+            if (/\.txt$/i.test(fname)) {
+                fname = fname.replace(/\.txt$/i, '.json');
+            }
+            if (!r.ok) {
+                var errData = await r.json().catch(function () { return {}; });
+                alert(errData.message || 'Не удалось сформировать запрос');
+                return;
+            }
+            var blob = await r.blob();
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert(String(e));
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.querySelectorAll('[data-aux-api-stage]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var sk = btn.getAttribute('data-aux-api-stage');
+            if (!sk || !openaiOk || btn.disabled) return;
+            if (rewriteStageBusy) return;
+            downloadAuxApiPayload(sk, btn);
+        });
+    });
+
     if (pipelineRunBtn) {
         pipelineRunBtn.addEventListener('click', function () {
             if (!openaiOk || pipelineRunBtn.disabled) return;
@@ -4613,6 +4724,7 @@
         globalModelEl.addEventListener('change', async function () {
             if (!openaiOk || globalModelEl.disabled) return;
             try { await saveToServer(); } catch (e) {}
+            applyChatTemperatureAvailability();
         });
     }
     if (pipelineLanguageEl) {
@@ -5054,6 +5166,7 @@
                 updateBtnLabel();
                 closePanel();
                 scheduleAutosave(0);
+                applyChatTemperatureAvailability();
             });
         });
     })();
@@ -5074,7 +5187,8 @@
             if (!lbl || !checked) return;
             var lab = checked.closest('label');
             var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
-            lbl.textContent = title ? String(title.textContent || '').trim() : (checked.value === 'en' ? 'English' : 'Русский');
+            var fall = { ru: 'Русский', en: 'English', es: 'Spanish', ja: 'Japanese' };
+            lbl.textContent = title ? String(title.textContent || '').trim() : (fall[checked.value] || 'Русский');
         }
         function closePanel() {
             if (panel) panel.hidden = true;

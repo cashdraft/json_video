@@ -95,13 +95,18 @@ from kie_client import (
     normalize_aspect_ratio,
 )
 from rewrite_openai import (
+    REWRITE_CHAT_TEMPERATURE,
     REWRITE_DEFAULT_MODEL,
     REWRITE_MODELS,
+    REWRITE_STREAM_USER_TERMINATOR,
+    clamp_chat_temperature,
     iter_draft1_blockwise_completion,
     iter_rewrite_completion,
+    iter_rewrite_completion_stream,
     list_draft1_wire_chat_payloads_for_export,
     normalize_rewrite_model,
     rewrite_chat_completion_wire_payload,
+    scrub_rewrite_end_markers,
 )
 from rewrite_pipeline import (
     REWRITE_PRESET_DEFAULT,
@@ -151,7 +156,7 @@ from locked_prompts import (
     save_locked_prompt,
     verify_pin as verify_locked_prompts_pin,
 )
-from claude_kie import strip_markdown_code_fence
+from claude_kie import CLAUDE_MODEL_IDS, strip_markdown_code_fence
 from task_manager import (
     cancel_task as _tm_cancel_task,
     get_active_task as _tm_get_active_task,
@@ -1543,7 +1548,7 @@ def _json_loads_fully(s: str) -> Any | None:
     if not t or not t.strip():
         return None
     try:
-        return json.loads(s)
+        return json.loads(t)
     except (json.JSONDecodeError, TypeError, ValueError):
         return None
 
@@ -1592,10 +1597,15 @@ def _message_content_for_openai_export(c: str) -> Any:
 
 def _body_for_pretty_openai_export(body: dict[str, Any]) -> dict[str, Any]:
     """
-    Копия тела POST для файла: в HTTP messages[].content — строки;
+    Копия тела POST для файла: в HTTP messages[].content и (Claude) system — строки;
     здесь JSON разворачивается рекурсивно; многострочный plain text — в _export.text_lines.
     """
     out = copy.deepcopy(body)
+    sy = out.get("system")
+    if isinstance(sy, str):
+        out["system"] = _message_content_for_openai_export(sy)
+    elif isinstance(sy, (dict, list)):
+        out["system"] = _expand_value_for_openai_export(sy, 0)
     msgs = out.get("messages")
     if not isinstance(msgs, list):
         return out
@@ -1618,12 +1628,13 @@ def _format_openai_wire_payloads_txt(
         "Логика входов как у кнопки ↻: тот же JSON со страницы (collectSnapshot), на сервере те же "
         "snapshot_stages_from_body / compose_rewrite_openai_request_body, что и в POST /rewrite/<id>/run. "
         "Дальше: для одного POST на этап — то же, что перед HTTP, что и в iter_rewrite_completion: "
-        "rewrite_chat_completion_wire_payload (нормализация model, _sanitize на system/user, temperature). "
+        "openai_chat_completions_request_dict / rewrite_chat_completion_wire_payload "
+        "(нормализация model, sanitize на system/user, temperature=REWRITE_CHAT_TEMPERATURE). "
         "draft1 и scene_writer шлют несколько POST подряд — в requests[] по одному объекту на каждый такой вызов "
         "(для draft1 при отсутствии block_*.json контекст short_summary может отличаться от живого прогона — см. notes). "
         "Файл — читаемый JSON (UTF-8, отступы); реальное тело POST кодируется компактнее (другой вид сериализации JSON). "
-        "Здесь messages[].content может быть развёрнут в объекты и в пометки "
-        "{\"_export\":\"text_lines\",\"lines\":[...]} — это только в этом файле для просмотра; в HTTP к OpenAI такого нет, там всегда строки в content."
+        "Здесь messages[].content и (для Claude) поле system могут быть развёрнуты в объекты и в пометки "
+        "{\"_export\":\"text_lines\",\"lines\":[...]} — это только в этом файле для просмотра; в HTTP к API такого нет, там всегда строки."
     )
     pretty = [_body_for_pretty_openai_export(b) for b in bodies]
     env: dict[str, Any] = {
@@ -1635,6 +1646,75 @@ def _format_openai_wire_payloads_txt(
         if notes:
             env["notes"] = notes
     return json.dumps(env, ensure_ascii=False, indent=2) + "\n"
+
+
+def _export_wire_payloads_translate_source_ru(body: dict[str, Any], rw_job: dict[str, Any]) -> str:
+    """Скачиваемый JSON: те же POST, что при переводе Source → RU (по батчам)."""
+    src = str(body.get("source_text") if "source_text" in body else rw_job.get("source_text") or "")
+    model = normalize_rewrite_model(
+        str(
+            body.get("russian_semantic_model")
+            or body.get("model")
+            or rw_job.get("russian_semantic_model")
+            or ""
+        )
+    )
+    chat_temp = clamp_chat_temperature(rw_job.get("chat_temperature"))
+    hdr: list[str] = []
+    if not src.strip():
+        hdr.append("[Russian] Нет текста для перевода — POST не формируется.")
+        return _format_openai_wire_payloads_txt([], header_lines=hdr)
+    sys_prompt = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("translate_to_ru"), body, rw_job
+    )
+    batches = _split_text_into_translation_batches(src, 5000)
+    nb = len(batches)
+    hdr.append(
+        f"Перевод: {nb} POST (батчи до {_fmt_num_ru(5000)} симв.), один system + user на батч."
+    )
+    wire: list[dict[str, Any]] = []
+    for chunk in batches:
+        wire.append(
+            rewrite_chat_completion_wire_payload(
+                model, sys_prompt, chunk, chat_temperature=chat_temp
+            )
+        )
+    return _format_openai_wire_payloads_txt(wire, header_lines=hdr or None)
+
+
+def _export_wire_payload_semantic_text_analyzer(body: dict[str, Any], rw_job: dict[str, Any]) -> str:
+    """Скачиваемый JSON: один POST Semantic (system + user с русским текстом)."""
+    src_ru = str(
+        body.get("source_text_ru")
+        if "source_text_ru" in body
+        else rw_job.get("source_text_ru") or ""
+    )
+    model = normalize_rewrite_model(
+        str(
+            body.get("russian_semantic_model")
+            or body.get("model")
+            or rw_job.get("russian_semantic_model")
+            or ""
+        )
+    )
+    chat_temp = clamp_chat_temperature(rw_job.get("chat_temperature"))
+    hdr: list[str] = []
+    if not src_ru.strip():
+        hdr.append("[Semantic] Нет русского текста — POST не формируется.")
+        return _format_openai_wire_payloads_txt([], header_lines=hdr)
+    system_prompt = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_system"), body, rw_job
+    )
+    user_template = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_user"), body, rw_job
+    )
+    user_msg = (user_template or "").rstrip() + "\n\n" + src_ru.strip()
+    wire = [
+        rewrite_chat_completion_wire_payload(
+            model, system_prompt, user_msg, chat_temperature=chat_temp
+        )
+    ]
+    return _format_openai_wire_payloads_txt(wire)
 
 
 def _load_block_writer_saved_short_summaries(rewrite_id: str) -> list[list[str]] | None:
@@ -2776,6 +2856,7 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "youtube_processing": False,
         "youtube_phase": "",
         "youtube_status": "",
+        "chat_temperature": REWRITE_CHAT_TEMPERATURE,
     }
 
 
@@ -3081,9 +3162,23 @@ def list_rewrite_jobs() -> list[dict]:
 
 def compute_summary(scenes: list[dict]) -> dict:
     """Вычисляет summary по сценам."""
-    start_count = sum(1 for s in scenes if s.get("start", {}).get("prompt"))
-    end_count = sum(1 for s in scenes if s.get("end", {}).get("prompt"))
-    video_count = sum(1 for s in scenes if s.get("video", {}).get("prompt"))
+    if not isinstance(scenes, list):
+        scenes = []
+    start_count = 0
+    end_count = 0
+    video_count = 0
+    for s in scenes:
+        if not isinstance(s, dict):
+            continue
+        st = s.get("start")
+        if isinstance(st, dict) and st.get("prompt"):
+            start_count += 1
+        en = s.get("end")
+        if isinstance(en, dict) and en.get("prompt"):
+            end_count += 1
+        vd = s.get("video")
+        if isinstance(vd, dict) and vd.get("prompt"):
+            video_count += 1
     return {
         "total": len(scenes),
         "with_start_prompt": start_count,
@@ -3320,6 +3415,8 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         "rewrite_preset_stage_keys": REWRITE_PRESET_STAGE_KEYS,
         "rewrite_preset_default": REWRITE_PRESET_DEFAULT,
         "rewrite_models": REWRITE_MODELS,
+        "claude_rewrite_model_ids": sorted(CLAUDE_MODEL_IDS),
+        "default_chat_temperature": REWRITE_CHAT_TEMPERATURE,
         "rewrite_template_names": list_rewrite_template_names(),
         "voiceover_final_text": voiceover_final_text,
         "youtube_cookies_status": youtube_cookies_status_dict(),
@@ -3630,6 +3727,11 @@ def rewrite_project_save(rewrite_id: str):
         rw["semantic_text_analysis_locked"] = bool(sa_lock_in)
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
+    if "chat_temperature" in body and body.get("chat_temperature") is not None and str(body.get("chat_temperature", "")).strip() != "":
+        try:
+            rw["chat_temperature"] = clamp_chat_temperature(body.get("chat_temperature"))
+        except (TypeError, ValueError):
+            pass
     if "last_prompt" in body:
         rw["last_prompt"] = str(body.get("last_prompt") or "")
     if "last_text" in body:
@@ -3771,6 +3873,7 @@ def _iter_translate_source_ru_events(
         yield {"type": "error", "message": "Нет текста для перевода."}
         return
     rw_ph = load_rewrite_job(rewrite_id) or {}
+    chat_temp = clamp_chat_temperature(rw_ph.get("chat_temperature"))
     nb = len(batches)
     yield {
         "type": "status",
@@ -3803,6 +3906,7 @@ def _iter_translate_source_ru_events(
             model,
             sys_prompt,
             user_msg,
+            chat_temperature=chat_temp,
         ):
             etype = str(ev.get("type") or "")
             if etype == "status":
@@ -3940,6 +4044,7 @@ def _iter_semantic_text_analyzer_events(
         yield {"type": "error", "message": "Задача отменена пользователем."}
         return
     rw_ph = load_rewrite_job(rewrite_id) or {}
+    chat_temp = clamp_chat_temperature(rw_ph.get("chat_temperature"))
     system_prompt = rewrite_placeholder_apply_from_request(
         get_locked_prompt("semantic_text_analyzer_system"), body, rw_ph
     )
@@ -3961,7 +4066,7 @@ def _iter_semantic_text_analyzer_events(
     got_result = False
     err_text: str | None = None
     result_text = ""
-    for ev in iter_rewrite_completion(api_key, model, system_prompt, user_msg):
+    for ev in iter_rewrite_completion(api_key, model, system_prompt, user_msg, chat_temperature=chat_temp):
         if cancel_event is not None and cancel_event.is_set():
             yield {"type": "error", "message": "Задача отменена пользователем."}
             return
@@ -4117,6 +4222,7 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
         if not batches:
             yield json.dumps({"type": "error", "message": "Нет текста для перевода."}, ensure_ascii=False) + "\n"
             return
+        chat_temp = clamp_chat_temperature(rw.get("chat_temperature"))
         nb = len(batches)
         yield json.dumps(
             {
@@ -4152,6 +4258,7 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
                 model,
                 sys_prompt,
                 user_msg,
+                chat_temperature=chat_temp,
             ):
                 etype = str(ev.get("type") or "")
                 if etype == "status":
@@ -4900,7 +5007,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
     stage_key = str(body.get("stage") or "").strip().lower()
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
-    hero_prompt, target_chars, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    hero_prompt, target_chars, duration_minutes, chars_per_minute, chat_temp = snapshot_pipeline_extras_from_body(body)
     preset = snapshot_rewrite_preset_from_body(body, rw_job)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
@@ -5090,6 +5197,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             original_title=original_title,
             preset=preset,
             pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
+            chat_temperature=chat_temp,
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -5175,11 +5283,12 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 block_writer_user_prompt=block_writer_user_prompt,
                 on_block_completed=on_block_completed,
                 on_all_completed=on_all_completed,
+                chat_temperature=chat_temp,
             ):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
         elif stage_key == "structure_splitter":
             split_result = ""
-            for item in iter_rewrite_completion(api_key, model, prompt, user_text):
+            for item in iter_rewrite_completion(api_key, model, prompt, user_text, chat_temperature=chat_temp):
                 t = str(item.get("type") or "")
                 if t == "result":
                     split_result = str(item.get("content") or "")
@@ -5247,7 +5356,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 joined_user = f"{user_text}\n\n{step_user}"
                 yield json.dumps({"type": "status", "message": f"Scene Writer: блок {i}/{total}…"}, ensure_ascii=False) + "\n"
                 part = ""
-                for item in iter_rewrite_completion(api_key, model, prompt, joined_user):
+                for item in iter_rewrite_completion(api_key, model, prompt, joined_user, chat_temperature=chat_temp):
                     t = str(item.get("type") or "")
                     if t == "result":
                         part = str(item.get("content") or "").strip()
@@ -5337,7 +5446,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                     ensure_ascii=False,
                 ) + "\n"
                 part = ""
-                for item in iter_rewrite_completion(api_key, model, prompt, joined_user):
+                for item in iter_rewrite_completion(api_key, model, prompt, joined_user, chat_temperature=chat_temp):
                     t = str(item.get("type") or "")
                     if t == "result":
                         part = str(item.get("content") or "").strip()
@@ -5391,8 +5500,26 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 ensure_ascii=False,
             ) + "\n"
             yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
+        elif stage_key == "rewrite":
+            for item in iter_rewrite_completion_stream(
+                api_key,
+                model,
+                prompt,
+                user_text,
+                chat_temperature=chat_temp,
+                content_stream_terminator=REWRITE_STREAM_USER_TERMINATOR,
+            ):
+                t_item = str(item.get("type") or "")
+                if t_item == "error":
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+                    return
+                if t_item == "result" and isinstance(item.get("content"), str):
+                    item = dict(item)
+                    raw_c = str(item.get("content") or "")
+                    item["content"] = scrub_rewrite_end_markers(strip_markdown_code_fence(raw_c))
+                yield json.dumps(item, ensure_ascii=False) + "\n"
         else:
-            for item in iter_rewrite_completion(api_key, model, prompt, user_text):
+            for item in iter_rewrite_completion(api_key, model, prompt, user_text, chat_temperature=chat_temp):
                 t_item = str(item.get("type") or "")
                 if t_item == "result" and isinstance(item.get("content"), str):
                     item = dict(item)
@@ -5425,9 +5552,10 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
         ):
             _orig = _ev["content"]
             _stripped = strip_markdown_code_fence(_orig)
-            if _stripped != _orig:
+            _content = scrub_rewrite_end_markers(_stripped) if stage_key == "rewrite" else _stripped
+            if _content != _orig:
                 _ev = dict(_ev)
-                _ev["content"] = _stripped
+                _ev["content"] = _content
                 yield json.dumps(_ev, ensure_ascii=False) + "\n"
                 continue
         yield _line
@@ -5560,9 +5688,23 @@ def rewrite_project_api_payload(rewrite_id: str):
     body = request.get_json(silent=True) or {}
     original_title = snapshot_original_title_from_body(body, rw_job)
     stage_key = str(body.get("stage") or "").strip().lower()
+    if stage_key == "translate_source_ru":
+        txt = _export_wire_payloads_translate_source_ru(body, rw_job)
+        fname = f"{rewrite_id}_translate_source_ru_openai_request.json"
+        resp = make_response(txt)
+        resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
+    if stage_key == "semantic_text_analyzer":
+        txt = _export_wire_payload_semantic_text_analyzer(body, rw_job)
+        fname = f"{rewrite_id}_semantic_text_analyzer_openai_request.json"
+        resp = make_response(txt)
+        resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
     source_text, stages_snap = snapshot_stages_from_body(body)
     master_prompt = snapshot_master_prompt_from_body(body)
-    hero_prompt, target_chars, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(body)
+    hero_prompt, target_chars, duration_minutes, chars_per_minute, chat_temp = snapshot_pipeline_extras_from_body(body)
     block_writer_full_text = ""
     if stage_key == "retention_editor":
         full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
@@ -5718,6 +5860,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         original_title=original_title,
         preset=preset_ap,
         pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
+        chat_temperature=chat_temp,
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
@@ -5733,6 +5876,7 @@ def rewrite_project_api_payload(rewrite_id: str):
     sys_c = str((msgs[0] or {}).get("content") or "") if msgs else ""
     usr_c = str((msgs[1] or {}).get("content") or "") if len(msgs) > 1 else ""
     model_m = str(payload.get("model") or "")
+    chat_temp_export = clamp_chat_temperature(rw_job.get("chat_temperature"))
 
     if stage_key == "draft1":
         structure_raw = str((stages_snap.get("structure") or {}).get("last_result") or "").strip()
@@ -5755,6 +5899,7 @@ def rewrite_project_api_payload(rewrite_id: str):
             hero_for_export,
             block_writer_user_prompt,
             saved,
+            chat_temperature=chat_temp_export,
         )
         hdr: list[str] = []
         if not wire_bodies:
@@ -5785,7 +5930,7 @@ def rewrite_project_api_payload(rewrite_id: str):
                 indent=2,
             )
             joined_user = f"{usr_c}\n\n{step_user}"
-            wire_bodies_sw.append(rewrite_chat_completion_wire_payload(model_m, sys_c, joined_user))
+            wire_bodies_sw.append(rewrite_chat_completion_wire_payload(model_m, sys_c, joined_user, chat_temperature=chat_temp_export))
         if not wire_bodies_sw:
             txt = _format_openai_wire_payloads_txt(
                 [],
@@ -5794,7 +5939,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         else:
             txt = _format_openai_wire_payloads_txt(wire_bodies_sw)
     else:
-        txt = _format_openai_wire_payloads_txt([rewrite_chat_completion_wire_payload(model_m, sys_c, usr_c)])
+        txt = _format_openai_wire_payloads_txt([rewrite_chat_completion_wire_payload(model_m, sys_c, usr_c, chat_temperature=chat_temp_export)])
     stage_export_name = stage_key
     fname = f"{rewrite_id}_{stage_export_name}_openai_request.json"
     resp = make_response(txt)
@@ -8987,7 +9132,11 @@ def job_page(job_id: str):
             job.pop("tts_outputs", None)
             save_job(job_id, job)
 
-    summary = compute_summary(job.get("scenes", []))
+    # `job.get("scenes", [])` is [] only if the key is missing; explicit null in JSON → None.
+    _scenes_val = job.get("scenes", [])
+    scenes_for_template = _scenes_val if isinstance(_scenes_val, list) else []
+
+    summary = compute_summary(scenes_for_template)
     template_display = job_template_display(meta.get("image_template", ""))
     elevenlabs_key_set = bool((os.getenv("ELEVENLABS_API_KEY") or "").strip())
     openai_key_set = bool((os.getenv("OPENAI_API_KEY") or "").strip())
@@ -9094,8 +9243,8 @@ def job_page(job_id: str):
         job=job,
         **rewrite_ctx,
         rewrite_id_allowed=rewrite_id_ok(job_id),
-        scenes=job.get("scenes", []),
-        scenes_stripped_with_timing=_render_scenes_stripped_with_timing(job.get("scenes") or []),
+        scenes=scenes_for_template,
+        scenes_stripped_with_timing=_render_scenes_stripped_with_timing(scenes_for_template),
         tts_words_available=bool(tts_last_words_href),
         whisper_words_available=bool(whisper_last_words_href),
         whisper_last_words_href=whisper_last_words_href,
