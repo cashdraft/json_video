@@ -12,9 +12,36 @@ from typing import Any
 
 from rewrite_openai import REWRITE_CHAT_TEMPERATURE, REWRITE_DEFAULT_MODEL, normalize_rewrite_model
 
+from locked_prompts import get_locked_prompt
+
+from prompt_placeholders import apply_prompt_placeholders
+
 TARGET_CHARS_MIN = 500
 TARGET_CHARS_MAX = 40_000
 TARGET_CHARS_STEP = 500
+
+
+def _rewrite_system_rules_text(cell: dict[str, Any]) -> str:
+    """Доп. system-текст для этапа rewrite: сначала locked_prompts, иначе legacy из cell."""
+    try:
+        locked = str(get_locked_prompt("rewrite_system_rules") or "").strip()
+    except KeyError:
+        locked = ""
+    if locked:
+        return locked
+    return str((cell or {}).get("rewrite_system_rules") or "").strip()
+
+
+def _stage_user_prompt_text(stage_key: str, cell: dict[str, Any]) -> str:
+    """User Promt этапа: сначала locked `user_prompt_<stage_key>`, иначе legacy из cell."""
+    name = f"user_prompt_{stage_key}"
+    try:
+        locked = str(get_locked_prompt(name) or "").strip()
+    except KeyError:
+        locked = ""
+    if locked:
+        return locked
+    return str((cell or {}).get("user_prompt") or "").strip()
 
 
 def clamp_target_chars(n: int | None) -> int:
@@ -276,13 +303,16 @@ def build_persona_editor_user_message(
     return _json_user_message(payload)
 
 
-def build_rewrite_stage_system_prompt(rewrite_prompt: str) -> str:
-    """Этап rewrite (пресет «Я уже ЗАrewriteИЛ»): в system только Rewrite System Promt.
-
-    Имя `build_rewrite_stage_system_prompt`, а не `build_rewrite_system_prompt`, чтобы не
-    конфликтовать с одноимённой функцией для глобального master/analysis-промпта выше.
-    """
-    return (rewrite_prompt or "").strip()
+def build_rewrite_stage_system_prompt(
+    rewrite_prompt: str,
+    rewrite_system_rules: str = "",
+) -> str:
+    """Этап rewrite: в system — Rewrite System Promt + необязательный блок System Rules."""
+    rp = (rewrite_prompt or "").strip()
+    rs = (rewrite_system_rules or "").strip()
+    if rp and rs:
+        return f"{rp}\n\n{rs}"
+    return rp or rs
 
 
 def build_rewrite_stage_user_message(
@@ -439,6 +469,14 @@ REWRITE_STAGES: list[tuple[str, str]] = [
 ]
 
 REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
+
+# Совпадает с `rewrite-stage-card--no-index` в шаблоне: у карточки скрыт бейдж
+# номера этапа (CSS). YouTube packaging может входить в «сворачиваемую линейку»
+# вместе с Rewrite…Structure Splitter, но в подпись «Этапы 1–N» его не считают —
+# иначе N не совпадает с видимыми номерами (Мягкий / prewritten: 4 vs 5).
+REWRITE_STAGE_CARD_NO_INDEX_KEYS: frozenset[str] = frozenset(
+    ("scene_writer", "scene_writer_live", "youtube_packaging")
+)
 
 _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_STAGES)}
 
@@ -738,6 +776,8 @@ def default_stage_entry() -> dict[str, Any]:
         "user_prompt_locked": False,
         "style_prompt_locked": False,
         "past_prompt_locked": True,
+        "rewrite_system_rules": "",
+        "rewrite_system_rules_locked": True,
     }
 
 
@@ -812,14 +852,22 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("user_prompt_locked", False)
         e.setdefault("style_prompt_locked", False)
         e.setdefault("past_prompt_locked", True)
+        e.setdefault("rewrite_system_rules", "")
+        e.setdefault("rewrite_system_rules_locked", True)
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
         e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
         e["style_prompt_locked"] = bool(e.get("style_prompt_locked"))
         e["past_prompt_locked"] = bool(e.get("past_prompt_locked"))
+        e["rewrite_system_rules"] = str(e.get("rewrite_system_rules") or "")
+        e["rewrite_system_rules_locked"] = bool(e.get("rewrite_system_rules_locked"))
         # UX rule: Past in Promt should be collapsed on page load.
         if key == "scene_writer":
             e["past_prompt_locked"] = True
+        # Rewrite: User Promt всегда в режиме правки при загрузке (пресеты с ручным
+        # текстом в user); закрыть можно кнопкой ✎ — тогда уйдёт в project.json.
+        if key == "rewrite":
+            e["user_prompt_locked"] = False
         if not isinstance(e.get("scene_writer_check"), dict):
             e["scene_writer_check"] = None
         if not isinstance(e.get("scene_writer_live_check"), dict):
@@ -959,6 +1007,15 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         past_locked_in_body = sv.get("past_prompt_locked") if "past_prompt_locked" in sv else None
         if past_locked_in_body is not None:
             e["past_prompt_locked"] = bool(past_locked_in_body)
+        if "rewrite_system_rules" in sv:
+            e["rewrite_system_rules"] = str(sv.get("rewrite_system_rules") or "")
+        rules_locked_in_body = (
+            sv.get("rewrite_system_rules_locked")
+            if "rewrite_system_rules_locked" in sv
+            else None
+        )
+        if rules_locked_in_body is not None:
+            e["rewrite_system_rules_locked"] = bool(rules_locked_in_body)
         if "model" in sv:
             e["model"] = normalize_rewrite_model(str(sv.get("model") or ""))
         if "last_result" in sv:
@@ -1086,6 +1143,7 @@ def compose_rewrite_openai_request_body(
     scene_writer_result_text: str = "",
     original_title: str = "",
     preset: str = REWRITE_PRESET_DEFAULT,
+    pipeline_language: str = "ru",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -1112,71 +1170,97 @@ def compose_rewrite_openai_request_body(
     if pre_err:
         return None, pre_err
     cell = stages_snap.get(stage_key) or {}
+    up_txt = _stage_user_prompt_text(stage_key, cell)
     model = normalize_rewrite_model(str(cell.get("model") or ""))
+    master_raw = str(master_prompt or "")
+    hero_raw = str(hero_prompt or "")
+    ot = str(original_title or "").strip()
+
+    def _ph_kw(nested: bool) -> dict[str, Any]:
+        return {
+            "language": pipeline_language,
+            "duration_minutes": duration_minutes,
+            "chars_per_minute": chars_per_minute,
+            "target_chars": target_chars,
+            "original_title": ot,
+            "master_prompt": master_raw,
+            "hero_prompt": hero_raw,
+            "allow_nested_master_hero": nested,
+        }
+
+    master_use = apply_prompt_placeholders(master_raw, **_ph_kw(False))
+    hero_use = apply_prompt_placeholders(hero_raw, **_ph_kw(False))
+
+    def subp(t: str) -> str:
+        return apply_prompt_placeholders(t, **_ph_kw(True))
+
+    up_txt = subp(up_txt)
+    rules_resolved = subp(_rewrite_system_rules_text(cell))
+    stage_prompt_t = subp(str(cell.get("prompt") or ""))
     if stage_key == "structure":
         analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
         prompt = build_structure_system_prompt(
-            master_prompt,
-            str(cell.get("prompt") or ""),
+            master_use,
+            stage_prompt_t,
         )
         user_text = build_structure_user_message(
             analysis_res,
-            str(cell.get("user_prompt") or ""),
+            up_txt,
         )
     elif stage_key == "analysis":
         prompt = build_rewrite_system_prompt(
-            master_prompt,
-            str(cell.get("prompt") or ""),
+            master_use,
+            stage_prompt_t,
             source_text,
         )
         user_text = build_analysis_user_message(
             source_text,
-            str(cell.get("user_prompt") or ""),
+            up_txt,
         )
     elif stage_key == "draft1":
         analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
         structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
         prompt = build_draft1_rewriter_system_prompt(
-            master_prompt,
-            str(cell.get("prompt") or ""),
+            master_use,
+            stage_prompt_t,
         )
         user_text = build_draft1_rewriter_user_message(
             analysis_res,
             structure_res,
-            str(cell.get("user_prompt") or ""),
-            hero_prompt,
+            up_txt,
+            hero_use,
         )
     elif stage_key == "retention_editor":
         prompt = build_retention_editor_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         user_text = build_retention_editor_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             block_writer_full_text,
         )
     elif stage_key == "hook_editor":
         prompt = build_hook_editor_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         user_text = build_hook_editor_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             retention_editor_text,
         )
     elif stage_key == "flow_editor":
         prompt = build_flow_editor_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         user_text = build_flow_editor_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             hook_editor_text,
         )
     elif stage_key == "persona_editor":
         prompt = build_persona_editor_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         user_text = build_persona_editor_user_message(
-            str(cell.get("user_prompt") or ""),
-            hero_prompt,
+            up_txt,
+            hero_use,
             flow_editor_text,
         )
     elif stage_key == "rewrite":
@@ -1191,14 +1275,17 @@ def compose_rewrite_openai_request_body(
                 return None, "Сначала вставьте готовый текст в Inbox (Result)."
         else:
             return None, "Этап Rewrite в этом пресете не используется."
-        prompt = build_rewrite_stage_system_prompt(str(cell.get("prompt") or ""))
+        prompt = build_rewrite_stage_system_prompt(
+            stage_prompt_t,
+            rules_resolved,
+        )
         user_text = build_rewrite_stage_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             inbox_text,
         )
     elif stage_key == "voiceover_editor":
         prompt = build_voiceover_editor_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         # В пресете «Я уже ЗАrewriteИЛ» (prewritten) Voiceover Editor запускается
         # после Inbox/Rewrite: на вход подаём Result Rewrite (если запускали Rewrite),
@@ -1218,12 +1305,12 @@ def compose_rewrite_openai_request_body(
             if not ve_input_text.strip():
                 return None, "Сначала вставьте текст в Source или прогоните Rewrite."
         user_text = build_voiceover_editor_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             ve_input_text,
         )
     elif stage_key == "title_strategist":
         prompt = build_title_strategist_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         # В пресете «Я уже ЗАrewriteИЛ» Title Strategist берёт исходный текст
         # из Rewrite.Result (если есть) или, как фолбэк, из Inbox.Result —
@@ -1244,13 +1331,13 @@ def compose_rewrite_openai_request_body(
             if not ts_input_text.strip():
                 return None, "Сначала вставьте текст в Source или прогоните Rewrite."
         user_text = build_title_strategist_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             ts_input_text,
             original_title=original_title,
         )
     elif stage_key == "structure_splitter":
         prompt = build_structure_splitter_system_prompt(
-            str(cell.get("prompt") or ""),
+            stage_prompt_t,
         )
         # В пресете «Я уже ЗАrewriteИЛ» Structure Splitter берёт исходный текст
         # из Rewrite.Result (если есть) или из Inbox.Result.
@@ -1269,13 +1356,13 @@ def compose_rewrite_openai_request_body(
             if not ss_input_text.strip():
                 return None, "Сначала вставьте текст в Source или прогоните Rewrite."
         user_text = build_structure_splitter_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             ss_input_text,
         )
     elif stage_key == "scene_writer":
-        prompt = (str(cell.get("prompt") or "") or "").strip()
-        style_prompt = str(cell.get("style_prompt") or "").strip()
-        up = str(cell.get("user_prompt") or "").strip()
+        prompt = stage_prompt_t.strip()
+        style_prompt = subp(str(cell.get("style_prompt") or "")).strip()
+        up = up_txt
         payload = {
             "scene_writer_user_promt": up,
             "style_promt": style_prompt,
@@ -1285,14 +1372,14 @@ def compose_rewrite_openai_request_body(
         ts = (title_strategist_result_text or "").strip()
         if not ts:
             return None, "Нет результата Title Strategist — выполните этап Title Strategist и сохраните проект."
-        prompt = build_youtube_packaging_system_prompt(str(cell.get("prompt") or ""))
+        prompt = build_youtube_packaging_system_prompt(stage_prompt_t)
         user_text = build_youtube_packaging_user_message(
-            str(cell.get("user_prompt") or ""),
+            up_txt,
             ts,
         )
     elif stage_key == "scene_writer_live":
-        prompt = (str(cell.get("prompt") or "") or "").strip()
-        up = str(cell.get("user_prompt") or "").strip()
+        prompt = stage_prompt_t.strip()
+        up = up_txt
         sw = str(scene_writer_result_text or "").strip()
         if not sw:
             return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
@@ -1304,15 +1391,15 @@ def compose_rewrite_openai_request_body(
         )
     else:
         prompt = build_rewrite_system_prompt(
-            master_prompt,
-            str(cell.get("prompt") or ""),
+            master_use,
+            stage_prompt_t,
             source_text,
         )
         user_text = build_stage_user_message(
             source_text,
             stage_key,
             stages_snap,
-            hero_prompt=hero_prompt,
+            hero_prompt=hero_use,
         )
     prompt = (prompt or "").strip()
     user_text = (user_text or "").strip()
@@ -1421,6 +1508,46 @@ def snapshot_original_title_from_body(body: dict[str, Any], job: dict[str, Any])
     if isinstance(body, dict) and "source_title" in body:
         return str(body.get("source_title") or "").strip()
     return str((job or {}).get("source_title") or "").strip()
+
+
+def snapshot_rewrite_pipeline_language_from_body(
+    body: dict[str, Any], job: dict[str, Any] | None = None
+) -> str:
+    if isinstance(body, dict) and "rewrite_pipeline_language" in body:
+        return normalize_rewrite_pipeline_language(body.get("rewrite_pipeline_language"))
+    if isinstance(job, dict):
+        return normalize_rewrite_pipeline_language(job.get("rewrite_pipeline_language"))
+    return normalize_rewrite_pipeline_language("ru")
+
+
+def rewrite_placeholder_apply_from_request(
+    text: str | None,
+    body: dict[str, Any] | None,
+    job: dict[str, Any] | None,
+    *,
+    allow_nested_master_hero: bool = True,
+) -> str:
+    """Подстановка {{LANGUAGE}} и др. в произвольный текст по снимку body + project.json.
+
+    Поля из body переопределяют job (как при сохранённом проекте + форма запуска).
+    """
+    snap: dict[str, Any] = {**(job or {}), **(body or {})}
+    master_raw = snapshot_master_prompt_from_body(snap)
+    hero_raw, target_chars, duration_minutes, chars_per_minute = snapshot_pipeline_extras_from_body(snap)
+    hero_raw = str(hero_raw or "")
+    ot = snapshot_original_title_from_body(snap, job or {})
+    lang = snapshot_rewrite_pipeline_language_from_body(snap, job or {})
+    return apply_prompt_placeholders(
+        text,
+        language=lang,
+        duration_minutes=duration_minutes,
+        chars_per_minute=chars_per_minute,
+        target_chars=target_chars,
+        original_title=ot,
+        master_prompt=str(master_raw or ""),
+        hero_prompt=hero_raw,
+        allow_nested_master_hero=allow_nested_master_hero,
+    )
 
 
 def snapshot_master_prompt_from_body(body: dict[str, Any]) -> str:

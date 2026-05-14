@@ -110,6 +110,7 @@ from rewrite_pipeline import (
     REWRITE_PRESET_PREWRITTEN,
     REWRITE_PRESET_SOFT,
     REWRITE_PRESET_STAGE_KEYS,
+    REWRITE_STAGE_CARD_NO_INDEX_KEYS,
     REWRITE_STAGE_HELP_HINTS,
     REWRITE_STAGE_KEYS,
     REWRITE_STAGE_SEND_HINTS,
@@ -127,11 +128,14 @@ from rewrite_pipeline import (
     merge_stages_from_request,
     new_stages_dict,
     normalize_rewrite_job_data,
+    rewrite_placeholder_apply_from_request,
     snapshot_master_prompt_from_body,
     snapshot_original_title_from_body,
     snapshot_pipeline_extras_from_body,
+    snapshot_rewrite_pipeline_language_from_body,
     snapshot_stages_from_body,
     stage_run_prerequisites_met,
+    _stage_user_prompt_text,
 )
 from rewrite_templates import (
     REWRITE_TEMPLATES_DIR,
@@ -1335,8 +1339,9 @@ def load_job(job_id: str) -> dict | None:
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 job = json.load(f)
-                if isinstance(job, dict):
-                    _sanitize_job_scenes(job)
+                if not isinstance(job, dict):
+                    return None
+                _sanitize_job_scenes(job)
                 return job
         except json.JSONDecodeError:
             time.sleep(0.02)
@@ -2828,6 +2833,29 @@ def _ensure_job_file_for_id(unified_id: str, project_name: str = "") -> bool:
     return True
 
 
+def _ensure_rewrite_project_for_unified_id(unified_id: str) -> bool:
+    """Если есть `data/jobs/<id>.json`, но нет rewrite `project.json` — создаёт каркас ReWrite.
+
+    Иначе `job.html` скрывает весь блок `{% if rw %}`. Так бывает у старых
+    проектов, копий без папки `data/rewrite_jobs/<id>/` или после ручного удаления
+    `project.json`. Возвращает True, если rewrite-данные созданы.
+    """
+    if not rewrite_id_ok(unified_id):
+        return False
+    if load_rewrite_job(unified_id) is not None:
+        return False
+    job = load_job(unified_id)
+    if job is None or not isinstance(job, dict):
+        return False
+    pname = str(job.get("project_name") or "").strip() or unified_id
+    try:
+        save_rewrite_job(unified_id, new_rewrite_payload(unified_id, pname))
+    except Exception:
+        app.logger.exception("ensure rewrite project failed for %s", unified_id)
+        return False
+    return True
+
+
 def list_unified_projects() -> list[dict]:
     """Объединённый список всех проектов (job-JSON и/или rewrite-папка).
 
@@ -2911,7 +2939,15 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
         target_fp = fp if fp.is_file() else legacy_fp
         with open(target_fp, "r", encoding="utf-8") as f:
             data = json.load(f)
-        normalize_rewrite_job_data(data)
+        if not isinstance(data, dict):
+            return None
+        try:
+            normalize_rewrite_job_data(data)
+        except Exception:
+            app.logger.warning(
+                "rewrite project.json failed to normalize for %s", rewrite_id, exc_info=True
+            )
+            return None
         # Миграция артефакта: voice_flow_editor_2.result.txt → title_strategist.result.txt
         pdir = _rewrite_project_dir(rewrite_id)
         _old_v2_res = pdir / "voice_flow_editor_2.result.txt"
@@ -3221,6 +3257,9 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         return {"rw": None}
     rw = load_rewrite_job(rewrite_id)
     if rw is None:
+        _ensure_rewrite_project_for_unified_id(rewrite_id)
+        rw = load_rewrite_job(rewrite_id)
+    if rw is None:
         return {"rw": None}
     st = rw.get("stages")
     if not isinstance(st, dict):
@@ -3265,6 +3304,9 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         if len(collapsible_pipeline_stages) >= 10:
             break
         collapsible_pipeline_stages.append(_k)
+    collapsible_pipeline_stage_range_end = sum(
+        1 for k in collapsible_pipeline_stages if k not in REWRITE_STAGE_CARD_NO_INDEX_KEYS
+    )
     return {
         "rw": rw,
         "rewrite_stages": REWRITE_STAGES,
@@ -3283,6 +3325,7 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         "youtube_cookies_status": youtube_cookies_status_dict(),
         "youtube_proxy_status": youtube_proxy_status_dict(),
         "collapsible_pipeline_stages": collapsible_pipeline_stages,
+        "collapsible_pipeline_stage_range_end": collapsible_pipeline_stage_range_end,
         "locked_prompts_state": {
             name: locked_prompt_public_state(name)
             for name in LOCKED_PROMPTS_REGISTRY.keys()
@@ -3597,6 +3640,16 @@ def rewrite_project_save(rewrite_id: str):
     return jsonify({"ok": True})
 
 
+def _normalize_locked_prompt_route_name(raw: str | None) -> str:
+    """Имя промта из path: strip, снять BOM (редкий случай прокси/копипаста)."""
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if s.startswith("\ufeff"):
+        s = s.lstrip("\ufeff")
+    return s
+
+
 @app.route("/api/locked-prompts/<name>", methods=["GET"])
 def api_locked_prompt_get(name: str):
     """Отдать содержимое защищённого промта (без пин-кода).
@@ -3605,13 +3658,14 @@ def api_locked_prompt_get(name: str):
     осознанный выбор: задача защиты — предотвратить случайную правку,
     а не скрыть содержимое. См. модуль `locked_prompts.py`.
     """
-    if not locked_prompt_is_known(name):
-        return jsonify({"ok": False, "error": "unknown_prompt"}), 404
-    state = locked_prompt_public_state(name)
-    content = get_locked_prompt(name)
+    name_key = _normalize_locked_prompt_route_name(name)
+    if not locked_prompt_is_known(name_key):
+        return jsonify({"ok": False, "error": "unknown_prompt", "requested": name_key}), 404
+    state = locked_prompt_public_state(name_key)
+    content = get_locked_prompt(name_key)
     return jsonify({
         "ok": True,
-        "name": name,
+        "name": name_key,
         "label": state.get("label"),
         "present": bool(state.get("present")),
         "content": content,
@@ -3624,8 +3678,9 @@ def api_locked_prompt_save(name: str):
 
     pin сверяется с env переменной `LOCKED_PROMPTS_PIN` (дефолт `1234`).
     """
-    if not locked_prompt_is_known(name):
-        return jsonify({"ok": False, "error": "unknown_prompt"}), 404
+    name_key = _normalize_locked_prompt_route_name(name)
+    if not locked_prompt_is_known(name_key):
+        return jsonify({"ok": False, "error": "unknown_prompt", "requested": name_key}), 404
     body = request.get_json(silent=True) or {}
     pin = body.get("pin")
     if not verify_locked_prompts_pin(pin):
@@ -3634,13 +3689,13 @@ def api_locked_prompt_save(name: str):
     if not isinstance(content, str):
         return jsonify({"ok": False, "error": "bad_content"}), 400
     try:
-        save_locked_prompt(name, content)
+        save_locked_prompt(name_key, content)
     except OSError as e:
         return jsonify({"ok": False, "error": f"write_failed: {e}"}), 500
-    state = locked_prompt_public_state(name)
+    state = locked_prompt_public_state(name_key)
     return jsonify({
         "ok": True,
-        "name": name,
+        "name": name_key,
         "label": state.get("label"),
         "present": bool(state.get("present")),
     })
@@ -3659,6 +3714,7 @@ def _iter_translate_source_ru_events(
     model: str,
     *,
     cancel_event: threading.Event | None = None,
+    body: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """События перевода (status / error / result) — для NDJSON-стрима и для task_manager."""
     api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
@@ -3673,6 +3729,7 @@ def _iter_translate_source_ru_events(
     if not batches:
         yield {"type": "error", "message": "Нет текста для перевода."}
         return
+    rw_ph = load_rewrite_job(rewrite_id) or {}
     nb = len(batches)
     yield {
         "type": "status",
@@ -3685,7 +3742,9 @@ def _iter_translate_source_ru_events(
             yield {"type": "error", "message": "Задача отменена пользователем."}
             return
         tag = f"[Батч {bi + 1}/{nb}, {_fmt_num_ru(len(chunk))} симв.] "
-        sys_prompt = _translate_to_ru_system_prompt()
+        sys_prompt = rewrite_placeholder_apply_from_request(
+            get_locked_prompt("translate_to_ru"), body, rw_ph
+        )
         yield {
             "type": "status",
             "message": (
@@ -3746,8 +3805,10 @@ def _translate_source_ru_task_target(
     rewrite_id = str(request_payload.get("rewrite_id") or "").strip()
     source_text = str(request_payload.get("source_text") or "")
     model = str(request_payload.get("model") or "")
+    ph = request_payload.get("placeholder_request_body")
+    ph_body = ph if isinstance(ph, dict) else {}
     for ev in _iter_translate_source_ru_events(
-        rewrite_id, source_text, model, cancel_event=cancel_event
+        rewrite_id, source_text, model, cancel_event=cancel_event, body=ph_body
     ):
         emit(ev)
 
@@ -3783,6 +3844,7 @@ def rewrite_translate_source_ru_start(rewrite_id: str):
             "rewrite_id": rewrite_id,
             "source_text": source_text,
             "model": model,
+            "placeholder_request_body": body,
         },
         reuse_active=True,
     )
@@ -3805,7 +3867,9 @@ def rewrite_translate_source_ru(rewrite_id: str):
     model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
 
     def gen():
-        for ev in _iter_translate_source_ru_events(rewrite_id, source_text, model, cancel_event=None):
+        for ev in _iter_translate_source_ru_events(
+            rewrite_id, source_text, model, cancel_event=None, body=body
+        ):
             yield json.dumps(ev, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
@@ -3817,6 +3881,7 @@ def _iter_semantic_text_analyzer_events(
     model: str,
     *,
     cancel_event: threading.Event | None = None,
+    body: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Semantic Text Analyzer: события для NDJSON и task_manager."""
     api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
@@ -3833,8 +3898,13 @@ def _iter_semantic_text_analyzer_events(
     if cancel_event is not None and cancel_event.is_set():
         yield {"type": "error", "message": "Задача отменена пользователем."}
         return
-    system_prompt = get_locked_prompt("semantic_text_analyzer_system")
-    user_template = get_locked_prompt("semantic_text_analyzer_user")
+    rw_ph = load_rewrite_job(rewrite_id) or {}
+    system_prompt = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_system"), body, rw_ph
+    )
+    user_template = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_user"), body, rw_ph
+    )
     user_msg = (user_template or "").rstrip() + "\n\n" + src_ru.strip()
     yield {"type": "status", "message": f"Модель: {model}; вход: {_fmt_num_ru(len(src_ru))} симв."}
     yield {
@@ -3891,8 +3961,10 @@ def _semantic_text_analyzer_task_target(
     rewrite_id = str(request_payload.get("rewrite_id") or "").strip()
     src_ru = str(request_payload.get("source_text_ru") or "")
     model = str(request_payload.get("model") or "")
+    ph = request_payload.get("placeholder_request_body")
+    ph_body = ph if isinstance(ph, dict) else {}
     for ev in _iter_semantic_text_analyzer_events(
-        rewrite_id, src_ru, model, cancel_event=cancel_event
+        rewrite_id, src_ru, model, cancel_event=cancel_event, body=ph_body
     ):
         emit(ev)
 
@@ -3934,6 +4006,7 @@ def rewrite_semantic_text_analyzer_start(rewrite_id: str):
             "rewrite_id": rewrite_id,
             "source_text_ru": src_ru,
             "model": model,
+            "placeholder_request_body": body,
         },
         reuse_active=True,
     )
@@ -3953,7 +4026,9 @@ def rewrite_semantic_text_analyzer(rewrite_id: str):
     model = normalize_rewrite_model(str(body.get("model") or rw.get("model") or ana.get("model") or ""))
 
     def gen():
-        for ev in _iter_semantic_text_analyzer_events(rewrite_id, src_ru, model, cancel_event=None):
+        for ev in _iter_semantic_text_analyzer_events(
+            rewrite_id, src_ru, model, cancel_event=None, body=body
+        ):
             yield json.dumps(ev, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
@@ -4013,7 +4088,9 @@ def rewrite_translate_voiceover_final_ru(rewrite_id: str):
         parts: list[str] = []
         for bi, chunk in enumerate(batches):
             tag = f"[Батч {bi + 1}/{nb}, {_fmt_num_ru(len(chunk))} симв.] "
-            sys_prompt = _translate_to_ru_system_prompt()
+            sys_prompt = rewrite_placeholder_apply_from_request(
+                get_locked_prompt("translate_to_ru"), body, rw
+            )
             yield json.dumps(
                 {
                     "type": "status",
@@ -4971,6 +5048,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             scene_writer_result_text=scene_writer_result_text,
             original_title=original_title,
             preset=preset,
+            pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -5000,7 +5078,17 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
         if stage_key == "draft1":
             analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
             structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
-            block_writer_user_prompt = str((stages_snap.get("draft1") or {}).get("user_prompt") or "")
+            d1_cell = stages_snap.get("draft1") or {}
+            if not isinstance(d1_cell, dict):
+                d1_cell = {}
+            block_writer_user_prompt = rewrite_placeholder_apply_from_request(
+                _stage_user_prompt_text("draft1", d1_cell),
+                body,
+                rw_job,
+            )
+            hero_for_bw = rewrite_placeholder_apply_from_request(
+                hero_prompt, body, rw_job, allow_nested_master_hero=False
+            )
             bw_dir = _rewrite_block_writer_dir(rewrite_id)
             bw_dir.mkdir(parents=True, exist_ok=True)
             for old in bw_dir.glob("block_*.json"):
@@ -5042,7 +5130,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 prompt,
                 analysis_res,
                 structure_res,
-                hero_prompt=hero_prompt,
+                hero_prompt=hero_for_bw,
                 block_writer_user_prompt=block_writer_user_prompt,
                 on_block_completed=on_block_completed,
                 on_all_completed=on_all_completed,
@@ -5078,6 +5166,9 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                     sw_saved = st_saved.get("scene_writer") if isinstance(st_saved, dict) else {}
                     if isinstance(sw_saved, dict):
                         scene_writer_past_prompt = str(sw_saved.get("past_prompt") or "").strip()
+            scene_writer_past_prompt = rewrite_placeholder_apply_from_request(
+                scene_writer_past_prompt, body, rw_job, allow_nested_master_hero=False
+            )
             blocks, parse_err = _parse_structure_splitter_blocks_with_error(raw_blocks)
             if not blocks:
                 human_reason = "пустой или невалидный JSON"
@@ -5585,6 +5676,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         scene_writer_result_text=scene_writer_result_text,
         original_title=original_title,
         preset=preset_ap,
+        pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
@@ -5603,13 +5695,23 @@ def rewrite_project_api_payload(rewrite_id: str):
 
     if stage_key == "draft1":
         structure_raw = str((stages_snap.get("structure") or {}).get("last_result") or "").strip()
-        block_writer_user_prompt = str((stages_snap.get("draft1") or {}).get("user_prompt") or "")
+        d1_cell = stages_snap.get("draft1") or {}
+        if not isinstance(d1_cell, dict):
+            d1_cell = {}
+        block_writer_user_prompt = rewrite_placeholder_apply_from_request(
+            _stage_user_prompt_text("draft1", d1_cell),
+            body,
+            rw_job,
+        )
+        hero_for_export = rewrite_placeholder_apply_from_request(
+            hero_prompt, body, rw_job, allow_nested_master_hero=False
+        )
         saved = _load_block_writer_saved_short_summaries(rewrite_id)
         wire_bodies, ctx_exact = list_draft1_wire_chat_payloads_for_export(
             model_m,
             sys_c,
             structure_raw,
-            hero_prompt,
+            hero_for_export,
             block_writer_user_prompt,
             saved,
         )
@@ -8950,6 +9052,7 @@ def job_page(job_id: str):
         job_id=job_id,
         job=job,
         **rewrite_ctx,
+        rewrite_id_allowed=rewrite_id_ok(job_id),
         scenes=job.get("scenes", []),
         scenes_stripped_with_timing=_render_scenes_stripped_with_timing(job.get("scenes") or []),
         tts_words_available=bool(tts_last_words_href),

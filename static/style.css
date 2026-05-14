@@ -1446,6 +1446,8 @@ textarea::placeholder {
     font-size: 0.85rem;
     line-height: 1;
     flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .rewrite-lock-toggle.btn-icon:hover:not(:disabled) {
@@ -1540,13 +1542,19 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     min-height: 0;
 }
 
-/* Hero Prompt: пунктир как у .slot-placeholder, цвет — тот же бирюзовый тон,
-   что у .template-prompt-badge--yes (Hero Promt). */
-.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt {
+/* Редактируемые промты (Hero / Master / System–User–Style–Past на этапах):
+   пунктир и цвет рамки как у Hero — см. базовый .slot-placeholder (dashed). */
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules {
     border-color: rgba(80, 200, 200, 0.38);
 }
 
-.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt:focus-within {
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt:focus-within,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt:focus-within,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt:focus-within,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules:focus-within {
     border-color: rgba(80, 200, 200, 0.58);
 }
 
@@ -1657,20 +1665,28 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     }
 }
 
-.rewrite-stages-collapse-bar {
+.rewrite-stages-pipeline-display-wrap {
     display: flex;
-    flex-wrap: wrap;
+    justify-content: flex-start;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem 1rem;
-    margin-bottom: 0.75rem;
-    padding: 0.55rem 0.75rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    gap: 0.65rem;
+    margin: 0 0 0.75rem;
 }
 
-/* --- Пресет ReWrite: нативный select — все три варианта всегда в списке (не режется вёрсткой). --- */
+.rewrite-stages-pipeline-display-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.rewrite-stages-pipeline-display-btn__chev {
+    display: inline-block;
+    font-size: 0.65rem;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+/* --- Пресет ReWrite: сегментированный переключатель (3 равные колонки, как 1K/2K/4K). --- */
 .rewrite-preset-toggle {
     display: flex;
     flex-direction: column;
@@ -1681,6 +1697,75 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: 8px;
+}
+
+.rewrite-preset-toggle--segmented {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 0.85rem;
+    padding: 0;
+    max-width: min(42rem, 100%);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+.rewrite-preset-segmented {
+    display: flex;
+    width: 100%;
+    max-width: 42rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    background: var(--bg-card, rgba(12, 14, 18, 0.92));
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.rewrite-preset-segmented__btn {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0.58rem 0.45rem;
+    border: none;
+    border-right: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: clamp(0.72rem, 1.1vw, 0.84rem);
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.rewrite-preset-segmented__btn:last-of-type {
+    border-right: none;
+}
+
+.rewrite-preset-segmented__btn:hover:not(:disabled) {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.rewrite-preset-segmented__btn:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--accent, #3b82f6);
+    z-index: 1;
+}
+
+.rewrite-preset-segmented__btn.rewrite-preset-toggle__btn--active {
+    color: var(--accent, #3b82f6);
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: inset 0 0 0 2px var(--accent, #3b82f6);
+    z-index: 1;
+}
+
+.rewrite-preset-segmented__btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .rewrite-preset-toggle__label {
@@ -1722,31 +1807,26 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     display: none !important;
 }
 
-.rewrite-stages-collapse-bar__label {
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    line-height: 1.35;
-}
-
-.rewrite-stages-collapse-bar__actions {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-collapsible-inner {
     display: none;
 }
 
-/* Свёрнутый этап: оставляем только номер, название и значок «?» — остальное прячем. */
+/* Свёрнутый этап: только номер, название и «?»; компактные поля сверху/снизу.
+   Верхний padding задаётся общим правилом .scene-card.rewrite-stage-card--collapsible
+   (после .scene-card), чтобы совпадал с развёрнутым. */
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed {
-    padding-top: 0.55rem;
     padding-bottom: 0.55rem;
-    justify-content: center;
+    /* flex-start: иначе в высокой ячейке сетки шапка уезжает вниз (center), строка
+       «Analysis» не совпадает с развёрнутым состоянием. */
+    justify-content: flex-start;
 }
 
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-subtitle,
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-api-export {
+    display: none;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-json-export-row {
     display: none;
 }
 
@@ -1964,6 +2044,13 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     min-width: 0;
 }
 
+/* Верх карточки: без вертикального «центрирования» всей строки относительно Result+↻
+   — иначе при свёрнутом теле блок с «1 / Rewrite» визуально смещается вниз, а в
+   развёрнутом (без Result) остаётся выше → разный отступ от верха рамки. */
+.rewrite-stage-card .rewrite-stage-header-top {
+    align-items: flex-start;
+}
+
 .rewrite-stage-title-row {
     display: flex;
     flex-direction: row;
@@ -1978,6 +2065,28 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 .rewrite-stage-title-text {
     margin-bottom: 0;
     min-width: 0;
+    line-height: 1.25;
+}
+
+/* Кнопка json над строкой System Promt (в колонке system), по горизонтали у правого края как ✎. */
+.rewrite-stage-json-export-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin: 0 0 0.35rem;
+    min-height: 0;
+}
+
+.rewrite-stage-json-export-row .rewrite-stage-api-export {
+    flex-shrink: 0;
+}
+
+/* Колонка System Rules без кнопки json — пустая строка той же высоты, что под json,
+   чтобы бейдж и ✎ совпали по вертикали с System / User. */
+.rewrite-stage-json-export-row--rules-spacer {
+    margin: 0 0 0.35rem;
+    min-height: 30px;
+    box-sizing: border-box;
 }
 
 .rewrite-stage-header-tools {
@@ -1989,8 +2098,27 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     flex-shrink: 0;
 }
 
-.rewrite-stage-header-tools .rewrite-stage-api-export {
+/* Result + ↻ в заголовке карточки — только в свёрнутом теле этапа. */
+.rewrite-stage-card-compact-result {
+    display: none;
+    align-items: center;
     flex-shrink: 0;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-card-compact-result {
+    display: inline-flex;
+    align-self: center;
+}
+
+/* Высота строки названия — для выравнивания с 24px-кнопками Result/↻ при flex-start. */
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-title-row {
+    min-height: 24px;
+    align-items: center;
+}
+
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-header-tools {
+    min-height: 24px;
+    align-items: center;
 }
 
 .rewrite-stage-card .rewrite-stage-send-hint {
@@ -2022,7 +2150,8 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 
 /* Author rules for .btn-regenerate set display; must beat that so [hidden] actually hides. */
 .rewrite-stage-run[hidden],
-.rewrite-stage-run-blocked[hidden] {
+.rewrite-stage-run-blocked[hidden],
+.rewrite-stage-compact-run[hidden] {
     display: none !important;
 }
 
@@ -2054,12 +2183,20 @@ input.rewrite-source-title-input.rewrite-source-textarea {
         grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
     }
 
+    .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls {
+        grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    }
+
     .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
         display: flex;
     }
 
     /* Совпадает с левым краем колонки System при трёхколоночной сетке */
     .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-subtitle {
+        padding-left: calc(9.5rem + 1rem);
+    }
+
+    .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-subtitle {
         padding-left: calc(9.5rem + 1rem);
     }
 }
@@ -2069,6 +2206,10 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     @media (min-width: 42.0625rem) {
         .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-row--controls {
             grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+        }
+
+        .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls {
+            grid-template-columns: auto repeat(3, minmax(0, 1fr));
         }
 
         .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
@@ -2565,6 +2706,10 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 }
 
 .rewrite-stage-card--stage-user-prompt-collapsed .rewrite-slot--stage-user-prompt {
+    display: none !important;
+}
+
+.rewrite-stage-card--rewrite-system-rules-collapsed .rewrite-slot--rewrite-system-rules {
     display: none !important;
 }
 
@@ -3882,6 +4027,13 @@ button.job-download-all-link {
     border-radius: 8px;
 }
 
+/* Общий .scene-card задаёт padding:1.25rem позже по каскаду перебивает только
+   longhand с равной специфичностью; для сворачиваемых этапов фиксируем верх
+   0.55rem всегда (свернуто = развернуто). */
+.scene-card.rewrite-stage-card.rewrite-stage-card--collapsible {
+    padding-top: 0.55rem;
+}
+
 .scene-card.scene-card--needs-attention,
 .job-needs-attention {
     border: 1px solid var(--error) !important;
@@ -4110,6 +4262,28 @@ button.job-download-all-link {
     flex-wrap: wrap;
 }
 
+/* System / User / Style / Past: бейдж и ✎/✓ строго по вертикали (иначе кнопка
+   визуально «выпирает» вверх относительно .slot-badge с рамкой). */
+.slot-header.rewrite-stage-compact-header.rewrite-stage-prompt-toolbar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    align-content: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    line-height: 1;
+}
+
+.slot-header.rewrite-stage-compact-header.rewrite-stage-prompt-toolbar > .slot-badge {
+    align-self: center;
+}
+
+.slot-header.rewrite-stage-compact-header.rewrite-stage-prompt-toolbar > .rewrite-lock-toggle.btn-icon {
+    align-self: center;
+    vertical-align: middle;
+    margin: 0;
+}
+
 /* Подпись модели / разрешения — мелко, серая, справа (как задумывали для job) */
 .slot-header-trailing {
     display: inline-flex;
@@ -4271,6 +4445,35 @@ button.job-download-all-link {
     justify-content: center;
     position: relative;
     overflow: hidden;
+}
+
+/* ReWrite: Hero / Master / промты этапов — у .slot-placeholder по умолчанию
+   align-items:center + overflow:hidden; внутри flex textarea с min-height:100%
+   визуально «съедает» верхнюю строку. Колонка, stretch, без обрезки снаружи. */
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: visible;
+}
+
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt .rewrite-slot-textarea,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules .rewrite-slot-textarea {
+    min-height: calc(5 * 1.45em + 1.1rem);
+    flex: 1 1 auto;
+    width: 100%;
+    align-self: stretch;
+}
+
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt .rewrite-source-textarea,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt .rewrite-source-textarea {
+    min-height: 8rem;
+    flex: 1 1 auto;
+    width: 100%;
+    align-self: stretch;
 }
 
 .slot-status {
@@ -4711,6 +4914,27 @@ button.job-download-all-link {
     border: 1px solid rgba(255, 255, 255, 0.045);
 }
 
+/* ReWrite этап: редактируемые промты (System / User / Style / Past) — YES как
+   Hero / .template-prompt-badge--yes (бирюза); NO без смены фона и текста,
+   только обводка как у Hero YES. */
+.rewrite-stage-prompt-badge.badge-yes,
+.rewrite-stage-user-prompt-badge.badge-yes,
+.rewrite-stage-style-prompt-badge.badge-yes,
+.rewrite-stage-past-prompt-badge.badge-yes {
+    background: rgba(80, 200, 200, 0.16);
+    color: #7fcacb;
+    border: 1px solid rgba(80, 200, 200, 0.22);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.rewrite-stage-prompt-badge.badge-no,
+.rewrite-stage-user-prompt-badge.badge-no,
+.rewrite-stage-style-prompt-badge.badge-no,
+.rewrite-stage-past-prompt-badge.badge-no {
+    border: 1px solid rgba(80, 200, 200, 0.22);
+}
+
 /* Projects list */
 .projects-section {
     margin-top: 3rem;
@@ -5021,25 +5245,30 @@ button.job-download-all-link {
     margin-left: 0;
 }
 
-/* YES — приглушённый фиолетовый (как раньше был NO). */
+/* YES / NO под пин-кодом: полная специфичность `.slot-badge.locked-prompt-badge…`,
+   чтобы обводка NO не перебивалась общим `.badge-no` и любыми одноклассовыми
+   правилами для `.slot-badge` (в разметке всегда есть оба класса). */
+.slot-badge.locked-prompt-badge.locked-prompt-badge--yes,
 .locked-prompt-badge--yes {
     background: rgba(129, 99, 245, 0.08);
     color: #9a93b8;
     border: 1px solid rgba(129, 99, 245, 0.22);
 }
 
-/* NO — бледный «призрак»: почти прозрачный фон/бордер, тусклый текст. */
+.slot-badge.locked-prompt-badge.locked-prompt-badge--no,
 .locked-prompt-badge--no {
     background: rgba(255, 255, 255, 0.015);
     color: #55555c;
-    border: 1px solid rgba(255, 255, 255, 0.045);
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(129, 99, 245, 0.22);
 }
 
 /* ===== Template prompts (правятся БЕЗ кода — из шаблона) =====
    Смысловая пара к фиолетовому .locked-prompt-badge--yes: тот же приглушённый
    тон/насыщенность, но другой цвет — приглушённая бирюза. Фиолетовый = «под
    кодом, под пин-кодом», бирюза = «можно поменять в шаблоне без кода».
-   YES — есть текст; NO — пусто (тот же «призрак», что у locked-prompt-badge--no). */
+   YES — есть текст; NO — пусто (фон/текст как у locked NO, рамка — бирюзовая). */
 .template-prompt-badge {
     margin-left: 0.35rem;
     font-weight: 500;
@@ -5055,7 +5284,7 @@ button.job-download-all-link {
 .template-prompt-badge--no {
     background: rgba(255, 255, 255, 0.015);
     color: #55555c;
-    border: 1px solid rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(80, 200, 200, 0.22);
 }
 
 /* Карандашик «защищённого» промта реюзит стиль .rewrite-lock-toggle.btn-icon,
@@ -5072,6 +5301,12 @@ button.job-download-all-link {
 
 .rewrite-lock-toggle.locked-prompt-edit-btn .rewrite-lock-toggle__edit {
     display: inline-flex !important;
+}
+
+/* В шапке колонки этапа бейдж — первый flex-элемент: без левого margin,
+   иначе «System Rules» визуально уезжает вправо относительно System/User Promt. */
+.slot-header.rewrite-stage-compact-header.rewrite-stage-prompt-toolbar > .locked-prompt-badge {
+    margin-left: 0;
 }
 
 /* Модалка с textarea + цифровой клавиатурой. Реюзим базу .confirm-modal,
@@ -5095,14 +5330,14 @@ button.job-download-all-link {
     padding: 0.6rem 0.7rem;
     background: var(--bg-elev-1, #1b1b22);
     color: var(--text);
-    border: 1px solid var(--border);
+    border: 1px dashed rgba(80, 200, 200, 0.38);
     border-radius: 6px;
     outline: none;
 }
 
 .locked-prompt-modal__textarea:focus {
-    border-color: rgba(129, 99, 245, 0.55);
-    box-shadow: 0 0 0 2px rgba(129, 99, 245, 0.15);
+    border-color: rgba(80, 200, 200, 0.58);
+    box-shadow: 0 0 0 2px rgba(80, 200, 200, 0.12);
 }
 
 .locked-prompt-modal__msg {
@@ -5226,12 +5461,16 @@ button.job-download-all-link {
     margin-bottom: 0;
 }
 
-/* Обёртка наследует все стили `.rewrite-scene-writer-check` (рамка/радиус/фон/
-   шрифт/цвет). Здесь только обнуляем padding — его берёт на себя внутренняя
-   textarea, чтобы ручка resize осталась прижатой к нижне-правому углу. */
+/* Обёртка наследует базу `.rewrite-scene-writer-check` (dashed, радиус, фон).
+   Padding обнуляем — его даёт textarea; рамка в тон Hero / редактируемым промтам. */
 .semantic-analyzer-textarea-wrap.rewrite-scene-writer-check {
     padding: 0;
     box-sizing: border-box;
+    border-color: rgba(80, 200, 200, 0.38);
+}
+
+.semantic-analyzer-textarea-wrap.rewrite-scene-writer-check:focus-within {
+    border-color: rgba(80, 200, 200, 0.58);
 }
 
 .semantic-analyzer-textarea-wrap.hidden {

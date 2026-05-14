@@ -22,6 +22,12 @@
     const translateRuStartUrl = {{ url_for('rewrite_translate_source_ru_start', rewrite_id=rw.rewrite_id) | tojson }};
     const semanticAnalyzerStartUrl = {{ url_for('rewrite_semantic_text_analyzer_start', rewrite_id=rw.rewrite_id) | tojson }};
     const translateVoFinalRuUrl = {{ url_for('rewrite_translate_voiceover_final_ru', rewrite_id=rw.rewrite_id) | tojson }};
+    /** URL защищённых промтов — через url_for, чтобы работал SCRIPT_NAME / префикс приложения. */
+    const lockedPromptUrlTemplate = {{ url_for('api_locked_prompt_get', name='LOCKPROMNAME') | tojson }};
+    function lockedPromptApiUrl(nm) {
+        var s = (nm == null) ? '' : String(nm);
+        return lockedPromptUrlTemplate.replace('LOCKPROMNAME', encodeURIComponent(s));
+    }
     const ytVerifyUrl = {{ url_for('rewrite_youtube_verify', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadUrl = {{ url_for('rewrite_youtube_download', rewrite_id=rw.rewrite_id) | tojson }};
     const ytDownloadStreamUrl = {{ url_for('rewrite_youtube_download_stream', rewrite_id=rw.rewrite_id) | tojson }};
@@ -63,11 +69,60 @@
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
     let COLLAPSIBLE_PIPELINE_STAGE_KEYS = {{ collapsible_pipeline_stages | tojson }};
-    const REWRITE_PRESET_STAGE_KEYS = {{ rewrite_preset_stage_keys | tojson }};
+    /** Совпадает с `rewrite_pipeline.REWRITE_STAGE_CARD_NO_INDEX_KEYS` (бейдж этапа скрыт). */
+    var PIPELINE_LABEL_SKIP = { scene_writer: true, scene_writer_live: true, youtube_packaging: true };
+    const REWRITE_PRESET_STAGE_KEYS_SERVER = {{ rewrite_preset_stage_keys | tojson }};
+    /* Дублируем серверный REWRITE_PRESET_STAGE_KEYS: если в встроенном JSON нет
+       ключа soft (старый HTML/кеш), раньше applyRewritePresetVisibility сбрасывала
+       пресет на deep — селект «Мягкий» не удерживался. */
+    const REWRITE_PRESET_STAGE_KEYS_FALLBACK = {
+        deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
+        soft: ['rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
+        prewritten: ['inbox', 'rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging']
+    };
+    const REWRITE_PRESET_STAGE_KEYS = (function () {
+        var src = REWRITE_PRESET_STAGE_KEYS_SERVER || {};
+        var out = {};
+        ['deep', 'soft', 'prewritten'].forEach(function (k) {
+            var a = src[k];
+            var fb = REWRITE_PRESET_STAGE_KEYS_FALLBACK[k] || [];
+            out[k] = (Array.isArray(a) && a.length) ? a.slice() : fb.slice();
+        });
+        return out;
+    })();
     const REWRITE_PRESET_LABELS = {{ rewrite_preset_labels | tojson }};
     let currentRewritePreset = {{ rewrite_preset_current | tojson }};
     const rewriteIdForStageCollapse = {{ rw.rewrite_id | tojson }};
     const REWRITE_STAGE_COLLAPSE_LS = 'jsonVideoRewriteStageCollapseV1';
+    const REWRITE_PRESET_LS = 'jsonVideoRewritePresetV1';
+    function rewriteLsPresetLoadAll() {
+        try {
+            var raw = localStorage.getItem(REWRITE_PRESET_LS);
+            var o = raw ? JSON.parse(raw) : {};
+            return (o && typeof o === 'object') ? o : {};
+        } catch (e) {
+            return {};
+        }
+    }
+    function rewriteLsPresetRead(projectId) {
+        try {
+            var row = rewriteLsPresetLoadAll()[String(projectId)];
+            var p = row && row.preset;
+            if (p === 'deep' || p === 'soft' || p === 'prewritten') return p;
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+    function rewriteLsPresetSave(projectId, preset) {
+        try {
+            var all = rewriteLsPresetLoadAll();
+            all[String(projectId)] = { preset: String(preset || 'deep'), t: Date.now() };
+            localStorage.setItem(REWRITE_PRESET_LS, JSON.stringify(all));
+        } catch (e) { /* ignore */ }
+    }
+    (function mergeRewritePresetFromLocalStorage() {
+        var lp = rewriteLsPresetRead(rewriteIdForStageCollapse);
+        if (lp) currentRewritePreset = lp;
+    })();
     const targetCharsRangeEl = document.getElementById('rewrite-target-chars');
     const targetCharsValEl = document.getElementById('rewrite-target-chars-val');
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
@@ -2066,6 +2121,20 @@
                 }
                 runBtn.disabled = anyRunning || !ok || !openaiOk;
             }
+            const compactRun = block.querySelector('.rewrite-stage-compact-run');
+            const compactBlocked = block.querySelector('.rewrite-stage-compact-run-blocked');
+            if (compactRun && compactBlocked && runBtn && blockedEl) {
+                if (ok) {
+                    compactRun.removeAttribute('hidden');
+                    compactBlocked.setAttribute('hidden', '');
+                } else {
+                    compactRun.setAttribute('hidden', '');
+                    compactBlocked.removeAttribute('hidden');
+                }
+                var stageBusyUi = block.classList.contains('rewrite-stage-card--running');
+                compactRun.classList.toggle('btn-regenerate--busy', stageBusyUi);
+                compactRun.disabled = anyRunning || !ok || !openaiOk || stageBusyUi;
+            }
             if (apiBtn) {
                 apiBtn.disabled = anyRunning || !ok || !openaiOk;
             }
@@ -2081,7 +2150,6 @@
         applySemanticResultLockUI();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             applyPromptLockUI(block);
-            applyAnalysisUserPromptLockUI(block);
             applyStylePromptLockUI(block);
             applyPastPromptLockUI(block);
             applyTargetLockUI(block);
@@ -2577,19 +2645,12 @@
                             syncPromptBadge(block);
                         }
                     }
-                    if ((key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'rewrite' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') && cell && typeof cell.user_prompt === 'string') {
-                        var uta = block.querySelector('.rewrite-stage-user-prompt');
-                        if (uta) {
-                            uta.value = cell.user_prompt;
-                            syncAnalysisUserPromptBadge(block);
-                        }
-                    }
                     if (key === 'scene_writer' && cell && typeof cell.style_prompt === 'string') {
                         var sta = block.querySelector('.rewrite-stage-style-prompt');
-                if (sta) {
-                    sta.value = cell.style_prompt;
-                    syncStylePromptBadge(block);
-                }
+                        if (sta) {
+                            sta.value = cell.style_prompt;
+                            syncStylePromptBadge(block);
+                        }
                     }
                     if (key === 'scene_writer' && cell && typeof cell.past_prompt === 'string') {
                         var pta = block.querySelector('.rewrite-stage-past-prompt');
@@ -2614,13 +2675,10 @@
                         if (tv) tv.textContent = String(n);
                     }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'rewrite' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
-                        block.setAttribute('data-user-prompt-locked', '1');
+                    if (key === 'scene_writer') {
+                        block.setAttribute('data-style-prompt-locked', '1');
+                        block.setAttribute('data-past-prompt-locked', '1');
                     }
-            if (key === 'scene_writer') {
-                block.setAttribute('data-style-prompt-locked', '1');
-                block.setAttribute('data-past-prompt-locked', '1');
-            }
                 });
                 templateSelectEl.value = name;
                 syncTemplatePickerUIFromSelect();
@@ -3028,7 +3086,6 @@
             stages[key] = {
                 model: globalModel,
                 prompt: promptEl ? promptEl.value : '',
-                user_prompt: ((block.querySelector('.rewrite-stage-user-prompt') || {}).value || ''),
                 style_prompt: (key === 'scene_writer_live'
                     ? ((contentTypeEl && contentTypeEl.value) || 'photos')
                     : ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || '')),
@@ -3040,7 +3097,6 @@
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
                 last_result: resEl ? (resEl.value || '') : '',
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
-                user_prompt_locked: (block.getAttribute('data-user-prompt-locked') === '1'),
                 style_prompt_locked: (block.getAttribute('data-style-prompt-locked') === '1'),
                 past_prompt_locked: (block.getAttribute('data-past-prompt-locked') === '1'),
                 result_locked: (block.getAttribute('data-result-locked') === '1')
@@ -3245,36 +3301,6 @@
         }
     }
 
-    function applyAnalysisUserPromptLockUI(block) {
-        if (!block) return;
-        var sk = block.getAttribute('data-stage-key');
-        if (sk !== 'analysis' && sk !== 'structure' && sk !== 'draft1' && sk !== 'rewrite' && sk !== 'retention_editor' && sk !== 'hook_editor' && sk !== 'flow_editor' && sk !== 'persona_editor' && sk !== 'voiceover_editor' && sk !== 'title_strategist' && sk !== 'structure_splitter' && sk !== 'scene_writer' && sk !== 'scene_writer_live' && sk !== 'youtube_packaging') return;
-        const locked = block.getAttribute('data-user-prompt-locked') === '1';
-        const ta = block.querySelector('.rewrite-stage-user-prompt');
-        const toggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
-        const promptWrap = block.querySelector('.rewrite-slot--stage-user-prompt');
-        if (!openaiOk) {
-            if (ta) ta.disabled = true;
-            if (toggle) toggle.disabled = true;
-            block.classList.add('rewrite-stage-card--stage-user-prompt-collapsed');
-            if (promptWrap) promptWrap.style.display = 'none';
-            return;
-        }
-        if (ta) {
-            ta.disabled = false;
-            ta.readOnly = locked;
-            ta.classList.toggle('rewrite-source-textarea--locked', locked);
-        }
-        block.classList.toggle('rewrite-stage-card--stage-user-prompt-collapsed', locked);
-        if (promptWrap) {
-            promptWrap.style.display = locked ? 'none' : '';
-        }
-        if (toggle) {
-            toggle.disabled = false;
-            styleToggleBtn(toggle, locked);
-        }
-    }
-
     function syncStylePromptBadge(block) {
         const promptEl = block.querySelector('.rewrite-stage-style-prompt');
         const badge = block.querySelector('.rewrite-stage-style-prompt-badge');
@@ -3431,6 +3457,7 @@
         syncPipelineStopButton();
         document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn):not(.semantic-analyzer-result-copy-btn):not(.semantic-analyzer-result-toggle)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
+        document.querySelectorAll('.rewrite-stage-compact-run').forEach(function (b) { b.disabled = dis; });
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
         }
@@ -3470,6 +3497,9 @@
         if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
         if (templateApplyBtn) templateApplyBtn.disabled = dis;
         var presetSelectBusy = document.getElementById('rewrite-preset-select');
+        document.querySelectorAll('.rewrite-preset-toggle__btn').forEach(function (b) {
+            b.disabled = dis;
+        });
         if (presetSelectBusy) presetSelectBusy.disabled = dis;
         if (globalModelEl) globalModelEl.disabled = dis;
         var globalModelField = document.querySelector('[data-global-model-field="1"]');
@@ -3505,13 +3535,7 @@
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
             }
-            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
-                const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
-                const uTa = block.querySelector('.rewrite-stage-user-prompt');
-                if (uTa) {
-                    uTa.disabled = !openaiOk;
-                    uTa.readOnly = dis || uLocked;
-                }
+            if (block.getAttribute('data-stage-key') === 'scene_writer') {
                 const sTa = block.querySelector('.rewrite-stage-style-prompt');
                 if (sTa) {
                     const sLocked = block.getAttribute('data-style-prompt-locked') === '1';
@@ -3543,7 +3567,11 @@
     }
 
     function updateResultCounts(block) {
+        if (!block) return;
         const ta = block.querySelector('.rewrite-stage-result');
+        block.querySelectorAll('.rewrite-stage-result-badge').forEach(function (badge) {
+            if (badge && ta) applyTextBadgeState(badge, ta);
+        });
         const el = block.querySelector('.rewrite-stage-result-counts');
         if (!ta || !el) return;
         if (el.getAttribute('data-copy-hold') === '1') return;
@@ -3694,16 +3722,6 @@
         promptBadge.classList.toggle('badge-no', !hasP);
     }
 
-    function syncAnalysisUserPromptBadge(block) {
-        const promptEl = block.querySelector('.rewrite-stage-user-prompt');
-        const promptBadge = block.querySelector('.rewrite-stage-user-prompt-badge');
-        if (!promptEl || !promptBadge) return;
-        var hasP = (promptEl.value || '').trim().length > 0;
-        promptBadge.textContent = hasP ? 'User Promt: YES' : 'User Promt: NO';
-        promptBadge.classList.toggle('badge-yes', hasP);
-        promptBadge.classList.toggle('badge-no', !hasP);
-    }
-
     document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
         var pe = block.querySelector('.rewrite-stage-prompt');
         if (pe) {
@@ -3726,7 +3744,6 @@
             syncPastPromptBadge(block);
         }
         applyPromptLockUI(block);
-        applyAnalysisUserPromptLockUI(block);
         applyStylePromptLockUI(block);
         applyResultLockUI(block);
         var stToggle = block.querySelector('.rewrite-stage-prompt-toggle');
@@ -3770,55 +3787,6 @@
                     } catch (e2) {
                         block.setAttribute('data-prompt-locked', '0');
                         applyPromptLockUI(block);
-                        alert(String(e2));
-                    }
-                }
-            });
-        }
-        var ue = block.querySelector('.rewrite-stage-user-prompt');
-        if (ue) {
-            ue.addEventListener('input', function () { syncAnalysisUserPromptBadge(block); });
-            syncAnalysisUserPromptBadge(block);
-        }
-        var userToggle = block.querySelector('.rewrite-stage-user-prompt-toggle');
-        if (userToggle) {
-            userToggle.addEventListener('click', async function () {
-                if (!openaiOk || userToggle.disabled) return;
-                var locked = block.getAttribute('data-user-prompt-locked') === '1';
-                if (locked) {
-                    block.setAttribute('data-user-prompt-locked', '0');
-                    applyAnalysisUserPromptLockUI(block);
-                    try {
-                        var ok = await saveToServer();
-                        if (!ok) {
-                            block.setAttribute('data-user-prompt-locked', '1');
-                            applyAnalysisUserPromptLockUI(block);
-                            alert('Не удалось переключить режим');
-                            return;
-                        }
-                        if (ue) ue.focus();
-                    } catch (e) {
-                        block.setAttribute('data-user-prompt-locked', '1');
-                        applyAnalysisUserPromptLockUI(block);
-                        alert(String(e));
-                    }
-                } else {
-                    block.setAttribute('data-user-prompt-locked', '1');
-                    applyAnalysisUserPromptLockUI(block);
-                    try {
-                        var ok2 = await saveToServer();
-                        if (!ok2) {
-                            block.setAttribute('data-user-prompt-locked', '0');
-                            applyAnalysisUserPromptLockUI(block);
-                            alert('Не удалось сохранить');
-                        } else {
-                            if (!(await trySyncRewriteTemplateToDisk())) {
-                                alertTemplateSyncFailed();
-                            }
-                        }
-                    } catch (e2) {
-                        block.setAttribute('data-user-prompt-locked', '0');
-                        applyAnalysisUserPromptLockUI(block);
                         alert(String(e2));
                     }
                 }
@@ -4090,7 +4058,6 @@
         block.setAttribute('data-run-started-at', String(Date.now()));
         resetStageRunUi(block);
         const resTextarea = block.querySelector('.rewrite-stage-result');
-        const resultBadge = block.querySelector('.rewrite-stage-result-badge');
         const sceneWriterCheckWrap = block.querySelector('[data-scene-writer-check]');
         const sceneMediaCheckWrap = block.querySelector('[data-scene-media-check]');
         const structureSplitterCheckWrap = block.querySelector('[data-structure-splitter-check]');
@@ -4256,11 +4223,6 @@
                             resTextarea.classList.remove('rewrite-stage-result--busy');
                             resTextarea.classList.add('rewrite-stage-result--error');
                             clearStageStatusUi(block);
-                            if (resultBadge) {
-                                resultBadge.textContent = 'Result: Pending';
-                                resultBadge.classList.remove('badge-yes');
-                                resultBadge.classList.add('badge-no');
-                            }
                             updateResultCounts(block);
                             syncStageRunButtons();
                         } else {
@@ -4292,11 +4254,6 @@
                             resTextarea.classList.remove('rewrite-stage-result--error');
                         }
                         clearStageStatusUi(block);
-                        if (resultBadge) {
-                            resultBadge.textContent = 'Result: DONE';
-                            resultBadge.classList.remove('badge-no');
-                            resultBadge.classList.add('badge-yes');
-                        }
                         updateResultCounts(block);
                         renderEditorCheck(block);
                         if (stageKey === 'youtube_packaging') {
@@ -4549,6 +4506,14 @@
                 runStage(key, block);
             });
         }
+        const compactRun = block.querySelector('.rewrite-stage-compact-run');
+        if (compactRun && key && runBtn) {
+            compactRun.addEventListener('click', function () {
+                if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) return;
+                if (compactRun.disabled) return;
+                runBtn.click();
+            });
+        }
         const apiBtn = block.querySelector('.rewrite-stage-api-export');
         if (apiBtn && key) {
             apiBtn.addEventListener('click', function () {
@@ -4698,6 +4663,7 @@
         var ta = document.getElementById('rewrite-voiceover-final-textarea');
         if (!ta) return;
         var counts = document.getElementById('rewrite-voiceover-final-counts');
+        var resultBadge = document.getElementById('rewrite-voiceover-final-result-badge');
         var toggleBtn = document.getElementById('rewrite-voiceover-final-toggle');
         var copyBtn = document.getElementById('rewrite-voiceover-final-copy-btn');
         var voEditorTa = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-result');
@@ -4723,6 +4689,7 @@
             return normalizeEditedText(s);
         }
         function updateCounts() {
+            if (resultBadge) applyTextBadgeState(resultBadge, ta);
             if (!counts) return;
             var v = ta.value || '';
             counts.textContent = formatNumRu(v.length) + ' симв. · ' + formatNumRu(countWords(v)) + ' сл.';
@@ -5278,6 +5245,27 @@
                 card.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             }
         }
+        function visiblePipelineStagesState() {
+            var allCollapsed = true;
+            var anyVisible = false;
+            document.querySelectorAll('.rewrite-stage-card[data-pipeline-collapse="1"]').forEach(function (card) {
+                if (card.classList.contains('rewrite-stage-card--hidden-by-preset')) return;
+                anyVisible = true;
+                if (!card.classList.contains('rewrite-stage-card--body-collapsed')) allCollapsed = false;
+            });
+            return { allCollapsed: anyVisible ? allCollapsed : true, anyVisible: anyVisible };
+        }
+        function syncPipelineDisplayBtn() {
+            var btn = document.getElementById('rewrite-stages-pipeline-display-btn');
+            if (!btn) return;
+            var st = visiblePipelineStagesState();
+            var title = btn.querySelector('.rewrite-stages-collapsible__title');
+            var chev = btn.querySelector('.rewrite-stages-pipeline-display-btn__chev');
+            btn.setAttribute('aria-expanded', st.allCollapsed ? 'false' : 'true');
+            if (title) title.textContent = st.allCollapsed ? 'Отобразить' : 'Скрыть';
+            if (chev) chev.textContent = st.allCollapsed ? '▾' : '▴';
+        }
+        window.__rewriteSyncPipelineDisplayBtn = syncPipelineDisplayBtn;
         function setAllCollapsed(collapsed) {
             var map = loadProjectCollapseMap();
             COLLAPSIBLE_PIPELINE_STAGE_KEYS.forEach(function (sk) { map[sk] = !!collapsed; });
@@ -5285,21 +5273,35 @@
             document.querySelectorAll('.rewrite-stage-card[data-pipeline-collapse="1"]').forEach(function (card) {
                 applyCardCollapsed(card, !!collapsed);
             });
+            syncPipelineDisplayBtn();
         }
         // Экспонируем наружу — нужно, чтобы переключение пресета могло
         // принудительно свернуть верхние этапы нового пресета.
         window.__rewriteSetAllCollapsed = setAllCollapsed;
-        var collapseAllBtn = document.getElementById('rewrite-stages-collapse-all-btn');
-        var expandAllBtn = document.getElementById('rewrite-stages-expand-all-btn');
-        if (collapseAllBtn) collapseAllBtn.addEventListener('click', function () { setAllCollapsed(true); });
-        if (expandAllBtn) expandAllBtn.addEventListener('click', function () { setAllCollapsed(false); });
+        function applyStageCollapseFromStorage() {
+            var saved = loadProjectCollapseMap();
+            document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
+                var sk = card.getAttribute('data-stage-key') || '';
+                if (sk === 'scene_writer') {
+                    applyCardCollapsed(card, false);
+                    return;
+                }
+                var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
+                applyCardCollapsed(card, collapsed);
+            });
+            syncPipelineDisplayBtn();
+        }
+        window.__rewriteApplyStageCollapseFromStorage = applyStageCollapseFromStorage;
+        var pipelineDispBtn = document.getElementById('rewrite-stages-pipeline-display-btn');
+        if (pipelineDispBtn) {
+            pipelineDispBtn.addEventListener('click', function () {
+                var st = visiblePipelineStagesState();
+                if (!st.anyVisible) return;
+                setAllCollapsed(!st.allCollapsed);
+            });
+        }
 
-        var saved = loadProjectCollapseMap();
-        document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
-            var sk = card.getAttribute('data-stage-key') || '';
-            var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
-            applyCardCollapsed(card, collapsed);
-        });
+        applyStageCollapseFromStorage();
 
         document.querySelectorAll('.rewrite-stage-card[data-extra-collapse="1"]').forEach(function (card) {
             var hdr = card.querySelector('.scene-header');
@@ -5308,6 +5310,7 @@
             hdr.style.cursor = 'pointer';
             hdr.addEventListener('click', function (e) {
                 if (e.target.closest('.rewrite-stage-header-tools')) return;
+                if (e.target.closest('.rewrite-stage-card-compact-result')) return;
                 var sk = card.getAttribute('data-stage-key') || '';
                 if (!sk) return;
                 var cur = card.classList.contains('rewrite-stage-card--body-collapsed');
@@ -5389,8 +5392,8 @@
     })();
 
     // --- Rewrite preset toggle (Глубокий / Мягкий) --------------------------
-    // Скрываем карточки, не входящие в выбранный пресет; обновляем заголовок
-    // bar'а «Свернуть/Развернуть все» и список COLLAPSIBLE_PIPELINE_STAGE_KEYS,
+    // Скрываем карточки, не входящие в выбранный пресет; обновляем кнопку «Отобразить»
+    // и список COLLAPSIBLE_PIPELINE_STAGE_KEYS,
     // чтобы кнопки сворачивали именно «первые 10» текущего пресета. Сохраняем
     // выбор пользователя через общий saveToServer (поле rewrite_preset).
     function applyRewritePresetVisibility(preset) {
@@ -5404,11 +5407,7 @@
         }
         var presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[presetKey]) || [];
         if (!presetKeys.length) {
-            console.warn('[rewrite] no stages for preset, using deep:', presetKey);
-            presetKey = 'deep';
-            presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[presetKey]) || [];
-            currentRewritePreset = presetKey;
-            syncPresetToggleButtonsUI(presetKey);
+            console.error('[rewrite] empty stage list after merge for preset:', presetKey);
         }
         var presetSet = {};
         presetKeys.forEach(function (k) { presetSet[k] = true; });
@@ -5436,9 +5435,14 @@
             if (pk === 'scene_writer' || pk === 'scene_writer_live') continue;
             COLLAPSIBLE_PIPELINE_STAGE_KEYS.push(pk);
         }
-        var label = document.getElementById('rewrite-stages-collapse-bar-label');
-        if (label) {
-            label.textContent = 'Этапы 1–' + COLLAPSIBLE_PIPELINE_STAGE_KEYS.length;
+        var stageRangeEl = document.getElementById('rewrite-stages-pipeline-stage-range');
+        if (stageRangeEl) {
+            var _labelEnd = 0;
+            for (var _li = 0; _li < COLLAPSIBLE_PIPELINE_STAGE_KEYS.length; _li++) {
+                var _lk = COLLAPSIBLE_PIPELINE_STAGE_KEYS[_li];
+                if (!PIPELINE_LABEL_SKIP[_lk]) _labelEnd++;
+            }
+            stageRangeEl.textContent = 'Этапы 1\u2013' + _labelEnd;
         }
         // На карточках в выбранных «верхних 10» проставим атрибут data-pipeline-collapse=1
         // — он используется setAllCollapsed для массового сворачивания. В первоначальном
@@ -5459,6 +5463,9 @@
                 card.classList.remove('rewrite-stage-card--body-collapsed');
             }
         });
+        if (typeof window.__rewriteSyncPipelineDisplayBtn === 'function') {
+            try { window.__rewriteSyncPipelineDisplayBtn(); } catch (_) { /* ignore */ }
+        }
     }
     function syncPresetToggleButtonsUI(preset) {
         var sel = document.getElementById('rewrite-preset-select');
@@ -5467,7 +5474,11 @@
         }
         document.querySelectorAll('.rewrite-preset-toggle__btn').forEach(function (btn) {
             var p = btn.getAttribute('data-rewrite-preset') || '';
-            btn.classList.toggle('rewrite-preset-toggle__btn--active', p === preset);
+            var active = p === preset;
+            btn.classList.toggle('rewrite-preset-toggle__btn--active', active);
+            if (btn.getAttribute('role') === 'radio') {
+                btn.setAttribute('aria-checked', active ? 'true' : 'false');
+            }
         });
         var wrap = document.querySelector('.rewrite-preset-toggle');
         if (wrap) wrap.setAttribute('data-rewrite-preset-current', preset);
@@ -5480,6 +5491,7 @@
         async function applyPresetChange(preset) {
             if (preset === currentRewritePreset) return;
             currentRewritePreset = preset;
+            rewriteLsPresetSave(rewriteIdForStageCollapse, preset);
             syncPresetToggleButtonsUI(preset);
             applyRewritePresetVisibility(preset);
             if (typeof window.__rewriteSetAllCollapsed === 'function') {
@@ -5490,8 +5502,33 @@
                 console.warn('[rewrite] preset save failed:', e);
             }
         }
+        function finishPresetUiAfterVisibility() {
+            syncPresetToggleButtonsUI(currentRewritePreset);
+            try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+            if (typeof window.__rewriteApplyStageCollapseFromStorage === 'function') {
+                try { window.__rewriteApplyStageCollapseFromStorage(); } catch (_) { /* ignore */ }
+            }
+        }
         var presetSel = document.getElementById('rewrite-preset-select');
+        var presetButtons = document.querySelectorAll('.rewrite-preset-toggle__btn');
+
+        if (presetButtons.length) {
+            presetButtons.forEach(function (btn) {
+                btn.addEventListener('click', async function () {
+                    var preset = btn.getAttribute('data-rewrite-preset') || 'deep';
+                    if (REWRITE_PRESET_IDS.indexOf(preset) < 0) preset = 'deep';
+                    await applyPresetChange(preset);
+                });
+            });
+            applyRewritePresetVisibility(currentRewritePreset);
+            finishPresetUiAfterVisibility();
+            if (!rewriteLsPresetRead(rewriteIdForStageCollapse)) {
+                rewriteLsPresetSave(rewriteIdForStageCollapse, currentRewritePreset);
+            }
+            return;
+        }
         if (presetSel) {
+            try { presetSel.value = currentRewritePreset; } catch (_) { /* ignore */ }
             var sv = String(presetSel.value || '');
             if (REWRITE_PRESET_IDS.indexOf(sv) < 0) {
                 try { presetSel.value = 'deep'; } catch (_) { /* ignore */ }
@@ -5503,21 +5540,12 @@
                 await applyPresetChange(preset);
             });
             applyRewritePresetVisibility(currentRewritePreset);
-            syncPresetToggleButtonsUI(currentRewritePreset);
-            try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+            finishPresetUiAfterVisibility();
+            if (!rewriteLsPresetRead(rewriteIdForStageCollapse)) {
+                rewriteLsPresetSave(rewriteIdForStageCollapse, currentRewritePreset);
+            }
             return;
         }
-        var buttons = document.querySelectorAll('.rewrite-preset-toggle__btn');
-        if (!buttons.length) return;
-        buttons.forEach(function (btn) {
-            btn.addEventListener('click', async function () {
-                var preset = btn.getAttribute('data-rewrite-preset') || 'deep';
-                await applyPresetChange(preset);
-            });
-        });
-        applyRewritePresetVisibility(currentRewritePreset);
-        syncPresetToggleButtonsUI(currentRewritePreset);
-        try { syncStageRunButtons(); } catch (_) { /* ignore */ }
     })();
 
     // ===== Semantic Text Analyzer =====
@@ -6256,10 +6284,12 @@
         async function loadContent(name) {
             setMsg('Загрузка…', null);
             try {
-                const resp = await fetch('/api/locked-prompts/' + encodeURIComponent(name), { method: 'GET' });
+                const resp = await fetch(lockedPromptApiUrl(name), { method: 'GET', credentials: 'same-origin' });
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || !data.ok) {
-                    setMsg('Не удалось загрузить промт: ' + (data && data.error ? data.error : resp.status), 'err');
+                    var errPart = (data && data.error) ? String(data.error) : String(resp.status);
+                    var reqPart = (data && data.requested) ? (' («' + String(data.requested) + '»)') : '';
+                    setMsg('Не удалось загрузить промт: ' + errPart + reqPart, 'err');
                     return false;
                 }
                 state.loadedContent = String(data.content || '');
@@ -6276,7 +6306,17 @@
         function updateBadge(name, present) {
             const badge = document.querySelector('[data-locked-prompt-badge="' + name + '"]');
             if (!badge) return;
-            var label = (String(name).slice(-5) === '_user') ? 'User Promt: ' : 'System Promt: ';
+            var nm = String(name || '');
+            var label;
+            if (nm === 'rewrite_system_rules') {
+                label = 'System Rules: ';
+            } else if (nm.indexOf('user_prompt_') === 0) {
+                label = 'User Promt: ';
+            } else if (nm.slice(-5) === '_user') {
+                label = 'User Promt: ';
+            } else {
+                label = 'System Promt: ';
+            }
             badge.textContent = label + (present ? 'YES' : 'NO');
             badge.classList.toggle('locked-prompt-badge--yes', present);
             badge.classList.toggle('locked-prompt-badge--no', !present);
@@ -6290,10 +6330,11 @@
             state.saving = true;
             setMsg('Сохраняем…', null);
             try {
-                const resp = await fetch('/api/locked-prompts/' + encodeURIComponent(state.name), {
+                const resp = await fetch(lockedPromptApiUrl(state.name), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin: state.pin, content: textarea.value })
+                    body: JSON.stringify({ pin: state.pin, content: textarea.value }),
+                    credentials: 'same-origin',
                 });
                 const data = await resp.json().catch(() => ({}));
                 if (resp.status === 401) {
@@ -6340,7 +6381,7 @@
             const btn = ev.target.closest && ev.target.closest('[data-locked-prompt-edit]');
             if (!btn) return;
             ev.preventDefault();
-            const name = btn.getAttribute('data-locked-prompt-edit');
+            const name = (btn.getAttribute('data-locked-prompt-edit') || '').trim();
             const label = btn.getAttribute('data-locked-prompt-label') || 'Промт';
             if (!name) return;
             state.name = name;

@@ -82,6 +82,18 @@
 
         {% if rw %}
         {% include '_rewrite_block.html' %}
+        {% elif rewrite_id_allowed %}
+        <section class="scene-card rewrite-pipeline rewrite-pipeline--missing" role="status">
+            <h2 class="scene-id rewrite-pipeline-runner__title">ReWrite</h2>
+            <p class="tts-warning">
+                Блок ReWrite не загрузился: нет читаемого файла
+                <code>data/rewrite_jobs/{{ job_id }}/project.json</code>
+                или не удалось создать его на диске. Обычно помогает обновить страницу
+                после перезапуска приложения. Проверьте права на каталог
+                <code>data/rewrite_jobs</code> и журнал сервера (строка
+                <code>ensure rewrite project failed</code>).
+            </p>
+        </section>
         {% endif %}
 
         <section class="tts-section video-panel" id="elevenlabs-tts">

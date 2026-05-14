@@ -79,7 +79,45 @@ LOCKED_PROMPTS: dict[str, dict] = {
             "ТЕКСТ ДЛЯ АНАЛИЗА:\n"
         ),
     },
+    "rewrite_system_rules": {
+        "label": "Rewrite — System Rules",
+        "filename": "rewrite_system_rules.txt",
+        "default": (
+            "Дополнительные правила для этапа Rewrite (дополняют «Rewrite System Promt» в UI).\n\n"
+            "— Не выдумывай факты: имена, цифры и утверждения только из исходного текста.\n"
+            "— Меняй формулировки и примеры, сохраняй логику, структуру и факты оригинала.\n"
+            "— Стиль: разговорный монолог для YouTube, короткие фразы, без канцелярита.\n"
+            "— Ответ: только готовый сценарий, без вступлений и комментариев.\n\n"
+            "Плейсхолдеры (подставляются при запуске): "
+            "{{LANGUAGE}}, {{DURATION}}, {{ORIGINAL_TITLE}}, {{MASTER_PROMT}}, {{HERO_PROMT}}."
+        ),
+    },
 }
+
+# User Promt по этапам ReWrite — отдельный файл на этап (редактирование только по пин-коду).
+_USER_PROMPT_STAGE_LABELS: tuple[tuple[str, str], ...] = (
+    ("analysis", "Analysis"),
+    ("structure", "Architect"),
+    ("draft1", "Block Writer"),
+    ("rewrite", "Rewrite"),
+    ("retention_editor", "Retention Editor"),
+    ("hook_editor", "Hook Editor"),
+    ("flow_editor", "Flow Editor"),
+    ("persona_editor", "Persona Editor"),
+    ("voiceover_editor", "Voiceover Editor"),
+    ("title_strategist", "Title Strategist"),
+    ("structure_splitter", "Structure Splitter"),
+    ("scene_writer", "Scene Writer"),
+    ("scene_writer_live", "Scene Writer Live"),
+    ("youtube_packaging", "YouTube packaging engine"),
+)
+for _sk, _lbl in _USER_PROMPT_STAGE_LABELS:
+    _nm = f"user_prompt_{_sk}"
+    LOCKED_PROMPTS[_nm] = {
+        "label": f"{_lbl} — User Promt",
+        "filename": f"user_prompt_{_sk}.txt",
+        "default": "",
+    }
 
 
 def list_locked_prompts() -> dict[str, dict]:

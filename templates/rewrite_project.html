@@ -401,15 +401,19 @@
                 </select>
             </div>
 
-            <div class="rewrite-stages-collapse-bar" role="toolbar" aria-label="Сворачивание верхних этапов пресета">
-                <span class="rewrite-stages-collapse-bar__label" id="rewrite-stages-collapse-bar-label">Этапы 1–{{ collapsible_pipeline_stages|length }}</span>
-                <div class="rewrite-stages-collapse-bar__actions">
-                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-stages-collapse-all-btn">Свернуть все</button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-stages-expand-all-btn">Развернуть все</button>
-                </div>
+            <div class="rewrite-stages-pipeline-display-wrap">
+                <button type="button"
+                    class="rewrite-stages-collapsible__toggle rewrite-stages-pipeline-display-btn"
+                    id="rewrite-stages-pipeline-display-btn"
+                    aria-expanded="false"
+                    aria-controls="rewrite-stages-list">
+                    <span class="rewrite-stages-pipeline-display-btn__chev" aria-hidden="true">▾</span>
+                    <span class="rewrite-stages-collapsible__title">Отобразить</span>
+                </button>
+                <span class="rewrite-stages-pipeline-display-label" id="rewrite-stages-pipeline-stage-range" aria-live="polite">Этапы 1–{{ collapsible_pipeline_stages|length }}</span>
             </div>
 
-            <div class="scenes-grid rewrite-stages-list">
+            <div class="scenes-grid rewrite-stages-list" id="rewrite-stages-list">
             {% for stage_key, stage_label in rewrite_stages %}
             {% set cell = rw.stages[stage_key] %}
             {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
@@ -445,10 +449,18 @@
                                     <span class="rewrite-stage-index" aria-label="Этап {{ _stage_display_index }}" data-stage-display-index="{{ _stage_display_index }}">{{ _stage_display_index }}</span>
                                     <div class="scene-id rewrite-stage-title-text">{{ stage_label }}</div>
                                 </div>
+                                {% if stage_collapsible %}
+                                <div class="rewrite-stage-card-compact-result">
+                                    <span class="rewrite-stages-compact__pair">
+                                        <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result</span>
+                                        {% if stage_key != 'inbox' %}
+                                        <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" title="Запустить этап" aria-label="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
+                                        <span class="rewrite-stage-run-blocked rewrite-stage-compact-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
                                 <div class="rewrite-stage-header-tools">
-                                    {% if stage_key != 'inbox' %}
-                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
-                                    {% endif %}
                                     <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
                                         <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
                                         <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
@@ -477,6 +489,9 @@
                                 </select>
                             </div>
                             <div class="rewrite-stage-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-system-cell{% endif %}">
+                                <div class="rewrite-stage-json-export-row">
+                                    <button type="button" class="btn btn-secondary btn-sm rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>json</button>
+                                </div>
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if has_prompt else 'no' }} rewrite-stage-prompt-badge">System Promt: {{ 'YES' if has_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-prompt-toggle{% if prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
@@ -488,6 +503,17 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
                                 </div>
                             </div>
+                            {% if stage_key == 'rewrite' %}
+                            {% set _rsr_lp = (locked_prompts_state|default({}, true)).get('rewrite_system_rules') or {} %}
+                            {% set has_rewrite_system_rules = _rsr_lp.get('present')|default(false) %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-system-rules-cell">
+                                <div class="rewrite-stage-json-export-row rewrite-stage-json-export-row--rules-spacer" aria-hidden="true"></div>
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_rewrite_system_rules else 'no' }}" id="locked-prompt-badge-rewrite_system_rules" data-locked-prompt-badge="rewrite_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_rewrite_system_rules else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="rewrite_system_rules" data-locked-prompt-label="Rewrite — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </div>
+                            </div>
+                            {% endif %}
                             {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'rewrite' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'voiceover_editor' or stage_key == 'title_strategist' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
@@ -564,7 +590,7 @@
                         {% endif %}{# stage_key != 'inbox' #}
                         <div class="rewrite-stage-row rewrite-stage-row--result">
                             <div class="slot-header rewrite-stage-result-toolbar">
-                                <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result: {{ 'DONE' if has_result else 'Pending' }}</span>
+                                <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge">Result</span>
                                 {% if stage_key != 'inbox' %}
                                 <button type="button" class="btn-regenerate rewrite-stage-run" title="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
                                 <span class="rewrite-stage-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
@@ -621,7 +647,7 @@
                         </div>
                     </div>
                     <div class="rewrite-source-toolbar slot-header">
-                        <span class="slot-badge badge-yes">Result</span>
+                        <span class="slot-badge badge-{{ 'yes' if (voiceover_final_text or '')|trim else 'no' }}" id="rewrite-voiceover-final-result-badge">Result</span>
                         <button type="button" class="rewrite-lock-toggle btn-icon{% if vf_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                             <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                             <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -830,7 +856,22 @@
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
     let COLLAPSIBLE_PIPELINE_STAGE_KEYS = {{ collapsible_pipeline_stages | tojson }};
-    const REWRITE_PRESET_STAGE_KEYS = {{ rewrite_preset_stage_keys | tojson }};
+    const REWRITE_PRESET_STAGE_KEYS_SERVER = {{ rewrite_preset_stage_keys | tojson }};
+    const REWRITE_PRESET_STAGE_KEYS_FALLBACK = {
+        deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
+        soft: ['rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
+        prewritten: ['inbox', 'rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging']
+    };
+    const REWRITE_PRESET_STAGE_KEYS = (function () {
+        var src = REWRITE_PRESET_STAGE_KEYS_SERVER || {};
+        var out = {};
+        ['deep', 'soft', 'prewritten'].forEach(function (k) {
+            var a = src[k];
+            var fb = REWRITE_PRESET_STAGE_KEYS_FALLBACK[k] || [];
+            out[k] = (Array.isArray(a) && a.length) ? a.slice() : fb.slice();
+        });
+        return out;
+    })();
     const REWRITE_PRESET_LABELS = {{ rewrite_preset_labels | tojson }};
     let currentRewritePreset = {{ rewrite_preset_current | tojson }};
     const rewriteIdForStageCollapse = {{ rw.rewrite_id | tojson }};
@@ -2576,6 +2617,20 @@
                 }
                 runBtn.disabled = anyRunning || !ok || !openaiOk;
             }
+            const compactRun = block.querySelector('.rewrite-stage-compact-run');
+            const compactBlocked = block.querySelector('.rewrite-stage-compact-run-blocked');
+            if (compactRun && compactBlocked && runBtn && blockedEl) {
+                if (ok) {
+                    compactRun.removeAttribute('hidden');
+                    compactBlocked.setAttribute('hidden', '');
+                } else {
+                    compactRun.setAttribute('hidden', '');
+                    compactBlocked.removeAttribute('hidden');
+                }
+                var stageBusyUi = block.classList.contains('rewrite-stage-card--running');
+                compactRun.classList.toggle('btn-regenerate--busy', stageBusyUi);
+                compactRun.disabled = anyRunning || !ok || !openaiOk || stageBusyUi;
+            }
             if (apiBtn) {
                 apiBtn.disabled = anyRunning || !ok || !openaiOk;
             }
@@ -2616,6 +2671,13 @@
         var v = Number(n);
         if (!isFinite(v)) return String(n == null ? '' : n);
         return String(Math.trunc(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202F');
+    }
+
+    function applyTextBadgeState(badgeEl, ta) {
+        if (!badgeEl || !ta) return;
+        var has = !!(String(ta.value || '').trim());
+        badgeEl.classList.toggle('badge-yes', has);
+        badgeEl.classList.toggle('badge-no', !has);
     }
 
     function updateSourceCounts() {
@@ -2933,7 +2995,10 @@
                         if (tv) tv.textContent = String(n);
                     }
                     block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'rewrite' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
+                    if (key === 'rewrite') {
+                        block.setAttribute('data-user-prompt-locked', '0');
+                        applyAnalysisUserPromptLockUI(block);
+                    } else if (key === 'analysis' || key === 'structure' || key === 'draft1' || key === 'retention_editor' || key === 'hook_editor' || key === 'flow_editor' || key === 'persona_editor' || key === 'voiceover_editor' || key === 'title_strategist' || key === 'structure_splitter' || key === 'scene_writer' || key === 'scene_writer_live' || key === 'youtube_packaging') {
                         block.setAttribute('data-user-prompt-locked', '1');
                     }
             if (key === 'scene_writer') {
@@ -3549,6 +3614,18 @@
         }
     }
 
+    /** Программно замок/размок User Promt на карточке этапа (`locked` true = только просмотр). */
+    window.__rewriteSetStageUserPromptLocked = function (stageKey, locked) {
+        var sk = String(stageKey || '').trim();
+        if (!sk) return false;
+        var block = document.querySelector('.rewrite-stage-card[data-stage-key="' + sk + '"]');
+        if (!block) return false;
+        block.setAttribute('data-user-prompt-locked', locked ? '1' : '0');
+        applyAnalysisUserPromptLockUI(block);
+        if (typeof scheduleAutosave === 'function') scheduleAutosave(0);
+        return true;
+    };
+
     function syncStylePromptBadge(block) {
         const promptEl = block.querySelector('.rewrite-stage-style-prompt');
         const badge = block.querySelector('.rewrite-stage-style-prompt-badge');
@@ -3705,6 +3782,7 @@
         syncPipelineStopButton();
         document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
+        document.querySelectorAll('.rewrite-stage-compact-run').forEach(function (b) { b.disabled = dis; });
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
         }
@@ -3774,7 +3852,7 @@
                 ta.disabled = !openaiOk;
                 ta.readOnly = dis || locked;
             }
-            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
+            if (block.getAttribute('data-stage-key') === 'analysis' || block.getAttribute('data-stage-key') === 'structure' || block.getAttribute('data-stage-key') === 'draft1' || block.getAttribute('data-stage-key') === 'rewrite' || block.getAttribute('data-stage-key') === 'retention_editor' || block.getAttribute('data-stage-key') === 'hook_editor' || block.getAttribute('data-stage-key') === 'flow_editor' || block.getAttribute('data-stage-key') === 'persona_editor' || block.getAttribute('data-stage-key') === 'voiceover_editor' || block.getAttribute('data-stage-key') === 'title_strategist' || block.getAttribute('data-stage-key') === 'structure_splitter' || block.getAttribute('data-stage-key') === 'scene_writer' || block.getAttribute('data-stage-key') === 'scene_writer_live' || block.getAttribute('data-stage-key') === 'youtube_packaging') {
                 const uLocked = block.getAttribute('data-user-prompt-locked') === '1';
                 const uTa = block.querySelector('.rewrite-stage-user-prompt');
                 if (uTa) {
@@ -3810,7 +3888,11 @@
     }
 
     function updateResultCounts(block) {
+        if (!block) return;
         const ta = block.querySelector('.rewrite-stage-result');
+        block.querySelectorAll('.rewrite-stage-result-badge').forEach(function (badge) {
+            if (badge && ta) applyTextBadgeState(badge, ta);
+        });
         const el = block.querySelector('.rewrite-stage-result-counts');
         if (!ta || !el) return;
         if (el.getAttribute('data-copy-hold') === '1') return;
@@ -4357,7 +4439,6 @@
         block.setAttribute('data-run-started-at', String(Date.now()));
         resetStageRunUi(block);
         const resTextarea = block.querySelector('.rewrite-stage-result');
-        const resultBadge = block.querySelector('.rewrite-stage-result-badge');
         const sceneWriterCheckWrap = block.querySelector('[data-scene-writer-check]');
         const sceneMediaCheckWrap = block.querySelector('[data-scene-media-check]');
         const structureSplitterCheckWrap = block.querySelector('[data-structure-splitter-check]');
@@ -4523,11 +4604,6 @@
                             resTextarea.classList.remove('rewrite-stage-result--busy');
                             resTextarea.classList.add('rewrite-stage-result--error');
                             clearStageStatusUi(block);
-                            if (resultBadge) {
-                                resultBadge.textContent = 'Result: Pending';
-                                resultBadge.classList.remove('badge-yes');
-                                resultBadge.classList.add('badge-no');
-                            }
                             updateResultCounts(block);
                             syncStageRunButtons();
                         } else {
@@ -4559,11 +4635,6 @@
                             resTextarea.classList.remove('rewrite-stage-result--error');
                         }
                         clearStageStatusUi(block);
-                        if (resultBadge) {
-                            resultBadge.textContent = 'Result: DONE';
-                            resultBadge.classList.remove('badge-no');
-                            resultBadge.classList.add('badge-yes');
-                        }
                         updateResultCounts(block);
                         renderEditorCheck(block);
                         if (stageKey === 'youtube_packaging') {
@@ -4816,6 +4887,14 @@
                 runStage(key, block);
             });
         }
+        const compactRun = block.querySelector('.rewrite-stage-compact-run');
+        if (compactRun && key && runBtn) {
+            compactRun.addEventListener('click', function () {
+                if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) return;
+                if (compactRun.disabled) return;
+                runBtn.click();
+            });
+        }
         const apiBtn = block.querySelector('.rewrite-stage-api-export');
         if (apiBtn && key) {
             apiBtn.addEventListener('click', function () {
@@ -4941,6 +5020,7 @@
         var ta = document.getElementById('rewrite-voiceover-final-textarea');
         if (!ta) return;
         var counts = document.getElementById('rewrite-voiceover-final-counts');
+        var resultBadge = document.getElementById('rewrite-voiceover-final-result-badge');
         var toggleBtn = document.getElementById('rewrite-voiceover-final-toggle');
         var copyBtn = document.getElementById('rewrite-voiceover-final-copy-btn');
         var voEditorTa = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-result');
@@ -4966,6 +5046,7 @@
             return normalizeEditedText(s);
         }
         function updateCounts() {
+            if (resultBadge) applyTextBadgeState(resultBadge, ta);
             if (!counts) return;
             var v = ta.value || '';
             counts.textContent = formatNumRu(v.length) + ' симв. · ' + formatNumRu(countWords(v)) + ' сл.';
@@ -5463,6 +5544,27 @@
                 card.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             }
         }
+        function visiblePipelineStagesState() {
+            var allCollapsed = true;
+            var anyVisible = false;
+            document.querySelectorAll('.rewrite-stage-card[data-pipeline-collapse="1"]').forEach(function (card) {
+                if (card.classList.contains('rewrite-stage-card--hidden-by-preset')) return;
+                anyVisible = true;
+                if (!card.classList.contains('rewrite-stage-card--body-collapsed')) allCollapsed = false;
+            });
+            return { allCollapsed: anyVisible ? allCollapsed : true, anyVisible: anyVisible };
+        }
+        function syncPipelineDisplayBtn() {
+            var btn = document.getElementById('rewrite-stages-pipeline-display-btn');
+            if (!btn) return;
+            var st = visiblePipelineStagesState();
+            var title = btn.querySelector('.rewrite-stages-collapsible__title');
+            var chev = btn.querySelector('.rewrite-stages-pipeline-display-btn__chev');
+            btn.setAttribute('aria-expanded', st.allCollapsed ? 'false' : 'true');
+            if (title) title.textContent = st.allCollapsed ? 'Отобразить' : 'Скрыть';
+            if (chev) chev.textContent = st.allCollapsed ? '▾' : '▴';
+        }
+        window.__rewriteSyncPipelineDisplayBtn = syncPipelineDisplayBtn;
         function setAllCollapsed(collapsed) {
             var map = loadProjectCollapseMap();
             COLLAPSIBLE_PIPELINE_STAGE_KEYS.forEach(function (sk) { map[sk] = !!collapsed; });
@@ -5470,22 +5572,35 @@
             document.querySelectorAll('.rewrite-stage-card[data-pipeline-collapse="1"]').forEach(function (card) {
                 applyCardCollapsed(card, !!collapsed);
             });
+            syncPipelineDisplayBtn();
         }
         // Экспонируем наружу — нужно, чтобы переключение пресета могло
         // принудительно свернуть верхние этапы нового пресета.
         window.__rewriteSetAllCollapsed = setAllCollapsed;
-        var collapseAllBtn = document.getElementById('rewrite-stages-collapse-all-btn');
-        var expandAllBtn = document.getElementById('rewrite-stages-expand-all-btn');
-        if (collapseAllBtn) collapseAllBtn.addEventListener('click', function () { setAllCollapsed(true); });
-        if (expandAllBtn) expandAllBtn.addEventListener('click', function () { setAllCollapsed(false); });
+        function applyStageCollapseFromStorage() {
+            var saved = loadProjectCollapseMap();
+            document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
+                var sk = card.getAttribute('data-stage-key') || '';
+                if (sk === 'scene_writer') {
+                    applyCardCollapsed(card, false);
+                    return;
+                }
+                var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
+                applyCardCollapsed(card, collapsed);
+            });
+            syncPipelineDisplayBtn();
+        }
+        window.__rewriteApplyStageCollapseFromStorage = applyStageCollapseFromStorage;
+        var pipelineDispBtn = document.getElementById('rewrite-stages-pipeline-display-btn');
+        if (pipelineDispBtn) {
+            pipelineDispBtn.addEventListener('click', function () {
+                var st = visiblePipelineStagesState();
+                if (!st.anyVisible) return;
+                setAllCollapsed(!st.allCollapsed);
+            });
+        }
 
-        var saved = loadProjectCollapseMap();
-        document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
-            var sk = card.getAttribute('data-stage-key') || '';
-            var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
-            applyCardCollapsed(card, collapsed);
-        });
-
+        applyStageCollapseFromStorage();
         document.querySelectorAll('.rewrite-stage-card[data-extra-collapse="1"]').forEach(function (card) {
             var hdr = card.querySelector('.scene-header');
             if (!hdr) return;
@@ -5493,6 +5608,7 @@
             hdr.style.cursor = 'pointer';
             hdr.addEventListener('click', function (e) {
                 if (e.target.closest('.rewrite-stage-header-tools')) return;
+                if (e.target.closest('.rewrite-stage-card-compact-result')) return;
                 var sk = card.getAttribute('data-stage-key') || '';
                 if (!sk) return;
                 var cur = card.classList.contains('rewrite-stage-card--body-collapsed');
@@ -5537,8 +5653,8 @@
     })();
 
     // --- Rewrite preset toggle (Глубокий / Мягкий) --------------------------
-    // Скрываем карточки, не входящие в выбранный пресет; обновляем заголовок
-    // bar'а «Свернуть/Развернуть все» и список COLLAPSIBLE_PIPELINE_STAGE_KEYS,
+    // Скрываем карточки, не входящие в выбранный пресет; обновляем кнопку «Отобразить»
+    // и список COLLAPSIBLE_PIPELINE_STAGE_KEYS,
     // чтобы кнопки сворачивали именно «первые 10» текущего пресета. Сохраняем
     // выбор пользователя через общий saveToServer (поле rewrite_preset).
     function applyRewritePresetVisibility(preset) {
@@ -5552,11 +5668,7 @@
         }
         var presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[presetKey]) || [];
         if (!presetKeys.length) {
-            console.warn('[rewrite] no stages for preset, using deep:', presetKey);
-            presetKey = 'deep';
-            presetKeys = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[presetKey]) || [];
-            currentRewritePreset = presetKey;
-            syncPresetToggleButtonsUI(presetKey);
+            console.error('[rewrite] empty stage list after merge for preset:', presetKey);
         }
         var presetSet = {};
         presetKeys.forEach(function (k) { presetSet[k] = true; });
@@ -5584,9 +5696,9 @@
             if (pk === 'scene_writer' || pk === 'scene_writer_live') continue;
             COLLAPSIBLE_PIPELINE_STAGE_KEYS.push(pk);
         }
-        var label = document.getElementById('rewrite-stages-collapse-bar-label');
-        if (label) {
-            label.textContent = 'Этапы 1–' + COLLAPSIBLE_PIPELINE_STAGE_KEYS.length;
+        var stageRangeEl = document.getElementById('rewrite-stages-pipeline-stage-range');
+        if (stageRangeEl) {
+            stageRangeEl.textContent = 'Этапы 1\u2013' + COLLAPSIBLE_PIPELINE_STAGE_KEYS.length;
         }
         // На карточках в выбранных «верхних 10» проставим атрибут data-pipeline-collapse=1
         // — он используется setAllCollapsed для массового сворачивания. В первоначальном
@@ -5607,6 +5719,9 @@
                 card.classList.remove('rewrite-stage-card--body-collapsed');
             }
         });
+        if (typeof window.__rewriteSyncPipelineDisplayBtn === 'function') {
+            try { window.__rewriteSyncPipelineDisplayBtn(); } catch (_) { /* ignore */ }
+        }
     }
     function syncPresetToggleButtonsUI(preset) {
         var sel = document.getElementById('rewrite-preset-select');
@@ -5653,6 +5768,9 @@
             applyRewritePresetVisibility(currentRewritePreset);
             syncPresetToggleButtonsUI(currentRewritePreset);
             try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+            if (typeof window.__rewriteApplyStageCollapseFromStorage === 'function') {
+                try { window.__rewriteApplyStageCollapseFromStorage(); } catch (_) { /* ignore */ }
+            }
             return;
         }
         var buttons = document.querySelectorAll('.rewrite-preset-toggle__btn');
@@ -5666,6 +5784,9 @@
         applyRewritePresetVisibility(currentRewritePreset);
         syncPresetToggleButtonsUI(currentRewritePreset);
         try { syncStageRunButtons(); } catch (_) { /* ignore */ }
+        if (typeof window.__rewriteApplyStageCollapseFromStorage === 'function') {
+            try { window.__rewriteApplyStageCollapseFromStorage(); } catch (_) { /* ignore */ }
+        }
     })();
 })();
     </script>
