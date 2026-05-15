@@ -540,25 +540,25 @@
                 </div>
             </div>
 
-            {# «Свернуть все»: до 11 этапов с начала пресета, но без Scene Writer / SWL —
+            {# «Свернуть все»: до 11 этапов с начала пресета, но без Scene Writer —
                Deep: включаем structure_splitter (11-й); иначе карточка без data-pipeline-collapse
                навсегда в rewrite-stage-card--body-collapsed. #}
             {% set _preset_keys = rewrite_preset_stage_keys[rewrite_preset_current] %}
             {% set ns_col = namespace(lst=[]) %}
             {% for k in _preset_keys %}
-                {% if k not in ('scene_writer', 'scene_writer_live') and ns_col.lst|length < 11 %}
+                {% if k != 'scene_writer' and ns_col.lst|length < 11 %}
                     {% set _ = ns_col.lst.append(k) %}
                 {% endif %}
             {% endfor %}
             {% set collapsible_pipeline_stages = ns_col.lst %}
-            {% set collapsible_extra_stages = ['scene_writer_live', 'youtube_packaging'] %}
+            {% set collapsible_extra_stages = ['youtube_packaging'] %}
             {# Объединение по ВСЕМ пресетам — нужно, чтобы при переключении пресета на клиенте
                карточки уже имели класс --collapsible и обёртку rewrite-stage-collapsible-inner. #}
             {% set ns_union = namespace(lst=[]) %}
             {% for _preset_id, _plist in rewrite_preset_stage_keys.items() %}
                 {% set ns_each = namespace(cnt=0) %}
                 {% for _k in _plist %}
-                    {% if _k not in ('scene_writer', 'scene_writer_live') and ns_each.cnt < 11 %}
+                    {% if _k != 'scene_writer' and ns_each.cnt < 11 %}
                         {% if _k not in ns_union.lst %}{% set _ = ns_union.lst.append(_k) %}{% endif %}
                         {% set ns_each.cnt = ns_each.cnt + 1 %}
                     {% endif %}
@@ -632,7 +632,7 @@
                текущего пресета и обновляется JS-скриптом при переключении. #}
             {% set stage_collapsible = stage_key in union_collapsible_stages or stage_key in collapsible_extra_stages %}
             {% set _in_current_preset = stage_key in _preset_keys %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-header-top">
@@ -834,7 +834,7 @@
                                 </div>
                             </div>
                             {% else %}
-                            <div class="rewrite-stage-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-system-cell{% endif %}">
+                            <div class="rewrite-stage-prompt-cell">
                                 <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
                                     {% if not stage_collapsible %}
                                     <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
@@ -852,11 +852,11 @@
                                 </div>
                             </div>
                             {% endif %}
-                            {% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %}
                             {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
                             {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
                             {% set _up_lock = 'user_prompt_' ~ stage_key %}
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-user-cell{% endif %}">
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
@@ -886,38 +886,6 @@
                                 </div>
                                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-past-prompt">
                                     <textarea id="rewrite-stage-{{ stage_key }}-past-prompt" class="rewrite-stage-past-prompt rewrite-slot-textarea{% if past_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Дополнительный past-контекст для Scene Writer…" {% if not openai_key_set %}disabled{% elif past_prompt_locked %}readonly{% endif %}>{{ cell.past_prompt or '' }}</textarea>
-                                </div>
-                            </div>
-                            {% endif %}
-                            {% if stage_key == 'scene_writer_live' %}
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-swl-content-cell">
-                                {% set media_type = ((cell.style_prompt or 'photos')|trim|lower) %}
-                                {% if media_type not in ['photos', 'videos', 'mixed'] %}{% set media_type = 'photos' %}{% endif %}
-                                <h3 class="rewrite-source-subtitle">Content Type</h3>
-                                <select class="tts-select rewrite-global-model-select rewrite-stage-content-type" {% if not openai_key_set %}disabled{% endif %} aria-label="Content Type для Scene Writer Live">
-                                    <option value="photos" {% if media_type == 'photos' %}selected{% endif %}>Photos</option>
-                                    <option value="videos" {% if media_type == 'videos' %}selected{% endif %}>Videos</option>
-                                    <option value="mixed" {% if media_type == 'mixed' %}selected{% endif %}>Photos &amp; Videos</option>
-                                </select>
-                            </div>
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-swl-target-cell">
-                                {% set target_pct = (cell.past_prompt or '50')|trim %}
-                                <h3 class="rewrite-source-subtitle">Target</h3>
-                                <p class="rewrite-source-subhint">Процент живых сцен среди сгенерированых.</p>
-                                <div class="rewrite-source-toolbar slot-header">
-                                    <span class="slot-badge badge-yes">Target</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-target-toggle{% if past_prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                    </button>
-                                </div>
-                                <div class="tts-slider-block rewrite-source-duration">
-                                    <label class="tts-slider-label">Процент <span class="tts-slider-val rewrite-stage-target-range__num">{{ target_pct if target_pct else '50' }}</span>%</label>
-                                    <input type="range" class="rewrite-stage-target-range tts-range" min="1" max="100" step="1" value="{{ target_pct if target_pct else '50' }}" {% if not openai_key_set or past_prompt_locked %}disabled{% endif %} aria-valuemin="1" aria-valuemax="100">
-                                    <div class="tts-slider-ends">
-                                        <span>1</span>
-                                        <span>100</span>
-                                    </div>
                                 </div>
                             </div>
                             {% endif %}
@@ -975,9 +943,6 @@
                             {% endif %}
                             {% if stage_key == 'scene_writer' %}
                             <div class="rewrite-scene-writer-check" data-scene-writer-check></div>
-                            {% endif %}
-                            {% if stage_key == 'scene_writer_live' %}
-                            <div class="rewrite-scene-writer-check" data-scene-media-check></div>
                             {% endif %}
                             {% if stage_key == 'elevenlabs_editor' %}
                             <div class="rewrite-scene-writer-check" data-elevenlabs-editor-check></div>

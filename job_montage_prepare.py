@@ -3,7 +3,7 @@
 
 Каталог: data/job_remotion/<job_id>/
   voiceover.mp3
-  media/scene_001.<ext>            (видео > start image > первый выбранный Pexels)
+  media/scene_001.<ext>            (видео > start image)
   media/scene_001.kind              ("video" | "image")
   props.json
 
@@ -43,7 +43,7 @@ def _pick_scene_media(
     `prefer_video=True`: берём сгенерированное видео сцены, при его отсутствии —
     Start image.
 
-    Pexels‑результаты в монтаж не идут.
+    Только собственные URL сцены (start/video).
     """
     if not isinstance(scene, dict):
         return None
@@ -356,7 +356,6 @@ def prepare_montage(
     job: dict[str, Any],
     base_dir: Path,
     audio_src: Path | None,
-    pexels_dir: Path | None,
     fetch_url_bytes: Callable[..., bytes | None],
     remotion_public_dir: Path | None = None,
     progress: Callable[[dict[str, Any]], None] | None = None,
@@ -463,41 +462,18 @@ def prepare_montage(
         kind = pick["kind"]
         source = pick["source"]
         target_path: Path | None = None
-
-        if source == "pexels":
-            local_url = pick.get("local_url") or ""
-            prefix = f"/job/{job_id}/pexels/"
-            local_file: Path | None = None
-            if pexels_dir and isinstance(local_url, str) and local_url.startswith(prefix):
-                fname = local_url[len(prefix):]
-                cand = (pexels_dir / fname).resolve()
+        url = str(pick.get("url") or "").strip()
+        if url:
+            ext = _ext_from_url(url, ".mp4" if kind == "video" else ".jpg")
+            target_path = media_dir / f"{stem}{ext}"
+            data = fetch_url_bytes(url)
+            if data:
                 try:
-                    cand.relative_to(pexels_dir.resolve())
-                    if cand.is_file():
-                        local_file = cand
-                except ValueError:
-                    local_file = None
-            if local_file:
-                ext = local_file.suffix or (".mp4" if kind == "video" else ".jpg")
-                target_path = media_dir / f"{stem}{ext}"
-                try:
-                    shutil.copyfile(local_file, target_path)
+                    target_path.write_bytes(data)
                 except OSError:
                     target_path = None
-
-        if target_path is None:
-            url = str(pick.get("url") or "").strip()
-            if url:
-                ext = _ext_from_url(url, ".mp4" if kind == "video" else ".jpg")
-                target_path = media_dir / f"{stem}{ext}"
-                data = fetch_url_bytes(url)
-                if data:
-                    try:
-                        target_path.write_bytes(data)
-                    except OSError:
-                        target_path = None
-                else:
-                    target_path = None
+            else:
+                target_path = None
 
         if target_path and target_path.is_file():
             if kind == "image":

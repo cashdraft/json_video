@@ -80,11 +80,6 @@ from elevenlabs_client import (
     text_to_speech_with_timestamps,
 )
 from job_scene_audio_align import align_scenes_to_word_timings, merge_audio_timing_into_scenes
-from elevenlabs_templates import (
-    list_elevenlabs_template_names,
-    load_elevenlabs_template,
-    save_elevenlabs_template,
-)
 from kie_client import (
     create_grok_image_to_video_task,
     create_image_task,
@@ -174,7 +169,6 @@ from task_manager import (
 # --- Paths ---
 JOBS_DIR = BASE_DIR / "data" / "jobs"
 JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
-JOB_PEXELS_DIR = BASE_DIR / "data" / "job_pexels"
 REWRITE_JOBS_DIR = BASE_DIR / "data" / "rewrite_jobs"
 REWRITE_MEDIA_DIR = BASE_DIR / "data" / "rewrite_media"
 
@@ -192,10 +186,15 @@ def _rewrite_stage_editor_changes_cell_key(stage_key: str) -> str:
 
 
 def _sanitize_scene_deprecated(scene: dict[str, Any]) -> None:
-    """Удаляет поля снятых фич: animation, prompt_master, prompt_master_render, …"""
+    """Удаляет поля снятых фич: animation, prompt_master, Live media / Pexels, …"""
     if not isinstance(scene, dict):
         return
     scene.pop("animation", None)
+    scene.pop("content_type", None)
+    scene.pop("keywords", None)
+    scene.pop("excluded_keywords", None)
+    scene.pop("pexels_results", None)
+    scene.pop("pexels_selected_indices", None)
     for k in list(scene.keys()):
         if isinstance(k, str) and k.startswith("prompt_master"):
             scene.pop(k, None)
@@ -210,6 +209,13 @@ def _sanitize_job_scenes(job: dict[str, Any] | None) -> None:
     for s in scenes:
         if isinstance(s, dict):
             _sanitize_scene_deprecated(s)
+
+
+def _strip_deprecated_job_fields(job: dict[str, Any] | None) -> None:
+    """Remove keys from older UI versions so they do not linger in saved JSON."""
+    if not isinstance(job, dict):
+        return
+    job.pop("tts_template", None)
 
 
 # Serialize read-modify-write on the same job JSON. Without this, concurrent
@@ -430,10 +436,6 @@ def _archive_scene_basename(scene: dict[str, Any], idx0: int) -> str:
     return sid
 
 
-def _job_pexels_dir(job_id: str) -> Path:
-    return JOB_PEXELS_DIR / job_id
-
-
 def _media_ext_from_url(url: str, slot: str) -> str:
     path = (urlparse(url).path or "").lower()
     if path.endswith(".png"):
@@ -452,7 +454,6 @@ def _media_ext_from_url(url: str, slot: str) -> str:
 
 
 _MEDIA_FETCH_MAX_BYTES = 120 * 1024 * 1024
-PEXELS_API_KEY = (os.getenv("PEXELS_API_KEY") or "").strip()
 
 
 def _fetch_url_bytes_capped(
@@ -482,207 +483,6 @@ def _fetch_url_bytes_capped(
             return b"".join(parts)
     except (requests.RequestException, OSError):
         return None
-
-
-def _pexels_search_assets(
-    *,
-    keywords: str,
-    content_type: str,
-    target_aspect_ratio: str = "16:9",
-    per_page: int = 8,
-) -> tuple[list[dict[str, Any]], str | None]:
-    key = (PEXELS_API_KEY or "").strip()
-    if not key:
-        return [], "Не задан PEXELS_API_KEY в .env."
-    q = str(keywords or "").strip()
-    if not q:
-        return [], "Пустые keywords."
-    ct = str(content_type or "photos").strip().lower()
-    if ct not in ("photos", "videos"):
-        ct = "photos"
-    pp = max(1, min(80, int(per_page or 8)))
-    def _target_orientation(ar: str) -> str:
-        s = str(ar or "").strip()
-        m = re.match(r"^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$", s)
-        if not m:
-            return "landscape"
-        try:
-            w = float(m.group(1))
-            h = float(m.group(2))
-        except (TypeError, ValueError):
-            return "landscape"
-        if w > h:
-            return "landscape"
-        if h > w:
-            return "portrait"
-        return "any"
-
-    def _orientation_ok(w: int, h: int, want: str) -> bool:
-        if w <= 0 or h <= 0:
-            return False
-        if want == "any":
-            return True
-        if want == "landscape":
-            return w >= h
-        if want == "portrait":
-            return h >= w
-        return True
-
-    want_orient = _target_orientation(target_aspect_ratio)
-
-    try:
-        if ct == "videos":
-            url = "https://api.pexels.com/videos/search"
-            r = requests.get(
-                url,
-                headers={"Authorization": key},
-                params={"query": q, "per_page": pp, "page": 1},
-                timeout=30,
-            )
-            r.raise_for_status()
-            data = r.json() if r.content else {}
-            rows = data.get("videos") if isinstance(data, dict) else []
-            out: list[dict[str, Any]] = []
-            if isinstance(rows, list):
-                for v in rows:
-                    if not isinstance(v, dict):
-                        continue
-                    files = v.get("video_files") if isinstance(v.get("video_files"), list) else []
-                    mp4_url = ""
-                    pick_w = 0
-                    pick_h = 0
-                    pick_area = 0
-                    for f in files:
-                        if not isinstance(f, dict):
-                            continue
-                        link = str(f.get("link") or "")
-                        ftype = str(f.get("file_type") or "")
-                        fw = int(f.get("width") or 0)
-                        fh = int(f.get("height") or 0)
-                        if not (link and ("mp4" in ftype.lower() or link.lower().endswith(".mp4"))):
-                            continue
-                        if not _orientation_ok(fw, fh, want_orient):
-                            continue
-                        area = fw * fh
-                        if area > pick_area:
-                            pick_area = area
-                            pick_w = fw
-                            pick_h = fh
-                            mp4_url = link
-                    if not mp4_url:
-                        vw = int(v.get("width") or 0)
-                        vh = int(v.get("height") or 0)
-                        if not _orientation_ok(vw, vh, want_orient):
-                            continue
-                        # fallback: берем любой mp4, если прошла проверка ориентации на уровне видео
-                        for f in files:
-                            if not isinstance(f, dict):
-                                continue
-                            link = str(f.get("link") or "")
-                            ftype = str(f.get("file_type") or "")
-                            if link and ("mp4" in ftype.lower() or link.lower().endswith(".mp4")):
-                                mp4_url = link
-                                pick_w = vw
-                                pick_h = vh
-                                break
-                    img = str(v.get("image") or "")
-                    if not mp4_url and not img:
-                        continue
-                    out.append(
-                        {
-                            "type": "video",
-                            "thumbnail_url": img,
-                            "media_url": mp4_url,
-                            "source_url": str(v.get("url") or ""),
-                            "author": str((v.get("user") or {}).get("name") or ""),
-                            "width": pick_w,
-                            "height": pick_h,
-                        }
-                    )
-                    if len(out) >= pp:
-                        break
-            return out, None
-        url = "https://api.pexels.com/v1/search"
-        r = requests.get(
-            url,
-            headers={"Authorization": key},
-            params={"query": q, "per_page": pp, "page": 1},
-            timeout=30,
-        )
-        r.raise_for_status()
-        data = r.json() if r.content else {}
-        rows = data.get("photos") if isinstance(data, dict) else []
-        out2: list[dict[str, Any]] = []
-        if isinstance(rows, list):
-            for p in rows:
-                if not isinstance(p, dict):
-                    continue
-                pw = int(p.get("width") or 0)
-                ph = int(p.get("height") or 0)
-                # Требование: фото >= 2000px хотя бы по одной стороне.
-                if max(pw, ph) < 2000:
-                    continue
-                # Ориентация — под текущий Aspect Ratio проекта.
-                if not _orientation_ok(pw, ph, want_orient):
-                    continue
-                src = p.get("src") if isinstance(p.get("src"), dict) else {}
-                img = str(src.get("large2x") or src.get("large") or src.get("original") or "")
-                thumb = str(src.get("medium") or src.get("small") or img)
-                if not img and not thumb:
-                    continue
-                out2.append(
-                    {
-                        "type": "photo",
-                        "thumbnail_url": thumb,
-                        "media_url": img or thumb,
-                        "source_url": str(p.get("url") or ""),
-                        "author": str(p.get("photographer") or ""),
-                        "width": pw,
-                        "height": ph,
-                    }
-                )
-                if len(out2) >= pp:
-                    break
-        return out2, None
-    except requests.RequestException as e:
-        return [], f"Pexels API error: {e}"
-
-
-def _split_keywords(raw: str) -> list[str]:
-    txt = str(raw or "")
-    parts = [p.strip() for p in re.split(r"[,;\n]+", txt) if p.strip()]
-    seen: set[str] = set()
-    out: list[str] = []
-    for p in parts:
-        k = p.lower()
-        if k in seen:
-            continue
-        seen.add(k)
-        out.append(p)
-    return out
-
-
-def _normalize_keyword_list(raw: Any) -> list[str]:
-    if not isinstance(raw, list):
-        return []
-    seen: set[str] = set()
-    out: list[str] = []
-    for x in raw:
-        s = str(x or "").strip()
-        if not s:
-            continue
-        k = s.lower()
-        if k in seen:
-            continue
-        seen.add(k)
-        out.append(s)
-    return out
-
-
-def _norm_kw_key(s: str) -> str:
-    """Сопоставление keyword в UI / excluded с учётом дефисов и пробелов."""
-    t = str(s or "").strip().lower().replace("-", " ")
-    return re.sub(r"\s+", " ", t).strip()
 
 
 app = Flask(__name__)
@@ -947,46 +747,6 @@ def _scene_writer_block_check(block: dict[str, Any], part_text: str, idx: int) -
     }
 
 
-def _scene_media_batch_check(
-    input_scenes: list[dict[str, Any]],
-    part_text: str,
-    idx: int,
-    *,
-    content_type: str,
-) -> dict[str, Any]:
-    scenes_out, _ = parse_scene_blocks(part_text or "")
-    in_count = len(input_scenes or [])
-    out_count = len(scenes_out or [])
-    in_chars = sum(len(str((s or {}).get("text") or "")) for s in (input_scenes or []))
-    out_chars = sum(len(str((s or {}).get("text") or "")) for s in (scenes_out or []))
-    with_ct = 0
-    for s in scenes_out:
-        if content_type == "videos":
-            slot = s.get("video")
-            ok = isinstance(slot, dict) and bool(str(slot.get("prompt") or "").strip())
-        elif content_type == "mixed":
-            v = s.get("video")
-            st = s.get("start")
-            ok = (
-                (isinstance(v, dict) and bool(str(v.get("prompt") or "").strip()))
-                or (isinstance(st, dict) and bool(str(st.get("prompt") or "").strip()))
-            )
-        else:
-            slot = s.get("start")
-            ok = isinstance(slot, dict) and bool(str(slot.get("prompt") or "").strip())
-        if ok:
-            with_ct += 1
-    return {
-        "index": idx,
-        "input_scenes": in_count,
-        "output_scenes": out_count,
-        "input_chars": in_chars,
-        "output_chars": out_chars,
-        "with_target_content": with_ct,
-        "ok": in_count > 0 and out_count == in_count,
-    }
-
-
 def _inject_past_prompt_into_scene_json_lines(raw_text: str, past_prompt: str) -> str:
     """Prepends past_prompt to non-empty start/end prompts in line-delimited scene JSON."""
     txt = str(raw_text or "")
@@ -1070,8 +830,6 @@ def _iter_scene_json_objects(raw_text: str) -> list[tuple[int, Any, str | None]]
 
     Возвращает список троек (1-based line number начала объекта, объект, error_message).
     Если объект распарсился — error_message is None. Если нет — obj is None.
-    Поддерживает «расслабленный» формат `{"keywords":"k1","k2","k3"}` (значения через запятую)
-    как однострочный fallback.
     """
     out: list[tuple[int, Any, str | None]] = []
     text = raw_text or ""
@@ -1102,20 +860,10 @@ def _iter_scene_json_objects(raw_text: str) -> list[tuple[int, Any, str | None]]
         try:
             obj, end = decoder.raw_decode(text, i)
         except json.JSONDecodeError as e:
-            # Однострочный fallback для {"keywords":"a","b","c"}
             j = text.find("\n", i)
             if j == -1:
                 j = n
             line_chunk = text[i:j]
-            m_kw = re.match(r'^\s*\{\s*"keywords"\s*:\s*(.+)\}\s*$', line_chunk.strip())
-            if m_kw:
-                tail = m_kw.group(1).strip()
-                vals = re.findall(r'"([^"]*)"', tail)
-                if vals:
-                    out.append((line_no, {"keywords": vals}, None))
-                    line_no += line_chunk.count("\n")
-                    i = j
-                    continue
             out.append((line_no, None, f"Ошибка в строке {line_no}: не удалось распарсить JSON — {e}"))
             i = j
             continue
@@ -1233,25 +981,17 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
                 current_scene["video"] = video_val
             continue
 
-        # Новый формат Scene Writer Live: content_type + keywords.
+        # Live media (content_type / keywords / Pexels) больше не поддерживаются.
         if "content_type" in obj:
-            ct = str(obj.get("content_type") or "").strip().lower()
-            if ct in ("photo", "photos"):
-                current_scene["content_type"] = "photos"
-            elif ct in ("video", "videos"):
-                current_scene["content_type"] = "videos"
-            else:
-                errors.append(
-                    f"У сцены {current_scene.get('scene_id')} поле content_type должно быть photos/videos"
-                )
+            errors.append(
+                f"У сцены {current_scene.get('scene_id')} поле content_type больше не поддерживается — удалите его."
+            )
             continue
 
         if "keywords" in obj:
-            kv = obj.get("keywords")
-            if isinstance(kv, list):
-                current_scene["keywords"] = ", ".join(str(x).strip() for x in kv if str(x).strip())
-            else:
-                current_scene["keywords"] = str(kv or "").strip()
+            errors.append(
+                f"У сцены {current_scene.get('scene_id')} поле keywords больше не поддерживается — удалите его."
+            )
             continue
 
         if "animation" in obj:
@@ -1290,11 +1030,6 @@ def normalize_scene(scene_parts: dict) -> dict:
         "scene_id": scene_parts.get("scene_id", ""),
         "text": scene_parts.get("text") or "",
         "text_ru": scene_parts.get("text_ru") or "",
-        "content_type": scene_parts.get("content_type") or "",
-        "keywords": scene_parts.get("keywords") or "",
-        "excluded_keywords": scene_parts.get("excluded_keywords") if isinstance(scene_parts.get("excluded_keywords"), list) else [],
-        "pexels_results": scene_parts.get("pexels_results") if isinstance(scene_parts.get("pexels_results"), list) else [],
-        "pexels_selected_indices": scene_parts.get("pexels_selected_indices") if isinstance(scene_parts.get("pexels_selected_indices"), list) else [],
         "start": scene_parts.get("start") or {"prompt": None},
         "end": scene_parts.get("end") or {"prompt": None},
         "video": scene_parts.get("video") or {"prompt": None},
@@ -1379,6 +1114,7 @@ def save_job_file(payload: dict) -> tuple[str, str]:
     filepath = JOBS_DIR / filename
     if isinstance(payload, dict):
         _sanitize_job_scenes(payload)
+        _strip_deprecated_job_fields(payload)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     return str(filepath), job_id
@@ -1396,6 +1132,7 @@ def load_job(job_id: str) -> dict | None:
                 if not isinstance(job, dict):
                     return None
                 _sanitize_job_scenes(job)
+                _strip_deprecated_job_fields(job)
                 return job
         except json.JSONDecodeError:
             time.sleep(0.02)
@@ -1409,6 +1146,7 @@ def save_job(job_id: str, job: dict) -> None:
     """Persist job JSON to disk."""
     if isinstance(job, dict):
         _sanitize_job_scenes(job)
+        _strip_deprecated_job_fields(job)
     filepath = JOBS_DIR / f"{job_id}.json"
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     tmp_name = None
@@ -3168,6 +2906,14 @@ def save_rewrite_job(rewrite_id: str, data: dict) -> None:
     proj_dir = _rewrite_project_dir(rewrite_id)
     proj_dir.mkdir(parents=True, exist_ok=True)
     data = dict(data)
+    try:
+        normalize_rewrite_job_data(data)
+    except Exception:
+        app.logger.warning(
+            "normalize_rewrite_job_data before rewrite save failed for %s",
+            rewrite_id,
+            exc_info=True,
+        )
     data["rewrite_id"] = rewrite_id
     data["updated_at"] = datetime.now().isoformat(timespec="seconds")
     stages = data.get("stages")
@@ -3484,12 +3230,12 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
             str(((st.get("voiceover_editor") or {}).get("last_result")) or "")
         )
     # Совпадает с логикой `_rewrite_block.html` / прежнего шаблона: первые
-    # до 10 ключей текущего пресета, исключая `scene_writer*` (они не
-    # сворачиваются, отдельные карточки с собственным collapsible-чевроном).
+    # до 10 ключей текущего пресета, исключая Scene Writer (не сворачивается,
+    # отдельная карточка с собственным collapsible-чевроном).
     preset_keys_current = REWRITE_PRESET_STAGE_KEYS.get(rewrite_preset_current, [])
     collapsible_pipeline_stages: list[str] = []
     for _k in preset_keys_current:
-        if _k in ("scene_writer", "scene_writer_live"):
+        if _k == "scene_writer":
             continue
         if len(collapsible_pipeline_stages) >= 11:
             break
@@ -5154,7 +4900,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             "title_strategist",
             "structure_splitter",
             "scene_writer",
-            "scene_writer_live",
             "youtube_packaging",
             "rewrite",
         ) and not (source_text or "").strip():
@@ -5235,16 +4980,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                         title_strategist_result_text = p.read_text(encoding="utf-8")
                     except OSError:
                         title_strategist_result_text = ""
-        scene_writer_result_text = ""
-        if stage_key == "scene_writer_live":
-            scene_writer_result_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
-            if not scene_writer_result_text.strip():
-                p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
-                if p.exists():
-                    try:
-                        scene_writer_result_text = p.read_text(encoding="utf-8")
-                    except OSError:
-                        scene_writer_result_text = ""
         payload, compose_err = compose_rewrite_openai_request_body(
             stage_key,
             source_text=source_text,
@@ -5263,7 +4998,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             elevenlabs_editor_text=elevenlabs_editor_text,
             structure_splitter_text=structure_splitter_text,
             title_strategist_result_text=title_strategist_result_text,
-            scene_writer_result_text=scene_writer_result_text,
             original_title=original_title,
             preset=preset,
             pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
@@ -5485,104 +5219,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                         "avg_scene_chars": avg_scene_chars,
                     },
                     "blocks_info": block_checks,
-                },
-                ensure_ascii=False,
-            ) + "\n"
-            yield json.dumps({"type": "result", "content": full}, ensure_ascii=False) + "\n"
-        elif stage_key == "scene_writer_live":
-            raw_scenes = str(scene_writer_result_text or "").strip()
-            scenes_in, parse_errors = parse_scene_blocks(raw_scenes)
-            if not scenes_in:
-                reason = "; ".join(parse_errors[:3]) if parse_errors else "пустой или невалидный Scene Writer Result"
-                yield json.dumps(
-                    {"type": "error", "message": f"Scene Writer Live: нет валидных сцен во входе ({reason})."},
-                    ensure_ascii=False,
-                ) + "\n"
-                return
-            swl_cell = stages_snap.get("scene_writer_live") if isinstance(stages_snap.get("scene_writer_live"), dict) else {}
-            content_type = str((swl_cell or {}).get("style_prompt") or "photos").strip().lower()
-            if content_type not in ("photos", "videos", "mixed"):
-                content_type = "photos"
-            try:
-                target_percent = int(str((swl_cell or {}).get("past_prompt") or "50").strip())
-            except (TypeError, ValueError):
-                target_percent = 50
-            target_percent = max(1, min(100, target_percent))
-            batch_size = 50
-            total_batches = (len(scenes_in) + batch_size - 1) // batch_size
-            acc_parts: list[str] = []
-            batch_checks: list[dict[str, Any]] = []
-            for bi in range(total_batches):
-                start = bi * batch_size
-                end = min(start + batch_size, len(scenes_in))
-                chunk = scenes_in[start:end]
-                step_user = json.dumps(
-                    {
-                        "batch_index": bi + 1,
-                        "batch_count": total_batches,
-                        "scenes_offset_start": start + 1,
-                        "scenes_offset_end": end,
-                        "scenes_batch": chunk,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                joined_user = f"{user_text}\n\n{step_user}"
-                yield json.dumps(
-                    {"type": "status", "message": f"Scene Writer Live: batch {bi + 1}/{total_batches}…"},
-                    ensure_ascii=False,
-                ) + "\n"
-                part = ""
-                for item in iter_rewrite_completion(api_key, model, prompt, joined_user, chat_temperature=chat_temp):
-                    t = str(item.get("type") or "")
-                    if t == "result":
-                        part = str(item.get("content") or "").strip()
-                    elif t == "error":
-                        err = str(item.get("message") or "Ошибка Scene Writer Live.")
-                        yield json.dumps(
-                            {"type": "error", "message": f"Batch {bi + 1}/{total_batches}: {err}"},
-                            ensure_ascii=False,
-                        ) + "\n"
-                        return
-                    elif t == "status":
-                        yield json.dumps(
-                            {"type": "status", "message": f"[{bi + 1}/{total_batches}] {str(item.get('message') or '')}"},
-                            ensure_ascii=False,
-                        ) + "\n"
-                acc_parts.append(part)
-                batch_checks.append(
-                    _scene_media_batch_check(
-                        chunk,
-                        part,
-                        bi + 1,
-                        content_type=content_type,
-                    )
-                )
-            full = "\n\n".join([p for p in acc_parts if p]).strip()
-            responses = len([p for p in acc_parts if str(p or "").strip()])
-            in_scenes = sum(int(x.get("input_scenes") or 0) for x in batch_checks)
-            out_scenes = sum(int(x.get("output_scenes") or 0) for x in batch_checks)
-            with_target_content = sum(int(x.get("with_target_content") or 0) for x in batch_checks)
-            avg_scene_chars = 0.0
-            if out_scenes > 0:
-                total_out_chars = sum(int(x.get("output_chars") or 0) for x in batch_checks)
-                avg_scene_chars = round(total_out_chars / out_scenes, 1)
-            all_ok = (responses == total_batches) and all(bool(x.get("ok")) for x in batch_checks)
-            yield json.dumps(
-                {
-                    "type": "scene_writer_live_check",
-                    "summary": {
-                        "batches": total_batches,
-                        "responses": responses,
-                        "ok": all_ok,
-                        "scenes_in": in_scenes,
-                        "scenes_out": out_scenes,
-                        "with_target_content": with_target_content,
-                        "content_type": content_type,
-                        "target_percent": target_percent,
-                        "avg_scene_chars": avg_scene_chars,
-                    },
-                    "batches_info": batch_checks,
                 },
                 ensure_ascii=False,
             ) + "\n"
@@ -5848,16 +5484,6 @@ def rewrite_project_api_payload(rewrite_id: str):
                     structure_splitter_text = p.read_text(encoding="utf-8")
                 except OSError:
                     structure_splitter_text = ""
-    scene_writer_result_text = ""
-    if stage_key == "scene_writer_live":
-        scene_writer_result_text = str((stages_snap.get("scene_writer") or {}).get("last_result") or "")
-        if not scene_writer_result_text.strip():
-            p = _rewrite_stage_result_path(rewrite_id, "scene_writer")
-            if p.exists():
-                try:
-                    scene_writer_result_text = p.read_text(encoding="utf-8")
-                except OSError:
-                    scene_writer_result_text = ""
     title_strategist_result_text = ""
     if stage_key == "youtube_packaging":
         title_strategist_result_text = str((stages_snap.get("title_strategist") or {}).get("last_result") or "")
@@ -5923,7 +5549,6 @@ def rewrite_project_api_payload(rewrite_id: str):
         elevenlabs_editor_text=elevenlabs_editor_text,
         structure_splitter_text=structure_splitter_text,
         title_strategist_result_text=title_strategist_result_text,
-        scene_writer_result_text=scene_writer_result_text,
         original_title=original_title,
         preset=preset_ap,
         pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
@@ -6223,200 +5848,6 @@ def job_scenes_apply_tts_timings(job_id: str):
             ),
         }
     )
-
-
-@app.route("/job/<job_id>/pexels/search", methods=["POST"])
-def job_pexels_search(job_id: str):
-    data = request.get_json(silent=True) or {}
-    try:
-        scene_idx = int(data.get("scene_index", -1))
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "invalid_scene_index"}), 400
-    with _job_file_lock(job_id):
-        job = load_job(job_id)
-        if job is None:
-            return jsonify({"ok": False, "error": "job_not_found"}), 404
-        meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
-        aspect_ratio = str(meta.get("aspect_ratio") or "16:9")
-        scenes = job.get("scenes")
-        if not isinstance(scenes, list) or scene_idx < 0 or scene_idx >= len(scenes):
-            return jsonify({"ok": False, "error": "scene_not_found"}), 404
-        scene = scenes[scene_idx] if isinstance(scenes[scene_idx], dict) else None
-        if not isinstance(scene, dict):
-            return jsonify({"ok": False, "error": "invalid_scene"}), 400
-        keywords = str(scene.get("keywords") or "").strip()
-        content_type = str(scene.get("content_type") or "photos").strip().lower()
-        incoming_excluded = _normalize_keyword_list(data.get("excluded_keywords"))
-        if incoming_excluded:
-            scene["excluded_keywords"] = incoming_excluded
-            save_job(job_id, job)
-            excluded_keywords = incoming_excluded
-        else:
-            excluded_keywords = _normalize_keyword_list(scene.get("excluded_keywords"))
-    kws = _split_keywords(keywords)
-    if not kws:
-        return jsonify({"ok": False, "error": "Пустые keywords."}), 400
-    if excluded_keywords:
-        ex = {_norm_kw_key(x) for x in excluded_keywords}
-        kws = [k for k in kws if _norm_kw_key(k) not in ex]
-    if not kws:
-        return jsonify({"ok": False, "error": "Все keywords исключены. Верните хотя бы один keyword."}), 400
-    items: list[dict[str, Any]] = []
-    seen_urls_local: set[str] = set()
-    by_kw: dict[str, list[dict[str, Any]]] = {}
-    for kw in kws:
-        chunk, err = _pexels_search_assets(
-            keywords=kw,
-            content_type=content_type,
-            target_aspect_ratio=aspect_ratio,
-            per_page=20,
-        )
-        if err:
-            continue
-        uniq_chunk: list[dict[str, Any]] = []
-        local_seen: set[str] = set()
-        for it in chunk:
-            url_key = str(it.get("media_url") or it.get("thumbnail_url") or "").strip()
-            if not url_key or url_key in local_seen:
-                continue
-            local_seen.add(url_key)
-            row = dict(it)
-            row["found_by_keyword"] = kw
-            uniq_chunk.append(row)
-        if uniq_chunk:
-            by_kw[kw] = uniq_chunk
-
-    # 1) Round-robin: по 1 элементу с ключа для разнообразия.
-    for round_idx in range(20):
-        progressed = False
-        for kw in kws:
-            pool = by_kw.get(kw) or []
-            if round_idx >= len(pool):
-                continue
-            row = pool[round_idx]
-            url_key = str(row.get("media_url") or row.get("thumbnail_url") or "").strip()
-            if not url_key or url_key in seen_urls_local:
-                continue
-            seen_urls_local.add(url_key)
-            items.append(row)
-            progressed = True
-            if len(items) >= 8:
-                break
-        if len(items) >= 8 or not progressed:
-            break
-
-    # 2) Добор до 8 из любого оставшегося пула.
-    if len(items) < 8:
-        for kw in kws:
-            pool = by_kw.get(kw) or []
-            for row in pool:
-                url_key = str(row.get("media_url") or row.get("thumbnail_url") or "").strip()
-                if not url_key or url_key in seen_urls_local:
-                    continue
-                seen_urls_local.add(url_key)
-                items.append(row)
-                if len(items) >= 8:
-                    break
-            if len(items) >= 8:
-                break
-    if not items:
-        return jsonify({"ok": False, "error": "По указанным keywords ничего не найдено с текущими фильтрами."}), 400
-    with _job_file_lock(job_id):
-        job2 = load_job(job_id)
-        if job2 is None:
-            return jsonify({"ok": False, "error": "job_not_found"}), 404
-        scenes2 = job2.get("scenes")
-        if not isinstance(scenes2, list) or scene_idx < 0 or scene_idx >= len(scenes2):
-            return jsonify({"ok": False, "error": "scene_not_found"}), 404
-        sc2 = scenes2[scene_idx]
-        if not isinstance(sc2, dict):
-            return jsonify({"ok": False, "error": "invalid_scene"}), 400
-        sc2["pexels_results"] = items
-        pdir = _job_pexels_dir(job_id)
-        pdir.mkdir(parents=True, exist_ok=True)
-        search_nonce = int(time.time() * 1000)
-        saved_items: list[dict[str, Any]] = []
-        for i, it in enumerate(items, start=1):
-            row = dict(it or {})
-            media_src = str(row.get("media_url") or "").strip()
-            if media_src:
-                bts = _fetch_url_bytes_capped(media_src)
-                if bts:
-                    ext = _media_ext_from_url(media_src, "video" if str(row.get("type") or "") == "video" else "start")
-                    fname = f"s{scene_idx:03d}_{search_nonce}_{i:02d}{ext}"
-                    fp = pdir / fname
-                    try:
-                        fp.write_bytes(bts)
-                        row["local_url"] = f"/job/{job_id}/pexels/{fname}"
-                    except OSError:
-                        pass
-            if "local_url" not in row:
-                row["local_url"] = media_src
-            row["search_keywords"] = keywords
-            row["found_by_keyword"] = str(row.get("found_by_keyword") or "")
-            saved_items.append(row)
-        sc2["pexels_results"] = saved_items
-        sc2["excluded_keywords"] = excluded_keywords
-        sc2["pexels_selected_indices"] = []
-        save_job(job_id, job2)
-    return jsonify(
-        {
-            "ok": True,
-            "items": saved_items,
-            "content_type": content_type,
-            "keywords": keywords,
-            "excluded_keywords": excluded_keywords,
-        }
-    )
-
-
-@app.route("/job/<job_id>/pexels/select", methods=["POST"])
-def job_pexels_select(job_id: str):
-    """Сохраняет выбор пользователя из Pexels-результатов сцены: до 2 индексов."""
-    body = request.get_json(silent=True) or {}
-    try:
-        scene_index = int(body.get("scene_index"))
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "Bad scene_index"}), 400
-    expected_id = str(body.get("scene_id") or "").strip()
-    raw_indices = body.get("selected_indices")
-    if not isinstance(raw_indices, list):
-        raw_indices = []
-
-    with _job_file_lock(job_id):
-        job = load_job(job_id)
-        if job is None:
-            return jsonify({"ok": False, "error": "Job not found"}), 404
-        scenes = job.get("scenes")
-        if not isinstance(scenes, list) or scene_index < 0 or scene_index >= len(scenes):
-            return jsonify({"ok": False, "error": "Scene index out of range"}), 400
-        scene = scenes[scene_index]
-        if not isinstance(scene, dict):
-            return jsonify({"ok": False, "error": "Scene is invalid"}), 400
-        if expected_id and expected_id != str(scene.get("scene_id") or "").strip():
-            return jsonify({"ok": False, "error": "scene_id mismatch"}), 409
-
-        results = scene.get("pexels_results")
-        n_results = len(results) if isinstance(results, list) else 0
-
-        seen: set[int] = set()
-        cleaned: list[int] = []
-        for x in raw_indices:
-            try:
-                v = int(x)
-            except (TypeError, ValueError):
-                continue
-            if v < 0 or v >= n_results or v in seen:
-                continue
-            seen.add(v)
-            cleaned.append(v)
-            if len(cleaned) >= 2:
-                break
-
-        scene["pexels_selected_indices"] = cleaned
-        save_job(job_id, job)
-
-    return jsonify({"ok": True, "selected_indices": cleaned})
 
 
 @app.route("/job/<job_id>/generate/start", methods=["POST"])
@@ -7014,7 +6445,7 @@ def update_job_scene_prompt(job_id: str):
 
 @app.route("/job/<job_id>/scene/delete", methods=["POST"])
 def delete_job_scene(job_id: str):
-    """Удаляет одну сцену из job по индексу. Подчищает локальные файлы Pexels этой сцены."""
+    """Удаляет одну сцену из job по индексу."""
     body = request.get_json(silent=True) or {}
     try:
         scene_index = int(body.get("scene_index"))
@@ -7042,14 +6473,6 @@ def delete_job_scene(job_id: str):
         scenes.pop(scene_index)
         save_job(job_id, job)
 
-    pdir = _job_pexels_dir(job_id)
-    if pdir.is_dir():
-        for fp in pdir.glob(f"s{scene_index:03d}_*"):
-            try:
-                fp.unlink(missing_ok=True)
-            except OSError:
-                pass
-
     return jsonify({"ok": True, "scene_id": actual_id})
 
 
@@ -7057,7 +6480,7 @@ def delete_job_scene(job_id: str):
 def delete_job(job_id: str):
     """Удаляет проект целиком: и job-данные, и rewrite-данные под тем же ID.
 
-    Удаляются: `data/jobs/<id>.json`, `data/job_audio/<id>`, `data/job_pexels/<id>`,
+    Удаляются: `data/jobs/<id>.json`, `data/job_audio/<id>`,
     `data/job_remotion/<id>`, `data/rewrite_jobs/<id>`, `data/rewrite_media/<id>`
     и симлинк `remotion/public/jobs/<id>`.
     """
@@ -7074,7 +6497,6 @@ def delete_job(job_id: str):
             pass
     for d in (
         JOB_AUDIO_DIR / job_id,
-        BASE_DIR / "data" / "job_pexels" / job_id,
         BASE_DIR / "data" / "job_remotion" / job_id,
         BASE_DIR / "data" / "rewrite_media" / job_id,
     ):
@@ -7118,46 +6540,6 @@ def job_elevenlabs_voices(job_id: str):
         return jsonify({"error": str(e)}), 502
 
 
-@app.route("/job/<job_id>/elevenlabs/templates", methods=["GET"])
-def job_elevenlabs_templates(job_id: str):
-    if load_job(job_id) is None:
-        return jsonify({"ok": False, "error": "Job not found"}), 404
-    return jsonify({"ok": True, "templates": list_elevenlabs_template_names()})
-
-
-@app.route("/job/<job_id>/elevenlabs/templates/<name>", methods=["GET"])
-def job_elevenlabs_template_get(job_id: str, name: str):
-    if load_job(job_id) is None:
-        return jsonify({"ok": False, "error": "Job not found"}), 404
-    data = load_elevenlabs_template(name)
-    if data is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    return jsonify({"ok": True, "template": data})
-
-
-@app.route("/job/<job_id>/elevenlabs/templates/<name>/save", methods=["POST"])
-def job_elevenlabs_template_save(job_id: str, name: str):
-    if load_job(job_id) is None:
-        return jsonify({"ok": False, "error": "Job not found"}), 404
-    body = request.get_json(silent=True) or {}
-    ok, err = save_elevenlabs_template(
-        name,
-        {
-            "model_id": body.get("model_id"),
-            "voice_id": body.get("voice_id"),
-            "voice_name": body.get("voice_name"),
-            "speed_pct": body.get("speed_pct"),
-            "stability_pct": body.get("stability_pct"),
-            "similarity_pct": body.get("similarity_pct"),
-            "style_pct": body.get("style_pct"),
-            "use_speaker_boost": body.get("use_speaker_boost"),
-        },
-    )
-    if not ok:
-        return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True})
-
-
 @app.route("/job/<job_id>/elevenlabs/defaults", methods=["POST"])
 def job_elevenlabs_defaults_save(job_id: str):
     body = request.get_json(silent=True) or {}
@@ -7171,7 +6553,6 @@ def job_elevenlabs_defaults_save(job_id: str):
     voice_id = str(body.get("voice_id") or "").strip()
     model_id = str(body.get("model_id") or "eleven_v3").strip() or "eleven_v3"
     voice_name = str(body.get("voice_name") or "").strip()
-    tts_template = str(body.get("tts_template") or "").strip()
     raw_boost = body.get("use_speaker_boost", True)
     if isinstance(raw_boost, str):
         use_speaker_boost = raw_boost.lower() in ("true", "1", "yes", "on")
@@ -7193,8 +6574,6 @@ def job_elevenlabs_defaults_save(job_id: str):
             "speed_pct": _pct("speed_pct", 50),
             "use_speaker_boost": use_speaker_boost,
         }
-        if tts_template:
-            job["tts_template"] = tts_template
         save_job(job_id, job)
     return jsonify({"ok": True})
 
@@ -7294,14 +6673,11 @@ def job_elevenlabs_tts(job_id: str):
             "use_speaker_boost": use_speaker_boost,
         },
     }
-    tts_template = str(data.get("tts_template") or "").strip()
     with _job_file_lock(job_id):
         job = load_job(job_id)
         if job is None:
             return jsonify({"error": "Job not found"}), 404
         job.pop("tts_outputs", None)
-        if tts_template:
-            job["tts_template"] = tts_template
         job["tts_defaults"] = {
             "voice_id": voice_id,
             "model_id": model_id,
@@ -7609,15 +6985,12 @@ def job_elevenlabs_tts_stream(job_id: str):
             },
         }
 
-        tts_template = str(data.get("tts_template") or "").strip()
         with _job_file_lock(job_id):
             job = load_job(job_id)
             if job is None:
                 yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
                 return
             job.pop("tts_outputs", None)
-            if tts_template:
-                job["tts_template"] = tts_template
             job["tts_defaults"] = {
                 "voice_id": voice_id,
                 "model_id": model_id,
@@ -7693,19 +7066,12 @@ def _render_scenes_input_text(scenes: list[dict[str, Any]]) -> str:
         text_ru_val = sc.get("text_ru")
         if text_ru_val is not None and str(text_ru_val) != "":
             lines.append(json.dumps({"text_ru": text_ru_val}, ensure_ascii=False))
-        ct = str(sc.get("content_type") or "").strip()
-        if ct:
-            lines.append(json.dumps({"content_type": ct}, ensure_ascii=False))
-            kw = str(sc.get("keywords") or "").strip()
-            if kw:
-                lines.append(json.dumps({"keywords": kw}, ensure_ascii=False))
-        else:
-            for slot in ("start", "end", "video"):
-                blk = sc.get(slot)
-                if isinstance(blk, dict):
-                    lines.append(
-                        json.dumps({slot: {"prompt": blk.get("prompt", None)}}, ensure_ascii=False)
-                    )
+        for slot in ("start", "end", "video"):
+            blk = sc.get(slot)
+            if isinstance(blk, dict):
+                lines.append(
+                    json.dumps({slot: {"prompt": blk.get("prompt", None)}}, ensure_ascii=False)
+                )
     return ("\n".join(lines) + "\n") if lines else ""
 
 
@@ -7726,7 +7092,6 @@ def _archive_plan_steps(job_id: str, job: dict[str, Any]) -> list[dict[str, Any]
                 "text": scenes_input_text,
             }
         )
-    pdir = _job_pexels_dir(job_id)
     for idx, scene in enumerate(scenes):
         if not isinstance(scene, dict):
             continue
@@ -7739,45 +7104,6 @@ def _archive_plan_steps(job_id: str, job: dict[str, Any]) -> list[dict[str, Any]
             url = str(block.get(key) or "").strip()
             if url:
                 steps.append({"type": "media", "slot": slot, "stem": stem, "url": url})
-        # Live-media (Pexels): кладём ВЫБРАННЫЕ элементы в подпапку Extra/.
-        results = scene.get("pexels_results") if isinstance(scene.get("pexels_results"), list) else []
-        sel_raw = scene.get("pexels_selected_indices") if isinstance(scene.get("pexels_selected_indices"), list) else []
-        sel: list[int] = []
-        for v in sel_raw:
-            try:
-                vi = int(v)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= vi < len(results) and vi not in sel:
-                sel.append(vi)
-        for pos, sel_idx in enumerate(sel, start=1):
-            row = results[sel_idx]
-            if not isinstance(row, dict):
-                continue
-            is_video = str(row.get("type") or "").strip().lower() == "video"
-            local_url = str(row.get("local_url") or "").strip()
-            media_url = str(row.get("media_url") or "").strip()
-            local_path: Path | None = None
-            prefix = f"/job/{job_id}/pexels/"
-            if local_url.startswith(prefix):
-                fname = local_url[len(prefix):]
-                cand = (pdir / fname).resolve()
-                try:
-                    cand.relative_to(pdir.resolve())
-                    if cand.is_file():
-                        local_path = cand
-                except ValueError:
-                    local_path = None
-            steps.append(
-                {
-                    "type": "pexels",
-                    "stem": stem,
-                    "is_video": is_video,
-                    "selected_pos": pos,
-                    "local_path": local_path,
-                    "url": media_url,
-                }
-            )
     return steps
 
 
@@ -7786,11 +7112,6 @@ def _archive_step_label(step: dict[str, Any]) -> str:
         return "Озвучка (MP3)"
     if step["type"] == "scenes_json":
         return f"JSON-код сцен ({step.get('name') or 'scenes.json'})"
-    if step["type"] == "pexels":
-        stem = str(step.get("stem") or "")
-        kind = "видео" if step.get("is_video") else "фото"
-        pos = int(step.get("selected_pos") or 1)
-        return f"{stem} — Extra/{kind} #{pos}"
     slot = str(step.get("slot") or "")
     stem = str(step.get("stem") or "")
     if slot == "start":
@@ -7879,47 +7200,6 @@ def _run_archive_into_zipfile(
                 push(steps_done=i + 1, current=f"{label} — ошибка записи: {exc}", fetch_bytes=0)
                 continue
             push(steps_done=i + 1, current=label, fetch_bytes=0)
-            continue
-        if step["type"] == "pexels":
-            stem = str(step.get("stem") or "")
-            is_video = bool(step.get("is_video"))
-            pos = int(step.get("selected_pos") or 1)
-            local_path = step.get("local_path")
-            url = str(step.get("url") or "")
-            data: bytes = b""
-            ext = ""
-            if isinstance(local_path, Path) and local_path.is_file():
-                try:
-                    data = local_path.read_bytes()
-                    ext = local_path.suffix or ""
-                except OSError:
-                    data = b""
-            if not data and url:
-                def on_prog(n: int) -> None:
-                    push(steps_done=i, current=label, fetch_bytes=int(n))
-
-                data = _fetch_url_bytes_capped(url, on_progress=on_prog, should_abort=cancel_check)
-                if cancel_check is not None and cancel_check():
-                    push(steps_done=i + 1, current="Отмена во время скачивания", fetch_bytes=0)
-                    return added, True
-                if not ext:
-                    ext = _media_ext_from_url(url, "video" if is_video else "start")
-            if not data:
-                push(steps_done=i + 1, current=f"{label} — не удалось получить файл", fetch_bytes=0)
-                continue
-            if not ext:
-                ext = ".mp4" if is_video else ".jpg"
-            arc = f"Extra/{stem}_extra_{pos:02d}{ext}"
-            zf.writestr(arc, data)
-            added += 1
-            ln = len(data)
-            if is_video:
-                videos_added += 1
-                bytes_videos += ln
-            else:
-                images_added += 1
-                bytes_images += ln
-            push(steps_done=i + 1, current=label, fetch_bytes=ln)
             continue
         slot = str(step.get("slot") or "")
         url = str(step.get("url") or "")
@@ -8136,14 +7416,12 @@ def job_download_all_start(job_id: str):
     planned_images = sum(
         1
         for s in plan
-        if (s.get("type") == "media" and s.get("slot") != "video")
-        or (s.get("type") == "pexels" and not s.get("is_video"))
+        if s.get("type") == "media" and s.get("slot") != "video"
     )
     planned_videos = sum(
         1
         for s in plan
-        if (s.get("type") == "media" and s.get("slot") == "video")
-        or (s.get("type") == "pexels" and s.get("is_video"))
+        if s.get("type") == "media" and s.get("slot") == "video"
     )
     task_id = uuid.uuid4().hex
     with _download_all_lock:
@@ -8420,29 +7698,6 @@ def job_whisper_words(job_id: str):
     return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
 
 
-@app.route("/job/<job_id>/pexels/<filename>")
-def job_pexels_file(job_id: str, filename: str):
-    if load_job(job_id) is None:
-        abort(404)
-    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$", filename or ""):
-        abort(404)
-    d = _job_pexels_dir(job_id).resolve()
-    if not d.is_dir():
-        abort(404)
-    target = (d / filename).resolve()
-    try:
-        target.relative_to(d)
-    except ValueError:
-        abort(404)
-    if not target.is_file():
-        abort(404)
-    resp = send_from_directory(d, filename, max_age=0)
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return resp
-
-
 def _montage_pct_clamp(value: Any) -> int:
     try:
         x = int(round(float(value)))
@@ -8660,7 +7915,6 @@ def job_montage_assemble(job_id: str):
                     job=job_work,
                     base_dir=out_dir,
                     audio_src=audio_src,
-                    pexels_dir=_job_pexels_dir(job_id),
                     fetch_url_bytes=lambda url: _fetch_url_bytes_capped(url),
                     remotion_public_dir=(BASE_DIR / "remotion" / "public" / "jobs"),
                     progress=on_progress,
@@ -9338,8 +8592,6 @@ def job_page(job_id: str):
         elevenlabs_key_set=elevenlabs_key_set,
         openai_key_set=openai_key_set,
         tts_defaults=job.get("tts_defaults") or {},
-        tts_template_names=list_elevenlabs_template_names(),
-        tts_template=(job.get("tts_template") or "Naomi"),
         montage_zoom_scale=montage_zoom_scale,
         montage_zoom_mode=montage_zoom_mode,
         montage_zoom_modes=list(_MONTAGE_ZOOM_MODES),

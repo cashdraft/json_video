@@ -571,7 +571,6 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
-    ("scene_writer_live", "Scene Writer Live"),
     ("youtube_packaging", "YouTube packaging engine"),
 ]
 
@@ -582,7 +581,7 @@ REWRITE_STAGE_KEYS: frozenset[str] = frozenset(k for k, _ in REWRITE_STAGES)
 # вместе с Rewrite…Structure Splitter, но в подпись «Этапы 1–N» его не считают —
 # иначе N не совпадает с видимыми номерами (Мягкий / prewritten: 4 vs 5).
 REWRITE_STAGE_CARD_NO_INDEX_KEYS: frozenset[str] = frozenset(
-    ("scene_writer", "scene_writer_live", "youtube_packaging")
+    ("scene_writer", "youtube_packaging")
 )
 
 _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_STAGES)}
@@ -629,7 +628,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "scene_writer_live",
         "youtube_packaging",
     ],
     # «Я уже ЗАrewriteИЛ»: Inbox → Voiceover Editor (из Inbox) → ElevenLabs → Title /
@@ -641,7 +639,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "scene_writer_live",
         "youtube_packaging",
     ],
     # «Мягкий Rewrite» — как prewritten, но без Inbox: исходник в поле Source.
@@ -652,7 +649,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "scene_writer_live",
         "youtube_packaging",
     ],
 }
@@ -745,10 +741,6 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем block-by-block. В System: Scene Writer System Promt. "
         "В User: Scene Writer User Promt, Scene Writer Style Promt, параметры длины сцены и текущий block."
     ),
-    "scene_writer_live": (
-        "Отправляем batch-by-batch по 50 сцен. В System: Scene Writer Live System Promt. "
-        "В User: Scene Writer Live User Promt, content_type, target_percent, Result этапа Scene Writer и текущий batch."
-    ),
     "youtube_packaging": (
         "Отправляем один POST. В System: YouTube packaging System Promt. "
         "В User: YouTube packaging User Promt и поле title_strategist_result (Result этапа Title Strategist). "
@@ -771,7 +763,6 @@ REWRITE_STAGE_SUBTITLES: dict[str, str] = {
     "title_strategist": "Агент-стратег заголовков",
     "structure_splitter": "Агент-сплиттер текста",
     "scene_writer": "",
-    "scene_writer_live": "",
     "youtube_packaging": "",
 }
 
@@ -870,7 +861,6 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
         "текст без пропусков и перекрытий."
     ),
     "scene_writer": "Идёт по блокам из Structure Splitter и переписывает каждый блок отдельно, затем склеивает.",
-    "scene_writer_live": "Берёт Result из Scene Writer и пакетно (по 50 сцен) дополняет сцены media-полями.",
     "youtube_packaging": (
         "Собирает заголовки, описание, хештеги и идеи превью для YouTube из готового вывода Scene Writer."
     ),
@@ -883,7 +873,6 @@ def default_stage_entry() -> dict[str, Any]:
         "user_prompt": "",
         "style_prompt": "",
         "past_prompt": "",
-        "scene_writer_live_check": None,
         "scene_writer_check": None,
         "structure_splitter_check": None,
         "elevenlabs_editor_check": None,
@@ -947,15 +936,10 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             else:
                 stages["title_strategist"] = old_v2
 
-    # Миграция: scene_media_planner → scene_writer_live.
+    # Миграция: убран этап scene_writer_live — старые данные выкидываем.
     if "scene_media_planner" in stages:
-        old_swl = stages.pop("scene_media_planner")
-        if isinstance(old_swl, dict):
-            cur = stages.get("scene_writer_live")
-            if isinstance(cur, dict):
-                cur.update(old_swl)
-            else:
-                stages["scene_writer_live"] = old_swl
+        stages.pop("scene_media_planner", None)
+    stages.pop("scene_writer_live", None)
 
     for key in REWRITE_STAGE_KEYS:
         if key not in stages or not isinstance(stages[key], dict):
@@ -998,12 +982,9 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
             e["user_prompt_locked"] = False
         if not isinstance(e.get("scene_writer_check"), dict):
             e["scene_writer_check"] = None
-        if not isinstance(e.get("scene_writer_live_check"), dict):
-            e["scene_writer_live_check"] = None
         e.pop("animation_settings", None)
-        if isinstance(e.get("scene_media_check"), dict) and not isinstance(e.get("scene_writer_live_check"), dict):
-            e["scene_writer_live_check"] = e.get("scene_media_check")
         e.pop("scene_media_check", None)
+        e.pop("scene_writer_live_check", None)
         if not isinstance(e.get("structure_splitter_check"), dict):
             e["structure_splitter_check"] = None
         if not isinstance(e.get("elevenlabs_editor_check"), dict):
@@ -1117,12 +1098,6 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         if "scene_writer_check" in sv:
             v = sv.get("scene_writer_check")
             e["scene_writer_check"] = v if isinstance(v, dict) else None
-        if "scene_writer_live_check" in sv:
-            v = sv.get("scene_writer_live_check")
-            e["scene_writer_live_check"] = v if isinstance(v, dict) else None
-        if "scene_media_check" in sv and "scene_writer_live_check" not in sv:
-            v = sv.get("scene_media_check")
-            e["scene_writer_live_check"] = v if isinstance(v, dict) else None
         if "structure_splitter_check" in sv:
             v = sv.get("structure_splitter_check")
             e["structure_splitter_check"] = v if isinstance(v, dict) else None
@@ -1255,9 +1230,6 @@ def _validate_stage_input_sources(
     if stage_key == "scene_writer":
         return need_result("structure_splitter")
 
-    if stage_key == "scene_writer_live":
-        return need_result("scene_writer")
-
     if stage_key == "youtube_packaging":
         return need_result("title_strategist")
 
@@ -1319,7 +1291,6 @@ def compose_rewrite_openai_request_body(
     elevenlabs_editor_text: str = "",
     structure_splitter_text: str = "",
     title_strategist_result_text: str = "",
-    scene_writer_result_text: str = "",
     original_title: str = "",
     preset: str = REWRITE_PRESET_DEFAULT,
     pipeline_language: str = "ru",
@@ -1342,7 +1313,6 @@ def compose_rewrite_openai_request_body(
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "scene_writer_live",
         "youtube_packaging",
         "rewrite",
     ) and not (source_text or "").strip():
@@ -1548,24 +1518,6 @@ def compose_rewrite_openai_request_body(
             up_txt,
             ts,
         )
-    elif stage_key == "scene_writer_live":
-        prompt = stage_prompt_t.strip()
-        up = up_txt
-        sw = str(scene_writer_result_text or "").strip()
-        if not sw:
-            return None, "Нет результата Scene Writer — выполните этап Scene Writer и сохраните проект."
-        user_text = _join_user_sections(up, sw)
-    else:
-        prompt = build_rewrite_system_prompt(
-            master_use,
-            stage_prompt_t,
-        )
-        user_text = build_stage_user_message(
-            source_text,
-            stage_key,
-            stages_snap,
-            hero_prompt=hero_use,
-        )
     prompt = (prompt or "").strip()
     user_text = (user_text or "").strip()
     if stage_key not in (
@@ -1579,7 +1531,6 @@ def compose_rewrite_openai_request_body(
         "title_strategist",
         "structure_splitter",
         "scene_writer",
-        "scene_writer_live",
         "youtube_packaging",
         "rewrite",
     ):
@@ -1647,7 +1598,6 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "style_prompt": str(cell.get("style_prompt") or ""),
             "past_prompt": str(cell.get("past_prompt") or ""),
             "scene_writer_check": cell.get("scene_writer_check") if isinstance(cell.get("scene_writer_check"), dict) else None,
-            "scene_writer_live_check": cell.get("scene_writer_live_check") if isinstance(cell.get("scene_writer_live_check"), dict) else None,
             "structure_splitter_check": cell.get("structure_splitter_check") if isinstance(cell.get("structure_splitter_check"), dict) else None,
             "elevenlabs_editor_check": cell.get("elevenlabs_editor_check") if isinstance(cell.get("elevenlabs_editor_check"), dict) else None,
             "block_writer_check": cell.get("block_writer_check") if isinstance(cell.get("block_writer_check"), dict) else None,

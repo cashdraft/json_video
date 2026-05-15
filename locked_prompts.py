@@ -208,7 +208,6 @@ _USER_PROMPT_STAGE_LABELS: tuple[tuple[str, str], ...] = (
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
-    ("scene_writer_live", "Scene Writer Live"),
     ("youtube_packaging", "YouTube packaging engine"),
 )
 for _sk, _lbl in _USER_PROMPT_STAGE_LABELS:

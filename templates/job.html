@@ -108,21 +108,6 @@
                 пакуется в куски ≤ лимита, для каждого куска уходит отдельный запрос, затем фрагменты <strong>склеиваются в один MP3</strong> (на сервере нужен <code>ffmpeg</code>).
                 С баланса списываются все символы. Точки в «Dr.» и числах 3.14 тоже режут текст — при необходимости временно замените их.
             </p>
-            <div class="rewrite-template-bar">
-                <label for="tts-template-select" class="rewrite-template-bar__label">Шаблон озвучки</label>
-                <select id="tts-template-select" class="tts-select rewrite-template-select">
-                    {% set cur_tts_tpl = (tts_template or 'Naomi')|trim %}
-                    {% for t in tts_template_names %}
-                    <option value="{{ t }}" {{ 'selected' if t == cur_tts_tpl else '' }}>{{ t }}</option>
-                    {% endfor %}
-                    {% if cur_tts_tpl and cur_tts_tpl not in tts_template_names %}
-                    <option value="{{ cur_tts_tpl }}" selected>{{ cur_tts_tpl }}</option>
-                    {% endif %}
-                </select>
-                <button type="button" class="btn btn-secondary btn-sm" id="tts-template-apply">Применить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="tts-template-save-disk">Обновить шаблон</button>
-                <span id="tts-template-status" class="tts-template-status hidden" aria-live="polite"></span>
-            </div>
             <div class="tts-form">
                 <label class="tts-label" for="tts-text">Текст</label>
                 <textarea id="tts-text" class="tts-textarea" rows="7" placeholder="Вставьте текст для озвучки…">{{ tts_last_text|e }}</textarea>
@@ -444,32 +429,16 @@
                 {% set has_start_prompt = scene.start.prompt|default('', true) %}
                 {% set has_end_prompt = scene.end.prompt|default('', true) %}
                 {% set has_video_prompt = scene.video.prompt|default('', true) %}
-                {% set has_live_media = (scene.content_type|default('', true) and scene.keywords|default('', true)) %}
                 {% set start_ready = scene.start.image_url|default('', true) %}
                 {% set end_ready = scene.end.image_url|default('', true) %}
                 {% set video_ready = (not has_start_prompt or start_ready) and (not has_end_prompt or end_ready) %}
                 <div
-                    class="scene-card{{ ' scene-card--live' if has_live_media else '' }}"
+                    class="scene-card"
                     data-scene-index="{{ loop.index0 }}"
                     data-scene-id="{{ scene.scene_id }}"
                     data-has-start-prompt="{{ '1' if has_start_prompt else '0' }}"
                     data-has-end-prompt="{{ '1' if has_end_prompt else '0' }}"
                 >
-                    {% if has_live_media %}
-                    <button
-                        type="button"
-                        class="scene-card-delete-btn"
-                        data-action="delete-live-scene"
-                        data-scene-index="{{ loop.index0 }}"
-                        data-scene-id="{{ scene.scene_id }}"
-                        title="Удалить сцену"
-                        aria-label="Удалить сцену {{ scene.scene_id }}"
-                    >
-                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                            <path fill="currentColor" d="M9 3a1 1 0 0 0-1 1v1H4a1 1 0 1 0 0 2h1v12a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7h1a1 1 0 1 0 0-2h-4V4a1 1 0 0 0-1-1H9zm1 2h4v0H10V5zm-3 4h10v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9zm3 2a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0v-6a1 1 0 0 0-1-1zm4 0a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0v-6a1 1 0 0 0-1-1z"/>
-                        </svg>
-                    </button>
-                    {% endif %}
                     <div class="scene-header">
                         <div class="scene-id">{{ scene.scene_id }}</div>
                         {% set at = scene.audio_timing if scene.audio_timing is mapping else {} %}
@@ -485,75 +454,6 @@
                         <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
                     </div>
                     <div class="scene-slots">
-                        {% if has_live_media %}
-                        {% set pexels_items = scene.pexels_results if scene.pexels_results is defined and scene.pexels_results else [] %}
-                        {% set excluded_keywords = scene.excluded_keywords if scene.excluded_keywords is defined and scene.excluded_keywords else [] %}
-                        {% set selected_pexels = scene.pexels_selected_indices if scene.pexels_selected_indices is defined and scene.pexels_selected_indices else [] %}
-                        <div class="scene-slot scene-slot--pexels" data-slot="pexels" data-scene-index="{{ loop.index0 }}" data-scene-id="{{ scene.scene_id }}" data-excluded-keywords-json="{{ excluded_keywords|tojson|forceescape }}" data-selected-indices-json="{{ selected_pexels|tojson|forceescape }}">
-                            <div class="slot-header">
-                                <span class="slot-badge badge-yes">Live media: {{ (scene.content_type or 'photos')|lower }}</span>
-                                <span class="slot-header-meta">Keywords:</span>
-                                <div class="live-keywords-wrap">
-                                    {% for kw_raw in (scene.keywords or '').split(',') %}
-                                    {% set kw = kw_raw|trim %}
-                                    {% if kw %}
-                                    {% set ns_kw = namespace(excl=false) %}
-                                    {% for ex in excluded_keywords %}
-                                        {% if ex|trim|lower|replace('-', ' ') == kw|trim|lower|replace('-', ' ') %}
-                                            {% set ns_kw.excl = true %}
-                                        {% endif %}
-                                    {% endfor %}
-                                    {% set kw_excluded = ns_kw.excl %}
-                                    <span class="live-keyword-chip{{ ' live-keyword-chip--excluded' if kw_excluded else '' }}" data-keyword="{{ kw }}">
-                                        <span>{{ kw }}</span>
-                                        <button type="button" class="live-keyword-chip__remove" title="Исключить из поиска" aria-label="Исключить {{ kw }}">×</button>
-                                    </span>
-                                    {% endif %}
-                                    {% endfor %}
-                                </div>
-                                <button
-                                    type="button"
-                                    class="btn-regenerate btn-pexels-search"
-                                    data-scene-index="{{ loop.index0 }}"
-                                    title="Найти 8 материалов в Pexels"
-                                >↻</button>
-                            </div>
-                            <div class="slot-placeholder slot-placeholder--pexels" data-status="{{ 'done' if pexels_items else 'pending' }}" data-content-type="{{ (scene.content_type or 'photos')|lower }}">
-                                {% if pexels_items %}
-                                <div class="pexels-slots-grid">
-                                    {% for it in pexels_items[:8] %}
-                                    {% set pex_idx = loop.index0 %}
-                                    {% set is_selected = pex_idx in selected_pexels %}
-                                    <div class="scene-slot pexels-slot-item{{ ' pexels-slot-item--selected' if is_selected else '' }}" data-pexels-index="{{ pex_idx }}">
-                                        <div class="slot-placeholder" data-status="done">
-                                            {% if (scene.content_type or '')|lower in ['video', 'videos'] %}
-                                            <video src="{{ it.local_url or it.media_url or '' }}" class="slot-image" muted playsinline preload="metadata" controls></video>
-                                            {% else %}
-                                            <img src="{{ it.local_url or it.thumbnail_url or it.media_url or '' }}" alt="Pexels result" class="slot-image">
-                                            {% endif %}
-                                            <button
-                                                type="button"
-                                                class="pexels-select-toggle{{ ' pexels-select-toggle--checked' if is_selected else '' }}"
-                                                data-action="toggle-pexels-select"
-                                                aria-pressed="{{ 'true' if is_selected else 'false' }}"
-                                                aria-label="Выбрать"
-                                                title="Выбрать"
-                                            ><span class="pexels-select-toggle__check" aria-hidden="true"></span></button>
-                                        </div>
-                                        <div class="pexels-item-meta">
-                                            <span class="pexels-meta-left">{{ 'Video' if (scene.content_type or '')|lower in ['video', 'videos'] else 'Photo' }}</span>
-                                            <span class="pexels-meta-center">{{ it.found_by_keyword or it.search_keywords or scene.keywords or '—' }}</span>
-                                            <span class="pexels-meta-right">{{ (it.width or 0) }}x{{ (it.height or 0) }}</span>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% else %}
-                                <span class="slot-status">Pending</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% else %}
                         <div class="scene-slot" data-slot="start">
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
@@ -728,7 +628,6 @@
                                 {% endif %}
                             </div>
                         </div>
-                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -819,7 +718,7 @@
                     <output class="job-montage-value" id="montage-fade-in-value" for="montage-fade-in">{{ montage_fade_in_pct }}%</output>
                 </div>
                 <div class="job-montage-row">
-                    <label class="job-montage-label" for="montage-prefer-video" title="Если на сцене есть и видео сцены, и Start image — выбираем видео сцены. По умолчанию (выключен) — берём Start image. Pexels в монтаж не идёт.">Приоритет Видео</label>
+                    <label class="job-montage-label" for="montage-prefer-video" title="Если на сцене есть и видео сцены, и Start image — выбираем видео сцены. По умолчанию (выключен) — берём Start image.">Приоритет Видео</label>
                     <div class="job-montage-smooth-controls">
                         <label class="job-montage-smooth-toggle">
                             <input type="checkbox" id="montage-prefer-video" {% if montage_prefer_video %}checked{% endif %}>
@@ -881,19 +780,6 @@
             <div class="confirm-modal__actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="json-confirm-cancel">Отмена</button>
                 <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="json-confirm-ok">Подтвердить</button>
-            </div>
-        </div>
-    </div>
-    <div class="confirm-modal hidden" id="scene-delete-confirm-modal" aria-hidden="true">
-        <div class="confirm-modal__backdrop" data-scene-delete-close></div>
-        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="scene-delete-confirm-title">
-            <div class="confirm-modal__head">
-                <h3 class="confirm-modal__title" id="scene-delete-confirm-title">Удалить сцену</h3>
-            </div>
-            <p class="confirm-modal__lead" id="scene-delete-confirm-text">Точно удалить сцену?</p>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="scene-delete-confirm-cancel">Отмена</button>
-                <button type="button" class="btn btn-danger btn-sm" id="scene-delete-confirm-ok">Удалить</button>
             </div>
         </div>
     </div>
@@ -1148,39 +1034,15 @@
         const cards = Array.from(document.querySelectorAll('.scenes-section .scene-card[data-scene-id]'));
         for (const card of cards) {
             const sid = String(card.getAttribute('data-scene-id') || '').trim() || '?';
-            const isLive = card.classList.contains('scene-card--live');
-            if (!isLive) {
-                const hasStart = card.getAttribute('data-has-start-prompt') === '1';
-                if (hasStart) {
-                    const startSlot = card.querySelector('.scene-slot[data-slot="start"] .slot-placeholder');
-                    const ready = !!(startSlot && startSlot.querySelector('img.slot-image'));
-                    if (!ready) {
-                        return {
-                            sceneEl: card,
-                            sceneId: sid,
-                            message: 'Сцена ' + sid + ': не сгенерирован Start. Сначала сгенерируйте Start-изображение, затем повторите «' + label + '».',
-                        };
-                    }
-                }
-            } else {
-                const pexelsSlot = card.querySelector('.scene-slot--pexels');
-                const placeholder = pexelsSlot ? pexelsSlot.querySelector('.slot-placeholder--pexels') : null;
-                const status = placeholder ? (placeholder.getAttribute('data-status') || '') : '';
-                const items = placeholder ? placeholder.querySelectorAll('.pexels-slot-item') : [];
-                const hasResults = status === 'done' && items.length > 0;
-                if (!hasResults) {
+            const hasStart = card.getAttribute('data-has-start-prompt') === '1';
+            if (hasStart) {
+                const startSlot = card.querySelector('.scene-slot[data-slot="start"] .slot-placeholder');
+                const ready = !!(startSlot && startSlot.querySelector('img.slot-image'));
+                if (!ready) {
                     return {
                         sceneEl: card,
                         sceneId: sid,
-                        message: 'Сцена ' + sid + ': для live-сцены ещё не найдены фото/видео. Запустите поиск (↻) и повторите «' + label + '».',
-                    };
-                }
-                const selected = pexelsSlot.querySelector('.pexels-slot-item--selected');
-                if (!selected) {
-                    return {
-                        sceneEl: card,
-                        sceneId: sid,
-                        message: 'Сцена ' + sid + ': не выбрано ни одного материала. Отметьте 1–2 фото/видео чекбоксом и повторите «' + label + '».',
+                        message: 'Сцена ' + sid + ': не сгенерирован Start. Сначала сгенерируйте Start-изображение, затем повторите «' + label + '».',
                     };
                 }
             }
@@ -2038,8 +1900,8 @@
             }
             if (preferVideoHint) {
                 preferVideoHint.textContent = (preferVideoChk && preferVideoChk.checked)
-                    ? 'Видео сцены > Start image. Pexels в монтаж не идёт.'
-                    : 'Start image > Видео сцены. Pexels в монтаж не идёт.';
+                    ? 'Видео сцены > Start image.'
+                    : 'Start image > Видео сцены.';
             }
         };
         zoomInput.addEventListener('input', syncLabels);
@@ -2706,342 +2568,6 @@
         });
     });
 
-    const renderPexelsResults = (slotPlaceholder, contentType, items) => {
-        if (!slotPlaceholder) return;
-        const ct = String(contentType || 'photos').toLowerCase();
-        if (!Array.isArray(items) || items.length === 0) {
-            slotPlaceholder.dataset.status = 'pending';
-            slotPlaceholder.innerHTML = '<span class="slot-status">Pending</span>';
-            return;
-        }
-        let html = '<div class="pexels-slots-grid">';
-        items.slice(0, 8).forEach((it, idx) => {
-            const srcLink = String((it && (it.source_url || '')) || '').trim();
-            const thumb = String((it && (it.local_url || it.thumbnail_url || it.media_url)) || '').trim();
-            const media = String((it && (it.local_url || it.media_url || '')) || '').trim();
-            const kw = String((it && (it.found_by_keyword || it.search_keywords || '')) || '').trim();
-            const w = Number((it && it.width) || 0);
-            const h = Number((it && it.height) || 0);
-            if (!thumb && !media) return;
-            html += `<div class="scene-slot pexels-slot-item" data-pexels-index="${idx}">`;
-            html += '<div class="slot-placeholder" data-status="done">';
-            if (ct === 'videos' || ct === 'video') {
-                html += `<video src="${media}" class="slot-image" muted playsinline preload="metadata" controls></video>`;
-            } else {
-                html += `<img src="${thumb}" alt="Pexels result" class="slot-image">`;
-            }
-            html += '<button type="button" class="pexels-select-toggle" data-action="toggle-pexels-select" aria-pressed="false" aria-label="Выбрать" title="Выбрать"><span class="pexels-select-toggle__check" aria-hidden="true"></span></button>';
-            html += '</div>';
-            html += '<div class="pexels-item-meta">';
-            html += `<span class="pexels-meta-left">${(ct === 'videos' || ct === 'video') ? 'Video' : 'Photo'}</span>`;
-            html += `<span class="pexels-meta-center">${kw || '—'}</span>`;
-            html += `<span class="pexels-meta-right">${w || 0}x${h || 0}</span>`;
-            html += '</div>';
-            html += '</div>';
-        });
-        html += '</div>';
-        slotPlaceholder.dataset.status = 'done';
-        slotPlaceholder.innerHTML = html;
-    };
-
-    /** Как на сервере _norm_kw_key: дефисы/пробелы не ломают exclude ↔ chip. */
-    const normKey = (s) =>
-        String(s || '')
-            .trim()
-            .toLowerCase()
-            .replace(/-/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-    const readExcludedKeywords = (pexelsSlot) => {
-        if (!pexelsSlot) return [];
-        const raw = pexelsSlot.getAttribute('data-excluded-keywords-json') || '[]';
-        try {
-            const arr = JSON.parse(raw);
-            return Array.isArray(arr) ? arr.map((x) => String(x || '').trim()).filter(Boolean) : [];
-        } catch (_) {
-            return [];
-        }
-    };
-
-    const writeExcludedKeywords = (pexelsSlot, arr) => {
-        if (!pexelsSlot) return;
-        const list = Array.isArray(arr) ? arr.map((x) => String(x || '').trim()).filter(Boolean) : [];
-        pexelsSlot.setAttribute('data-excluded-keywords-json', JSON.stringify(list));
-    };
-
-    const syncKeywordChipsVisibility = (pexelsSlot) => {
-        if (!pexelsSlot) return;
-        const ex = new Set(readExcludedKeywords(pexelsSlot).map(normKey));
-        pexelsSlot.querySelectorAll('.live-keyword-chip').forEach((chip) => {
-            const kwRaw = String(chip.getAttribute('data-keyword') || '').trim();
-            const excluded = kwRaw && ex.has(normKey(kwRaw));
-            chip.classList.toggle('live-keyword-chip--excluded', !!excluded);
-        });
-    };
-
-    const rebuildExcludedFromDom = (pexelsSlot) => {
-        if (!pexelsSlot) return [];
-        const byNorm = new Map();
-        pexelsSlot.querySelectorAll('.live-keyword-chip.live-keyword-chip--excluded').forEach((chip) => {
-            const kw = String(chip.getAttribute('data-keyword') || '').trim();
-            if (!kw) return;
-            const n = normKey(kw);
-            if (!byNorm.has(n)) byNorm.set(n, kw);
-        });
-        return Array.from(byNorm.values());
-    };
-
-    document.querySelectorAll('.btn-pexels-search').forEach((btn) => {
-        btn.addEventListener('click', async function () {
-            const sceneIndex = Number.parseInt(String(this.dataset.sceneIndex || ''), 10);
-            if (!Number.isFinite(sceneIndex) || sceneIndex < 0) return;
-            const sceneCard = this.closest('.scene-card');
-            const pexelsSlot = sceneCard ? sceneCard.querySelector('.scene-slot[data-slot="pexels"]') : null;
-            const placeholder = pexelsSlot ? pexelsSlot.querySelector('.slot-placeholder--pexels') : null;
-            const sceneId = sceneCard?.querySelector('.scene-id')?.textContent?.trim() || `scene#${sceneIndex}`;
-            if (!placeholder) return;
-            this.disabled = true;
-            placeholder.dataset.status = 'generating';
-            placeholder.innerHTML = '<span class="slot-status slot-status-with-spinner">Searching Pexels…</span>';
-            try {
-                const excludedKeywords = readExcludedKeywords(pexelsSlot);
-                const resp = await fetch(`/job/${jobId}/pexels/search`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scene_index: sceneIndex, excluded_keywords: excludedKeywords })
-                });
-                const data = await parseJsonOrThrow(resp, 'Pexels');
-                if (!resp.ok || !data.ok) {
-                    throw new Error(data.error || 'Pexels search failed');
-                }
-                writeExcludedKeywords(pexelsSlot, data.excluded_keywords || excludedKeywords);
-                syncKeywordChipsVisibility(pexelsSlot);
-                renderPexelsResults(placeholder, data.content_type, data.items || []);
-                if (typeof window.__pexelsResetSelection === 'function') {
-                    window.__pexelsResetSelection(pexelsSlot);
-                }
-                appendBulkLog(`✓ ${sceneId} · pexels: найдено ${Array.isArray(data.items) ? data.items.length : 0}`);
-            } catch (e) {
-                const msg = e && e.message ? e.message : String(e);
-                showPlaceholderError(placeholder, msg);
-                openJobErrorModal(msg);
-            } finally {
-                this.disabled = false;
-            }
-        });
-    });
-
-    document.querySelectorAll('.scene-slot[data-slot="pexels"]').forEach((slot) => {
-        syncKeywordChipsVisibility(slot);
-    });
-
-    document.querySelector('section.scenes-section')?.addEventListener('click', (e) => {
-        const btn = e.target && e.target.closest ? e.target.closest('.live-keyword-chip__remove') : null;
-        if (!btn) return;
-        const slot = btn.closest('.scene-slot[data-slot="pexels"]');
-        if (!slot) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const chip = btn.closest('.live-keyword-chip');
-        if (!chip) return;
-        const kw = String(chip.getAttribute('data-keyword') || '').trim();
-        if (!kw) return;
-        const n = normKey(kw);
-        const isExcludedNow = chip.classList.contains('live-keyword-chip--excluded');
-        const activeNorms = new Set();
-        slot.querySelectorAll('.live-keyword-chip').forEach((c) => {
-            if (c.classList.contains('live-keyword-chip--excluded')) return;
-            const raw = String(c.getAttribute('data-keyword') || '').trim();
-            if (raw) activeNorms.add(normKey(raw));
-        });
-        if (isExcludedNow) {
-            slot.querySelectorAll('.live-keyword-chip').forEach((c) => {
-                const raw = String(c.getAttribute('data-keyword') || '').trim();
-                if (raw && normKey(raw) === n) c.classList.remove('live-keyword-chip--excluded');
-            });
-            writeExcludedKeywords(slot, rebuildExcludedFromDom(slot));
-            return;
-        }
-        if (activeNorms.size <= 1 && activeNorms.has(n)) {
-            openJobErrorModal('Нельзя удалить последний ключевик. Оставьте хотя бы один keyword для поиска.');
-            return;
-        }
-        slot.querySelectorAll('.live-keyword-chip').forEach((c) => {
-            const raw = String(c.getAttribute('data-keyword') || '').trim();
-            if (raw && normKey(raw) === n) c.classList.add('live-keyword-chip--excluded');
-        });
-        writeExcludedKeywords(slot, rebuildExcludedFromDom(slot));
-    });
-
-    (function pexelsSelection() {
-        const PEXELS_SELECT_LIMIT = 2;
-
-        const readSelectedIndices = (slot) => {
-            if (!slot) return [];
-            const raw = slot.getAttribute('data-selected-indices-json') || '[]';
-            try {
-                const arr = JSON.parse(raw);
-                if (!Array.isArray(arr)) return [];
-                const out = [];
-                const seen = new Set();
-                for (const x of arr) {
-                    const v = Number.parseInt(x, 10);
-                    if (!Number.isFinite(v) || v < 0) continue;
-                    if (seen.has(v)) continue;
-                    seen.add(v);
-                    out.push(v);
-                    if (out.length >= PEXELS_SELECT_LIMIT) break;
-                }
-                return out;
-            } catch (_) {
-                return [];
-            }
-        };
-
-        const writeSelectedIndices = (slot, arr) => {
-            if (!slot) return;
-            slot.setAttribute('data-selected-indices-json', JSON.stringify(arr || []));
-        };
-
-        const applyUi = (slot) => {
-            if (!slot) return;
-            const sel = new Set(readSelectedIndices(slot));
-            const items = slot.querySelectorAll('.pexels-slot-item');
-            const dimUnselected = sel.size >= PEXELS_SELECT_LIMIT;
-            items.forEach((item) => {
-                const idx = Number.parseInt(item.getAttribute('data-pexels-index') || '', 10);
-                const isSelected = Number.isFinite(idx) && sel.has(idx);
-                item.classList.toggle('pexels-slot-item--selected', isSelected);
-                item.classList.toggle('pexels-slot-item--dimmed', dimUnselected && !isSelected);
-                const btn = item.querySelector('.pexels-select-toggle');
-                if (btn) {
-                    btn.classList.toggle('pexels-select-toggle--checked', isSelected);
-                    btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
-                }
-            });
-        };
-
-        const persist = async (slot, indices) => {
-            const sceneIndex = Number.parseInt(slot.getAttribute('data-scene-index') || '', 10);
-            const sceneId = String(slot.getAttribute('data-scene-id') || '').trim();
-            if (!Number.isFinite(sceneIndex) || sceneIndex < 0) return;
-            try {
-                const resp = await fetch(`/job/${jobId}/pexels/select`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scene_index: sceneIndex, scene_id: sceneId, selected_indices: indices }),
-                });
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok || !data.ok) {
-                    throw new Error(data.error || `HTTP ${resp.status}`);
-                }
-                if (Array.isArray(data.selected_indices)) {
-                    writeSelectedIndices(slot, data.selected_indices);
-                    applyUi(slot);
-                }
-            } catch (err) {
-                openJobErrorModal(err && err.message ? err.message : String(err));
-            }
-        };
-
-        document.addEventListener('click', (e) => {
-            const btn = e.target && e.target.closest ? e.target.closest('[data-action="toggle-pexels-select"]') : null;
-            if (!btn) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const item = btn.closest('.pexels-slot-item');
-            const slot = btn.closest('.scene-slot[data-slot="pexels"]');
-            if (!item || !slot) return;
-            const idx = Number.parseInt(item.getAttribute('data-pexels-index') || '', 10);
-            if (!Number.isFinite(idx) || idx < 0) return;
-            const current = readSelectedIndices(slot);
-            const has = current.indexOf(idx);
-            let next;
-            if (has >= 0) {
-                next = current.filter((v) => v !== idx);
-            } else {
-                if (current.length >= PEXELS_SELECT_LIMIT) {
-                    openJobErrorModal(`Можно выбрать максимум ${PEXELS_SELECT_LIMIT} элемента. Снимите выделение, чтобы выбрать другой.`);
-                    return;
-                }
-                next = current.concat([idx]);
-            }
-            writeSelectedIndices(slot, next);
-            applyUi(slot);
-            persist(slot, next);
-        });
-
-        document.querySelectorAll('.scene-slot[data-slot="pexels"]').forEach(applyUi);
-
-        window.__pexelsApplySelectionUi = applyUi;
-        window.__pexelsResetSelection = (slot) => {
-            if (!slot) return;
-            writeSelectedIndices(slot, []);
-            applyUi(slot);
-        };
-    })();
-
-    (function liveSceneDelete() {
-        const modal = document.getElementById('scene-delete-confirm-modal');
-        const textEl = document.getElementById('scene-delete-confirm-text');
-        const cancelBtn = document.getElementById('scene-delete-confirm-cancel');
-        const okBtn = document.getElementById('scene-delete-confirm-ok');
-        if (!modal || !okBtn || !cancelBtn) return;
-        let pending = null;
-        const close = () => {
-            modal.classList.add('hidden');
-            modal.setAttribute('aria-hidden', 'true');
-            okBtn.disabled = false;
-            pending = null;
-        };
-        const open = (sceneIndex, sceneId) => {
-            pending = { sceneIndex, sceneId };
-            if (textEl) {
-                textEl.textContent = `Точно удалить сцену "${sceneId}"? Это действие нельзя отменить.`;
-            }
-            okBtn.disabled = false;
-            modal.classList.remove('hidden');
-            modal.setAttribute('aria-hidden', 'false');
-        };
-        document.addEventListener('click', (e) => {
-            const btn = e.target && e.target.closest ? e.target.closest('[data-action="delete-live-scene"]') : null;
-            if (!btn) return;
-            e.preventDefault();
-            const idx = parseInt(btn.getAttribute('data-scene-index') || '', 10);
-            const sid = String(btn.getAttribute('data-scene-id') || '').trim();
-            if (!Number.isFinite(idx) || idx < 0 || !sid) return;
-            open(idx, sid);
-        });
-        cancelBtn.addEventListener('click', close);
-        modal.addEventListener('click', (e) => {
-            if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-scene-delete-close')) close();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
-        });
-        okBtn.addEventListener('click', async () => {
-            if (!pending) return;
-            const { sceneIndex, sceneId } = pending;
-            okBtn.disabled = true;
-            try {
-                const resp = await fetch(`/job/${jobId}/scene/delete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scene_index: sceneIndex, scene_id: sceneId }),
-                });
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok || !data.ok) {
-                    throw new Error(data.error || `HTTP ${resp.status}`);
-                }
-                window.location.reload();
-            } catch (err) {
-                close();
-                openJobErrorModal(err && err.message ? err.message : String(err));
-            }
-        });
-    })();
-
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
     const BULK_START_INTERVAL_MS = {
         image: 650, // <= ~15 new requests / 10s
@@ -3223,10 +2749,6 @@
         const btnGen = document.getElementById('tts-generate');
         const busyEl = document.getElementById('tts-busy');
         const errEl = document.getElementById('tts-error');
-        const ttsTemplateSel = document.getElementById('tts-template-select');
-        const ttsTemplateApplyBtn = document.getElementById('tts-template-apply');
-        const ttsTemplateSaveBtn = document.getElementById('tts-template-save-disk');
-        const ttsTemplateStatus = document.getElementById('tts-template-status');
         const playerWrap = document.getElementById('tts-player-wrap');
         const player = document.getElementById('tts-player');
         const playToggle = document.getElementById('tts-play-toggle');
@@ -3237,13 +2759,6 @@
         let ttsDownloadFilename = 'tts.mp3';
         let currentAudioFilename = ttsLastAudioFilename || '';
         if (!modelSel || !voiceSel) return;
-
-        const sliderIds = {
-            speed_pct: 'tts-speed',
-            stability_pct: 'tts-stability',
-            similarity_pct: 'tts-similarity',
-            style_pct: 'tts-style',
-        };
 
         const fmtTtsTime = (sec) => {
             if (sec == null || !Number.isFinite(sec) || sec < 0) return '0:00';
@@ -3712,54 +3227,6 @@
             }
         };
 
-        const setModelIfExists = (modelId) => {
-            if (!modelId) return;
-            for (let i = 0; i < modelSel.options.length; i++) {
-                if (modelSel.options[i].value === modelId) {
-                    modelSel.selectedIndex = i;
-                    break;
-                }
-            }
-            updateCharUi();
-        };
-
-        const setVoiceByTemplate = (voiceId, voiceName) => {
-            if (!voiceSel || voiceSel.disabled) return;
-            if (voiceId) {
-                for (let i = 0; i < voiceSel.options.length; i++) {
-                    if (voiceSel.options[i].value === voiceId) {
-                        voiceSel.selectedIndex = i;
-                        return;
-                    }
-                }
-            }
-            if (voiceName) {
-                const target = voiceName.trim().toLowerCase();
-                for (let i = 0; i < voiceSel.options.length; i++) {
-                    if ((voiceSel.options[i].textContent || '').trim().toLowerCase() === target) {
-                        voiceSel.selectedIndex = i;
-                        return;
-                    }
-                }
-            }
-        };
-
-        const applyTemplateDataToUi = (tpl) => {
-            if (!tpl || typeof tpl !== 'object') return;
-            setModelIfExists(String(tpl.model_id || ''));
-            Object.entries(sliderIds).forEach(([key, id]) => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                const raw = Number(tpl[key]);
-                const value = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : Number(el.value || 0);
-                el.value = String(value);
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-            });
-            const boost = document.getElementById('tts-speaker-boost');
-            if (boost) boost.checked = Boolean(tpl.use_speaker_boost);
-            setVoiceByTemplate(String(tpl.voice_id || ''), String(tpl.voice_name || ''));
-        };
-
         const collectCurrentTtsSettings = () => {
             const voice_id = voiceSel.value || '';
             const voice_name = voiceSel.options[voiceSel.selectedIndex]?.textContent || '';
@@ -3779,7 +3246,6 @@
         const persistTtsDefaults = async () => {
             const payload = {
                 ...collectCurrentTtsSettings(),
-                tts_template: (ttsTemplateSel?.value || '').trim(),
             };
             await fetch(`/job/${jobId}/elevenlabs/defaults`, {
                 method: 'POST',
@@ -3793,13 +3259,6 @@
                 persistTtsDefaults().catch(() => {});
             }, 250);
         };
-        const showTtsTemplateStatus = (text, isError = false) => {
-            if (!ttsTemplateStatus) return;
-            ttsTemplateStatus.textContent = text || '';
-            ttsTemplateStatus.classList.toggle('hidden', !text);
-            ttsTemplateStatus.classList.toggle('tts-template-status--error', Boolean(isError));
-        };
-
         const bindSlider = (rangeId, valId) => {
             const r = document.getElementById(rangeId);
             const v = document.getElementById(valId);
@@ -3877,60 +3336,11 @@
                         }
                     }
                 }
-                setVoiceByTemplate('', '');
                 voiceSel.addEventListener('change', schedulePersistTtsDefaults);
             })
             .catch(() => {
                 voiceSel.innerHTML = '<option value="">Ошибка загрузки голосов</option>';
             });
-
-        ttsTemplateApplyBtn?.addEventListener('click', async () => {
-            const name = (ttsTemplateSel?.value || '').trim();
-            if (!name) return;
-            showTtsTemplateStatus('');
-            ttsTemplateApplyBtn.disabled = true;
-            try {
-                const r = await fetch(`/job/${jobId}/elevenlabs/templates/${encodeURIComponent(name)}`);
-                const data = await r.json();
-                if (!r.ok || !data.ok || !data.template) throw new Error(data.error || `HTTP ${r.status}`);
-                applyTemplateDataToUi(data.template);
-                schedulePersistTtsDefaults();
-            } catch (e) {
-                errEl.textContent = e.message || String(e);
-                errEl.classList.remove('hidden');
-                showTtsTemplateStatus(`Не удалось применить шаблон "${name}"`, true);
-            } finally {
-                ttsTemplateApplyBtn.disabled = false;
-            }
-        });
-
-        ttsTemplateSaveBtn?.addEventListener('click', async () => {
-            const name = (ttsTemplateSel?.value || '').trim();
-            if (!name) {
-                errEl.textContent = 'Выберите шаблон озвучки.';
-                errEl.classList.remove('hidden');
-                return;
-            }
-            showTtsTemplateStatus('');
-            ttsTemplateSaveBtn.disabled = true;
-            try {
-                const payload = collectCurrentTtsSettings();
-                const r = await fetch(`/job/${jobId}/elevenlabs/templates/${encodeURIComponent(name)}/save`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                const data = await r.json();
-                if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
-                showTtsTemplateStatus(`Шаблон "${name}" успешно обновлен`);
-            } catch (e) {
-                errEl.textContent = e.message || String(e);
-                errEl.classList.remove('hidden');
-                showTtsTemplateStatus(`Не удалось обновить шаблон "${name}"`, true);
-            } finally {
-                ttsTemplateSaveBtn.disabled = false;
-            }
-        });
 
         btnGen?.addEventListener('click', async () => {
             errEl.classList.add('hidden');
@@ -3966,7 +3376,6 @@
                         text,
                         voice_id,
                         voice_name,
-                        tts_template: (ttsTemplateSel?.value || '').trim(),
                         model_id: modelSel.value,
                         speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
                         stability_pct: parseInt(document.getElementById('tts-stability').value, 10),

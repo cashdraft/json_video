@@ -2293,7 +2293,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 /* Обычные этапы: один ряд Model | System | User только если сама карточка достаточно широкая */
 @container rewrite-stage (min-width: 28rem) {
-    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-row--controls {
+    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]) .rewrite-stage-row--controls {
         grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
     }
 
@@ -2309,12 +2309,12 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
         grid-template-columns: auto minmax(0, 1fr);
     }
 
-    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
+    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]) .rewrite-stage-model-cell {
         display: flex;
     }
 
     /* Совпадает с левым краем колонки System при трёхколоночной сетке */
-    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-subtitle {
+    .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]) .rewrite-stage-subtitle {
         padding-left: calc(9.5rem + 1rem);
     }
 
@@ -2349,7 +2349,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 /* Браузеры без container queries: широкий viewport — прежняя сетка, без отступа подзаголовка (он ломает узкие карточки в сетке 3×N). */
 @supports not (container-type: inline-size) {
     @media (min-width: 42.0625rem) {
-        .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-row--controls {
+        .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]) .rewrite-stage-row--controls {
             grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
         }
 
@@ -2365,7 +2365,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
             grid-template-columns: auto minmax(0, 1fr);
         }
 
-        .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]):not([data-stage-key="scene_writer_live"]) .rewrite-stage-model-cell {
+        .rewrite-stage-card:not(.rewrite-stage-card--full):not([data-stage-key="scene_writer"]) .rewrite-stage-model-cell {
             display: flex;
         }
     }
@@ -2375,58 +2375,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-row--controls {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-
-/* Scene Writer Live: like Hero/Master + Model/Duration layout */
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-row--controls {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.65rem 1rem;
-}
-
-/* For Scene Writer Live we don't need per-stage model cell here. */
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-model-cell {
-    display: none;
-}
-
-.rewrite-stage-target-range {
-    width: 100%;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-target-cell {
-    display: flex;
-    flex-direction: column;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-target-cell .rewrite-source-toolbar {
-    margin-bottom: 0.55rem;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-target-cell .tts-slider-label {
-    margin-bottom: 0.15rem;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-prompt-cell .rewrite-slot-textarea {
-    min-height: 96px;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-user-prompt {
-    min-height: 96px;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-content-cell {
-    display: flex;
-    flex-direction: column;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-content-type {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-}
-
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-system-cell { grid-column: 1; }
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-user-cell { grid-column: 2; }
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-content-cell { grid-column: 3; }
-.rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-swl-target-cell { grid-column: 3; }
 
 .rewrite-scene-writer-check {
     margin-top: 0.45rem;
@@ -3150,10 +3098,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     }
 
     .rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-row--controls {
-        grid-template-columns: 1fr;
-    }
-
-    .rewrite-stage-card[data-stage-key="scene_writer_live"] .rewrite-stage-row--controls {
         grid-template-columns: 1fr;
     }
 
