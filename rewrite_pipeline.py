@@ -73,6 +73,33 @@ def _voiceover_editor_system_rules_text(cell: dict[str, Any]) -> str:
     return str((cell or {}).get("voiceover_system_rules") or "").strip()
 
 
+def _editor_stage_system_rules_text(stage_key: str, cell: dict[str, Any]) -> str:
+    """Locked ``{stage}_system_rules`` или legacy из ячейки этапа."""
+    name = f"{stage_key}_system_rules"
+    try:
+        locked = str(get_locked_prompt(name) or "").strip()
+    except KeyError:
+        locked = ""
+    if locked:
+        return locked
+    return str((cell or {}).get(name) or "").strip()
+
+
+def build_editor_stage_user_json(
+    user_prompt_plain: str,
+    edited_text_upstream: str,
+    *,
+    hero_plain: str | None = None,
+) -> str:
+    """User для редакторов конвейера: JSON {user_promt, edited_text} (+ hero_promt для Persona)."""
+    up = (user_prompt_plain or "").strip()
+    et = _extract_edited_text(str(edited_text_upstream or ""))
+    payload: dict[str, Any] = {"user_promt": up, "edited_text": et}
+    if hero_plain is not None and str(hero_plain).strip():
+        payload["hero_promt"] = str(hero_plain).strip()
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 def clamp_target_chars(n: int | None) -> int:
     """500–40 000 симв., шаг 500."""
     try:
@@ -203,9 +230,8 @@ def parse_voiceover_editor_payload(raw_payload: str) -> tuple[str, list[Any]]:
 def build_rewrite_system_prompt(
     master_prompt: str,
     stage_prompt: str,
-    source_text: str,
 ) -> str:
-    """System-сообщение для этапа: Master → промпт этапа (Duration уходит в user)."""
+    """System-сообщение для этапа: Master → промпт этапа (Duration и исходник — в user)."""
     parts: list[str] = []
     m = (master_prompt or "").strip()
     if m:
@@ -230,106 +256,67 @@ def build_analysis_user_message(source_text: str, analysis_user_prompt: str) -> 
     return build_rewrite_stage_user_message(up, body)
 
 
-def build_structure_system_prompt(
-    master_prompt: str,
-    structure_prompt: str,
-) -> str:
-    """Только этап Architect: в system строго Master → Architect (Duration уходит в user)."""
-    parts: list[str] = []
-    m = (master_prompt or "").strip()
-    if m:
-        parts.append(m)
-    sp = (structure_prompt or "").strip()
-    if sp:
-        parts.append(sp)
-    return "\n\n".join(parts)
-
-
-def build_draft1_rewriter_system_prompt(
-    master_prompt: str,
-    draft1_rewriter_prompt: str,
-) -> str:
-    """Этап draft1: в system строго Master → Block Writer Prompt (без Duration)."""
-    parts: list[str] = []
-    m = (master_prompt or "").strip()
-    if m:
-        parts.append(m)
-    dr = (draft1_rewriter_prompt or "").strip()
-    if dr:
-        parts.append(dr)
-    return "\n\n".join(parts)
-
-
 def build_draft1_rewriter_user_message(
     analysis_last_result: str,
     structure_last_result: str,
     draft1_user_prompt: str,
-    hero_prompt: str,
 ) -> str:
-    """User для draft1 (один общий запрос до blockwise): Hero, User Promt, Analysis, Architect — plain text."""
+    """User для draft1 (диагностическое compose-тело до blockwise): User Promt, Analysis, Architect — plain."""
     ar = (analysis_last_result or "").strip() or "(пусто)"
     sr = (structure_last_result or "").strip() or "(пусто)"
     up = (draft1_user_prompt or "").strip()
-    hp = (hero_prompt or "").strip()
-    return _join_user_sections(hp, up, ar, sr)
+    return _join_user_sections(up, ar, sr)
 
 
 def build_retention_editor_system_prompt(
     retention_editor_prompt: str,
+    retention_rules: str = "",
 ) -> str:
-    """Этап retention_editor: в system только Retention Editor System Promt."""
-    return (retention_editor_prompt or "").strip()
+    """Retention Editor: system promt + необязательный блок system rules."""
+    return build_voiceover_editor_system_prompt(retention_editor_prompt, retention_rules)
 
 
 def build_retention_editor_user_message(
     retention_editor_user_prompt: str,
     block_writer_full_text: str = "",
 ) -> str:
-    """User для retention_editor: User Promt + полный текст Block Writer (plain text)."""
-    up = (retention_editor_user_prompt or "").strip()
-    ft = str(block_writer_full_text or "")
-    return build_rewrite_stage_user_message(up, ft)
+    """Legacy-обёртка: JSON как у Voiceover."""
+    return build_editor_stage_user_json(retention_editor_user_prompt, block_writer_full_text)
 
 
 def build_hook_editor_system_prompt(
     hook_editor_prompt: str,
+    hook_rules: str = "",
 ) -> str:
-    """Этап hook_editor: в system только Hook Editor System Promt."""
-    return (hook_editor_prompt or "").strip()
+    return build_voiceover_editor_system_prompt(hook_editor_prompt, hook_rules)
 
 
 def build_hook_editor_user_message(
     hook_editor_user_prompt: str,
     edited_text: str = "",
 ) -> str:
-    """User для hook_editor: User Promt + edited_text (plain text)."""
-    up = (hook_editor_user_prompt or "").strip()
-    et = _extract_edited_text(edited_text)
-    return build_rewrite_stage_user_message(up, et)
+    return build_editor_stage_user_json(hook_editor_user_prompt, edited_text)
 
 
 def build_flow_editor_system_prompt(
     flow_editor_prompt: str,
+    flow_rules: str = "",
 ) -> str:
-    """Этап flow_editor: в system только Flow Editor System Promt."""
-    return (flow_editor_prompt or "").strip()
+    return build_voiceover_editor_system_prompt(flow_editor_prompt, flow_rules)
 
 
 def build_flow_editor_user_message(
     flow_editor_user_prompt: str,
     edited_text: str = "",
 ) -> str:
-    """User для flow_editor: User Promt + edited_text (plain text)."""
-    up = (flow_editor_user_prompt or "").strip()
-    et = _extract_edited_text(edited_text)
-    return build_rewrite_stage_user_message(up, et)
+    return build_editor_stage_user_json(flow_editor_user_prompt, edited_text)
 
 
 def build_persona_editor_system_prompt(
     persona_editor_prompt: str,
+    persona_rules: str = "",
 ) -> str:
-    """Этап persona_editor: в system только Persona Editor System Promt."""
-    return (persona_editor_prompt or "").strip()
+    return build_voiceover_editor_system_prompt(persona_editor_prompt, persona_rules)
 
 
 def build_persona_editor_user_message(
@@ -337,11 +324,11 @@ def build_persona_editor_user_message(
     hero_prompt: str = "",
     edited_text: str = "",
 ) -> str:
-    """User для persona_editor: User Promt + Hero + edited_text (plain text)."""
-    up = (persona_editor_user_prompt or "").strip()
-    hp = (hero_prompt or "").strip()
-    et = _extract_edited_text(edited_text)
-    return _join_user_sections(up, hp, et)
+    return build_editor_stage_user_json(
+        persona_editor_user_prompt,
+        edited_text,
+        hero_plain=hero_prompt,
+    )
 
 
 def build_rewrite_stage_system_prompt(
@@ -387,10 +374,106 @@ def build_voiceover_editor_user_message(
     voiceover_editor_user_prompt: str,
     edited_text: str = "",
 ) -> str:
-    """User для voiceover_editor: User Promt + edited_text (plain text, без Hero)."""
-    up = (voiceover_editor_user_prompt or "").strip()
+    """User для voiceover_editor: JSON {user_promt, edited_text}."""
+    return build_editor_stage_user_json(voiceover_editor_user_prompt, edited_text)
+
+
+_ELEVENLABS_INSERT_BRACKET_RE = re.compile(r"\[[^\]]*\]")
+_ELEVENLABS_INSERT_XML_RE = re.compile(r"<[^>]*/>", re.IGNORECASE)
+
+
+def count_elevenlabs_inserts(text: str) -> int:
+    """Теги voice-direction: [whispers] и самозакрывающиеся <break … />."""
+    s = str(text or "")
+    return len(_ELEVENLABS_INSERT_BRACKET_RE.findall(s)) + len(
+        _ELEVENLABS_INSERT_XML_RE.findall(s)
+    )
+
+
+def strip_elevenlabs_inserts(text: str) -> str:
+    s = str(text or "")
+    s = _ELEVENLABS_INSERT_BRACKET_RE.sub("", s)
+    return _ELEVENLABS_INSERT_XML_RE.sub("", s)
+
+
+def downstream_script_input_text(
+    preset: str,
+    stages_snap: dict[str, Any],
+    *,
+    voiceover_editor_text: str = "",
+    source_text: str = "",
+) -> str:
+    """Plain-текст для downstream-этапов: Voiceover (если есть) → Inbox / Source."""
+    vo = str(voiceover_editor_text or "").strip()
+    if vo:
+        return vo
+    preset_n = normalize_rewrite_preset(preset)
+    if preset_n == REWRITE_PRESET_PREWRITTEN:
+        ibx = str((stages_snap.get("inbox") or {}).get("last_result") or "").strip()
+        if ibx:
+            return _extract_edited_text(ibx)
+        return ""
+    if preset_n == REWRITE_PRESET_SOFT:
+        rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "").strip()
+        if rw_res:
+            return _extract_edited_text(rw_res)
+        return ""
+    return ""
+
+
+def _elevenlabs_check_norm_text(text: str) -> str:
+    """Схлопывает пробелы: после вырезания тегов модель часто оставляет \\n/пробелы на их месте."""
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def build_elevenlabs_editor_system_prompt(
+    elevenlabs_editor_prompt: str,
+) -> str:
+    return (elevenlabs_editor_prompt or "").strip()
+
+
+def build_elevenlabs_editor_user_message(
+    elevenlabs_editor_user_prompt: str,
+    edited_text: str = "",
+) -> str:
+    """User для elevenlabs_editor: User Promt + plain text из Voiceover Editor Result."""
+    up = (elevenlabs_editor_user_prompt or "").strip()
     et = _extract_edited_text(edited_text)
-    return build_rewrite_stage_user_message(up, et)
+    return _join_user_sections(up, et)
+
+
+def build_elevenlabs_editor_check(input_text: str, editor_result_text: str) -> dict[str, Any]:
+    """Проверка: IN = Voiceover plain; OUT = Result без insert-тегов.
+
+    OK — совпадение текста после схлопывания пробелов (модель вставляет \\n/пробелы
+    вокруг тегов; в сырой дельте это даёт +N при insert_count = числу тегов, не символов).
+    """
+    inp = str(input_text or "")
+    raw_out = str(editor_result_text or "")
+    out_stripped = strip_elevenlabs_inserts(raw_out)
+    inp_norm = _elevenlabs_check_norm_text(inp)
+    out_norm = _elevenlabs_check_norm_text(out_stripped)
+    input_chars = len(inp)
+    output_chars = len(out_stripped)
+    delta_chars = output_chars - input_chars
+    input_chars_norm = len(inp_norm)
+    output_chars_norm = len(out_norm)
+    delta_chars_norm = output_chars_norm - input_chars_norm
+    insert_count = count_elevenlabs_inserts(raw_out)
+    ok = bool(inp_norm) and inp_norm == out_norm
+    return {
+        "type": "elevenlabs_editor_check",
+        "summary": {
+            "input_chars": input_chars,
+            "output_chars": output_chars,
+            "delta_chars": delta_chars,
+            "input_chars_norm": input_chars_norm,
+            "output_chars_norm": output_chars_norm,
+            "delta_chars_norm": delta_chars_norm,
+            "insert_count": insert_count,
+            "ok": ok,
+        },
+    }
 
 
 def build_title_strategist_system_prompt(
@@ -484,6 +567,7 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
+    ("elevenlabs_editor", "ElevenLabs Editor"),
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
@@ -541,22 +625,19 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
+        "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
         "scene_writer",
         "scene_writer_live",
         "youtube_packaging",
     ],
-    # «Я уже ЗАrewriteИЛ»: текст уже готов, его просто вставляют в Inbox
-    # (Result-only этап без модели/промпта). Voiceover Editor / Title Strategist /
-    # Structure Splitter читают исходник прямо из Inbox (или из Rewrite.Result,
-    # если запускали опциональный Rewrite). Scene Writer / SWL /
-    # YouTube packaging работают как в остальных пресетах — от Structure Splitter
-    # / Scene Writer / Title Strategist соответственно.
+    # «Я уже ЗАrewriteИЛ»: Inbox → Voiceover Editor (из Inbox) → ElevenLabs → Title /
+    # Structure → … Без этапа Rewrite.
     REWRITE_PRESET_PREWRITTEN: [
         "inbox",
-        "rewrite",
         "voiceover_editor",
+        "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
         "scene_writer",
@@ -567,6 +648,7 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
     REWRITE_PRESET_SOFT: [
         "rewrite",
         "voiceover_editor",
+        "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
         "scene_writer",
@@ -611,38 +693,44 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "три следующих агента берут Rewrite.Result, если он есть, иначе тот же Source."
     ),
     "analysis": (
-        "Отправляем. В System (по порядку): Master Prompt, Analysis Prompt. "
-        "В User (по порядку): Duration, Analysis User Promt, Input text."
+        "Отправляем. В System: только Analysis System Promt (общий Master — через плейсхолдер "
+        "{{MASTER_PROMT}}, если нужен). В User: Analysis User Promt и текст из поля Source (верх страницы)."
     ),
     "structure": (
-        "Отправляем. В System (по порядку): Master Prompt, Architect Prompt. "
-        "В User (по порядку): Duration, Architect User Promt, analysis.json."
+        "Отправляем. В System: только Architect System Promt (Master — через {{MASTER_PROMT}}, если нужен). "
+        "В User: Architect User Promt и результат Analysis (plain text / analysis.json)."
     ),
     "draft1": (
-        "Отправляем. В System (по порядку): Master Prompt, Block Writer Prompt. "
-        "В User (по порядку): Duration, Hero Prompt, Block Writer User Promt, analysis.json, architect.json. "
-        "Draft1 идёт block-by-block: каждый блок проверяется по target_chars_min/max из architect.json "
-        "и только после accept запускается следующий."
+        "Поблочно. В System: только Block Writer System Promt (при нужде Master/Hero через "
+        "{{MASTER_PROMT}}/{{HERO_PROMT}} в тексте промпта). "
+        "В JSON каждого POST-user: block_writer_user_promt, architect_block, short_summary_context "
+        "(без отдельного поля Hero). В compose до цикла (образец J): User Promt, Analysis Result, Structure Result "
+        "; в начале User может быть текст ориентира длины (Duration)."
     ),
     "retention_editor": (
-        "Отправляем. В System: Retention Editor System Promt. "
-        "В User (по порядку): Retention Editor User Promt, full_text.txt из Block Writer."
+        "Отправляем. В System: Retention Editor System Promt + необязательный блок System Rules (под пин-кодом). "
+        "В User — один JSON: user_promt (из locked User Promt), edited_text (текст предыдущего этапа — Block Writer)."
     ),
     "hook_editor": (
-        "Отправляем. В System: Hook Editor System Promt. "
-        "В User (по порядку): Hook Editor User Promt, edited_text."
+        "Отправляем. В System: Hook Editor System Promt + System Rules (locked). "
+        "В User — JSON: user_promt, edited_text (результат Retention Editor)."
     ),
     "flow_editor": (
-        "Отправляем. В System: Flow Editor System Promt. "
-        "В User (по порядку): Flow Editor User Promt, edited_text."
+        "Отправляем. В System: Flow Editor System Promt + System Rules (locked). "
+        "В User — JSON: user_promt, edited_text (результат Hook Editor)."
     ),
     "persona_editor": (
-        "Отправляем. В System: Persona Editor System Promt. "
-        "В User (по порядку): Persona Editor User Promt, Hero Prompt, edited_text."
+        "Отправляем. В System: Persona Editor System Promt + System Rules (locked). "
+        "В User — JSON: user_promt, hero_promt (Hero после плейсхолдеров), edited_text (результат Flow Editor)."
     ),
     "voiceover_editor": (
-        "Отправляем. В System: Voiceover Editor System Promt. "
-        "В User (по порядку): Voiceover Editor User Promt, edited_text."
+        "Отправляем. В System: Voiceover Editor System Promt + System Rules (locked). "
+        "В User — JSON: user_promt, edited_text (из Persona / Inbox / Rewrite в зависимости от пресета). "
+        "Ответ модели: JSON с text или edited_text и массивом changes."
+    ),
+    "elevenlabs_editor": (
+        "Отправляем. В System: ElevenLabs Editor System Promt. "
+        "В User (по порядку): ElevenLabs Editor User Promt, edited_text из Voiceover Editor."
     ),
     "title_strategist": (
         "Отправляем. В System: Title Strategist System Promt. "
@@ -671,7 +759,7 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
 # Краткие подзаголовки под названием этапа (мутный серый под заголовком в карточке).
 REWRITE_STAGE_SUBTITLES: dict[str, str] = {
     "inbox": "Готовый текст: вставьте сюда — дальше пойдёт Rewrite → Voiceover Editor → Title Strategist → Structure Splitter",
-    "rewrite": "Агент-доработчик готового текста (Inbox → Rewrite)",
+    "rewrite": "Агент-писатель текста (Inbox → Rewrite)",
     "analysis": "Агент-аналитик YouTube-сценариев",
     "structure": "Агент-архитектор структуры YouTube-сценария",
     "draft1": "Агент-сценарист одного блока",
@@ -798,6 +886,7 @@ def default_stage_entry() -> dict[str, Any]:
         "scene_writer_live_check": None,
         "scene_writer_check": None,
         "structure_splitter_check": None,
+        "elevenlabs_editor_check": None,
         "block_writer_check": None,
         "model": REWRITE_DEFAULT_MODEL,
         "last_result": "",
@@ -808,6 +897,10 @@ def default_stage_entry() -> dict[str, Any]:
         "rewrite_system_rules": "",
         "rewrite_system_rules_locked": True,
         "voiceover_changes": "",
+        "retention_editor_changes": "",
+        "hook_editor_changes": "",
+        "flow_editor_changes": "",
+        "persona_editor_changes": "",
     }
 
 
@@ -884,6 +977,11 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("past_prompt_locked", True)
         e.setdefault("rewrite_system_rules", "")
         e.setdefault("rewrite_system_rules_locked", True)
+        e.setdefault("voiceover_changes", "")
+        e.setdefault("retention_editor_changes", "")
+        e.setdefault("hook_editor_changes", "")
+        e.setdefault("flow_editor_changes", "")
+        e.setdefault("persona_editor_changes", "")
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
         e["user_prompt_locked"] = bool(e.get("user_prompt_locked"))
@@ -908,6 +1006,8 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.pop("scene_media_check", None)
         if not isinstance(e.get("structure_splitter_check"), dict):
             e["structure_splitter_check"] = None
+        if not isinstance(e.get("elevenlabs_editor_check"), dict):
+            e["elevenlabs_editor_check"] = None
         if not isinstance(e.get("block_writer_check"), dict):
             e["block_writer_check"] = None
 
@@ -1026,6 +1126,9 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
         if "structure_splitter_check" in sv:
             v = sv.get("structure_splitter_check")
             e["structure_splitter_check"] = v if isinstance(v, dict) else None
+        if "elevenlabs_editor_check" in sv:
+            v = sv.get("elevenlabs_editor_check")
+            e["elevenlabs_editor_check"] = v if isinstance(v, dict) else None
         if "block_writer_check" in sv:
             v = sv.get("block_writer_check")
             e["block_writer_check"] = v if isinstance(v, dict) else None
@@ -1055,9 +1158,110 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["last_result"] = str(sv.get("last_result") or "")
         if sk == "voiceover_editor" and "voiceover_changes" in sv:
             e["voiceover_changes"] = str(sv.get("voiceover_changes") or "")
+        for _ek in ("retention_editor", "hook_editor", "flow_editor", "persona_editor"):
+            ck = f"{_ek}_changes"
+            if sk == _ek and ck in sv:
+                e[ck] = str(sv.get(ck) or "")
 
 
 _STAGE_LABEL_BY_KEY: dict[str, str] = {k: lbl for k, lbl in REWRITE_STAGES}
+
+
+def _stage_last_result(stages: dict[str, Any], stage_key: str) -> str:
+    cell = stages.get(stage_key) if isinstance(stages.get(stage_key), dict) else {}
+    return str((cell or {}).get("last_result") or "").strip()
+
+
+def _voiceover_plain_from_stages(stages: dict[str, Any]) -> str:
+    raw = _stage_last_result(stages, "voiceover_editor")
+    if not raw:
+        return ""
+    return _extract_edited_text(raw).strip() or raw.strip()
+
+
+def _missing_stage_result_message(source_stage_key: str) -> str:
+    if source_stage_key == "inbox":
+        return "Сначала вставьте готовый текст в Inbox (Result)."
+    label = _STAGE_LABEL_BY_KEY.get(source_stage_key, source_stage_key)
+    return f"Сначала выполните этап «{label}» — нет сохранённого результата."
+
+
+def _validate_stage_input_sources(
+    stage_key: str,
+    preset: str,
+    stages: dict[str, Any],
+    *,
+    source_text: str = "",
+) -> str | None:
+    """Проверка фактических источников данных этапа (как в compose + подписи UI).
+
+    None — входные данные есть; иначе текст для пользователя.
+    """
+    preset_n = normalize_rewrite_preset(preset)
+    st = stages if isinstance(stages, dict) else {}
+
+    def need_result(source_key: str) -> str | None:
+        if _stage_last_result(st, source_key):
+            return None
+        return _missing_stage_result_message(source_key)
+
+    if stage_key == "analysis":
+        if not str(source_text or "").strip():
+            return "Сначала вставьте исходный текст в поле Source (верх страницы)."
+        return None
+
+    if stage_key == "structure":
+        return need_result("analysis")
+
+    if stage_key == "draft1":
+        err = need_result("analysis")
+        if err:
+            return err
+        return need_result("structure")
+
+    if stage_key == "retention_editor":
+        return need_result("draft1")
+
+    if stage_key == "hook_editor":
+        return need_result("retention_editor")
+
+    if stage_key == "flow_editor":
+        return need_result("hook_editor")
+
+    if stage_key == "persona_editor":
+        return need_result("flow_editor")
+
+    if stage_key == "rewrite":
+        if preset_n == REWRITE_PRESET_SOFT:
+            if not str(source_text or "").strip():
+                return "Сначала вставьте исходный текст в поле Source (верх страницы)."
+            return None
+        if preset_n == REWRITE_PRESET_PREWRITTEN:
+            return need_result("inbox")
+        return "Этап Rewrite недоступен в этом пресете."
+
+    if stage_key == "voiceover_editor":
+        if preset_n == REWRITE_PRESET_PREWRITTEN:
+            return need_result("inbox")
+        if preset_n == REWRITE_PRESET_SOFT:
+            return need_result("rewrite")
+        return need_result("persona_editor")
+
+    if stage_key in ("elevenlabs_editor", "title_strategist", "structure_splitter"):
+        if not _voiceover_plain_from_stages(st):
+            return _missing_stage_result_message("voiceover_editor")
+        return None
+
+    if stage_key == "scene_writer":
+        return need_result("structure_splitter")
+
+    if stage_key == "scene_writer_live":
+        return need_result("scene_writer")
+
+    if stage_key == "youtube_packaging":
+        return need_result("title_strategist")
+
+    return None
 
 
 def validate_prerequisites(
@@ -1069,81 +1273,20 @@ def validate_prerequisites(
 ) -> str | None:
     """None если ок, иначе текст ошибки для пользователя.
 
-    Учёт preset: цепочка зависимостей строится **в пределах выбранного пресета**.
-    Этапы, не входящие в текущий preset, не считаются обязательными
-    предками (Distiller/Author не блокируют Глубокий, и Analysis/Architect/
-    Block Writer не блокируют Мягкий).
+    Проверяются **источники данных** этапа (поле Source, Result предков по подписи
+    «данные берутся из …»), а не произвольная цепочка «любой предыдущий в пресете».
     """
     if stage_key not in REWRITE_STAGE_KEYS:
         return "Неизвестный этап."
     if stage_key == "inbox":
-        # Inbox — Result-only, не запускается моделью. Предусловий нет.
         return None
     preset = normalize_rewrite_preset(preset)
     preset_order = REWRITE_PRESET_STAGE_KEYS.get(preset, [])
     if stage_key not in preset_order:
-        # Этап выпадает из выбранного preset (например, "analysis" в Мягком) — нет
-        # смысла валидировать его предусловия для запуска именно этого пресета.
-        # Возвращаем None: запуск всё равно возможен (отдельной кнопкой), и его
-        # результат не влияет на пайплайн другого пресета.
         return None
-    idx = preset_order.index(stage_key)
-    # «Мягкий Rewrite»: первый этап — Rewrite, ему нужен непустой Source (без Inbox).
-    if preset == REWRITE_PRESET_SOFT and stage_key == "rewrite":
-        if not str(source_text or "").strip():
-            return "Сначала вставьте исходный текст в поле Source (верх страницы)."
-        return None
-    if idx == 0:
-        return None
-    # В пресете «Я уже ЗАrewriteИЛ» Rewrite — отдельный лёгкий агент после Inbox,
-    # которому нужен только заполненный Inbox.Result. Сам Rewrite не зависит ни от чего,
-    # кроме Inbox.
-    if preset == REWRITE_PRESET_PREWRITTEN and stage_key == "rewrite":
-        ibx = stages.get("inbox") or {}
-        if not str(ibx.get("last_result") or "").strip():
-            return "Сначала вставьте готовый текст в Inbox (Result)."
-        return None
-    # В пресете «Я уже ЗАrewriteИЛ» Voiceover Editor / Title Strategist /
-    # Structure Splitter все три читают исходник из Rewrite.Result (если он есть)
-    # либо из Inbox.Result (фолбэк). Им нужен любой из этих двух источников,
-    # между собой они не зависят.
-    if preset == REWRITE_PRESET_PREWRITTEN and stage_key in (
-        "voiceover_editor",
-        "title_strategist",
-        "structure_splitter",
-    ):
-        rw_res = str((stages.get("rewrite") or {}).get("last_result") or "").strip()
-        if rw_res:
-            return None
-        ibx = stages.get("inbox") or {}
-        if not str(ibx.get("last_result") or "").strip():
-            return "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
-        return None
-    # «Мягкий Rewrite» — те же три агента, но фолбэк к Inbox заменён на Source.
-    if preset == REWRITE_PRESET_SOFT and stage_key in (
-        "voiceover_editor",
-        "title_strategist",
-        "structure_splitter",
-    ):
-        rw_res = str((stages.get("rewrite") or {}).get("last_result") or "").strip()
-        if rw_res:
-            return None
-        if str(source_text or "").strip():
-            return None
-        return "Сначала вставьте текст в Source или прогоните Rewrite."
-    for i in range(idx):
-        pk = preset_order[i]
-        plabel = _STAGE_LABEL_BY_KEY.get(pk, pk)
-        if stage_key in ("structure_splitter", "scene_writer") and pk == "title_strategist":
-            continue
-        if stage_key == "youtube_packaging" and pk == "scene_writer_live":
-            continue
-        prev = stages.get(pk) or {}
-        if not str(prev.get("last_result") or "").strip():
-            if pk == "inbox":
-                return "Сначала вставьте готовый текст в Inbox (Result)."
-            return f"Сначала выполните этап «{plabel}» — нет сохранённого результата."
-    return None
+    return _validate_stage_input_sources(
+        stage_key, preset, stages, source_text=source_text
+    )
 
 
 def stage_run_prerequisites_met(
@@ -1173,6 +1316,7 @@ def compose_rewrite_openai_request_body(
     flow_editor_text: str = "",
     persona_editor_text: str = "",
     voiceover_editor_text: str = "",
+    elevenlabs_editor_text: str = "",
     structure_splitter_text: str = "",
     title_strategist_result_text: str = "",
     scene_writer_result_text: str = "",
@@ -1194,6 +1338,7 @@ def compose_rewrite_openai_request_body(
         "flow_editor",
         "persona_editor",
         "voiceover_editor",
+        "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
         "scene_writer",
@@ -1232,23 +1377,18 @@ def compose_rewrite_openai_request_body(
 
     up_txt = subp(up_txt)
     rules_resolved = subp(_rewrite_system_rules_text(cell))
-    stage_prompt_t = subp(str(cell.get("prompt") or ""))
+    stage_prompt_t = subp(_stage_system_prompt_text(stage_key, cell))
     if stage_key == "structure":
         analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
-        prompt = build_structure_system_prompt(
-            master_use,
-            stage_prompt_t,
-        )
+        # Master не дублируем в system — при необходимости {{MASTER_PROMT}} в locked Architect System Promt.
+        prompt = (stage_prompt_t or "").strip()
         user_text = build_structure_user_message(
             analysis_res,
             up_txt,
         )
     elif stage_key == "analysis":
-        prompt = build_rewrite_system_prompt(
-            master_use,
-            stage_prompt_t,
-            source_text,
-        )
+        # Master не дублируем в system — при необходимости вставьте {{MASTER_PROMT}} в locked System Promt.
+        prompt = (stage_prompt_t or "").strip()
         user_text = build_analysis_user_message(
             source_text,
             up_txt,
@@ -1256,44 +1396,41 @@ def compose_rewrite_openai_request_body(
     elif stage_key == "draft1":
         analysis_res = str((stages_snap.get("analysis") or {}).get("last_result") or "")
         structure_res = str((stages_snap.get("structure") or {}).get("last_result") or "")
-        prompt = build_draft1_rewriter_system_prompt(
-            master_use,
-            stage_prompt_t,
-        )
+        # Master не в system — при необходимости {{MASTER_PROMT}} в locked Block Writer System Promt.
+        prompt = (stage_prompt_t or "").strip()
         user_text = build_draft1_rewriter_user_message(
             analysis_res,
             structure_res,
             up_txt,
-            hero_use,
         )
     elif stage_key == "retention_editor":
-        prompt = build_retention_editor_system_prompt(
-            stage_prompt_t,
-        )
+        re_sys = subp(_stage_system_prompt_text("retention_editor", cell))
+        re_rules = subp(_editor_stage_system_rules_text("retention_editor", cell))
+        prompt = build_retention_editor_system_prompt(re_sys, re_rules)
         user_text = build_retention_editor_user_message(
             up_txt,
             block_writer_full_text,
         )
     elif stage_key == "hook_editor":
-        prompt = build_hook_editor_system_prompt(
-            stage_prompt_t,
-        )
+        hk_sys = subp(_stage_system_prompt_text("hook_editor", cell))
+        hk_rules = subp(_editor_stage_system_rules_text("hook_editor", cell))
+        prompt = build_hook_editor_system_prompt(hk_sys, hk_rules)
         user_text = build_hook_editor_user_message(
             up_txt,
             retention_editor_text,
         )
     elif stage_key == "flow_editor":
-        prompt = build_flow_editor_system_prompt(
-            stage_prompt_t,
-        )
+        fl_sys = subp(_stage_system_prompt_text("flow_editor", cell))
+        fl_rules = subp(_editor_stage_system_rules_text("flow_editor", cell))
+        prompt = build_flow_editor_system_prompt(fl_sys, fl_rules)
         user_text = build_flow_editor_user_message(
             up_txt,
             hook_editor_text,
         )
     elif stage_key == "persona_editor":
-        prompt = build_persona_editor_system_prompt(
-            stage_prompt_t,
-        )
+        pe_sys = subp(_stage_system_prompt_text("persona_editor", cell))
+        pe_rules = subp(_editor_stage_system_rules_text("persona_editor", cell))
+        prompt = build_persona_editor_system_prompt(pe_sys, pe_rules)
         user_text = build_persona_editor_user_message(
             up_txt,
             hero_use,
@@ -1326,75 +1463,73 @@ def compose_rewrite_openai_request_body(
             vo_sys,
             vo_rules,
         )
-        # В пресете «Я уже ЗАrewriteИЛ» (prewritten) Voiceover Editor запускается
-        # после Inbox/Rewrite: на вход подаём Result Rewrite (если запускали Rewrite),
-        # иначе — Inbox.Result.
+        # В пресете «Я уже ЗАrewriteИЛ» Voiceover Editor берёт текст из Inbox.Result.
         ve_input_text = persona_editor_text
         preset_n = normalize_rewrite_preset(preset)
         if preset_n == REWRITE_PRESET_PREWRITTEN:
-            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
-            ve_input_text = rw_res if rw_res.strip() else str(
-                (stages_snap.get("inbox") or {}).get("last_result") or ""
-            )
+            ve_input_text = str((stages_snap.get("inbox") or {}).get("last_result") or "")
             if not ve_input_text.strip():
-                return None, "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
+                return None, "Сначала вставьте готовый текст в Inbox (Result)."
         elif preset_n == REWRITE_PRESET_SOFT:
-            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
-            ve_input_text = rw_res if rw_res.strip() else str(source_text or "")
+            ve_input_text = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
             if not ve_input_text.strip():
-                return None, "Сначала вставьте текст в Source или прогоните Rewrite."
+                return None, "Сначала выполните Rewrite и дождитесь Result."
         user_text = build_voiceover_editor_user_message(
             up_txt,
             ve_input_text,
         )
+    elif stage_key == "elevenlabs_editor":
+        el_sys = subp(_stage_system_prompt_text("elevenlabs_editor", cell))
+        prompt = build_elevenlabs_editor_system_prompt(el_sys)
+        preset_n = normalize_rewrite_preset(preset)
+        el_input = downstream_script_input_text(
+            preset_n,
+            stages_snap,
+            voiceover_editor_text=voiceover_editor_text,
+            source_text=source_text,
+        )
+        if not el_input.strip():
+            if preset_n == REWRITE_PRESET_PREWRITTEN:
+                return None, "Сначала вставьте готовый текст в Inbox (Result) или выполните Voiceover Editor."
+            return None, "Сначала выполните Voiceover Editor — нет текста для озвучки."
+        user_text = build_elevenlabs_editor_user_message(up_txt, el_input)
     elif stage_key == "title_strategist":
         ts_sys = subp(_stage_system_prompt_text("title_strategist", cell))
         prompt = build_title_strategist_system_prompt(
             ts_sys,
         )
-        # В пресете «Я уже ЗАrewriteИЛ» Title Strategist берёт исходный текст
-        # из Rewrite.Result (если есть) или, как фолбэк, из Inbox.Result —
-        # чтобы все три финальных агента работали с одним и тем же исходником
-        # уже после (опционального) прогонa через Rewrite.
-        ts_input_text = voiceover_editor_text
         preset_n = normalize_rewrite_preset(preset)
-        if preset_n == REWRITE_PRESET_PREWRITTEN:
-            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
-            ts_input_text = rw_res if rw_res.strip() else str(
-                (stages_snap.get("inbox") or {}).get("last_result") or ""
-            )
-            if not ts_input_text.strip():
-                return None, "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
-        elif preset_n == REWRITE_PRESET_SOFT:
-            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
-            ts_input_text = rw_res if rw_res.strip() else str(source_text or "")
-            if not ts_input_text.strip():
-                return None, "Сначала вставьте текст в Source или прогоните Rewrite."
+        ts_input_text = downstream_script_input_text(
+            preset_n,
+            stages_snap,
+            voiceover_editor_text=voiceover_editor_text,
+            source_text=source_text,
+        )
+        if preset_n in (REWRITE_PRESET_PREWRITTEN, REWRITE_PRESET_SOFT) and not ts_input_text.strip():
+            if preset_n == REWRITE_PRESET_PREWRITTEN:
+                return None, "Сначала вставьте готовый текст в Inbox (Result) или выполните Voiceover Editor."
+            return None, "Сначала выполните Rewrite (Result) или Voiceover Editor."
         user_text = build_title_strategist_user_message(
             up_txt,
             ts_input_text,
             original_title=original_title,
         )
     elif stage_key == "structure_splitter":
+        ss_sys = subp(_stage_system_prompt_text("structure_splitter", cell))
         prompt = build_structure_splitter_system_prompt(
-            stage_prompt_t,
+            ss_sys,
         )
-        # В пресете «Я уже ЗАrewriteИЛ» Structure Splitter берёт исходный текст
-        # из Rewrite.Result (если есть) или из Inbox.Result.
-        ss_input_text = voiceover_editor_text
         preset_n = normalize_rewrite_preset(preset)
-        if preset_n == REWRITE_PRESET_PREWRITTEN:
-            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
-            ss_input_text = rw_res if rw_res.strip() else str(
-                (stages_snap.get("inbox") or {}).get("last_result") or ""
-            )
-            if not ss_input_text.strip():
-                return None, "Сначала вставьте готовый текст в Inbox (Result) или прогоните Rewrite."
-        elif preset_n == REWRITE_PRESET_SOFT:
-            rw_res = str((stages_snap.get("rewrite") or {}).get("last_result") or "")
-            ss_input_text = rw_res if rw_res.strip() else str(source_text or "")
-            if not ss_input_text.strip():
-                return None, "Сначала вставьте текст в Source или прогоните Rewrite."
+        ss_input_text = downstream_script_input_text(
+            preset_n,
+            stages_snap,
+            voiceover_editor_text=voiceover_editor_text,
+            source_text=source_text,
+        )
+        if preset_n in (REWRITE_PRESET_PREWRITTEN, REWRITE_PRESET_SOFT) and not ss_input_text.strip():
+            if preset_n == REWRITE_PRESET_PREWRITTEN:
+                return None, "Сначала вставьте готовый текст в Inbox (Result) или выполните Voiceover Editor."
+            return None, "Сначала выполните Rewrite (Result) или Voiceover Editor."
         user_text = build_structure_splitter_user_message(
             up_txt,
             ss_input_text,
@@ -1424,7 +1559,6 @@ def compose_rewrite_openai_request_body(
         prompt = build_rewrite_system_prompt(
             master_use,
             stage_prompt_t,
-            source_text,
         )
         user_text = build_stage_user_message(
             source_text,
@@ -1435,6 +1569,8 @@ def compose_rewrite_openai_request_body(
     prompt = (prompt or "").strip()
     user_text = (user_text or "").strip()
     if stage_key not in (
+        "analysis",
+        "structure",
         "retention_editor",
         "hook_editor",
         "flow_editor",
@@ -1513,9 +1649,15 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "scene_writer_check": cell.get("scene_writer_check") if isinstance(cell.get("scene_writer_check"), dict) else None,
             "scene_writer_live_check": cell.get("scene_writer_live_check") if isinstance(cell.get("scene_writer_live_check"), dict) else None,
             "structure_splitter_check": cell.get("structure_splitter_check") if isinstance(cell.get("structure_splitter_check"), dict) else None,
+            "elevenlabs_editor_check": cell.get("elevenlabs_editor_check") if isinstance(cell.get("elevenlabs_editor_check"), dict) else None,
             "block_writer_check": cell.get("block_writer_check") if isinstance(cell.get("block_writer_check"), dict) else None,
             "model": normalize_rewrite_model(str(cell.get("model") or "")),
             "last_result": str(cell.get("last_result") or ""),
+            "voiceover_changes": str(cell.get("voiceover_changes") or "") if key == "voiceover_editor" else "",
+            "retention_editor_changes": str(cell.get("retention_editor_changes") or "") if key == "retention_editor" else "",
+            "hook_editor_changes": str(cell.get("hook_editor_changes") or "") if key == "hook_editor" else "",
+            "flow_editor_changes": str(cell.get("flow_editor_changes") or "") if key == "flow_editor" else "",
+            "persona_editor_changes": str(cell.get("persona_editor_changes") or "") if key == "persona_editor" else "",
             "style_prompt_locked": bool(cell.get("style_prompt_locked")),
             "past_prompt_locked": bool(cell.get("past_prompt_locked")),
         }

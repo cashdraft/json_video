@@ -1,0 +1,32 @@
+{# Locked System Promt / System Rules / User Promt (как Voiceover Editor).
+   Контекст: stage_key, stage_label, locked_prompts_state, stage_collapsible, openai_key_set, can_run_stage #}
+{% set sys_lock_key = 'system_prompt_' ~ stage_key %}
+{% set rules_lock_key = stage_key ~ '_system_rules' %}
+{% set user_lock_key = 'user_prompt_' ~ stage_key %}
+{% set _ed_sys_lp = (locked_prompts_state|default({}, true)).get(sys_lock_key) or {} %}
+{% set has_ed_system_prompt = _ed_sys_lp.get('present')|default(false) %}
+{% set _ed_rsr_lp = (locked_prompts_state|default({}, true)).get(rules_lock_key) or {} %}
+{% set has_ed_system_rules = _ed_rsr_lp.get('present')|default(false) %}
+{% set _up_lp_ed = (locked_prompts_state|default({}, true)).get(user_lock_key) or {} %}
+{% set has_ed_user_prompt = (_up_lp_ed.get('present'))|default(false) %}
+<div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
+    <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
+        {% if not stage_collapsible %}
+        <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+        {% endif %}
+    </div>
+    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_ed_system_prompt else 'no' }}" id="locked-prompt-badge-{{ sys_lock_key }}" data-locked-prompt-badge="{{ sys_lock_key }}" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_ed_system_prompt else 'NO' }}</span>
+        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ sys_lock_key }}" data-locked-prompt-label="{{ stage_label|e }} — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+    </div>
+    <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
+        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+            <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_ed_system_rules else 'no' }}" id="locked-prompt-badge-{{ rules_lock_key }}" data-locked-prompt-badge="{{ rules_lock_key }}" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_ed_system_rules else 'NO' }}</span>
+            <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ rules_lock_key }}" data-locked-prompt-label="{{ stage_label|e }} — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+        </div>
+        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+            <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_ed_user_prompt else 'no' }}" id="locked-prompt-badge-{{ user_lock_key }}" data-locked-prompt-badge="{{ user_lock_key }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_ed_user_prompt else 'NO' }}</span>
+            <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ user_lock_key }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+        </div>
+    </div>
+</div>

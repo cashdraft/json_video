@@ -700,53 +700,6 @@ textarea::placeholder {
     margin-bottom: 1rem;
 }
 
-.scene-card.rewrite-pipeline-runner.rewrite-pipeline-runner--centered {
-    background: transparent;
-    border: none;
-    padding: 0;
-}
-
-/* Кнопки конвейера: Сгенерировать — мягкая зелёная (как badge Hero), Остановить — красная активная и серая в disabled. */
-.rewrite-pipeline-runner #rewrite-pipeline-run-btn {
-    background: rgba(52, 199, 89, 0.2);
-    color: #7dd99a;
-    border: 1px solid rgba(52, 199, 89, 0.45);
-    font-weight: 600;
-}
-
-.rewrite-pipeline-runner #rewrite-pipeline-run-btn:hover:not(:disabled) {
-    background: rgba(52, 199, 89, 0.32);
-    border-color: rgba(52, 199, 89, 0.65);
-    color: #9ae3b1;
-}
-
-.rewrite-pipeline-runner #rewrite-pipeline-run-btn:disabled {
-    background: rgba(52, 199, 89, 0.1);
-    border-color: rgba(52, 199, 89, 0.25);
-    color: rgba(125, 217, 154, 0.6);
-    cursor: not-allowed;
-}
-
-.rewrite-pipeline-runner #rewrite-pipeline-stop-btn {
-    background: var(--error);
-    color: #fff;
-    border: 1px solid var(--error);
-    font-weight: 600;
-}
-
-.rewrite-pipeline-runner #rewrite-pipeline-stop-btn:hover:not(:disabled) {
-    background: #ff6b6d;
-    border-color: #ff6b6d;
-    color: #fff;
-}
-
-.rewrite-pipeline-runner #rewrite-pipeline-stop-btn:disabled {
-    background: var(--bg-card);
-    border-color: var(--border);
-    color: var(--text-muted);
-    cursor: not-allowed;
-}
-
 .rewrite-pipeline-runner__head {
     display: flex;
     flex-wrap: wrap;
@@ -782,11 +735,6 @@ textarea::placeholder {
     align-items: center;
     gap: 0.45rem;
     flex-shrink: 0;
-}
-
-.rewrite-pipeline-runner--centered .rewrite-pipeline-runner__actions {
-    justify-content: center;
-    margin-bottom: 0.75rem;
 }
 
 .rewrite-pipeline-runner__log {
@@ -1686,6 +1634,32 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     opacity: 0.85;
 }
 
+.rewrite-stages-pipeline-clear-btn {
+    margin-left: auto;
+}
+
+.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn {
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn:hover {
+    background: rgba(255, 77, 79, 0.12);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn:active {
+    background: rgba(255, 77, 79, 0.18);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn:focus-visible {
+    outline: 2px solid var(--error);
+    outline-offset: 2px;
+}
+
 /* --- Пресет ReWrite: сегментированный переключатель (3 равные колонки, как 1K/2K/4K). --- */
 .rewrite-preset-toggle {
     display: flex;
@@ -2325,7 +2299,13 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
     .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls,
     .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-row--controls,
-    .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls {
+    .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="structure_splitter"] .rewrite-stage-row--controls {
         grid-template-columns: auto minmax(0, 1fr);
     }
 
@@ -2340,14 +2320,26 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
     .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-subtitle,
     .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-subtitle,
-    .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-subtitle {
+    .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="structure_splitter"] .rewrite-stage-subtitle {
         padding-left: calc(9.5rem + 1rem);
     }
 }
 
-/* Voiceover / Title Strategist: User в колонку под отдельным System Promt (как Rewrite без textarea). */
+/* Voiceover / Deep editors (Retention…Persona) / Title Strategist: System Rules и User Promt — колонкой под System Promt. */
 .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-rewrite-locked-badges-row,
-.rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-rewrite-locked-badges-row {
+.rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="structure_splitter"] .rewrite-stage-rewrite-locked-badges-row {
     flex-direction: column;
     align-items: stretch;
     gap: 0.35rem;
@@ -2363,7 +2355,13 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
         .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls,
         .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-row--controls,
-        .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls {
+        .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="structure_splitter"] .rewrite-stage-row--controls {
             grid-template-columns: auto minmax(0, 1fr);
         }
 
@@ -2445,6 +2443,10 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
+.rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
+.rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
+.rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
+.rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
 .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-scene-writer-check[data-editor-check]:empty {
     display: block;
     min-height: 2.5rem;

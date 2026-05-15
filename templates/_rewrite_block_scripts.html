@@ -78,6 +78,8 @@
     const openaiOk = {{ openai_key_set|tojson }};
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
+    var REWRITE_JSON_SPLIT_STAGES = { retention_editor: true, hook_editor: true, flow_editor: true, persona_editor: true, voiceover_editor: true };
+    var REWRITE_EDITOR_CHAIN_FOR_CHECKS = ['draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor'];
     let COLLAPSIBLE_PIPELINE_STAGE_KEYS = {{ collapsible_pipeline_stages | tojson }};
     /** Совпадает с `rewrite_pipeline.REWRITE_STAGE_CARD_NO_INDEX_KEYS` (бейдж этапа скрыт). */
     var PIPELINE_LABEL_SKIP = { scene_writer: true, scene_writer_live: true, youtube_packaging: true };
@@ -86,9 +88,9 @@
        ключа soft (старый HTML/кеш), раньше applyRewritePresetVisibility сбрасывала
        пресет на deep — селект «Мягкий» не удерживался. */
     const REWRITE_PRESET_STAGE_KEYS_FALLBACK = {
-        deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
-        soft: ['rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
-        prewritten: ['inbox', 'rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging']
+        deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
+        soft: ['rewrite', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
+        prewritten: ['inbox', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging']
     };
     const REWRITE_PRESET_STAGE_KEYS = (function () {
         var src = REWRITE_PRESET_STAGE_KEYS_SERVER || {};
@@ -186,6 +188,9 @@
     const ytProxySaveBtn = document.getElementById('rewrite-youtube-proxy-save');
     const ytProxyClearBtn = document.getElementById('rewrite-youtube-proxy-clear');
     const ytProxyHintEl = document.getElementById('rewrite-youtube-proxy-hint');
+    const clearResultsConfirmModal = document.getElementById('rewrite-clear-results-confirm-modal');
+    const clearResultsConfirmCancelBtn = document.getElementById('rewrite-clear-results-confirm-cancel');
+    const clearResultsConfirmOkBtn = document.getElementById('rewrite-clear-results-confirm-ok');
     const templateApplyConfirmModal = document.getElementById('rewrite-template-apply-confirm-modal');
     const templateApplyConfirmCancelBtn = document.getElementById('rewrite-template-apply-confirm-cancel');
     const templateApplyConfirmOkBtn = document.getElementById('rewrite-template-apply-confirm-ok');
@@ -206,6 +211,7 @@
     let youtubeLocked = {{ (((rw.youtube_transcript_text or '')|trim != '') or ((rw.source_text or rw.last_text or '')|trim != ''))|tojson }};
     let youtubeEditConfirmResolver = null;
     let youtubeInsertConfirmResolver = null;
+    let clearResultsConfirmResolver = null;
     let templateApplyConfirmResolver = null;
     let templateCreateResolver = null;
     let templateDeleteResolver = null;
@@ -246,12 +252,6 @@
         chatTemperatureRangeEl.disabled = !openaiOk || rewriteStageBusy || !selectedRewriteModelIsOpenAI();
     }
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
-    const pipelineRunBtn = document.getElementById('rewrite-pipeline-run-btn');
-    const pipelineStopBtn = document.getElementById('rewrite-pipeline-stop-btn');
-    const pipelineLogEl = document.getElementById('rewrite-pipeline-log');
-    var pipelineStatusForward = null;
-    var pipelineAbortController = null;
-    var pipelineRunActive = false;
     const rewriteDeleteConfirmModal = document.getElementById('rewrite-delete-confirm-modal');
     const rewriteDeleteConfirmCancelBtn = document.getElementById('rewrite-delete-confirm-cancel');
     const rewriteDeleteConfirmOkBtn = document.getElementById('rewrite-delete-confirm-ok');
@@ -296,19 +296,6 @@
             if (!ok) return;
             rewriteDeleteForm.submit();
         });
-    }
-
-    function syncPipelineStopButton() {
-        if (!pipelineStopBtn) return;
-        pipelineStopBtn.disabled = !openaiOk || !pipelineRunActive;
-    }
-
-    function appendPipelineRunnerLog(msg) {
-        if (!pipelineLogEl) return;
-        var t = new Date();
-        var ts = t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        pipelineLogEl.textContent += '[' + ts + '] ' + msg + '\n';
-        pipelineLogEl.scrollTop = pipelineLogEl.scrollHeight;
     }
 
     function clampTargetChars(v) {
@@ -634,6 +621,36 @@
             }
         }
         applyYoutubeToolbar();
+    }
+
+    function openClearResultsConfirm() {
+        if (!clearResultsConfirmModal || !clearResultsConfirmCancelBtn || !clearResultsConfirmOkBtn) {
+            return Promise.resolve(window.confirm('Очистить Result, Changes и проверки у всех этапов, кроме Inbox?'));
+        }
+        clearResultsConfirmModal.classList.remove('hidden');
+        clearResultsConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) {
+            clearResultsConfirmResolver = resolve;
+        });
+    }
+
+    function closeClearResultsConfirm(accepted) {
+        if (!clearResultsConfirmModal) return;
+        clearResultsConfirmModal.classList.add('hidden');
+        clearResultsConfirmModal.setAttribute('aria-hidden', 'true');
+        if (clearResultsConfirmResolver) {
+            var fn = clearResultsConfirmResolver;
+            clearResultsConfirmResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (clearResultsConfirmCancelBtn) clearResultsConfirmCancelBtn.addEventListener('click', function () { closeClearResultsConfirm(false); });
+    if (clearResultsConfirmOkBtn) clearResultsConfirmOkBtn.addEventListener('click', function () { closeClearResultsConfirm(true); });
+    if (clearResultsConfirmModal) {
+        clearResultsConfirmModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-clear-results-confirm-close')) closeClearResultsConfirm(false);
+        });
     }
 
     function openYoutubeEditConfirm() {
@@ -1178,6 +1195,137 @@
         wrap.innerHTML = html;
     }
 
+    var STRUCTURE_SPLITTER_CHECK_MAX_DELTA = 50;
+
+    function structureSplitterCheckOk(summary) {
+        var s = summary || {};
+        var blocks = Number(s.blocks || 0);
+        var outChars = Number(s.output_chars || 0);
+        var delta = Number(s.delta_chars || 0);
+        if (blocks <= 0 || outChars <= 0) return false;
+        return Math.abs(delta) <= STRUCTURE_SPLITTER_CHECK_MAX_DELTA;
+    }
+
+    function stripElevenlabsInserts(text) {
+        return String(text || '')
+            .replace(/\[[^\]]*\]/g, '')
+            .replace(/<[^>]*\/>/gi, '');
+    }
+
+    function countElevenlabsInserts(text) {
+        var s = String(text || '');
+        var bracket = (s.match(/\[[^\]]*\]/g) || []).length;
+        var xml = (s.match(/<[^>]*\/>/gi) || []).length;
+        return bracket + xml;
+    }
+
+    function normElevenlabsCheckText(text) {
+        return String(text || '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Inbox → Rewrite → Voiceover (если этап в пресете): plain-текст для prewritten/soft downstream. */
+    function downstreamScriptInputText() {
+        var voBlock = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"]');
+        if (voBlock) {
+            var voTa = voBlock.querySelector('.rewrite-stage-result');
+            var voRaw = String((voTa && voTa.value) || '').trim();
+            if (voRaw) return parseVoiceoverEditorModelJson(voRaw).text || voRaw;
+        }
+        if (currentRewritePreset === 'prewritten') {
+            var ibTa = document.querySelector('.rewrite-stage-card[data-stage-key="inbox"] .rewrite-stage-result');
+            return ibTa ? String(ibTa.value || '').trim() : '';
+        }
+        if (currentRewritePreset === 'soft') {
+            var rwTaSoft = document.querySelector('.rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-result');
+            return rwTaSoft ? String(rwTaSoft.value || '').trim() : '';
+        }
+        return '';
+    }
+
+    function elevenlabsEditorCheckOk(summary) {
+        var s = summary || {};
+        if (typeof s.ok === 'boolean') return s.ok;
+        var inNorm = Number(s.input_chars_norm || 0);
+        var outNorm = Number(s.output_chars_norm || 0);
+        return inNorm > 0 && inNorm === outNorm;
+    }
+
+    function readElevenLabsEditorCheckFromBlock(block) {
+        if (!block) return null;
+        var raw = block.getAttribute('data-elevenlabs-editor-check-json');
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+
+    function tryBuildElevenLabsEditorCheckFromCurrentValues() {
+        var elBlock = document.querySelector('.rewrite-stage-card[data-stage-key="elevenlabs_editor"]');
+        if (!elBlock) return null;
+        var voiceoverBlock = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"]');
+        var elTa = elBlock.querySelector('.rewrite-stage-result');
+        var voiceoverTa = voiceoverBlock.querySelector('.rewrite-stage-result');
+        var rawOut = String((elTa && elTa.value) || '');
+        if (!rawOut.trim()) return null;
+        var inputText = downstreamScriptInputText();
+        if (!inputText && voiceoverTa) {
+            var inputRaw = String(voiceoverTa.value || '');
+            inputText = parseVoiceoverEditorModelJson(inputRaw).text || inputRaw;
+        }
+        var outStripped = stripElevenlabsInserts(rawOut);
+        var inputChars = inputText.length;
+        var outputChars = outStripped.length;
+        var deltaChars = outputChars - inputChars;
+        var inpNorm = normElevenlabsCheckText(inputText);
+        var outNorm = normElevenlabsCheckText(outStripped);
+        var insertCount = countElevenlabsInserts(rawOut);
+        var summary = {
+            input_chars: inputChars,
+            output_chars: outputChars,
+            delta_chars: deltaChars,
+            input_chars_norm: inpNorm.length,
+            output_chars_norm: outNorm.length,
+            delta_chars_norm: outNorm.length - inpNorm.length,
+            insert_count: insertCount,
+            ok: !!(inpNorm && inpNorm === outNorm)
+        };
+        return { summary: summary };
+    }
+
+    function renderElevenLabsEditorCheck(block, payload) {
+        if (!block) return;
+        var wrap = block.querySelector('[data-elevenlabs-editor-check]');
+        if (!wrap) return;
+        if (!payload || !payload.summary) {
+            payload = tryBuildElevenLabsEditorCheckFromCurrentValues();
+        }
+        if (!payload || !payload.summary) {
+            var htmlEmpty = '';
+            htmlEmpty += '<div class="rewrite-scene-writer-check__head"><strong>Проверка ElevenLabs Editor</strong> <span class="rewrite-scene-writer-check__no">NO</span></div>';
+            htmlEmpty += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
+            htmlEmpty += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(0) + '</strong></span>';
+            htmlEmpty += '<span class="rewrite-editor-check-line__sep">|</span>';
+            htmlEmpty += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(0) + '</strong> (' + editorCheckDeltaHtml(0) + ')</span>';
+            htmlEmpty += '<span class="rewrite-editor-check-line__sep">|</span>';
+            htmlEmpty += '<span class="rewrite-editor-check-line__right">Insert tags: <strong>' + formatNumRu(0) + '</strong></span>';
+            htmlEmpty += '</div>';
+            wrap.innerHTML = htmlEmpty;
+            return;
+        }
+        var s = payload.summary || {};
+        var ok = elevenlabsEditorCheckOk(s);
+        var okClass = ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
+        var delta = Number(s.delta_chars || 0);
+        var html = '';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка ElevenLabs Editor</strong> <span class="' + okClass + '">' + (ok ? 'OK' : 'NO') + '</span></div>';
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
+        html += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(s.input_chars || 0) + '</strong></span>';
+        html += '<span class="rewrite-editor-check-line__sep">|</span>';
+        html += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(s.output_chars || 0) + '</strong> (' + editorCheckDeltaHtml(delta) + ')</span>';
+        html += '<span class="rewrite-editor-check-line__sep">|</span>';
+        html += '<span class="rewrite-editor-check-line__right">Insert tags: <strong>' + formatNumRu(s.insert_count || 0) + '</strong></span>';
+        html += '</div>';
+        wrap.innerHTML = html;
+    }
+
     function renderStructureSplitterCheck(block, payload) {
         if (!block) return;
         var wrap = block.querySelector('[data-structure-splitter-check]');
@@ -1188,35 +1336,25 @@
         if (!payload || !payload.summary) {
             var htmlEmpty = '';
             htmlEmpty += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Structure Splitter</strong> <span class="rewrite-scene-writer-check__no">NO</span></div>';
-            htmlEmpty += '<div class="rewrite-structure-splitter-check-line">';
-            htmlEmpty += '<span class="rewrite-structure-splitter-check-line__in">IN: <strong>0</strong></span>';
-            htmlEmpty += '<span class="rewrite-structure-splitter-check-line__sep">|</span>';
-            htmlEmpty += '<span class="rewrite-structure-splitter-check-line__out">OUT: <strong>0</strong> (0)</span>';
-            htmlEmpty += '<span class="rewrite-structure-splitter-check-line__sep">|</span>';
-            htmlEmpty += '<span class="rewrite-structure-splitter-check-line__blocks">Блоков: <strong>0</strong></span>';
+            htmlEmpty += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
+            htmlEmpty += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(0) + '</strong></span>';
+            htmlEmpty += '<span class="rewrite-editor-check-line__sep">|</span>';
+            htmlEmpty += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(0) + '</strong> (' + editorCheckDeltaHtml(0) + ')</span>';
             htmlEmpty += '</div>';
-            htmlEmpty += '<div class="rewrite-scene-writer-check__hint">Без пробелов/переносов: <span class="rewrite-scene-writer-check__no">NO</span></div>';
             wrap.innerHTML = htmlEmpty;
             return;
         }
         var s = payload.summary || {};
-        var structureOk = (Number(s.blocks || 0) > 0) && (Number(s.output_compact_chars || s.output_chars || 0) > 0);
+        var structureOk = structureSplitterCheckOk(s);
         var okClass = structureOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
         var delta = Number(s.delta_chars || 0);
-        var deltaStr = formatNumRuSigned(delta);
-        var compactOk = structureOk;
-        var compactDelta = Number(s.delta_compact_chars || 0);
-        var compactDeltaStr = formatNumRuSigned(compactDelta);
         var html = '';
-        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Structure Splitter</strong> <span class="' + okClass + '">' + (structureOk ? 'OK' : ('NO (' + deltaStr + ')')) + '</span></div>';
-        html += '<div class="rewrite-structure-splitter-check-line">';
-        html += '<span class="rewrite-structure-splitter-check-line__in">IN: <strong>' + formatNumRu(s.input_chars || 0) + '</strong></span>';
-        html += '<span class="rewrite-structure-splitter-check-line__sep">|</span>';
-        html += '<span class="rewrite-structure-splitter-check-line__out">OUT: <strong>' + formatNumRu(s.output_chars || 0) + '</strong> (' + editorCheckDeltaHtml(delta) + ')</span>';
-        html += '<span class="rewrite-structure-splitter-check-line__sep">|</span>';
-        html += '<span class="rewrite-structure-splitter-check-line__blocks">Блоков: <strong>' + formatNumRu(s.blocks || 0) + '</strong></span>';
+        html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Structure Splitter</strong> <span class="' + okClass + '">' + (structureOk ? 'OK' : 'NO') + '</span></div>';
+        html += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
+        html += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(s.input_chars || 0) + '</strong></span>';
+        html += '<span class="rewrite-editor-check-line__sep">|</span>';
+        html += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(s.output_chars || 0) + '</strong> (' + editorCheckDeltaHtml(delta) + ')</span>';
         html += '</div>';
-        html += '<div class="rewrite-scene-writer-check__hint">Без пробелов/переносов: <span class="' + (compactOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (compactOk ? 'OK' : ('NO (' + compactDeltaStr + ')')) + '</span></div>';
         wrap.innerHTML = html;
     }
 
@@ -1363,16 +1501,23 @@
         try { return JSON.parse(raw); } catch (e) { return null; }
     }
 
+    function structureSplitterCheckInputText() {
+        var fromDownstream = downstreamScriptInputText();
+        if (fromDownstream) return fromDownstream;
+        var voiceoverBlock = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"]');
+        if (!voiceoverBlock) return '';
+        var voiceoverTa = voiceoverBlock.querySelector('.rewrite-stage-result');
+        var inputRaw = String((voiceoverTa && voiceoverTa.value) || '');
+        return parseVoiceoverEditorModelJson(inputRaw).text || inputRaw;
+    }
+
     function tryBuildStructureSplitterCheckFromCurrentValues() {
         var structureBlock = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
-        var voiceoverBlock = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"]');
-        if (!structureBlock || !voiceoverBlock) return null;
+        if (!structureBlock) return null;
         var structureTa = structureBlock.querySelector('.rewrite-stage-result');
-        var voiceoverTa = voiceoverBlock.querySelector('.rewrite-stage-result');
         var raw = String((structureTa && structureTa.value) || '').trim();
         if (!raw) return null;
-        var inputRaw = String((voiceoverTa && voiceoverTa.value) || '');
-        var inputText = parseVoiceoverEditorModelJson(inputRaw).text || inputRaw;
+        var inputText = structureSplitterCheckInputText();
         var blocks = [];
         try {
             var parsed = JSON.parse(raw);
@@ -1382,14 +1527,19 @@
         var joined = blocks.map(function (b) { return String((b || {}).text || ''); }).join('');
         var inputCompact = inputText.replace(/\s+/g, '');
         var outputCompact = joined.replace(/\s+/g, '');
+        var deltaChars = joined.length - inputText.length;
         return {
             summary: {
                 blocks: blocks.length,
                 input_chars: inputText.length,
                 output_chars: joined.length,
-                delta_chars: joined.length - inputText.length,
+                delta_chars: deltaChars,
                 delta_compact_chars: outputCompact.length - inputCompact.length,
-                ok: inputText.length === joined.length,
+                ok: structureSplitterCheckOk({
+                    blocks: blocks.length,
+                    output_chars: joined.length,
+                    delta_chars: deltaChars
+                }),
                 ok_compact: inputCompact.length === outputCompact.length
             }
         };
@@ -1456,7 +1606,7 @@
         return { text: txt, changes: [], changesJson: '', isPayload: false, hasText: !!txt, hasChanges: false };
     }
 
-    function updateVoiceoverChangesBadge(block) {
+    function updateEditorChangesBadge(block) {
         if (!block) return;
         var badge = block.querySelector('.rewrite-stage-changes-badge');
         var changesTa = block.querySelector('.rewrite-stage-changes');
@@ -1466,9 +1616,14 @@
         badge.classList.toggle('badge-yes', has);
         badge.classList.toggle('badge-no', !has);
     }
+    function updateVoiceoverChangesBadge(block) {
+        updateEditorChangesBadge(block);
+    }
 
-    function applyVoiceoverEditorSplit(block, raw) {
-        if (!block || (block.getAttribute('data-stage-key') || '') !== 'voiceover_editor') return;
+    function applyEditorJsonResultSplit(block, raw) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key') || '';
+        if (!REWRITE_JSON_SPLIT_STAGES[sk]) return;
         var parsed = parseVoiceoverEditorModelJson(raw);
         var resTa = block.querySelector('.rewrite-stage-result');
         var changesTa = block.querySelector('.rewrite-stage-changes');
@@ -1476,7 +1631,11 @@
         if (changesTa && block.getAttribute('data-changes-locked') !== '0') {
             changesTa.value = parsed.isPayload ? parsed.changesJson : (changesTa.value || '');
         }
-        updateVoiceoverChangesBadge(block);
+        updateEditorChangesBadge(block);
+    }
+
+    function applyVoiceoverEditorSplit(block, raw) {
+        applyEditorJsonResultSplit(block, raw);
     }
 
     function validateVoiceoverChangesJson(block) {
@@ -1492,17 +1651,23 @@
         }
     }
 
-    function syncVoiceoverChangesPanel(block) {
-        if (!block || (block.getAttribute('data-stage-key') || '') !== 'voiceover_editor') return;
+    function syncEditorChangesFromResult(block) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key') || '';
+        if (!REWRITE_JSON_SPLIT_STAGES[sk]) return;
         if (block.getAttribute('data-changes-locked') === '0') return;
         var resTa = block.querySelector('.rewrite-stage-result');
         if (!resTa) return;
         var raw = resTa.value || '';
         if (!parseVoiceoverEditorModelJson(raw).isPayload) {
-            updateVoiceoverChangesBadge(block);
+            updateEditorChangesBadge(block);
             return;
         }
-        applyVoiceoverEditorSplit(block, raw);
+        applyEditorJsonResultSplit(block, raw);
+    }
+
+    function syncVoiceoverChangesPanel(block) {
+        syncEditorChangesFromResult(block);
     }
 
     function parseVoiceoverEditorState(block, resultRaw) {
@@ -1578,6 +1743,14 @@
         }
     }
 
+    /** Подпись метрики Analysis: каждое слово (сегмент через _) с заглавной буквы. */
+    function analysisCheckFieldLabel(snakeKey) {
+        return String(snakeKey || '').split('_').map(function (w) {
+            if (!w) return '';
+            return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+        }).join('_');
+    }
+
     function parseArchitectCheckPayload(raw) {
         var txt = String(raw || '').trim();
         if (!txt) return null;
@@ -1618,14 +1791,14 @@
         var ta = block.querySelector('.rewrite-stage-result');
         var metrics = parseArchitectCheckPayload(((ta || {}).value || ''));
         if (!metrics) {
-            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">ожидание валидного JSON</span></div>';
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">Ожидание валидного JSON</span></div>';
             return;
         }
         var ok = metrics.blocks_total > 0;
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="' + (ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (ok ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
-        html += '<div>blocks: <strong>' + formatNumRu(metrics.blocks_total) + '</strong></div>';
+        html += '<div>Blocks: <strong>' + formatNumRu(metrics.blocks_total) + '</strong></div>';
         html += '</div>';
         html += '<div class="rewrite-scene-writer-check__hint rewrite-block-writer-check__total">';
         html += '<span class="rewrite-block-writer-check__total-left">Target: <strong>' + formatNumRu(metrics.target_chars_total) + '</strong></span>';
@@ -1700,7 +1873,7 @@
         var ta = block.querySelector('.rewrite-stage-result');
         var metrics = parseAnalysisCheckPayload(((ta || {}).value || ''));
         if (!metrics) {
-            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">ожидание валидного JSON</span></div>';
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">Ожидание валидного JSON</span></div>';
             return;
         }
         function yesNo(ok) {
@@ -1725,21 +1898,21 @@
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="' + (allRequiredOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (allRequiredOk ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
         html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--left">';
-        html += '<div>core_thesis: ' + yesNo(metrics.core_thesis_ok) + '</div>';
-        html += '<div>core_promise: ' + yesNo(metrics.core_promise_ok) + '</div>';
-        html += '<div>key_ideas: <strong>' + formatNumRu(metrics.key_ideas) + '</strong></div>';
-        html += '<div>facts_and_numbers: <strong>' + formatNumRu(metrics.facts_and_numbers) + '</strong></div>';
-        html += '<div>argument_flow: <strong>' + formatNumRu(metrics.argument_flow) + '</strong></div>';
-        html += '<div>weak_segments: <strong>' + formatNumRu(metrics.weak_segments) + '</strong></div>';
-        html += '<div class="rewrite-analysis-check__nowrap">retention_opportunities: <strong>' + formatNumRu(metrics.retention_opportunities) + '</strong></div>';
-        html += '<div>donor_voice_signals: <strong>' + formatNumRu(metrics.donor_voice_signals) + '</strong></div>';
-        html += '<div class="rewrite-analysis-check__nowrap">recommended_block_logic: <strong>' + formatNumRu(metrics.recommended_block_logic) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('core_thesis') + ': ' + yesNo(metrics.core_thesis_ok) + '</div>';
+        html += '<div>' + analysisCheckFieldLabel('core_promise') + ': ' + yesNo(metrics.core_promise_ok) + '</div>';
+        html += '<div>' + analysisCheckFieldLabel('key_ideas') + ': <strong>' + formatNumRu(metrics.key_ideas) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('facts_and_numbers') + ': <strong>' + formatNumRu(metrics.facts_and_numbers) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('argument_flow') + ': <strong>' + formatNumRu(metrics.argument_flow) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('weak_segments') + ': <strong>' + formatNumRu(metrics.weak_segments) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">' + analysisCheckFieldLabel('retention_opportunities') + ': <strong>' + formatNumRu(metrics.retention_opportunities) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('donor_voice_signals') + ': <strong>' + formatNumRu(metrics.donor_voice_signals) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">' + analysisCheckFieldLabel('recommended_block_logic') + ': <strong>' + formatNumRu(metrics.recommended_block_logic) + '</strong></div>';
         html += '</div>';
         html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--right">';
-        html += '<div>content_map A: <strong>' + formatNumRu(metrics.content_map_a) + '</strong></div>';
-        html += '<div>content_map B: <strong>' + formatNumRu(metrics.content_map_b) + '</strong></div>';
-        html += '<div>content_map C: <strong>' + formatNumRu(metrics.content_map_c) + '</strong></div>';
-        html += '<div>content_map D: <strong>' + formatNumRu(metrics.content_map_d) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' A: <strong>' + formatNumRu(metrics.content_map_a) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' B: <strong>' + formatNumRu(metrics.content_map_b) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' C: <strong>' + formatNumRu(metrics.content_map_c) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' D: <strong>' + formatNumRu(metrics.content_map_d) + '</strong></div>';
         html += '</div>';
         html += '</div>';
         wrap.innerHTML = html;
@@ -2067,7 +2240,7 @@
         }
         if (stageKey === 'title_strategist') {
             var stageLabelTs = STAGE_LABELS[stageKey] || 'Title Strategist';
-            var outCharsTs = String((((block.querySelector('.rewrite-stage-result')) || {}).value || '')).trim().length;
+            var outCharsTs = String((block.querySelector('.rewrite-stage-result') || {}).value || '').trim().length;
             var hasOkTs = outCharsTs > 0;
             var okClassTs = hasOkTs ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
             var htmlTs = '';
@@ -2075,63 +2248,57 @@
             wrap.innerHTML = htmlTs;
             return;
         }
-        var strictEditorStages = {
-            retention_editor: true,
-            hook_editor: true,
-            flow_editor: true,
-            persona_editor: true,
-            voiceover_editor: true
-        };
-        if (strictEditorStages[stageKey]) {
-            var stageLabel = STAGE_LABELS[stageKey] || 'Editor';
+        if (REWRITE_JSON_SPLIT_STAGES[stageKey]) {
+            var stageLabelEd = STAGE_LABELS[stageKey] || 'Editor';
+            var inCharsEd = 0;
             if (stageKey === 'voiceover_editor') {
-                var rewriteResTa = document.querySelector('.rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-result');
-                var inCharsVo = rewriteResTa ? String(rewriteResTa.value || '').trim().length : 0;
-                var currResRawVo = ((block.querySelector('.rewrite-stage-result')) || {}).value || '';
-                var voState = parseVoiceoverEditorState(block, currResRawVo);
-                var outCharsVo = String(voState.editedText || '').trim().length;
-                var changesTaVo = block.querySelector('.rewrite-stage-changes');
-                var changesRawVo = changesTaVo ? String(changesTaVo.value || '').trim() : '';
-                var hasOkVo = outCharsVo > 0 && changesRawVo.length > 0;
-                var deltaVo = outCharsVo - inCharsVo;
-                var okClassVo = hasOkVo ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
-                var htmlVo = '';
-                htmlVo += '<div class="rewrite-scene-writer-check__head"><strong>Проверка ' + stageLabel + '</strong> <span class="' + okClassVo + '">' + (hasOkVo ? 'OK' : 'NO') + '</span></div>';
-                htmlVo += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
-                htmlVo += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(inCharsVo) + '</strong></span>';
-                htmlVo += '<span class="rewrite-editor-check-line__sep">|</span>';
-                htmlVo += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(outCharsVo) + '</strong> (' + editorCheckDeltaHtml(deltaVo) + ')</span>';
-                htmlVo += '<span class="rewrite-editor-check-line__sep">|</span>';
-                htmlVo += '<span class="rewrite-editor-check-line__right">Changes: <strong>' + formatNumRu(voState.changesCount) + '</strong></span>';
-                htmlVo += '</div>';
-                wrap.innerHTML = htmlVo;
-                return;
+                var presetEd = typeof currentRewritePreset === 'string' ? currentRewritePreset : 'deep';
+                if (presetEd === 'deep') {
+                    var personaBlockEd = document.querySelector('.rewrite-stage-card[data-stage-key="persona_editor"]');
+                    var prevRawEd = ((personaBlockEd ? personaBlockEd.querySelector('.rewrite-stage-result') : null) || {}).value || '';
+                    var pmPrev = parseVoiceoverEditorModelJson(prevRawEd);
+                    inCharsEd = String(pmPrev.text || prevRawEd).trim().length;
+                } else if (presetEd === 'soft') {
+                    var rewriteResTaEd = document.querySelector('.rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-result');
+                    var rwRaw = rewriteResTaEd ? String(rewriteResTaEd.value || '') : '';
+                    var pmRw = parseVoiceoverEditorModelJson(rwRaw);
+                    inCharsEd = String(pmRw.text || rwRaw).trim().length;
+                } else {
+                    var inboxBlockEd = document.querySelector('.rewrite-stage-card[data-stage-key="inbox"]');
+                    var inboxRawEd = ((inboxBlockEd ? inboxBlockEd.querySelector('.rewrite-stage-result') : null) || {}).value || '';
+                    var pmIb = parseVoiceoverEditorModelJson(inboxRawEd);
+                    inCharsEd = String(pmIb.text || inboxRawEd).trim().length;
+                }
+            } else {
+                var stageIdxEd = STAGE_KEYS_ORDER.indexOf(stageKey);
+                if (stageIdxEd <= 0) {
+                    wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка ' + stageLabelEd + '</strong> <span class="rewrite-scene-writer-check__wait">нет предыдущего этапа</span></div>';
+                    return;
+                }
+                var prevKeyEd = STAGE_KEYS_ORDER[stageIdxEd - 1];
+                var prevBlockEd = document.querySelector('.rewrite-stage-card[data-stage-key="' + prevKeyEd + '"]');
+                var prevRawChain = ((prevBlockEd ? prevBlockEd.querySelector('.rewrite-stage-result') : null) || {}).value || '';
+                var pmPrev2 = parseVoiceoverEditorModelJson(prevRawChain);
+                inCharsEd = String(pmPrev2.text || prevRawChain).trim().length;
             }
-            var stageIdxStrict = STAGE_KEYS_ORDER.indexOf(stageKey);
-            if (stageIdxStrict <= 0) {
-                wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка ' + stageLabel + '</strong> <span class="rewrite-scene-writer-check__wait">нет предыдущего этапа</span></div>';
-                return;
-            }
-            var prevKeyStrict = STAGE_KEYS_ORDER[stageIdxStrict - 1];
-            var prevBlockStrict = document.querySelector('.rewrite-stage-card[data-stage-key="' + prevKeyStrict + '"]');
-            var prevParsedStrict = parseEditedPayload(((prevBlockStrict ? prevBlockStrict.querySelector('.rewrite-stage-result') : null) || {}).value || '');
-            var currResRaw = ((block.querySelector('.rewrite-stage-result')) || {}).value || '';
-            var currParsedStrict = parseEditedPayload(currResRaw);
-            var hasPayload = currParsedStrict.hasEditedField && currParsedStrict.hasChangesField;
-            var inChars = prevParsedStrict.editedText.length;
-            var outChars = currParsedStrict.editedText.length;
-            var delta = outChars - inChars;
-            var okClass = hasPayload ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
-            var htmlStrict = '';
-            htmlStrict += '<div class="rewrite-scene-writer-check__head"><strong>Проверка ' + stageLabel + '</strong> <span class="' + okClass + '">' + (hasPayload ? 'OK' : 'NO') + '</span></div>';
-            htmlStrict += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
-            htmlStrict += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(inChars) + '</strong></span>';
-            htmlStrict += '<span class="rewrite-editor-check-line__sep">|</span>';
-            htmlStrict += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(outChars) + '</strong> (' + editorCheckDeltaHtml(delta) + ')</span>';
-            htmlStrict += '<span class="rewrite-editor-check-line__sep">|</span>';
-            htmlStrict += '<span class="rewrite-editor-check-line__right">Changes: <strong>' + formatNumRu(currParsedStrict.changesCount) + '</strong></span>';
-            htmlStrict += '</div>';
-            wrap.innerHTML = htmlStrict;
+            var currResRawEd = ((block.querySelector('.rewrite-stage-result')) || {}).value || '';
+            var edState = parseVoiceoverEditorState(block, currResRawEd);
+            var outCharsEd = String(edState.editedText || '').trim().length;
+            var changesTaEd = block.querySelector('.rewrite-stage-changes');
+            var changesRawEd = changesTaEd ? String(changesTaEd.value || '').trim() : '';
+            var hasOkEd = outCharsEd > 0 && changesRawEd.length > 0;
+            var deltaEd = outCharsEd - inCharsEd;
+            var okClassEd = hasOkEd ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no';
+            var htmlEd = '';
+            htmlEd += '<div class="rewrite-scene-writer-check__head"><strong>Проверка ' + stageLabelEd + '</strong> <span class="' + okClassEd + '">' + (hasOkEd ? 'OK' : 'NO') + '</span></div>';
+            htmlEd += '<div class="rewrite-scene-writer-check__hint rewrite-editor-check-line">';
+            htmlEd += '<span class="rewrite-editor-check-line__left">IN: <strong>' + formatNumRu(inCharsEd) + '</strong></span>';
+            htmlEd += '<span class="rewrite-editor-check-line__sep">|</span>';
+            htmlEd += '<span class="rewrite-editor-check-line__center">OUT: <strong>' + formatNumRu(outCharsEd) + '</strong> (' + editorCheckDeltaHtml(deltaEd) + ')</span>';
+            htmlEd += '<span class="rewrite-editor-check-line__sep">|</span>';
+            htmlEd += '<span class="rewrite-editor-check-line__right">Changes: <strong>' + formatNumRu(edState.changesCount) + '</strong></span>';
+            htmlEd += '</div>';
+            wrap.innerHTML = htmlEd;
             return;
         }
         var stageIdx = STAGE_KEYS_ORDER.indexOf(stageKey);
@@ -2278,6 +2445,79 @@
         return true;
     }
 
+    function stageLastResultNonEmpty(byKey, stageKey) {
+        var block = byKey[stageKey];
+        return block ? stageResultNonEmpty(block) : false;
+    }
+
+    function voiceoverPlainNonEmpty(byKey) {
+        var block = byKey['voiceover_editor'];
+        if (!block) return false;
+        var raw = String((block.querySelector('.rewrite-stage-result') || {}).value || '').trim();
+        if (!raw || raw === 'Pending' || raw === 'Генерация…') return false;
+        var st = parseVoiceoverEditorState(block, raw);
+        return String(st.editedText || '').trim().length > 0;
+    }
+
+    /** Источники данных этапа (зеркало _validate_stage_input_sources в rewrite_pipeline.py). */
+    function stageInputSourcesReady(stageKey, byKey) {
+        var preset = currentRewritePreset || 'deep';
+        if (stageKey === 'inbox') return true;
+
+        if (stageKey === 'analysis') {
+            return !!(sourceEl && String(sourceEl.value || '').trim());
+        }
+        if (stageKey === 'structure') {
+            return stageLastResultNonEmpty(byKey, 'analysis');
+        }
+        if (stageKey === 'draft1') {
+            return stageLastResultNonEmpty(byKey, 'analysis') && stageLastResultNonEmpty(byKey, 'structure');
+        }
+        if (stageKey === 'retention_editor') {
+            return stageLastResultNonEmpty(byKey, 'draft1');
+        }
+        if (stageKey === 'hook_editor') {
+            return stageLastResultNonEmpty(byKey, 'retention_editor');
+        }
+        if (stageKey === 'flow_editor') {
+            return stageLastResultNonEmpty(byKey, 'hook_editor');
+        }
+        if (stageKey === 'persona_editor') {
+            return stageLastResultNonEmpty(byKey, 'flow_editor');
+        }
+        if (stageKey === 'rewrite') {
+            if (preset === 'soft') {
+                return !!(sourceEl && String(sourceEl.value || '').trim());
+            }
+            if (preset === 'prewritten') {
+                return stageLastResultNonEmpty(byKey, 'inbox');
+            }
+            return false;
+        }
+        if (stageKey === 'voiceover_editor') {
+            if (preset === 'prewritten') {
+                return stageLastResultNonEmpty(byKey, 'inbox');
+            }
+            if (preset === 'soft') {
+                return stageLastResultNonEmpty(byKey, 'rewrite');
+            }
+            return stageLastResultNonEmpty(byKey, 'persona_editor');
+        }
+        if (stageKey === 'elevenlabs_editor' || stageKey === 'title_strategist' || stageKey === 'structure_splitter') {
+            return voiceoverPlainNonEmpty(byKey);
+        }
+        if (stageKey === 'scene_writer') {
+            return stageLastResultNonEmpty(byKey, 'structure_splitter');
+        }
+        if (stageKey === 'scene_writer_live') {
+            return stageLastResultNonEmpty(byKey, 'scene_writer');
+        }
+        if (stageKey === 'youtube_packaging') {
+            return stageLastResultNonEmpty(byKey, 'title_strategist');
+        }
+        return true;
+    }
+
     function syncStageRunButtons() {
         const cards = Array.from(document.querySelectorAll('.rewrite-stage-card'));
         const byKey = {};
@@ -2325,31 +2565,11 @@
             if (!block) return;
             const runBtn = block.querySelector('.rewrite-stage-result-toolbar .rewrite-stage-run');
             const blockedEl = block.querySelector('.rewrite-stage-result-toolbar .rewrite-stage-run-blocked');
-            let ok = true;
+            var ok = true;
             if (Object.prototype.hasOwnProperty.call(presetIndexByKey, sk)) {
-                const idx = presetIndexByKey[sk];
-                for (let i = 0; i < idx; i++) {
-                    const prevKey = presetOrder[i];
-                    if ((sk === 'structure_splitter' || sk === 'scene_writer') && prevKey === 'title_strategist') {
-                        continue;
-                    }
-                    if (sk === 'youtube_packaging' && prevKey === 'scene_writer_live') {
-                        continue;
-                    }
-                    // Пресеты «Я уже ЗАrewriteИЛ» / «Мягкий Rewrite»: Rewrite опционален для
-                    // Voiceover/Title/Splitter — сервер берёт фолбэк из Inbox или Source; не блокируем ↻.
-                    if ((currentRewritePreset === 'prewritten' || currentRewritePreset === 'soft') && sk !== 'rewrite' && prevKey === 'rewrite') {
-                        continue;
-                    }
-                    const prev = byKey[prevKey];
-                    if (!stageResultNonEmpty(prev)) {
-                        ok = false;
-                        break;
-                    }
-                }
+                ok = stageInputSourcesReady(sk, byKey);
             } else {
-                // Этап вне текущего пресета — кнопку запуска оставляем доступной,
-                // он не блокирует и не блокируется другими пресетами.
+                // Этап вне текущего пресета — не блокируем кнопку запуска.
                 ok = true;
             }
             // Пока любой этап в работе — у всех остальных ✕ (и до, и после), у активного ↻.
@@ -2481,9 +2701,15 @@
 
     if (sourceEl) {
         sourceEl.addEventListener('input', updateSourceCounts);
-        sourceEl.addEventListener('input', function () { scheduleAutosave(500); });
+        sourceEl.addEventListener('input', function () {
+            scheduleAutosave(500);
+            syncStageRunButtons();
+        });
         sourceEl.addEventListener('change', updateSourceCounts);
-        sourceEl.addEventListener('change', function () { scheduleAutosave(0); });
+        sourceEl.addEventListener('change', function () {
+            scheduleAutosave(0);
+            syncStageRunButtons();
+        });
     }
 
     var sourceCopyBtn = document.getElementById('rewrite-source-copy-btn');
@@ -3355,8 +3581,21 @@
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
                 scene_writer_live_check: (key === 'scene_writer_live' ? readSceneMediaCheckFromBlock(block) : null),
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
+                elevenlabs_editor_check: (key === 'elevenlabs_editor' ? readElevenLabsEditorCheckFromBlock(block) : null),
                 last_result: resEl ? (resEl.value || '') : '',
                 voiceover_changes: (key === 'voiceover_editor'
+                    ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
+                    : undefined),
+                retention_editor_changes: (key === 'retention_editor'
+                    ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
+                    : undefined),
+                hook_editor_changes: (key === 'hook_editor'
+                    ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
+                    : undefined),
+                flow_editor_changes: (key === 'flow_editor'
+                    ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
+                    : undefined),
+                persona_editor_changes: (key === 'persona_editor'
                     ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
                     : undefined),
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
@@ -3738,8 +3977,6 @@
     function setBusy(on) {
         rewriteStageBusy = !!on;
         const dis = on || !openaiOk;
-        if (pipelineRunBtn) pipelineRunBtn.disabled = dis;
-        syncPipelineStopButton();
         document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-stage-changes-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn):not(.semantic-analyzer-result-copy-btn):not(.semantic-analyzer-result-toggle)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-compact-run').forEach(function (b) { b.disabled = dis; });
@@ -4015,10 +4252,6 @@
         updateResultCounts(block);
         syncStageRunButtons();
         renderEditorCheck(block);
-        if (pipelineStatusForward) {
-            var sk = block && block.getAttribute('data-stage-key');
-            pipelineStatusForward((sk ? '[' + sk + '] ' : '') + msg);
-        }
     }
 
     function showStageError(block, text) {
@@ -4032,10 +4265,6 @@
         updateResultCounts(block);
         syncStageRunButtons();
         renderEditorCheck(block);
-        if (pipelineStatusForward) {
-            var sk = block && block.getAttribute('data-stage-key');
-            pipelineStatusForward((sk ? '[' + sk + '] ' : '') + 'ОШИБКА: ' + text);
-        }
     }
 
     function syncPromptBadge(block) {
@@ -4267,6 +4496,9 @@
                 if (sk === 'structure_splitter') {
                     block.setAttribute('data-structure-splitter-check-json', '');
                     renderStructureSplitterCheck(block, tryBuildStructureSplitterCheckFromCurrentValues());
+                } else if (sk === 'elevenlabs_editor') {
+                    block.setAttribute('data-elevenlabs-editor-check-json', '');
+                    renderElevenLabsEditorCheck(block, tryBuildElevenLabsEditorCheckFromCurrentValues());
                 } else if (sk === 'scene_writer') {
                     block.setAttribute('data-scene-writer-check-json', '');
                     renderSceneWriterCheck(block, null);
@@ -4281,7 +4513,8 @@
                 } else {
                     renderEditorCheck(block);
                 }
-                if (sk === 'voiceover_editor') syncVoiceoverChangesPanel(block);
+                if (REWRITE_JSON_SPLIT_STAGES[sk]) syncEditorChangesFromResult(block);
+                syncStageRunButtons();
                 scheduleAutosave(500);
             });
             resultTa.addEventListener('change', function () {
@@ -4289,6 +4522,9 @@
                 if (sk === 'structure_splitter') {
                     block.setAttribute('data-structure-splitter-check-json', '');
                     renderStructureSplitterCheck(block, tryBuildStructureSplitterCheckFromCurrentValues());
+                } else if (sk === 'elevenlabs_editor') {
+                    block.setAttribute('data-elevenlabs-editor-check-json', '');
+                    renderElevenLabsEditorCheck(block, tryBuildElevenLabsEditorCheckFromCurrentValues());
                 } else if (sk === 'scene_writer') {
                     block.setAttribute('data-scene-writer-check-json', '');
                     renderSceneWriterCheck(block, null);
@@ -4303,7 +4539,8 @@
                 } else {
                     renderEditorCheck(block);
                 }
-                if (sk === 'voiceover_editor') syncVoiceoverChangesPanel(block);
+                if (REWRITE_JSON_SPLIT_STAGES[sk]) syncEditorChangesFromResult(block);
+                syncStageRunButtons();
                 scheduleAutosave(0);
             });
         }
@@ -4398,7 +4635,8 @@
                     }
                 }
             });
-            if ((block.getAttribute('data-stage-key') || '') === 'voiceover_editor') {
+            var skCh = block.getAttribute('data-stage-key') || '';
+            if (REWRITE_JSON_SPLIT_STAGES[skCh]) {
                 changesTaEl.addEventListener('input', function () { renderEditorCheck(block); });
                 changesTaEl.addEventListener('change', function () { renderEditorCheck(block); });
             }
@@ -4441,12 +4679,8 @@
     async function runStage(stageKey, block, options) {
         options = options || {};
         var manageBusy = options.manageBusy !== false;
-        var signal = options.signal;
-        var localAbortController = null;
-        if (!signal) {
-            localAbortController = new AbortController();
-            signal = localAbortController.signal;
-        }
+        var localAbortController = new AbortController();
+        var signal = localAbortController.signal;
         var stageSuccess = false;
         var gotFinalResult = false;
         var streamError = false;
@@ -4460,7 +4694,6 @@
         const resTextarea = block.querySelector('.rewrite-stage-result');
         const sceneWriterCheckWrap = block.querySelector('[data-scene-writer-check]');
         const sceneMediaCheckWrap = block.querySelector('[data-scene-media-check]');
-        const structureSplitterCheckWrap = block.querySelector('[data-structure-splitter-check]');
         const savedBeforeRun = resTextarea ? resTextarea.value : '';
         if (stageKey === 'scene_writer' && sceneWriterCheckWrap) {
             block.setAttribute('data-scene-writer-check-json', '');
@@ -4469,10 +4702,6 @@
         if (stageKey === 'scene_writer_live' && sceneMediaCheckWrap) {
             block.setAttribute('data-scene-media-check-json', '');
             sceneMediaCheckWrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Scene Writer Live</strong> <span class="rewrite-scene-writer-check__wait">в процессе...</span></div>';
-        }
-        if (stageKey === 'structure_splitter' && structureSplitterCheckWrap) {
-            block.setAttribute('data-structure-splitter-check-json', '');
-            structureSplitterCheckWrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Structure Splitter</strong> <span class="rewrite-scene-writer-check__wait">в процессе...</span></div>';
         }
         var doCancelForCurrentTask = function () {
             if (currentTaskId) {
@@ -4485,8 +4714,6 @@
             }
             if (localAbortController) {
                 localAbortController.abort();
-            } else if (pipelineAbortController) {
-                pipelineAbortController.abort();
             }
         };
         setStageStatusUi(
@@ -4505,9 +4732,6 @@
         syncStageRunButtons();
         try {
             if (!attachMode) {
-                if (pipelineStatusForward) {
-                    pipelineStatusForward('[' + stageKey + '] запрос: сбор снимка формы и POST /run/start…');
-                }
                 const snap = collectSnapshot();
                 const startResp = await fetch(runStartUrl, {
                     method: 'POST',
@@ -4520,23 +4744,14 @@
                 if (!startResp.ok || !startData || !startData.ok || !startData.task || !startData.task.task_id) {
                     var startErr = (startData && (startData.error || startData.message)) || ('HTTP ' + startResp.status);
                     var diag = 'HTTP ' + startResp.status + ' ' + (startResp.statusText || '') + ' · stage=' + JSON.stringify(stageKey);
-                    if (pipelineStatusForward) {
-                        pipelineStatusForward('[' + stageKey + '] /run/start не принят сервером: ' + startErr + ' (' + diag + ')');
-                    }
                     showStageError(block, 'Не удалось запустить задачу: ' + startErr + ' (' + diag + ')');
                     streamError = true;
                     return false;
                 }
                 currentTaskId = startData.task.task_id;
                 attachSinceSeq = -1;
-                if (pipelineStatusForward) {
-                    pipelineStatusForward('[' + stageKey + '] фоновая задача запущена: ' + currentTaskId + ', подписываюсь на /tasks/.../events …');
-                }
             } else {
                 currentTaskId = attachTaskIdInitial;
-                if (pipelineStatusForward) {
-                    pipelineStatusForward('[' + stageKey + '] re-attach к фоновой задаче ' + currentTaskId + ' (since=' + attachSinceSeq + ')…');
-                }
             }
             // Update cancel handler now that we know the task_id.
             setStageStatusUi(
@@ -4550,9 +4765,6 @@
                 headers: { 'Accept': 'application/x-ndjson' },
                 signal: signal
             });
-            if (pipelineStatusForward) {
-                pipelineStatusForward('[' + stageKey + '] events HTTP ' + res.status + ' ' + res.statusText + ', чтение NDJSON…');
-            }
             reader = res.body && res.body.getReader();
             if (!reader) {
                 showStageError(block, 'Браузер не поддерживает потоковое чтение ответа.');
@@ -4563,7 +4775,6 @@
             let buf = '';
             const useOpenAIStreamUi = (stageKey === 'draft1' || stageKey === 'rewrite');
             let streamBuf = '';
-            var lastDeltaLog = 0;
             while (true) {
                 var chunk;
                 try {
@@ -4588,16 +4799,12 @@
                     } catch (e) {
                         if (!useOpenAIStreamUi || streamBuf.length === 0) {
                             pushStageStatus(block, 'Строка JSON не разобрана: ' + line.slice(0, 80));
-                        } else if (pipelineStatusForward) {
-                            pipelineStatusForward('[' + stageKey + '] строка не JSON в потоке: ' + line.slice(0, 80));
                         }
                         continue;
                     }
                     if (ev.type === 'status' && ev.message) {
                         if (!useOpenAIStreamUi || streamBuf.length === 0) {
                             pushStageStatus(block, ev.message);
-                        } else if (pipelineStatusForward) {
-                            pipelineStatusForward('[' + stageKey + '] ' + ev.message);
                         }
                     } else if (ev.type === 'delta' && typeof ev.content === 'string') {
                         streamBuf += ev.content;
@@ -4614,18 +4821,8 @@
                                 renderEditorCheck(block);
                             }
                         }
-                        if (pipelineStatusForward && useOpenAIStreamUi) {
-                            var now = Date.now();
-                            if (now - lastDeltaLog > 1500) {
-                                lastDeltaLog = now;
-                                pipelineStatusForward('[' + stageKey + '] поток токенов: накоплено ' + formatNumRu(streamBuf.length) + ' симв.…');
-                            }
-                        }
                     } else if (ev.type === 'error' && ev.message) {
                         streamError = true;
-                        if (pipelineStatusForward) {
-                            pipelineStatusForward('[' + stageKey + '] событие error в потоке: ' + ev.message);
-                        }
                         if (streamBuf.length > 0 && resTextarea) {
                             resTextarea.value = streamBuf + '\n\n--- Ошибка ---\n' + ev.message;
                             resTextarea.classList.remove('rewrite-stage-result--busy');
@@ -4643,6 +4840,9 @@
                     } else if (ev.type === 'scene_writer_live_check' && stageKey === 'scene_writer_live') {
                         block.setAttribute('data-scene-media-check-json', JSON.stringify(ev));
                         renderSceneMediaCheck(block, ev);
+                    } else if (ev.type === 'elevenlabs_editor_check' && stageKey === 'elevenlabs_editor') {
+                        block.setAttribute('data-elevenlabs-editor-check-json', JSON.stringify(ev));
+                        renderElevenLabsEditorCheck(block, ev);
                     } else if (ev.type === 'structure_splitter_check' && stageKey === 'structure_splitter') {
                         block.setAttribute('data-structure-splitter-check-json', JSON.stringify(ev));
                         renderStructureSplitterCheck(block, ev);
@@ -4657,12 +4857,9 @@
                             var pastVal = pastEl ? (pastEl.value || '') : '';
                             resultContent = injectPastPromptIntoSceneWriterResult(resultContent, pastVal);
                         }
-                        if (pipelineStatusForward) {
-                            pipelineStatusForward('[' + stageKey + '] событие result: длина текста ' + formatNumRu(resultContent.length) + ' симв.');
-                        }
                         if (resTextarea) {
-                            if (stageKey === 'voiceover_editor') {
-                                applyVoiceoverEditorSplit(block, resultContent);
+                            if (REWRITE_JSON_SPLIT_STAGES[stageKey]) {
+                                applyEditorJsonResultSplit(block, resultContent);
                             } else {
                                 resTextarea.value = resultContent;
                             }
@@ -4678,23 +4875,19 @@
                         // После завершения Voiceover Editor — обновить «Итоговый текст»
                         // и сбросить перевод. Программное resTextarea.value не дёргает
                         // input event, поэтому зовём напрямую.
+                        if (REWRITE_JSON_SPLIT_STAGES[stageKey]) {
+                            scheduleAutosave(500);
+                        }
                         if (stageKey === 'voiceover_editor') {
                             if (typeof window.__rewriteRefreshVoiceoverFinal === 'function') {
                                 try { window.__rewriteRefreshVoiceoverFinal(); } catch (_) {}
                             }
-                            scheduleAutosave(500);
                         }
                         syncStageRunButtons();
                     }
                 }
             }
             var userAborted = signal && signal.aborted;
-            if (userAborted && pipelineStatusForward) {
-                pipelineStatusForward('[' + stageKey + '] запрос прерван (AbortController).');
-            }
-            if (pipelineStatusForward && !userAborted) {
-                pipelineStatusForward('[' + stageKey + '] поток завершён (reader done), итог: ' + (gotFinalResult ? 'есть result' : 'без result') + (streamError ? ', были ошибки' : ''));
-            }
             if (userAborted && resTextarea && !gotFinalResult) {
                 if (reader) {
                     try { await reader.cancel(); } catch (_) {}
@@ -4722,13 +4915,11 @@
                 }
             }
             if (gotFinalResult) {
-                if (pipelineStatusForward) pipelineStatusForward('[' + stageKey + '] сохранение проекта на сервер…');
                 await saveToServer();
                 if (stageKey === 'draft1' || stageKey === 'block_writer') {
                     await refreshBlockWriterCheck(block);
                 }
                 stageSuccess = true;
-                if (pipelineStatusForward) pipelineStatusForward('[' + stageKey + '] сохранение завершено.');
             }
             return stageSuccess;
         } catch (e) {
@@ -4744,9 +4935,6 @@
                     updateResultCounts(block);
                 }
                 syncStageRunButtons();
-                if (pipelineStatusForward) {
-                    pipelineStatusForward('[' + stageKey + '] отмена до/во время запроса (AbortError).');
-                }
                 return false;
             }
             showStageError(block, String(e));
@@ -4759,91 +4947,6 @@
                 clearStageStatusUi(block);
             }
             if (manageBusy) setBusy(false);
-        }
-    }
-
-    async function runAllStagesPipeline() {
-        if (!openaiOk) {
-            alert('Ключ OpenAI не задан — конвейер недоступен.');
-            return;
-        }
-        const cards = Array.from(document.querySelectorAll('.rewrite-stage-card'));
-        const byKey = {};
-        cards.forEach(function (c) {
-            var k = c.getAttribute('data-stage-key');
-            if (k) byKey[k] = c;
-        });
-        // Порядок этапов берём по текущему пресету (Глубокий / Мягкий), а не по
-        // общему REWRITE_STAGES — иначе в Soft мы бы пытались запустить, например,
-        // analysis/structure/draft1, которые не нужны в этом пресете.
-        var presetOrder = (REWRITE_PRESET_STAGE_KEYS && REWRITE_PRESET_STAGE_KEYS[currentRewritePreset])
-            ? REWRITE_PRESET_STAGE_KEYS[currentRewritePreset].slice()
-            : STAGE_KEYS_ORDER.slice();
-        var presetLabel = (REWRITE_PRESET_LABELS && REWRITE_PRESET_LABELS[currentRewritePreset]) || currentRewritePreset;
-        if (pipelineLogEl) pipelineLogEl.textContent = '';
-        pipelineAbortController = new AbortController();
-        var signal = pipelineAbortController.signal;
-        pipelineStatusForward = function (msg) { appendPipelineRunnerLog(msg); };
-        pipelineRunActive = true;
-        syncPipelineStopButton();
-        setBusy(true);
-        try {
-            appendPipelineRunnerLog('══ Конвейер «' + presetLabel + '»: ' + presetOrder.length + ' этапов по порядку ══');
-            var allOk = true;
-            for (var i = 0; i < presetOrder.length; i++) {
-                if (signal.aborted) {
-                    appendPipelineRunnerLog('✖ Конвейер остановлен (кнопка «Остановить»).');
-                    allOk = false;
-                    break;
-                }
-                var sk = presetOrder[i];
-                var block = byKey[sk];
-                var label = STAGE_LABELS[sk] || sk;
-                appendPipelineRunnerLog('────────────────────────────────────────');
-                appendPipelineRunnerLog('▶ Шаг ' + (i + 1) + '/' + presetOrder.length + ': «' + label + '» (' + sk + ')');
-                if (!block) {
-                    appendPipelineRunnerLog('✖ Карточка этапа не найдена в DOM.');
-                    allOk = false;
-                    break;
-                }
-                // Если у этапа уже есть сохранённый Result (textarea не пустая),
-                // пропускаем его — иначе после перезапуска сервиса / отвалившегося
-                // /run/start пайплайн перезапускал бы всю цепочку и жёг токены.
-                var existingResEl = block.querySelector('.rewrite-stage-result');
-                var existingRes = existingResEl ? (existingResEl.value || '').trim() : '';
-                if (existingRes) {
-                    appendPipelineRunnerLog('• Пропуск: у этапа уже есть Result (' + formatNumRu(existingRes.length) + ' симв.) — повторный запуск не нужен.');
-                    continue;
-                }
-                if (sk === 'inbox') {
-                    appendPipelineRunnerLog('✖ Inbox пустой. Вставьте готовый текст в Result и запустите ещё раз.');
-                    allOk = false;
-                    break;
-                }
-                var ok = await runStage(sk, block, { manageBusy: false, signal: signal });
-                if (signal.aborted) {
-                    appendPipelineRunnerLog('✖ Конвейер остановлен (кнопка «Остановить»).');
-                    allOk = false;
-                    break;
-                }
-                if (!ok) {
-                    appendPipelineRunnerLog('✖ Этап не завершён успешно — конвейер остановлен.');
-                    allOk = false;
-                    break;
-                }
-                appendPipelineRunnerLog('✓ Этап «' + label + '» выполнен, данные записаны.');
-            }
-            if (allOk) {
-                appendPipelineRunnerLog('══ Все этапы конвейера завершены успешно ══');
-            }
-        } catch (e) {
-            appendPipelineRunnerLog('✖ Исключение: ' + String(e));
-        } finally {
-            pipelineStatusForward = null;
-            pipelineAbortController = null;
-            pipelineRunActive = false;
-            syncPipelineStopButton();
-            setBusy(false);
         }
     }
 
@@ -4953,19 +5056,6 @@
         });
     });
 
-    if (pipelineRunBtn) {
-        pipelineRunBtn.addEventListener('click', function () {
-            if (!openaiOk || pipelineRunBtn.disabled) return;
-            runAllStagesPipeline();
-        });
-    }
-    if (pipelineStopBtn) {
-        pipelineStopBtn.addEventListener('click', function () {
-            if (!pipelineAbortController || pipelineStopBtn.disabled) return;
-            pipelineAbortController.abort();
-        });
-    }
-
     document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
         const key = block.getAttribute('data-stage-key');
         const runBtn = block.querySelector('.rewrite-stage-run');
@@ -5001,21 +5091,43 @@
                 copyStageChanges(block);
             });
         }
-        if (key === 'voiceover_editor') {
+        if (REWRITE_JSON_SPLIT_STAGES[key]) {
             applyChangesLockUI(block);
-            applyVoiceoverEditorSplit(block, (block.querySelector('.rewrite-stage-result') || {}).value || '');
+            applyEditorJsonResultSplit(block, (block.querySelector('.rewrite-stage-result') || {}).value || '');
             renderEditorCheck(block);
         }
     });
     (function wireVoiceoverEditorCheckRefresh() {
-        var rewriteBlock = document.querySelector('.rewrite-stage-card[data-stage-key="rewrite"]');
         var voBlock = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"]');
-        if (!rewriteBlock || !voBlock) return;
-        var rwTa = rewriteBlock.querySelector('.rewrite-stage-result');
-        if (!rwTa) return;
-        var refreshVoCheck = function () { renderEditorCheck(voBlock); };
-        rwTa.addEventListener('input', refreshVoCheck);
-        rwTa.addEventListener('change', refreshVoCheck);
+        if (!voBlock) return;
+        function refreshVoCheck() {
+            renderEditorCheck(voBlock);
+            syncStageRunButtons();
+        }
+        var rewriteBlock = document.querySelector('.rewrite-stage-card[data-stage-key="rewrite"]');
+        if (rewriteBlock) {
+            var rwTa = rewriteBlock.querySelector('.rewrite-stage-result');
+            if (rwTa) {
+                rwTa.addEventListener('input', refreshVoCheck);
+                rwTa.addEventListener('change', refreshVoCheck);
+            }
+        }
+        var inboxBlock = document.querySelector('.rewrite-stage-card[data-stage-key="inbox"]');
+        if (inboxBlock) {
+            var ibTa = inboxBlock.querySelector('.rewrite-stage-result');
+            if (ibTa) {
+                ibTa.addEventListener('input', refreshVoCheck);
+                ibTa.addEventListener('change', refreshVoCheck);
+            }
+        }
+        var personaBlockWr = document.querySelector('.rewrite-stage-card[data-stage-key="persona_editor"]');
+        if (personaBlockWr) {
+            var pTa = personaBlockWr.querySelector('.rewrite-stage-result');
+            if (pTa) {
+                pTa.addEventListener('input', refreshVoCheck);
+                pTa.addEventListener('change', refreshVoCheck);
+            }
+        }
     })();
     if (ytUnlockBtn) {
         ytUnlockBtn.addEventListener('click', async function () {
@@ -5122,6 +5234,31 @@
     var youtubePackagingBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
     if (youtubePackagingBlockInit) {
         renderYoutubePackagingPreview(youtubePackagingBlockInit);
+    }
+    var elevenlabsEditorBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="elevenlabs_editor"]');
+    if (elevenlabsEditorBlockInit) {
+        var persistedElevenlabsCheck = readElevenLabsEditorCheckFromBlock(elevenlabsEditorBlockInit);
+        if (persistedElevenlabsCheck && persistedElevenlabsCheck.summary) {
+            renderElevenLabsEditorCheck(elevenlabsEditorBlockInit, persistedElevenlabsCheck);
+        } else {
+            renderElevenLabsEditorCheck(elevenlabsEditorBlockInit, tryBuildElevenLabsEditorCheckFromCurrentValues());
+        }
+        var elevenlabsResultElInit = elevenlabsEditorBlockInit.querySelector('.rewrite-stage-result');
+        if (elevenlabsResultElInit) {
+            var recheckEl = function () {
+                renderElevenLabsEditorCheck(elevenlabsEditorBlockInit, tryBuildElevenLabsEditorCheckFromCurrentValues());
+            };
+            elevenlabsResultElInit.addEventListener('input', recheckEl);
+            elevenlabsResultElInit.addEventListener('change', recheckEl);
+        }
+        var voiceoverForElInit = document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-result');
+        if (voiceoverForElInit) {
+            var recheckElVo = function () {
+                renderElevenLabsEditorCheck(elevenlabsEditorBlockInit, tryBuildElevenLabsEditorCheckFromCurrentValues());
+            };
+            voiceoverForElInit.addEventListener('input', recheckElVo);
+            voiceoverForElInit.addEventListener('change', recheckElVo);
+        }
     }
     var structureSplitterBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
     if (structureSplitterBlockInit) {
@@ -5700,6 +5837,67 @@
         });
     })();
 
+    function refreshStageCheckUI(block) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key') || '';
+        if (sk === 'structure_splitter') {
+            block.setAttribute('data-structure-splitter-check-json', '');
+            renderStructureSplitterCheck(block, null);
+        } else if (sk === 'elevenlabs_editor') {
+            block.setAttribute('data-elevenlabs-editor-check-json', '');
+            renderElevenLabsEditorCheck(block, null);
+        } else if (sk === 'scene_writer') {
+            block.setAttribute('data-scene-writer-check-json', '');
+            renderSceneWriterCheck(block, null);
+        } else if (sk === 'scene_writer_live') {
+            block.setAttribute('data-scene-media-check-json', '');
+            renderSceneMediaCheck(block, null);
+        } else if (sk === 'youtube_packaging') {
+            renderYoutubePackagingPreview(block);
+        } else if (sk === 'draft1') {
+            block.setAttribute('data-block-writer-check-json', '');
+            renderEditorCheck(block);
+        } else if (sk !== 'inbox') {
+            renderEditorCheck(block);
+        }
+    }
+
+    async function clearAllAgentResultsExceptInbox() {
+        var okClear = await openClearResultsConfirm();
+        if (!okClear) return;
+        if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) {
+            alert('Дождитесь завершения запущенного этапа.');
+            return;
+        }
+        document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+            var sk = block.getAttribute('data-stage-key') || '';
+            if (sk === 'inbox') return;
+            var resTa = block.querySelector('.rewrite-stage-result');
+            if (resTa) resTa.value = '';
+            var changesTa = block.querySelector('.rewrite-stage-changes');
+            if (changesTa) changesTa.value = '';
+            block.removeAttribute('data-scene-writer-check-json');
+            block.removeAttribute('data-scene-media-check-json');
+            block.removeAttribute('data-structure-splitter-check-json');
+            block.removeAttribute('data-elevenlabs-editor-check-json');
+            block.removeAttribute('data-block-writer-check-json');
+            updateResultCounts(block);
+            syncStageErrorBorder(block);
+            if (REWRITE_JSON_SPLIT_STAGES[sk]) updateEditorChangesBadge(block);
+            refreshStageCheckUI(block);
+        });
+        refreshRewriteStageCheck();
+        syncStageRunButtons();
+        if (window.__rewriteSyncTranslateRuRunPrereq) window.__rewriteSyncTranslateRuRunPrereq();
+        if (window.__rewriteSyncSemanticRunPrereq) window.__rewriteSyncSemanticRunPrereq();
+        try {
+            var ok = await saveToServer();
+            if (!ok) alert('Не удалось сохранить на сервере');
+        } catch (e) {
+            alert(String(e));
+        }
+    }
+
     (function initRewritePipelineStageCollapse() {
         function loadCollapseStoreAll() {
             try {
@@ -5784,6 +5982,12 @@
                 var st = visiblePipelineStagesState();
                 if (!st.anyVisible) return;
                 setAllCollapsed(!st.allCollapsed);
+            });
+        }
+        var pipelineClearBtn = document.getElementById('rewrite-stages-pipeline-clear-btn');
+        if (pipelineClearBtn) {
+            pipelineClearBtn.addEventListener('click', function () {
+                clearAllAgentResultsExceptInbox();
             });
         }
 
@@ -5878,6 +6082,32 @@
     })();
 
     // --- Rewrite preset toggle (Глубокий / Мягкий) --------------------------
+    function rewriteSubtitleFromSources(labelRu, labelEn) {
+        return 'данные берутся из <code>' + labelRu + '</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">' + labelEn + '</code>';
+    }
+
+    var REWRITE_STAGE_SUBTITLE_BY_PRESET = {
+        rewrite: {
+            soft: 'Агент-писатель текста, ' + rewriteSubtitleFromSources('Исходный текст', 'Source')
+        },
+        voiceover_editor: {
+            prewritten: 'Агент-редактор войсовера, ' + rewriteSubtitleFromSources('Inbox', 'Result'),
+            soft: 'Агент-редактор войсовера, ' + rewriteSubtitleFromSources('Rewrite', 'Result'),
+            deep: 'Агент-редактор войсовера, ' + rewriteSubtitleFromSources('Persona Editor', 'Result')
+        }
+    };
+
+    function syncRewriteStageSubtitles(preset) {
+        var presetKey = String(preset || '').trim() || 'deep';
+        document.querySelectorAll('[data-rewrite-stage-subtitle]').forEach(function (el) {
+            var sk = el.getAttribute('data-rewrite-stage-subtitle') || '';
+            var byStage = REWRITE_STAGE_SUBTITLE_BY_PRESET[sk];
+            var html = (byStage && byStage[presetKey]) ? byStage[presetKey] : '';
+            el.innerHTML = html;
+            el.style.display = html ? '' : 'none';
+        });
+    }
+
     // Скрываем карточки, не входящие в выбранный пресет; обновляем кнопку «Отобразить»
     // и список COLLAPSIBLE_PIPELINE_STAGE_KEYS,
     // чтобы кнопки сворачивали именно «первые 10» текущего пресета. Сохраняем
@@ -5913,10 +6143,10 @@
                 idxEl.setAttribute('data-stage-display-index', String(n));
             }
         });
-        // collapsible_pipeline_stages: до 10 этапов с начала пресета, без scene_writer / scene_writer_live
-        // (см. server-side комментарий у ns_col — иначе SW попадает под массовое сворачивание).
+        // collapsible_pipeline_stages: до 11 этапов с начала пресета, без scene_writer / scene_writer_live
+        // (Deep: structure_splitter; см. server-side комментарий у ns_col).
         COLLAPSIBLE_PIPELINE_STAGE_KEYS = [];
-        for (var pi = 0; pi < presetKeys.length && COLLAPSIBLE_PIPELINE_STAGE_KEYS.length < 10; pi++) {
+        for (var pi = 0; pi < presetKeys.length && COLLAPSIBLE_PIPELINE_STAGE_KEYS.length < 11; pi++) {
             var pk = presetKeys[pi];
             if (pk === 'scene_writer' || pk === 'scene_writer_live') continue;
             COLLAPSIBLE_PIPELINE_STAGE_KEYS.push(pk);
@@ -5930,7 +6160,7 @@
             }
             stageRangeEl.textContent = 'Этапы 1\u2013' + _labelEnd;
         }
-        // На карточках в выбранных «верхних 10» проставим атрибут data-pipeline-collapse=1
+        // На карточках в выбранных «верхних 11» проставим атрибут data-pipeline-collapse=1
         // — он используется setAllCollapsed для массового сворачивания. В первоначальном
         // server-render это уже сделано для текущего пресета; при переключении пересчитываем.
         document.querySelectorAll('.rewrite-stage-card').forEach(function (card) {
@@ -5952,6 +6182,11 @@
         if (typeof window.__rewriteSyncPipelineDisplayBtn === 'function') {
             try { window.__rewriteSyncPipelineDisplayBtn(); } catch (_) { /* ignore */ }
         }
+        syncRewriteStageSubtitles(presetKey);
+        document.querySelectorAll('.rewrite-stage-card').forEach(function (card) {
+            var sk = card.getAttribute('data-stage-key') || '';
+            if (REWRITE_JSON_SPLIT_STAGES[sk]) renderEditorCheck(card);
+        });
     }
     function syncPresetToggleButtonsUI(preset) {
         var sel = document.getElementById('rewrite-preset-select');

@@ -1,310 +1,254 @@
 {
   "analysis_mode": "full_analysis",
-  "core_thesis": "Truly wealthy individuals exhibit distinct, often invisible behavioral and financial patterns that set them apart from the general population, and these patterns are accessible and replicable by anyone regardless of current income.",
-  "core_promise": "By understanding and adopting the seven additional behavioral signs of quietly wealthy people, viewers can begin to build the habits and mindset that lead to long-term financial security and wealth accumulation.",
-  "target_audience_in_source": "Individuals interested in personal finance, wealth-building, and understanding the habits of the wealthy; likely middle-class viewers seeking practical, actionable advice.",
-  "content_type_in_source": "Educational, listicle-style YouTube video with a personal finance/self-improvement focus.",
+  "core_thesis": "Решение не выкладывать свои фотографии в соцсети обусловлено сложными психологическими причинами, которые выходят далеко за рамки стеснительности или неуверенности.",
+  "core_promise": "К концу зритель поймёт, что отказ от публикации своих фото — это не признак проблемы, а проявление разных здоровых психологических стратегий и осознанного отношения к идентичности и приватности.",
+  "target_audience_in_source": "Широкая аудитория пользователей соцсетей, интересующихся психологией, самопрезентацией и вопросами приватности.",
+  "content_type_in_source": "Психологический разбор/научно-популярное объяснение социального поведения.",
   "key_ideas": [
     {
       "idea_id": "idea_01",
-      "title": "Avoidance of Credit Card Debt",
-      "description": "Wealthy people never carry credit card debt, understanding both its direct and opportunity costs, and use credit cards as tools rather than sources of debt."
+      "title": "Стереотипы о невидимости в соцсетях",
+      "description": "Общество склонно воспринимать отсутствие фотографий как признак стеснительности, неуверенности или желания что-то скрыть, но это упрощённый взгляд."
     },
     {
       "idea_id": "idea_02",
-      "title": "Boring Jobs and Businesses",
-      "description": "Most millionaires have stable, unglamorous jobs or own businesses in unexciting but essential industries, which provide steady income and low social spending pressure."
+      "title": "Многоуровневые причины отказа от публикации фото",
+      "description": "Психологические исследования показывают, что мотивы могут быть связаны с ценностью приватности, отсутствием потребности во внешнем одобрении или философским взглядом на разделение офлайн- и онлайн-идентичности."
     },
     {
       "idea_id": "idea_03",
-      "title": "Self-Made Wealth",
-      "description": "The majority of American millionaires are first-generation wealthy, having built their fortunes from scratch without significant inheritance, developing disciplined financial habits in the process."
+      "title": "Разделение контекстов идентичности",
+      "description": "Для некоторых людей смешивание реальной и цифровой идентичности вызывает дискомфорт, что связано с психологическим явлением разделения контекстов."
     },
     {
       "idea_id": "idea_04",
-      "title": "Modest Housing Choices",
-      "description": "Wealthy individuals typically live in homes well below their means, avoiding the lifestyle inflation and social pressures that come with expensive neighborhoods."
+      "title": "Частная самосознательность и самопрезентация",
+      "description": "Люди с высоким уровнем частной самосознательности реже публикуют свои фото, потому что воспринимают это как раскрытие чего-то личного."
     },
     {
       "idea_id": "idea_05",
-      "title": "Strategic Financial Ambiguity",
-      "description": "They deliberately downplay or obscure their wealth to avoid social friction, requests for help, and security risks associated with visible affluence."
+      "title": "Потребность в автономии и теория самодетерминации",
+      "description": "Отказ от публикации фото часто связан с потребностью в автономии и сопротивлением ощущению внешнего наблюдения и оценки."
     },
     {
       "idea_id": "idea_06",
-      "title": "Multiple Invisible Income Streams",
-      "description": "Quietly wealthy people have several sources of income beyond their primary job, providing financial security and the freedom to take risks."
+      "title": "Нейронаучные аспекты социальной оценки",
+      "description": "Ожидание социальной оценки активирует те же области мозга, что и реальная угроза, вызывая стресс даже при воображаемом наблюдении."
     },
     {
       "idea_id": "idea_07",
-      "title": "Long-Term Thinking and Patience",
-      "description": "They approach financial decisions with a multi-decade perspective, allowing compounding to work and resisting short-term reactions."
+      "title": "Внутренний локус идентичности",
+      "description": "Некоторые люди не публикуют фото из-за устойчивого внутреннего чувства собственного 'я', не зависящего от внешней оценки."
+    },
+    {
+      "idea_id": "idea_08",
+      "title": "Поколенческие различия в отношении к фотографиям",
+      "description": "Люди, выросшие до цифровой эпохи, иначе воспринимают личные фотографии и не склонны делиться ими публично, а среди молодёжи растёт осознанный отказ от публикаций ради цифровых границ."
+    },
+    {
+      "idea_id": "idea_09",
+      "title": "Многообразие психологических стратегий",
+      "description": "Отказ от публикации фото — это не патология, а разные способы выстраивания границ и отношения к публичности."
+    },
+    {
+      "idea_id": "idea_10",
+      "title": "Контраст между публичной и прожитой жизнью",
+      "description": "В современном обществе видимость часто приравнивается к ценности, но те, кто остаётся невидимым, могут лучше понимать разницу между настоящей и демонстрируемой жизнью."
     }
   ],
   "facts_and_numbers": [
     {
       "fact_id": "fact_01",
-      "content": "The National Study of Millionaires surveyed 10,000 American millionaires.",
+      "content": "Люди с высоким уровнем частной самосознательности значительно реже занимаются самопрезентацией в интернете.",
       "type": "research",
       "precision_importance": "high"
     },
     {
       "fact_id": "fact_02",
-      "content": "Three out of four millionaires had never carried credit card debt.",
-      "type": "statistic",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_03",
-      "content": "The average American carries $6,715 in credit card debt.",
-      "type": "number",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_04",
-      "content": "Average credit card interest rate is 21.5%.",
-      "type": "number",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_05",
-      "content": "On a minimum payment schedule, $1,300 out of every $1,500 in annual payments goes to interest.",
-      "type": "claim",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_06",
-      "content": "$1,300 invested annually at 8% for 30 years grows to approximately $147,000.",
-      "type": "claim",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_07",
-      "content": "Terry Kahn accumulated $13 million as a building superintendent and donated it all to charity.",
-      "type": "example",
-      "precision_importance": "medium"
-    },
-    {
-      "fact_id": "fact_08",
-      "content": "79% of American millionaires did not receive significant inheritance.",
-      "type": "statistic",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_09",
-      "content": "Only 3% of millionaires received an inheritance of $1 million or more.",
-      "type": "statistic",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_10",
-      "content": "Average American home is priced at 6-7 times annual income; median household income is ~$80,000; typical home value $480,000-$560,000.",
-      "type": "number",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_11",
-      "content": "Typical millionaire buys a home at 1.5-3 times annual income.",
-      "type": "statistic",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_12",
-      "content": "Warren Buffett bought his house in 1958 for $31,500; his net worth is over $100 billion.",
-      "type": "example",
-      "precision_importance": "high"
-    },
-    {
-      "fact_id": "fact_13",
-      "content": "In 2026, displayed wealth is a documented security risk.",
-      "type": "claim",
-      "precision_importance": "medium"
-    },
-    {
-      "fact_id": "fact_14",
-      "content": "Rental properties generating $2,800/month after expenses (example of invisible income stream).",
-      "type": "example",
-      "precision_importance": "medium"
-    },
-    {
-      "fact_id": "fact_15",
-      "content": "People in highest net worth brackets typically have three or more income streams; middle-class usually have one or two.",
+      "content": "Ожидание социальной оценки активирует миндалевидное тело и медиальную префронтальную кору — те же области мозга, что и при реальной социальной угрозе.",
       "type": "research",
       "precision_importance": "high"
     },
     {
-      "fact_id": "fact_16",
-      "content": "Warren Buffett's net worth at age 50 was $300 million; over 97% of his wealth accumulated after age 60.",
-      "type": "example",
-      "precision_importance": "high"
+      "fact_id": "fact_03",
+      "content": "Исследования показывают: люди с устойчивым внутренним локусом идентичности в целом меньше вовлечены в соцсети.",
+      "type": "research",
+      "precision_importance": "medium"
+    },
+    {
+      "fact_id": "fact_04",
+      "content": "Среди молодых поколений растёт число людей, сознательно отказывающихся от публикации своих фотографий ради цифровых границ.",
+      "type": "claim",
+      "precision_importance": "medium"
     }
   ],
   "argument_flow": [
     {
       "step_id": "step_01",
-      "function": "setup",
-      "summary": "Author introduces the topic: identifying quietly wealthy people through behavioral signs, expanding on previous content."
+      "function": "hook",
+      "summary": "Вводится наблюдение: многие люди активны в соцсетях, но не публикуют свои фото, что вызывает стереотипные суждения."
     },
     {
       "step_id": "step_02",
-      "function": "hook",
-      "summary": "Promises to reveal seven additional signs of secret wealth, building on prior nine."
+      "function": "setup",
+      "summary": "Обозначается, что за этим поведением стоят более сложные психологические причины, чем принято думать."
     },
     {
       "step_id": "step_03",
       "function": "explanation",
-      "summary": "Each sign is introduced with supporting evidence, statistics, and examples."
+      "summary": "Перечисляются основные мотивы отказа от публикации фото: приватность, отсутствие потребности в одобрении, философское разделение офлайн- и онлайн-идентичности."
     },
     {
       "step_id": "step_04",
       "function": "proof",
-      "summary": "Research studies, statistics, and real-life examples (e.g., Terry Kahn, Warren Buffett) are used to validate each behavioral pattern."
+      "summary": "Приводятся исследования о частной самосознательности и её связи с нежеланием самопрезентации."
     },
     {
       "step_id": "step_05",
-      "function": "contrast",
-      "summary": "Contrasts quietly wealthy behaviors with typical American financial behaviors (e.g., debt, housing, job choices)."
+      "function": "explanation",
+      "summary": "Вводится теория самодетерминации и потребность в автономии как ещё один мотив."
     },
     {
       "step_id": "step_06",
-      "function": "payoff",
-      "summary": "Shows how adopting these behaviors leads to financial freedom, security, and compounding wealth."
+      "function": "proof",
+      "summary": "Описываются нейронаучные данные о том, как мозг реагирует на ожидание социальной оценки."
     },
     {
       "step_id": "step_07",
+      "function": "contrast",
+      "summary": "Показывается, что отказ может быть не только из-за тревожности, но и из-за уверенности в себе (внутренний локус идентичности)."
+    },
+    {
+      "step_id": "step_08",
+      "function": "example",
+      "summary": "Приводится поколенческий пример: старшие поколения иначе относятся к фотографиям, а среди молодёжи растёт осознанный отказ."
+    },
+    {
+      "step_id": "step_09",
       "function": "conclusion",
-      "summary": "Summarizes the seven signs, encourages viewers to self-assess and apply the lessons, and includes calls to action."
+      "summary": "Делается вывод: отказ от публикации фото — это разные здоровые стратегии, а не патология."
+    },
+    {
+      "step_id": "step_10",
+      "function": "payoff",
+      "summary": "Финальный акцент: в мире, где видимость приравнивается к ценности, невидимость может быть осознанным и глубоким выбором."
     }
   ],
   "content_map": {
     "A_preserve_exactly": [
-      "National Study of Millionaires: 10,000 surveyed",
-      "Three out of four millionaires never carried credit card debt",
-      "$6,715 average American credit card debt",
-      "21.5% average credit card interest rate",
-      "$1,300 out of $1,500 in annual payments goes to interest",
-      "$1,300 invested at 8% for 30 years = ~$147,000",
-      "79% of millionaires self-made; 3% inherited $1M+",
-      "Average home price: 6-7x income; median income ~$80,000; home $480,000-$560,000",
-      "Millionaire home price: 1.5-3x income",
-      "Warren Buffett: $31,500 house, $100B+ net worth",
-      "Three or more income streams for top net worth; one or two for middle class",
-      "Warren Buffett: $300M at 50, 97% of wealth after 60"
+      "Исследования о частной самосознательности и самопрезентации",
+      "Нейронаучные данные о миндалевидном теле и медиальной префронтальной коре",
+      "Факт о внутреннем локусе идентичности и вовлечённости в соцсети"
     ],
     "B_preserve_meaning": [
-      "Wealthy avoid credit card debt and use cards as tools",
-      "Boring jobs/businesses provide stability and low social spending pressure",
-      "Self-made millionaires develop disciplined habits",
-      "Modest housing prevents lifestyle inflation",
-      "Strategic ambiguity protects from social and security risks",
-      "Multiple income streams provide security and risk tolerance",
-      "Long-term thinking enables compounding and extraordinary outcomes"
+      "Аргументы о многоуровневых причинах отказа от публикации фото",
+      "Психологические объяснения разделения идентичности",
+      "Потребность в автономии и сопротивление социальной оценке",
+      "Контраст между тревожностью и внутренней уверенностью",
+      "Поколенческие различия и осознанные цифровые границы"
     ],
     "C_can_adapt": [
-      "Examples of boring jobs (engineers, teachers, etc.)",
-      "Terry Kahn's story",
-      "Descriptions of invisible income streams (rental, dividends, royalties)",
-      "Warren Buffett's lifestyle details",
-      "Descriptions of social pressures in expensive neighborhoods"
+      "Примеры ответов людей на вопрос о публикации фото",
+      "Философские рассуждения о ценности офлайн-жизни",
+      "Аналогии с публичной и прожитой жизнью"
     ],
     "D_must_rewrite": [
-      "YouTube-specific calls to action (like, subscribe, comments)",
-      "Direct audience engagement",
-      "Personal anecdotes or casual asides",
-      "References to previous or next videos",
-      "Blog-style conversational transitions"
+      "Вступительный хук с обращением к опыту зрителя",
+      "Переходы между блоками",
+      "Эмоциональные вставки и бытовые обращения",
+      "Финальное обращение к аудитории"
     ]
   },
   "weak_segments": [
     {
-      "location": "Intro and outro",
-      "problem_type": "blogger_offtopic",
-      "description": "Repeated calls to like, subscribe, and watch other videos; not relevant for core content."
+      "location": "Вступление (первые абзацы)",
+      "problem_type": "foreign_voice",
+      "description": "Слишком личное обращение к зрителю, бытовые примеры, неформальный тон."
     },
     {
-      "location": "Throughout sign explanations",
+      "location": "Переход к нейронауке",
+      "problem_type": "weak_transition",
+      "description": "Переход от психологии к нейронауке не полностью обоснован, можно усилить связку."
+    },
+    {
+      "location": "Финальный вывод",
       "problem_type": "padding",
-      "description": "Occasional over-explanation and reiteration of points that could be more concise."
-    },
-    {
-      "location": "Sign 5 (Strategic Ambiguity)",
-      "problem_type": "flat_explanation",
-      "description": "Somewhat lengthy justification of ambiguity; could be tightened for clarity."
+      "description": "Некоторая избыточность в повторении главной мысли о ценности невидимости."
     }
   ],
   "retention_opportunities": [
     {
-      "location": "Opening",
+      "location": "Вступление",
       "opportunity_type": "hook",
-      "description": "Potential for a stronger, curiosity-driven hook about hidden wealth behaviors."
+      "description": "Можно усилить хук, чтобы сразу заинтересовать необычным взглядом на привычное поведение."
     },
     {
-      "location": "Between signs",
-      "opportunity_type": "rehook",
-      "description": "Opportunity to use mini-hooks or contrasts to maintain engagement between each sign."
-    },
-    {
-      "location": "Sign 7 (Long-term thinking)",
-      "opportunity_type": "payoff_pull",
-      "description": "Potential to amplify the emotional and logical payoff of compounding over decades."
-    },
-    {
-      "location": "Sign 4 (Modest housing)",
+      "location": "Переход к нейронауке",
       "opportunity_type": "contrast",
-      "description": "Could heighten contrast between typical and wealthy housing choices for impact."
+      "description": "Есть потенциал для яркого контраста между воображаемой и реальной социальной угрозой."
+    },
+    {
+      "location": "Поколенческий пример",
+      "opportunity_type": "rehook",
+      "description": "Можно добавить re-hook через неожиданный взгляд старшего поколения."
+    },
+    {
+      "location": "Финал",
+      "opportunity_type": "payoff_pull",
+      "description": "Можно усилить payoff, подчеркнув ценность осознанной невидимости."
     }
   ],
   "donor_voice_signals": [
     {
-      "location": "Intro/outro and transitions",
+      "location": "Вступление",
       "signal_type": "audience_address",
-      "description": "Direct appeals to like, subscribe, comment, and watch other videos."
+      "description": "Обращение к зрителю через личный опыт и бытовые примеры."
     },
     {
-      "location": "Throughout",
+      "location": "Вводные и связки",
       "signal_type": "blogger_offtopic",
-      "description": "Casual asides, personal research journey, and conversational filler."
+      "description": "Фразы вроде 'и вот что в этом интересно', 'честно говоря', 'подумайте об этом'."
     },
     {
-      "location": "Outro",
-      "signal_type": "persona_mismatch",
-      "description": "Overly informal, blog-style sign-off not suitable for all channel personas."
+      "location": "Финал",
+      "signal_type": "casual_noise",
+      "description": "Субъективные оценки и эмоциональные вставки."
     }
   ],
   "narrative_value": {
     "high_value_segments": [
-      "Statistical findings about millionaire behaviors",
-      "Detailed breakdown of opportunity cost of debt",
-      "Contrast between quietly wealthy and typical financial behaviors",
-      "Explanation of compounding and long-term thinking",
-      "Insights into social and psychological costs of visible wealth"
+      "Психологические объяснения мотивов отказа от публикации фото",
+      "Исследования о частной самосознательности",
+      "Нейронаучные данные о социальной оценке",
+      "Аргумент о внутреннем локусе идентичности",
+      "Поколенческие различия и осознанные цифровые границы"
     ],
     "low_value_segments": [
-      "YouTube engagement prompts",
-      "Personal anecdotes not directly supporting key ideas",
-      "Overly detailed transitions and conversational filler"
+      "Бытовые обращения к зрителю",
+      "Избыточные эмоциональные вставки",
+      "Повторяющиеся формулировки финального вывода"
     ]
   },
   "recommended_block_logic": [
     {
       "block_hint_id": "block_hint_01",
-      "purpose": "Open with a compelling, curiosity-driven hook about invisible wealth behaviors."
+      "purpose": "Сформулировать сильный хук, который сразу ломает стереотипы о причинах невидимости в соцсетях."
     },
     {
       "block_hint_id": "block_hint_02",
-      "purpose": "Present each behavioral sign with supporting research, statistics, and clear contrasts to typical behaviors."
+      "purpose": "Чётко структурировать психологические мотивы: приватность, автономия, внутренний локус, поколенческие различия."
     },
     {
       "block_hint_id": "block_hint_03",
-      "purpose": "Use real-life examples and case studies to illustrate each sign, but adapt for tone and persona."
+      "purpose": "Ввести научные данные (психология, нейронаука) как доказательную базу."
     },
     {
       "block_hint_id": "block_hint_04",
-      "purpose": "Summarize the cumulative impact of these behaviors, emphasizing the payoff of compounding and long-term thinking."
+      "purpose": "Показать контраст между тревожностью и внутренней уверенностью как разными стратегиями."
     },
     {
       "block_hint_id": "block_hint_05",
-      "purpose": "Conclude with a motivational call to action focused on self-assessment and practical application, not channel engagement."
+      "purpose": "Завершить ролик выводом о ценности осознанной невидимости и разнообразии здоровых стратегий."
     }
   ]
 }

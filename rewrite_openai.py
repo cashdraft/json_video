@@ -234,7 +234,6 @@ def rewrite_chat_completion_wire_payload(
 def _draft1_wire_payload_for_block(
     model: str,
     system_prompt_sanitized: str,
-    hero_prompt_sanitized: str,
     block_writer_user_prompt_sanitized: str,
     b: dict[str, Any],
     short_summaries_before: list[list[str]],
@@ -258,7 +257,6 @@ def _draft1_wire_payload_for_block(
     architect_block_payload["must_not_cover"] = b["must_not_cover"]
     prev_short = short_summaries_before[-3:]
     user_payload: dict[str, Any] = {
-        "hero_prompt": hero_prompt_sanitized,
         "block_writer_user_promt": block_writer_user_prompt_sanitized,
         "architect_block": architect_block_payload,
         "short_summary_context": [
@@ -278,7 +276,6 @@ def list_draft1_wire_chat_payloads_for_export(
     model: str,
     system_prompt: str,
     structure_result: str,
-    hero_prompt: str,
     block_writer_user_prompt: str,
     saved_short_summaries: list[list[str]] | None,
     *,
@@ -288,7 +285,6 @@ def list_draft1_wire_chat_payloads_for_export(
     model = normalize_rewrite_model(model)
     system_prompt_sanitized = _sanitize_for_openai_json((system_prompt or "").strip())
     structure_result_sanitized = _sanitize_for_openai_json((structure_result or "").strip())
-    hero_san = _sanitize_for_openai_json((hero_prompt or "").strip())
     bw_san = _sanitize_for_openai_json((block_writer_user_prompt or "").strip())
     blocks = _extract_structure_blocks(structure_result_sanitized)
     if not blocks:
@@ -301,7 +297,6 @@ def list_draft1_wire_chat_payloads_for_export(
             _draft1_wire_payload_for_block(
                 model,
                 system_prompt_sanitized,
-                hero_san,
                 bw_san,
                 b,
                 short_summaries,
@@ -747,7 +742,6 @@ def iter_draft1_blockwise_completion(
     analysis_result: str,
     structure_result: str,
     *,
-    hero_prompt: str = "",
     block_writer_user_prompt: str = "",
     on_block_completed: Callable[[dict[str, Any]], None] | None = None,
     on_all_completed: Callable[[dict[str, Any]], None] | None = None,
@@ -758,7 +752,6 @@ def iter_draft1_blockwise_completion(
     model = normalize_rewrite_model(model)
     system_prompt = _sanitize_for_openai_json((system_prompt or "").strip())
     structure_result = _sanitize_for_openai_json((structure_result or "").strip())
-    hero_prompt = _sanitize_for_openai_json((hero_prompt or "").strip())
     block_writer_user_prompt = _sanitize_for_openai_json((block_writer_user_prompt or "").strip())
     if timeout is None:
         timeout = _chat_timeout_seconds()
@@ -821,7 +814,6 @@ def iter_draft1_blockwise_completion(
         payload = _draft1_wire_payload_for_block(
             model,
             system_prompt,
-            hero_prompt,
             block_writer_user_prompt,
             b,
             short_summaries,
@@ -850,8 +842,7 @@ def iter_draft1_blockwise_completion(
         yield {
             "type": "status",
             "message": (
-                f"[Block Writer] payload: hero_prompt chars={len(hero_prompt)}, "
-                f"user_promt chars={len(block_writer_user_prompt)}, "
+                f"[Block Writer] payload: user_promt chars={len(block_writer_user_prompt)}, "
                 f"architect_block chars={len(architect_block_json)}."
             ),
         }

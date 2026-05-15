@@ -389,13 +389,13 @@
                 <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — все этапы конвейера по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
             </section>
 
-            {# «Свернуть все»: до 10 этапов с начала пресета, но без Scene Writer / SWL —
-               иначе после удаления animation_planner scene_writer попадает в [:10] и тело
-               карточки скрывается классом rewrite-stage-card--body-collapsed. #}
+            {# «Свернуть все»: до 11 этапов с начала пресета, но без Scene Writer / SWL —
+               Deep: включаем structure_splitter (11-й); иначе карточка без data-pipeline-collapse
+               навсегда в rewrite-stage-card--body-collapsed. #}
             {% set _preset_keys = rewrite_preset_stage_keys[rewrite_preset_current] %}
             {% set ns_col = namespace(lst=[]) %}
             {% for k in _preset_keys %}
-                {% if k not in ('scene_writer', 'scene_writer_live') and ns_col.lst|length < 10 %}
+                {% if k not in ('scene_writer', 'scene_writer_live') and ns_col.lst|length < 11 %}
                     {% set _ = ns_col.lst.append(k) %}
                 {% endif %}
             {% endfor %}
@@ -409,7 +409,7 @@
             {% for _preset_id, _plist in rewrite_preset_stage_keys.items() %}
                 {% set ns_each = namespace(cnt=0) %}
                 {% for _k in _plist %}
-                    {% if _k not in ('scene_writer', 'scene_writer_live') and ns_each.cnt < 10 %}
+                    {% if _k not in ('scene_writer', 'scene_writer_live') and ns_each.cnt < 11 %}
                         {% if _k not in ns_union.lst %}{% set _ = ns_union.lst.append(_k) %}{% endif %}
                         {% set ns_each.cnt = ns_each.cnt + 1 %}
                     {% endif %}
@@ -493,7 +493,7 @@
                                 </div>
                             </div>
                             {% if stage_key == 'rewrite' and rewrite_preset_current == 'soft' %}
-                            <div class="rewrite-stage-subtitle">Агент-доработчик готового текста данные берутся из <code>Исходный текст</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Source</code></div>
+                            <div class="rewrite-stage-subtitle">Агент-писатель текста, данные берутся из <code>Исходный текст</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Source</code></div>
                             {% elif rewrite_stage_subtitles[stage_key] %}
                             <div class="rewrite-stage-subtitle">{{ rewrite_stage_subtitles[stage_key] }}</div>
                             {% endif %}
@@ -887,7 +887,7 @@
     const REWRITE_PRESET_STAGE_KEYS_FALLBACK = {
         deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
         soft: ['rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging'],
-        prewritten: ['inbox', 'rewrite', 'voiceover_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging']
+        prewritten: ['inbox', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter', 'scene_writer', 'scene_writer_live', 'youtube_packaging']
     };
     const REWRITE_PRESET_STAGE_KEYS = (function () {
         var src = REWRITE_PRESET_STAGE_KEYS_SERVER || {};
@@ -2013,6 +2013,13 @@
         }
     }
 
+    function analysisCheckFieldLabel(snakeKey) {
+        return String(snakeKey || '').split('_').map(function (w) {
+            if (!w) return '';
+            return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+        }).join('_');
+    }
+
     function renderArchitectCheck(block) {
         if (!block) return;
         var wrap = block.querySelector('[data-editor-check]');
@@ -2020,14 +2027,14 @@
         var ta = block.querySelector('.rewrite-stage-result');
         var metrics = parseArchitectCheckPayload(((ta || {}).value || ''));
         if (!metrics) {
-            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">ожидание валидного JSON</span></div>';
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">Ожидание валидного JSON</span></div>';
             return;
         }
         var ok = metrics.blocks_total > 0;
         var html = '';
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="' + (ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (ok ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
-        html += '<div>blocks: <strong>' + formatNumRu(metrics.blocks_total) + '</strong></div>';
+        html += '<div>Blocks: <strong>' + formatNumRu(metrics.blocks_total) + '</strong></div>';
         html += '</div>';
         var d = formatNumRuSigned(metrics.delta);
         html += '<div class="rewrite-scene-writer-check__hint rewrite-block-writer-check__total">';
@@ -2105,7 +2112,7 @@
         var ta = block.querySelector('.rewrite-stage-result');
         var metrics = parseAnalysisCheckPayload(((ta || {}).value || ''));
         if (!metrics) {
-            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">ожидание валидного JSON</span></div>';
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">Ожидание валидного JSON</span></div>';
             return;
         }
         function yesNo(ok) {
@@ -2130,21 +2137,21 @@
         html += '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="' + (allRequiredOk ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no') + '">' + (allRequiredOk ? 'OK' : 'NO') + '</span></div>';
         html += '<div class="rewrite-scene-writer-check__grid rewrite-scene-writer-check__grid--two">';
         html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--left">';
-        html += '<div>core_thesis: ' + yesNo(metrics.core_thesis_ok) + '</div>';
-        html += '<div>core_promise: ' + yesNo(metrics.core_promise_ok) + '</div>';
-        html += '<div>key_ideas: <strong>' + formatNumRu(metrics.key_ideas) + '</strong></div>';
-        html += '<div>facts_and_numbers: <strong>' + formatNumRu(metrics.facts_and_numbers) + '</strong></div>';
-        html += '<div>argument_flow: <strong>' + formatNumRu(metrics.argument_flow) + '</strong></div>';
-        html += '<div>weak_segments: <strong>' + formatNumRu(metrics.weak_segments) + '</strong></div>';
-        html += '<div class="rewrite-analysis-check__nowrap">retention_opportunities: <strong>' + formatNumRu(metrics.retention_opportunities) + '</strong></div>';
-        html += '<div>donor_voice_signals: <strong>' + formatNumRu(metrics.donor_voice_signals) + '</strong></div>';
-        html += '<div class="rewrite-analysis-check__nowrap">recommended_block_logic: <strong>' + formatNumRu(metrics.recommended_block_logic) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('core_thesis') + ': ' + yesNo(metrics.core_thesis_ok) + '</div>';
+        html += '<div>' + analysisCheckFieldLabel('core_promise') + ': ' + yesNo(metrics.core_promise_ok) + '</div>';
+        html += '<div>' + analysisCheckFieldLabel('key_ideas') + ': <strong>' + formatNumRu(metrics.key_ideas) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('facts_and_numbers') + ': <strong>' + formatNumRu(metrics.facts_and_numbers) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('argument_flow') + ': <strong>' + formatNumRu(metrics.argument_flow) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('weak_segments') + ': <strong>' + formatNumRu(metrics.weak_segments) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">' + analysisCheckFieldLabel('retention_opportunities') + ': <strong>' + formatNumRu(metrics.retention_opportunities) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('donor_voice_signals') + ': <strong>' + formatNumRu(metrics.donor_voice_signals) + '</strong></div>';
+        html += '<div class="rewrite-analysis-check__nowrap">' + analysisCheckFieldLabel('recommended_block_logic') + ': <strong>' + formatNumRu(metrics.recommended_block_logic) + '</strong></div>';
         html += '</div>';
         html += '<div class="rewrite-analysis-check__col rewrite-analysis-check__col--right">';
-        html += '<div>content_map A: <strong>' + formatNumRu(metrics.content_map_a) + '</strong></div>';
-        html += '<div>content_map B: <strong>' + formatNumRu(metrics.content_map_b) + '</strong></div>';
-        html += '<div>content_map C: <strong>' + formatNumRu(metrics.content_map_c) + '</strong></div>';
-        html += '<div>content_map D: <strong>' + formatNumRu(metrics.content_map_d) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' A: <strong>' + formatNumRu(metrics.content_map_a) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' B: <strong>' + formatNumRu(metrics.content_map_b) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' C: <strong>' + formatNumRu(metrics.content_map_c) + '</strong></div>';
+        html += '<div>' + analysisCheckFieldLabel('content_map') + ' D: <strong>' + formatNumRu(metrics.content_map_d) + '</strong></div>';
         html += '</div>';
         html += '</div>';
         wrap.innerHTML = html;
@@ -5786,10 +5793,10 @@
                 idxEl.setAttribute('data-stage-display-index', String(n));
             }
         });
-        // collapsible_pipeline_stages: до 10 этапов с начала пресета, без scene_writer / scene_writer_live
-        // (см. server-side комментарий у ns_col — иначе SW попадает под массовое сворачивание).
+        // collapsible_pipeline_stages: до 11 этапов с начала пресета, без scene_writer / scene_writer_live
+        // (Deep: structure_splitter; см. server-side комментарий у ns_col).
         COLLAPSIBLE_PIPELINE_STAGE_KEYS = [];
-        for (var pi = 0; pi < presetKeys.length && COLLAPSIBLE_PIPELINE_STAGE_KEYS.length < 10; pi++) {
+        for (var pi = 0; pi < presetKeys.length && COLLAPSIBLE_PIPELINE_STAGE_KEYS.length < 11; pi++) {
             var pk = presetKeys[pi];
             if (pk === 'scene_writer' || pk === 'scene_writer_live') continue;
             COLLAPSIBLE_PIPELINE_STAGE_KEYS.push(pk);
@@ -5798,7 +5805,7 @@
         if (stageRangeEl) {
             stageRangeEl.textContent = 'Этапы 1\u2013' + COLLAPSIBLE_PIPELINE_STAGE_KEYS.length;
         }
-        // На карточках в выбранных «верхних 10» проставим атрибут data-pipeline-collapse=1
+        // На карточках в выбранных «верхних 11» проставим атрибут data-pipeline-collapse=1
         // — он используется setAllCollapsed для массового сворачивания. В первоначальном
         // server-render это уже сделано для текущего пресета; при переключении пересчитываем.
         document.querySelectorAll('.rewrite-stage-card').forEach(function (card) {

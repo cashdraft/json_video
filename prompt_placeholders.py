@@ -6,6 +6,7 @@
 Токены (как в UI: «Promt»):
 - {{LANGUAGE}} — язык конвейера (одна строка, без переносов)
 - {{DURATION}} — целевое число символов (одно число, без единиц и пояснений)
+- {{TARGET_CHARS}} — то же число, что и {{DURATION}} (слайдер «Символы» / target_chars)
 - {{ORIGINAL_TITLE}} — исходное название ролика (одна строка)
 - {{MASTER_PROMT}} — Master Promt (вставка с двойным переноса \\n\\n вокруг непустого текста)
 - {{HERO_PROMT}} — Hero Promt (аналогично)
@@ -18,6 +19,7 @@ from typing import Any
 
 PH_LANGUAGE = "{{LANGUAGE}}"
 PH_DURATION = "{{DURATION}}"
+PH_TARGET_CHARS = "{{TARGET_CHARS}}"
 PH_ORIGINAL_TITLE = "{{ORIGINAL_TITLE}}"
 PH_MASTER = "{{MASTER_PROMT}}"
 PH_HERO = "{{HERO_PROMT}}"
@@ -120,6 +122,7 @@ def apply_prompt_placeholders(
 
     s = s.replace(PH_LANGUAGE, lang)
     s = s.replace(PH_DURATION, dur)
+    s = s.replace(PH_TARGET_CHARS, dur)
     s = s.replace(PH_ORIGINAL_TITLE, title)
 
     if allow_nested_master_hero:

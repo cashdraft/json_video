@@ -5,8 +5,9 @@
 криптографическая защита, а защита «от дурака»: чтобы случайно не
 переписать важный системный промт.
 
-Файлы лежат в каталоге `locked_prompts/` рядом с `app.py`. Каждому
-промту соответствует ровно один `*.txt` файл. Реестр промтов ниже.
+Файлы лежат в каталоге `locked_prompt_files/` рядом с этим модулем (имя отличается от
+`locked_prompts/`, чтобы не путать каталог данных с файлом модуля `locked_prompts.py` при импорте).
+Каждому промту соответствует ровно один `*.txt` файл. Реестр промтов ниже.
 
 API модуля:
 - `list_locked_prompts()` — словарь {name: метаданные}.
@@ -26,7 +27,25 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-LOCKED_PROMPTS_DIR = BASE_DIR / "locked_prompts"
+LOCKED_PROMPTS_DIR = BASE_DIR / "locked_prompt_files"
+# Старый каталог назывался `locked_prompts/` — путаница с файлом модуля `locked_prompts.py` при импорте.
+_LEGACY_PROMPTS_DATA_DIR = BASE_DIR / "locked_prompts"
+
+
+def _migrate_legacy_prompt_files_dir() -> None:
+    """Один раз переносим `locked_prompts/` → `locked_prompt_files/` (если нового каталога ещё нет)."""
+    try:
+        if LOCKED_PROMPTS_DIR.exists():
+            return
+        if _LEGACY_PROMPTS_DATA_DIR.is_dir():
+            import shutil
+
+            shutil.move(str(_LEGACY_PROMPTS_DATA_DIR), str(LOCKED_PROMPTS_DIR))
+    except OSError:
+        pass
+
+
+_migrate_legacy_prompt_files_dir()
 
 LOCKED_PROMPTS_PIN_ENV = "LOCKED_PROMPTS_PIN"
 LOCKED_PROMPTS_PIN_DEFAULT = "1234"
@@ -79,6 +98,61 @@ LOCKED_PROMPTS: dict[str, dict] = {
             "ТЕКСТ ДЛЯ АНАЛИЗА:\n"
         ),
     },
+    "system_prompt_analysis": {
+        "label": "Analysis — System Promt",
+        "filename": "system_prompt_analysis.txt",
+        "default": "",
+    },
+    "system_prompt_structure": {
+        "label": "Architect — System Promt",
+        "filename": "system_prompt_structure.txt",
+        "default": "",
+    },
+    "system_prompt_draft1": {
+        "label": "Block Writer — System Promt",
+        "filename": "system_prompt_draft1.txt",
+        "default": "",
+    },
+    "system_prompt_retention_editor": {
+        "label": "Retention Editor — System Promt",
+        "filename": "system_prompt_retention_editor.txt",
+        "default": "",
+    },
+    "retention_editor_system_rules": {
+        "label": "Retention Editor — System Rules",
+        "filename": "retention_editor_system_rules.txt",
+        "default": "",
+    },
+    "system_prompt_hook_editor": {
+        "label": "Hook Editor — System Promt",
+        "filename": "system_prompt_hook_editor.txt",
+        "default": "",
+    },
+    "hook_editor_system_rules": {
+        "label": "Hook Editor — System Rules",
+        "filename": "hook_editor_system_rules.txt",
+        "default": "",
+    },
+    "system_prompt_flow_editor": {
+        "label": "Flow Editor — System Promt",
+        "filename": "system_prompt_flow_editor.txt",
+        "default": "",
+    },
+    "flow_editor_system_rules": {
+        "label": "Flow Editor — System Rules",
+        "filename": "flow_editor_system_rules.txt",
+        "default": "",
+    },
+    "system_prompt_persona_editor": {
+        "label": "Persona Editor — System Promt",
+        "filename": "system_prompt_persona_editor.txt",
+        "default": "",
+    },
+    "persona_editor_system_rules": {
+        "label": "Persona Editor — System Rules",
+        "filename": "persona_editor_system_rules.txt",
+        "default": "",
+    },
     "system_prompt_voiceover_editor": {
         "label": "Voiceover Editor — System Promt",
         "filename": "system_prompt_voiceover_editor.txt",
@@ -94,6 +168,16 @@ LOCKED_PROMPTS: dict[str, dict] = {
         "filename": "system_prompt_title_strategist.txt",
         "default": "",
     },
+    "system_prompt_structure_splitter": {
+        "label": "Structure Splitter — System Promt",
+        "filename": "system_prompt_structure_splitter.txt",
+        "default": "",
+    },
+    "system_prompt_elevenlabs_editor": {
+        "label": "ElevenLabs Editor — System Promt",
+        "filename": "system_prompt_elevenlabs_editor.txt",
+        "default": "",
+    },
     "rewrite_system_rules": {
         "label": "Rewrite — System Rules",
         "filename": "rewrite_system_rules.txt",
@@ -104,7 +188,7 @@ LOCKED_PROMPTS: dict[str, dict] = {
             "— Стиль: разговорный монолог для YouTube, короткие фразы, без канцелярита.\n"
             "— Ответ: только готовый сценарий, без вступлений и комментариев.\n\n"
             "Плейсхолдеры (подставляются при запуске): "
-            "{{LANGUAGE}}, {{DURATION}}, {{ORIGINAL_TITLE}}, {{MASTER_PROMT}}, {{HERO_PROMT}}."
+            "{{LANGUAGE}}, {{DURATION}}, {{TARGET_CHARS}}, {{ORIGINAL_TITLE}}, {{MASTER_PROMT}}, {{HERO_PROMT}}."
         ),
     },
 }
@@ -120,6 +204,7 @@ _USER_PROMPT_STAGE_LABELS: tuple[tuple[str, str], ...] = (
     ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
+    ("elevenlabs_editor", "ElevenLabs Editor"),
     ("title_strategist", "Title Strategist"),
     ("structure_splitter", "Structure Splitter"),
     ("scene_writer", "Scene Writer"),
@@ -133,6 +218,11 @@ for _sk, _lbl in _USER_PROMPT_STAGE_LABELS:
         "filename": f"user_prompt_{_sk}.txt",
         "default": "",
     }
+
+
+# Реестр обязан содержать промты Deep Rewrite-редакторов; иначе модалка вернёт unknown_prompt.
+assert "system_prompt_persona_editor" in LOCKED_PROMPTS
+assert "user_prompt_retention_editor" in LOCKED_PROMPTS
 
 
 def list_locked_prompts() -> dict[str, dict]:

@@ -1,41 +1,37 @@
 {
-  "target_chars_total": 18000,
+  "target_chars_total": 5000,
   "narrative_arc": {
-    "opening_function": "Spark curiosity and establish the premise that quietly wealthy people follow hidden, replicable patterns.",
-    "middle_function": "Reveal and explore each of the seven behavioral signs, supporting each with research, statistics, and vivid contrasts to typical financial behaviors, while maintaining engagement through hooks and stakes escalation.",
-    "ending_function": "Deliver a strong payoff by synthesizing the cumulative impact of these behaviors, motivating viewers to self-assess and adopt these patterns for long-term wealth.",
-    "arc_summary": "The video begins with a curiosity-driven hook about invisible wealth behaviors, then systematically unpacks seven actionable signs of quietly wealthy individuals, each illustrated with research, statistics, and real-world examples. Contrasts and re-hooks maintain engagement, culminating in a motivational synthesis that empowers viewers to apply these lessons for their own financial transformation."
+    "opening_function": "Сразу ломает стереотип: отказ публиковать фото — не просто стеснительность, а сложное и осознанное поведение.",
+    "middle_function": "Постепенно раскрывает многоуровневые психологические, нейронаучные и поколенческие причины, иллюстрируя их исследованиями и примерами.",
+    "ending_function": "Делает вывод: невидимость в соцсетях — это не проблема, а проявление зрелых стратегий и осознанного выбора.",
+    "arc_summary": "Ролик начинается с провокационного вопроса о стереотипах, затем шаг за шагом раскрывает глубинные мотивы отказа от публикации фото, подкрепляя их научными данными и примерами, и завершает сильным выводом о ценности осознанной невидимости."
   },
   "global_rules": {
-    "language": "English",
+    "language": "ru",
     "voice_style": "for_voiceover",
     "avoid_repetition": true,
     "maintain_semantic_progression": true,
     "hook_density": "controlled",
-    "tone_goal": "inspiring, authoritative, practical"
+    "tone_goal": "научно-популярный, уважительный, рациональный"
   },
   "blocks": [
     {
       "block_id": 1,
-      "block_name": "Invisible Wealth: The Hidden Patterns",
+      "block_name": "Стереотипы и парадокс невидимости",
       "block_role": "hook",
-      "purpose": "Grab attention with a curiosity-driven hook about the unseen behaviors of the quietly wealthy, setting up the core thesis and promise.",
-      "target_chars_min": 800,
-      "target_chars_ideal": 1200,
-      "target_chars_max": 1400,
+      "purpose": "Сформировать сильный хук, сразу ломая привычные стереотипы о причинах отсутствия фото в соцсетях.",
+      "target_chars": 500,
       "must_cover": [
-        "Introduce the concept of invisible wealth behaviors",
-        "Imply that these patterns are accessible to anyone",
-        "Set up the promise of revealing seven actionable signs"
+        "Распространённые стереотипы: стеснительность, неуверенность, желание скрыться",
+        "Парадокс: активность в соцсетях без публикации фото вызывает вопросы"
       ],
       "must_not_cover": [
-        "Direct calls to like/subscribe",
-        "Personal anecdotes",
-        "Overly casual tone"
+        "Глубинные психологические причины",
+        "Научные исследования"
       ],
       "source_mapping": {
-        "A": ["National Study of Millionaires: 10,000 surveyed"],
-        "B": ["Wealthy avoid credit card debt and use cards as tools"],
+        "A": [],
+        "B": ["Стереотипы о невидимости в соцсетях"],
         "C": [],
         "D": []
       },
@@ -44,34 +40,24 @@
         "mid_hooks": 0,
         "open_loop": true
       },
-      "next_block_hint": "Transition to the first behavioral sign with a mini-hook."
+      "next_block_hint": "Переход к объяснению, что за этим поведением стоят более сложные причины."
     },
     {
       "block_id": 2,
-      "block_name": "Sign 1: Avoidance of Credit Card Debt",
-      "block_role": "explanation|proof|contrast",
-      "purpose": "Demonstrate how quietly wealthy people treat credit card debt, using statistics and contrasts to typical behaviors.",
-      "target_chars_min": 1400,
-      "target_chars_ideal": 1800,
-      "target_chars_max": 2000,
+      "block_name": "Многоуровневые мотивы отказа от публикации фото",
+      "block_role": "setup|explanation",
+      "purpose": "Обозначить, что за отказом стоят сложные психологические мотивы, и кратко их перечислить.",
+      "target_chars": 600,
       "must_cover": [
-        "Statistical findings on credit card debt among millionaires",
-        "Contrast with average American credit card debt and interest rates",
-        "Opportunity cost of carrying debt"
+        "Психологические причины: приватность, отсутствие потребности в одобрении, философское разделение идентичности"
       ],
       "must_not_cover": [
-        "Personal finance tips unrelated to credit cards",
-        "General debt advice not tied to the wealthy"
+        "Детальные научные данные",
+        "Поколенческие различия"
       ],
       "source_mapping": {
-        "A": [
-          "Three out of four millionaires never carried credit card debt",
-          "$6,715 average American credit card debt",
-          "21.5% average credit card interest rate",
-          "$1,300 out of $1,500 in annual payments goes to interest",
-          "$1,300 invested at 8% for 30 years = ~$147,000"
-        ],
-        "B": ["Wealthy avoid credit card debt and use cards as tools"],
+        "A": [],
+        "B": ["Многоуровневые причины отказа от публикации фото", "Разделение контекстов идентичности"],
         "C": [],
         "D": []
       },
@@ -80,258 +66,200 @@
         "mid_hooks": 1,
         "open_loop": true
       },
-      "next_block_hint": "Segue to the next sign with a mini-hook about unexpected career choices."
+      "next_block_hint": "Переход к научным доказательствам: исследования о частной самосознательности."
     },
     {
       "block_id": 3,
-      "block_name": "Sign 2: Boring Jobs and Businesses",
-      "block_role": "explanation|proof|contrast",
-      "purpose": "Reveal how most millionaires build wealth through stable, unglamorous careers, contrasting with popular perceptions.",
-      "target_chars_min": 1200,
-      "target_chars_ideal": 1600,
-      "target_chars_max": 1800,
+      "block_name": "Частная самосознательность и самопрезентация",
+      "block_role": "proof|explanation",
+      "purpose": "Показать, как уровень частной самосознательности влияет на поведение в соцсетях, используя научные данные.",
+      "target_chars": 700,
       "must_cover": [
-        "Examples of 'boring' jobs and businesses",
-        "How these roles provide stability and reduce social spending pressure",
-        "Contrast with high-status, high-spending professions"
+        "Исследования о частной самосознательности",
+        "Связь с нежеланием самопрезентации",
+        "Факт: люди с высоким уровнем частной самосознательности реже публикуют фото"
       ],
       "must_not_cover": [
-        "Celebrity or influencer career paths",
-        "Personal anecdotes"
+        "Нейронаучные аспекты",
+        "Поколенческие различия"
       ],
       "source_mapping": {
-        "A": [],
-        "B": ["Boring jobs/businesses provide stability and low social spending pressure"],
-        "C": ["Examples of boring jobs (engineers, teachers, etc.)"],
+        "A": ["Исследования о частной самосознательности и самопрезентации"],
+        "B": ["Частная самосознательность и самопрезентация"],
+        "C": [],
         "D": []
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 1,
-        "open_loop": true
+        "open_loop": false
       },
-      "next_block_hint": "Introduce the prevalence of self-made wealth among millionaires."
+      "next_block_hint": "Переход к мотиву автономии и теории самодетерминации."
     },
     {
       "block_id": 4,
-      "block_name": "Sign 3: Self-Made Wealth",
+      "block_name": "Потребность в автономии и теория самодетерминации",
       "block_role": "explanation|proof",
-      "purpose": "Highlight that most millionaires are self-made, using research and examples to dispel the inheritance myth.",
-      "target_chars_min": 1200,
-      "target_chars_ideal": 1600,
-      "target_chars_max": 1800,
+      "purpose": "Объяснить, как потребность в автономии и сопротивление внешней оценке становятся мотивом отказа от публикации фото.",
+      "target_chars": 600,
       "must_cover": [
-        "Statistics on self-made millionaires vs. inherited wealth",
-        "Examples like Terry Kahn",
-        "Emphasis on disciplined financial habits"
+        "Теория самодетерминации",
+        "Потребность в автономии",
+        "Связь с сопротивлением внешнему наблюдению"
       ],
       "must_not_cover": [
-        "General rags-to-riches stories not supported by data",
-        "Overly detailed personal stories"
+        "Нейронаучные детали",
+        "Поколенческие различия"
       ],
       "source_mapping": {
-        "A": [
-          "79% of millionaires self-made; 3% inherited $1M+"
-        ],
-        "B": ["Self-made millionaires develop disciplined habits"],
-        "C": ["Terry Kahn's story"],
+        "A": [],
+        "B": ["Потребность в автономии и теория самодетерминации"],
+        "C": [],
         "D": []
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 1,
-        "open_loop": true
+        "open_loop": false
       },
-      "next_block_hint": "Transition to housing choices with a contrast hook."
+      "next_block_hint": "Переход к нейронаучным аспектам социальной оценки."
     },
     {
       "block_id": 5,
-      "block_name": "Sign 4: Modest Housing Choices",
-      "block_role": "explanation|proof|contrast",
-      "purpose": "Show how quietly wealthy people live below their means in housing, using data and high-impact contrasts.",
-      "target_chars_min": 1400,
-      "target_chars_ideal": 1800,
-      "target_chars_max": 2000,
+      "block_name": "Нейронаучные аспекты социальной оценки",
+      "block_role": "proof|contrast",
+      "purpose": "Показать, что даже воображаемая социальная оценка вызывает стрессовые реакции мозга, усиливая аргумент о сложности мотивации.",
+      "target_chars": 700,
       "must_cover": [
-        "Average home price vs. millionaire home price ratios",
-        "Examples like Warren Buffett",
-        "Contrast with typical American housing choices and lifestyle inflation"
+        "Нейронаучные данные: активация миндалевидного тела и медиальной префронтальной коры",
+        "Факт: ожидание оценки вызывает стресс, сравнимый с реальной угрозой"
       ],
       "must_not_cover": [
-        "General real estate advice",
-        "Personal housing anecdotes"
+        "Поколенческие различия",
+        "Внутренний локус идентичности"
       ],
       "source_mapping": {
-        "A": [
-          "Average home price: 6-7x income; median income ~$80,000; home $480,000-$560,000",
-          "Millionaire home price: 1.5-3x income",
-          "Warren Buffett: $31,500 house, $100B+ net worth"
-        ],
-        "B": ["Modest housing prevents lifestyle inflation"],
-        "C": ["Warren Buffett's lifestyle details", "Descriptions of social pressures in expensive neighborhoods"],
+        "A": ["Нейронаучные данные о миндалевидном теле и медиальной префронтальной коре"],
+        "B": ["Нейронаучные аспекты социальной оценки"],
+        "C": [],
         "D": []
       },
       "hook_expectation": {
         "opening_hook": false,
-        "mid_hooks": 2,
-        "open_loop": true
+        "mid_hooks": 1,
+        "open_loop": false
       },
-      "next_block_hint": "Introduce the concept of strategic financial ambiguity."
+      "next_block_hint": "Переход к контрасту: отказ — не только тревожность, но и уверенность."
     },
     {
       "block_id": 6,
-      "block_name": "Sign 5: Strategic Financial Ambiguity",
-      "block_role": "explanation|proof",
-      "purpose": "Explain why quietly wealthy people obscure their wealth, focusing on social and security motivations.",
-      "target_chars_min": 1000,
-      "target_chars_ideal": 1300,
-      "target_chars_max": 1500,
+      "block_name": "Внутренний локус идентичности: уверенность вместо тревожности",
+      "block_role": "contrast|turn",
+      "purpose": "Показать, что отказ от публикации фото может быть проявлением внутренней уверенности, а не тревожности.",
+      "target_chars": 600,
       "must_cover": [
-        "Reasons for downplaying wealth",
-        "Social and security risks of visible affluence",
-        "Relevant research or claims"
+        "Внутренний локус идентичности",
+        "Факт: такие люди меньше вовлечены в соцсети",
+        "Контраст между тревожностью и уверенностью"
       ],
       "must_not_cover": [
-        "Overly lengthy justifications",
-        "Personal stories"
+        "Поколенческие различия",
+        "Финальные выводы"
       ],
       "source_mapping": {
-        "A": ["In 2026, displayed wealth is a documented security risk"],
-        "B": ["Strategic ambiguity protects from social and security risks"],
+        "A": ["Факт о внутреннем локусе идентичности и вовлечённости в соцсети"],
+        "B": ["Внутренний локус идентичности", "Контраст между публичной и прожитой жизнью"],
         "C": [],
         "D": []
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 1,
-        "open_loop": true
+        "open_loop": false
       },
-      "next_block_hint": "Segue to the importance of multiple income streams."
+      "next_block_hint": "Переход к поколенческим различиям и современным стратегиям."
     },
     {
       "block_id": 7,
-      "block_name": "Sign 6: Multiple Invisible Income Streams",
-      "block_role": "explanation|proof",
-      "purpose": "Demonstrate how quietly wealthy people build security and freedom through multiple, often hidden, income sources.",
-      "target_chars_min": 1200,
-      "target_chars_ideal": 1600,
-      "target_chars_max": 1800,
+      "block_name": "Поколенческие различия и цифровые границы",
+      "block_role": "explanation|rehook",
+      "purpose": "Показать, как отношение к публикации фото меняется от поколения к поколению, и как молодёжь осознанно выстраивает цифровые границы.",
+      "target_chars": 600,
       "must_cover": [
-        "Research on number of income streams among wealthy vs. middle class",
-        "Examples of invisible income (rental, dividends, royalties)",
-        "How this enables risk-taking and security"
+        "Поколенческие различия в отношении к фотографиям",
+        "Рост осознанного отказа среди молодёжи",
+        "Пример: старшие поколения и цифровые границы"
       ],
       "must_not_cover": [
-        "General investment advice",
-        "Personal income stories"
+        "Финальные выводы",
+        "Обобщения о патологии"
       ],
       "source_mapping": {
-        "A": [
-          "Three or more income streams for top net worth; one or two for middle class",
-          "Rental properties generating $2,800/month after expenses"
-        ],
-        "B": ["Multiple income streams provide security and risk tolerance"],
-        "C": ["Descriptions of invisible income streams (rental, dividends, royalties)"],
+        "A": [],
+        "B": ["Поколенческие различия в отношении к фотографиям"],
+        "C": [],
         "D": []
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 1,
-        "open_loop": true
+        "open_loop": false
       },
-      "next_block_hint": "Lead into the final sign: long-term thinking and patience."
+      "next_block_hint": "Переход к обобщающему выводу о многообразии стратегий."
     },
     {
       "block_id": 8,
-      "block_name": "Sign 7: Long-Term Thinking and Patience",
-      "block_role": "explanation|proof|payoff",
-      "purpose": "Highlight the power of long-term thinking and patience, using compounding as the ultimate payoff.",
-      "target_chars_min": 1400,
-      "target_chars_ideal": 1800,
-      "target_chars_max": 2000,
+      "block_name": "Многообразие психологических стратегий",
+      "block_role": "explanation|setup for payoff",
+      "purpose": "Обобщить: отказ от публикации фото — это разные здоровые стратегии, а не патология.",
+      "target_chars": 500,
       "must_cover": [
-        "Examples of compounding (e.g., Warren Buffett's wealth after age 60)",
-        "How long-term perspective differentiates the quietly wealthy",
-        "Emotional and logical payoff of patience"
+        "Многообразие стратегий",
+        "Отказ — не патология, а способ выстраивания границ"
       ],
       "must_not_cover": [
-        "Short-term investment tips",
-        "Personal time management stories"
-      ],
-      "source_mapping": {
-        "A": [
-          "Warren Buffett: $300M at 50, 97% of wealth after 60"
-        ],
-        "B": ["Long-term thinking enables compounding and extraordinary outcomes"],
-        "C": [],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 2,
-        "open_loop": false
-      },
-      "next_block_hint": "Transition to synthesis and motivational payoff."
-    },
-    {
-      "block_id": 9,
-      "block_name": "Synthesis: The Cumulative Power of Quiet Wealth",
-      "block_role": "payoff|turn",
-      "purpose": "Synthesize the seven signs, emphasizing how their combination leads to financial freedom and security, and escalate the stakes for adopting these behaviors.",
-      "target_chars_min": 1200,
-      "target_chars_ideal": 1600,
-      "target_chars_max": 1800,
-      "must_cover": [
-        "Summarize the cumulative impact of the seven signs",
-        "Highlight the transformation possible for viewers",
-        "Escalate stakes: what is lost by ignoring these patterns"
-      ],
-      "must_not_cover": [
-        "Direct calls to like/subscribe",
-        "Personal anecdotes"
+        "Финальный payoff",
+        "Избыточное повторение"
       ],
       "source_mapping": {
         "A": [],
-        "B": [],
-        "C": [],
-        "D": []
-      },
-      "hook_expectation": {
-        "opening_hook": false,
-        "mid_hooks": 1,
-        "open_loop": false
-      },
-      "next_block_hint": "Move to a motivational, action-oriented conclusion."
-    },
-    {
-      "block_id": 10,
-      "block_name": "Conclusion: Your Path to Quiet Wealth",
-      "block_role": "conclusion",
-      "purpose": "Motivate viewers to self-assess and apply the seven signs, closing with a practical, inspiring call to action (not channel engagement).",
-      "target_chars_min": 800,
-      "target_chars_ideal": 1200,
-      "target_chars_max": 1400,
-      "must_cover": [
-        "Encourage self-assessment and practical application",
-        "Reinforce that these behaviors are accessible to anyone",
-        "End with an inspiring, forward-looking note"
-      ],
-      "must_not_cover": [
-        "YouTube engagement prompts",
-        "Personal sign-off stories"
-      ],
-      "source_mapping": {
-        "A": [],
-        "B": [],
+        "B": ["Многообразие психологических стратегий"],
         "C": [],
         "D": []
       },
       "hook_expectation": {
         "opening_hook": false,
         "mid_hooks": 0,
+        "open_loop": true
+      },
+      "next_block_hint": "Финальный payoff: ценность осознанной невидимости."
+    },
+    {
+      "block_id": 9,
+      "block_name": "Ценность осознанной невидимости",
+      "block_role": "payoff|conclusion",
+      "purpose": "Сделать сильный финальный акцент: в мире, где видимость приравнивается к ценности, невидимость — это осознанный и глубокий выбор.",
+      "target_chars": 600,
+      "must_cover": [
+        "Контраст между публичной и прожитой жизнью",
+        "Ценность невидимости как осознанного выбора"
+      ],
+      "must_not_cover": [
+        "Повторение предыдущих блоков",
+        "Личные обращения и эмоциональные вставки"
+      ],
+      "source_mapping": {
+        "A": [],
+        "B": ["Контраст между публичной и прожитой жизнью"],
+        "C": ["Философские рассуждения о ценности офлайн-жизни", "Аналогии с публичной и прожитой жизнью"],
+        "D": []
+      },
+      "hook_expectation": {
+        "opening_hook": false,
+        "mid_hooks": 1,
         "open_loop": false
       },
-      "next_block_hint": "End of script."
+      "next_block_hint": "Завершение ролика, подведение итогов."
     }
   ]
 }

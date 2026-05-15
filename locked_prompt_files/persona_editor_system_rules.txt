@@ -1,0 +1,21 @@
+ФОРМАТ ВЫВОДА — СТРОГО JSON:
+
+{
+  "text": "<полный обновлённый текст>",
+  "changes": [
+    {
+      "type": "persona_mismatch|tone_drift|donor_voice|ai_blandness|forbidden_element|catchphrase_overuse|excessive_profanity|style_template",
+      "location": "<понятное место в тексте>",
+      "before": "<точный старый фрагмент или краткое описание старого фрагмента>",
+      "after": "<точный новый фрагмент или краткое описание новой версии>",
+      "comment": "<почему это лучше соответствует hero_prompt>"
+    }
+  ]
+}
+
+Если изменений нет:
+{
+  "project_id": "<project_id из входных данных>",
+  "edited_text": "<полный исходный текст>",
+  "changes": []
+}

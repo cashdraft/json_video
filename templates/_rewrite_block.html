@@ -275,7 +275,7 @@
 
                         {# ---- Semantic Text Analyzer ----
                            Идёт сразу под textarea русского перевода. System Promt и
-                           User Promt хранятся в каталоге locked_prompts/ (под пин-кодом)
+                           User Promt хранятся в каталоге locked_prompt_files/ (под пин-кодом)
                            и редактируются через общий диалог. Результат сохраняется
                            в `rw.semantic_text_analysis` и отображается «синим блоком»
                            ниже (стиль повторяет .rewrite-scene-writer-check). #}
@@ -540,21 +540,13 @@
                 </div>
             </div>
 
-            <section class="scene-card rewrite-pipeline-runner rewrite-pipeline-runner--centered" aria-label="Запуск всей цепочки этапов">
-                <div class="rewrite-pipeline-runner__actions">
-                    <button type="button" class="btn btn-success btn-sm" id="rewrite-pipeline-run-btn" {% if not openai_key_set %}disabled{% endif %}>Сгенерировать</button>
-                    <button type="button" class="btn btn-danger btn-sm" id="rewrite-pipeline-stop-btn" disabled>Остановить</button>
-                </div>
-                <pre class="rewrite-pipeline-runner__log" id="rewrite-pipeline-log" aria-live="polite" aria-relevant="additions">Журнал пуст. Нажмите «Сгенерировать» — все этапы конвейера по очереди; «Остановить» прерывает текущий HTTP-запрос (текущий этап не завершится).</pre>
-            </section>
-
-            {# «Свернуть все»: до 10 этапов с начала пресета, но без Scene Writer / SWL —
-               иначе после удаления animation_planner scene_writer попадает в [:10] и тело
-               карточки скрывается классом rewrite-stage-card--body-collapsed. #}
+            {# «Свернуть все»: до 11 этапов с начала пресета, но без Scene Writer / SWL —
+               Deep: включаем structure_splitter (11-й); иначе карточка без data-pipeline-collapse
+               навсегда в rewrite-stage-card--body-collapsed. #}
             {% set _preset_keys = rewrite_preset_stage_keys[rewrite_preset_current] %}
             {% set ns_col = namespace(lst=[]) %}
             {% for k in _preset_keys %}
-                {% if k not in ('scene_writer', 'scene_writer_live') and ns_col.lst|length < 10 %}
+                {% if k not in ('scene_writer', 'scene_writer_live') and ns_col.lst|length < 11 %}
                     {% set _ = ns_col.lst.append(k) %}
                 {% endif %}
             {% endfor %}
@@ -566,7 +558,7 @@
             {% for _preset_id, _plist in rewrite_preset_stage_keys.items() %}
                 {% set ns_each = namespace(cnt=0) %}
                 {% for _k in _plist %}
-                    {% if _k not in ('scene_writer', 'scene_writer_live') and ns_each.cnt < 10 %}
+                    {% if _k not in ('scene_writer', 'scene_writer_live') and ns_each.cnt < 11 %}
                         {% if _k not in ns_union.lst %}{% set _ = ns_union.lst.append(_k) %}{% endif %}
                         {% set ns_each.cnt = ns_each.cnt + 1 %}
                     {% endif %}
@@ -613,12 +605,19 @@
                     <span class="rewrite-stages-collapsible__title">Отобразить</span>
                 </button>
                 <span class="rewrite-stages-pipeline-display-label" id="rewrite-stages-pipeline-stage-range" aria-live="polite">Этапы 1–{{ collapsible_pipeline_stage_range_end }}</span>
+                <button type="button"
+                    class="rewrite-stages-collapsible__toggle rewrite-stages-pipeline-clear-btn"
+                    id="rewrite-stages-pipeline-clear-btn"
+                    title="Очистить Result, Changes и проверки всех этапов, кроме Inbox">
+                    <span class="rewrite-stages-collapsible__title">Очистить</span>
+                </button>
             </div>
 
             <div class="scenes-grid rewrite-stages-list" id="rewrite-stages-list">
             {% for stage_key, stage_label in rewrite_stages %}
             {% set cell = rw.stages[stage_key] %}
-            {% set has_prompt = ((cell.prompt or '')|trim|length) > 0 %}
+            {% set _sys_lp_hdr = (locked_prompts_state|default({}, true)).get('system_prompt_' ~ stage_key) or {} %}
+            {% set has_prompt = (_sys_lp_hdr.get('present')|default(false)) or ((cell.prompt or '')|trim|length) > 0 %}
             {% set has_style_prompt = ((cell.style_prompt or '')|trim|length) > 0 %}
             {% set has_past_prompt = ((cell.past_prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
@@ -633,7 +632,7 @@
                текущего пресета и обновляется JS-скриптом при переключении. #}
             {% set stage_collapsible = stage_key in union_collapsible_stages or stage_key in collapsible_extra_stages %}
             {% set _in_current_preset = stage_key in _preset_keys %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'voiceover_editor' %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'scene_writer_live' %} data-scene-media-check-json="{{ (cell.scene_writer_live_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-header-top">
@@ -668,12 +667,22 @@
                                     </div>
                                 </div>
                             </div>
-                            {% if stage_key == 'rewrite' and rewrite_preset_current == 'soft' %}
-                            <div class="rewrite-stage-subtitle">Агент-писатель текста, данные берутся из <code>Исходный текст</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Source</code></div>
+                            {% if stage_key == 'rewrite' %}
+                            <div class="rewrite-stage-subtitle" data-rewrite-stage-subtitle="rewrite"></div>
                             {% elif stage_key == 'voiceover_editor' %}
-                            <div class="rewrite-stage-subtitle">Агент-редактор войсовера, данные берутся из <code>Rewrite</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            <div class="rewrite-stage-subtitle" data-rewrite-stage-subtitle="voiceover_editor"></div>
+                            {% elif stage_key == 'analysis' %}
+                            <div class="rewrite-stage-subtitle">Агент-аналитик YouTube-сценариев, данные берутся из <code>Исходный текст</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Source</code></div>
+                            {% elif stage_key == 'structure' %}
+                            <div class="rewrite-stage-subtitle">Агент-архитектор структуры YouTube-сценария, данные берутся из <code>Analysis</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            {% elif stage_key == 'draft1' %}
+                            <div class="rewrite-stage-subtitle">Агент-сценарист одного блока, данные берутся из <code>Architect</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            {% elif stage_key == 'elevenlabs_editor' %}
+                            <div class="rewrite-stage-subtitle">Редактор voice-direction, данные берутся из <code>Voiceover Editor</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
                             {% elif stage_key == 'title_strategist' %}
                             <div class="rewrite-stage-subtitle">Агент-стратег заголовков, данные берутся из <code>Voiceover Editor</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            {% elif stage_key == 'structure_splitter' %}
+                            <div class="rewrite-stage-subtitle">Агент-сплиттер текста, данные берутся из <code>Voiceover Editor</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
                             {% elif rewrite_stage_subtitles[stage_key] %}
                             <div class="rewrite-stage-subtitle">{{ rewrite_stage_subtitles[stage_key] }}</div>
                             {% endif %}
@@ -728,14 +737,16 @@
                                     </div>
                                 </div>
                             </div>
-                            {% elif stage_key == 'voiceover_editor' %}
-                            {% set _vo_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_voiceover_editor') or {} %}
-                            {% set has_vo_system_prompt = _vo_sys_lp.get('present')|default(false) %}
-                            {% set _vo_rsr_lp = (locked_prompts_state|default({}, true)).get('voiceover_editor_system_rules') or {} %}
-                            {% set has_vo_system_rules = _vo_rsr_lp.get('present')|default(false) %}
-                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_voiceover_editor') or {} %}
+                            {% elif stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %}
+                            {% include '_rewrite_stage_locked_voiceover_like_prompts.html' %}
+
+                            {% elif stage_key in ('analysis', 'structure', 'draft1') %}
+                            {% set _deep_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_' ~ stage_key) or {} %}
+                            {% set has_deep_system_prompt = _deep_sys_lp.get('present')|default(false) %}
+                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
                             {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
-                            {% set _up_lock = 'user_prompt_voiceover_editor' %}
+                            {% set _up_lock = 'user_prompt_' ~ stage_key %}
+                            {% set _sys_lock = 'system_prompt_' ~ stage_key %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
                                 <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
                                     {% if not stage_collapsible %}
@@ -743,14 +754,33 @@
                                     {% endif %}
                                 </div>
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_vo_system_prompt else 'no' }}" id="locked-prompt-badge-system_prompt_voiceover_editor" data-locked-prompt-badge="system_prompt_voiceover_editor" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_vo_system_prompt else 'NO' }}</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="system_prompt_voiceover_editor" data-locked-prompt-label="Voiceover Editor — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_deep_system_prompt else 'no' }}" id="locked-prompt-badge-{{ _sys_lock }}" data-locked-prompt-badge="{{ _sys_lock }}" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_deep_system_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _sys_lock }}" data-locked-prompt-label="{{ stage_label|e }} — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
                                 </div>
                                 <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
                                     <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_vo_system_rules else 'no' }}" id="locked-prompt-badge-voiceover_editor_system_rules" data-locked-prompt-badge="voiceover_editor_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_vo_system_rules else 'NO' }}</span>
-                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="voiceover_editor_system_rules" data-locked-prompt-label="Voiceover Editor — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
                                     </div>
+                                </div>
+                            </div>
+                            {% elif stage_key == 'elevenlabs_editor' %}
+                            {% set _el_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_elevenlabs_editor') or {} %}
+                            {% set has_el_system_prompt = _el_sys_lp.get('present')|default(false) %}
+                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_elevenlabs_editor') or {} %}
+                            {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
+                            {% set _up_lock = 'user_prompt_elevenlabs_editor' %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
+                                <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
+                                    {% if not stage_collapsible %}
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+                                    {% endif %}
+                                </div>
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_el_system_prompt else 'no' }}" id="locked-prompt-badge-system_prompt_elevenlabs_editor" data-locked-prompt-badge="system_prompt_elevenlabs_editor" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_el_system_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="system_prompt_elevenlabs_editor" data-locked-prompt-label="ElevenLabs Editor — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </div>
+                                <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
                                     <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                         <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
                                         <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
@@ -780,6 +810,29 @@
                                     </div>
                                 </div>
                             </div>
+                            {% elif stage_key == 'structure_splitter' %}
+                            {% set _ss_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_structure_splitter') or {} %}
+                            {% set has_ss_system_prompt = _ss_sys_lp.get('present')|default(false) %}
+                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_structure_splitter') or {} %}
+                            {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
+                            {% set _up_lock = 'user_prompt_structure_splitter' %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
+                                <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
+                                    {% if not stage_collapsible %}
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+                                    {% endif %}
+                                </div>
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_ss_system_prompt else 'no' }}" id="locked-prompt-badge-system_prompt_structure_splitter" data-locked-prompt-badge="system_prompt_structure_splitter" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_ss_system_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="system_prompt_structure_splitter" data-locked-prompt-label="Structure Splitter — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </div>
+                                <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
+                                    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    </div>
+                                </div>
+                            </div>
                             {% else %}
                             <div class="rewrite-stage-prompt-cell{% if stage_key == 'scene_writer_live' %} rewrite-stage-swl-system-cell{% endif %}">
                                 <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
@@ -799,7 +852,7 @@
                                 </div>
                             </div>
                             {% endif %}
-                            {% if stage_key == 'analysis' or stage_key == 'structure' or stage_key == 'draft1' or stage_key == 'retention_editor' or stage_key == 'hook_editor' or stage_key == 'flow_editor' or stage_key == 'persona_editor' or stage_key == 'structure_splitter' or stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'scene_writer' or stage_key == 'scene_writer_live' or stage_key == 'youtube_packaging' %}
                             {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
                             {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
                             {% set _up_lock = 'user_prompt_' ~ stage_key %}
@@ -893,7 +946,14 @@
                                 </div>
                                 <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="{% if stage_key == 'youtube_packaging' %}8{% elif stage_key == 'inbox' %}12{% else %}3{% endif %}" {% if result_locked %}readonly{% endif %} placeholder="{% if stage_key == 'inbox' %}Вставьте сюда готовый текст сценария…{% else %}Pending{% endif %}" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
-                            {% if stage_key == 'voiceover_editor' %}
+                            {% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %}
+                            {% set _ch_field = ({
+                                'voiceover_editor': 'voiceover_changes',
+                                'retention_editor': 'retention_editor_changes',
+                                'hook_editor': 'hook_editor_changes',
+                                'flow_editor': 'flow_editor_changes',
+                                'persona_editor': 'persona_editor_changes',
+                            })[stage_key] %}
                             <div class="rewrite-stage-changes-block">
                                 <div class="slot-header rewrite-stage-result-toolbar rewrite-stage-changes-toolbar">
                                     <span class="slot-badge badge-no rewrite-stage-changes-badge">Changes</span>
@@ -906,7 +966,7 @@
                                     </button>
                                 </div>
                                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-changes">
-                                    <textarea class="rewrite-source-textarea rewrite-stage-changes rewrite-source-textarea--locked" rows="3" readonly placeholder="—" aria-label="Changes">{{ cell.voiceover_changes or '' }}</textarea>
+                                    <textarea class="rewrite-source-textarea rewrite-stage-changes rewrite-source-textarea--locked" rows="3" readonly placeholder="—" aria-label="Changes">{{ cell[_ch_field]|default('', true) }}</textarea>
                                 </div>
                             </div>
                             {% endif %}
@@ -918,6 +978,9 @@
                             {% endif %}
                             {% if stage_key == 'scene_writer_live' %}
                             <div class="rewrite-scene-writer-check" data-scene-media-check></div>
+                            {% endif %}
+                            {% if stage_key == 'elevenlabs_editor' %}
+                            <div class="rewrite-scene-writer-check" data-elevenlabs-editor-check></div>
                             {% endif %}
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
@@ -1034,6 +1097,20 @@
         </div>
     </div>
 
+    <div class="confirm-modal hidden" id="rewrite-clear-results-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-clear-results-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-clear-results-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-clear-results-confirm-title">Очистка этапов</h3>
+            </div>
+            <p class="confirm-modal__lead">Очистить Result, Changes и проверки у всех этапов, кроме Inbox? Действие нельзя отменить.</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-clear-results-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-clear-results-confirm-ok">Да, очистить</button>
+            </div>
+        </div>
+    </div>
+
     <div class="confirm-modal hidden" id="rewrite-youtube-edit-confirm-modal" aria-hidden="true">
         <div class="confirm-modal__backdrop" data-youtube-edit-confirm-close></div>
         <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-edit-confirm-title">
@@ -1110,7 +1187,7 @@
         </div>
     </div>
 
-    {# Глобальная модалка для редактирования промтов из каталога locked_prompts/.
+    {# Глобальная модалка для редактирования промтов из каталога locked_prompt_files/.
        Открывается по клику на ✎ рядом с любым «защищённым» промтом
        (см. JS-функцию `openLockedPromptModal` в _rewrite_block_scripts.html). #}
     <div class="confirm-modal locked-prompt-modal hidden" id="locked-prompt-modal" aria-hidden="true">
@@ -1119,7 +1196,7 @@
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="locked-prompt-modal-title">Редактирование промта</h3>
             </div>
-            <p class="confirm-modal__lead">Промт хранится в каталоге <code>locked_prompts/</code>. Для сохранения изменений введите пин-код (4 цифры). Пин лежит в переменной окружения <code>LOCKED_PROMPTS_PIN</code> — это барьер от случайной правки, а не криптозащита.</p>
+            <p class="confirm-modal__lead">Промт хранится в каталоге <code>locked_prompt_files/</code>. Для сохранения изменений введите пин-код (4 цифры). Пин лежит в переменной окружения <code>LOCKED_PROMPTS_PIN</code> — это барьер от случайной правки, а не криптозащита.</p>
             <div class="locked-prompt-modal__textarea-wrap">
                 <textarea id="locked-prompt-modal-textarea" class="locked-prompt-modal__textarea" rows="14" spellcheck="false"></textarea>
             </div>

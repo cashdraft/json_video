@@ -1,0 +1,14 @@
+ФОРМАТ ВЫВОДА (СТРОГО JSON):
+
+{
+  "text": "<полный обновлённый текст>",
+  "changes": [
+    {
+      "type": "attention_drop|flat_segment|missing_rehook|weak_stakes|no_forward_pull|over_explaining",
+      "location": "<блок / начало / середина / конец>",
+      "before": "<что было>",
+      "after": "<что стало>",
+      "comment": "<почему это усиливает удержание>"
+    }
+  ]
+}

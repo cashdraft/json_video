@@ -1,0 +1,10 @@
+Split the following text into logical structural blocks.
+
+Additional requirements:
+
+— detect natural topic shifts  
+— do NOT split inside a continuous idea  
+— avoid too many small blocks  
+— avoid over-fragmentation  
+
+Return ONLY JSON array.

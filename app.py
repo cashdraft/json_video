@@ -126,7 +126,10 @@ from rewrite_pipeline import (
     any_stage_has_result,
     clamp_target_chars,
     apply_title_strategist_original_title_to_user_json,
+    build_elevenlabs_editor_check,
     compose_rewrite_openai_request_body,
+    downstream_script_input_text,
+    strip_elevenlabs_inserts,
     normalize_rewrite_pipeline_language,
     normalize_rewrite_preset,
     snapshot_rewrite_preset_from_body,
@@ -174,6 +177,18 @@ JOB_AUDIO_DIR = BASE_DIR / "data" / "job_audio"
 JOB_PEXELS_DIR = BASE_DIR / "data" / "job_pexels"
 REWRITE_JOBS_DIR = BASE_DIR / "data" / "rewrite_jobs"
 REWRITE_MEDIA_DIR = BASE_DIR / "data" / "rewrite_media"
+
+_REWRITE_JSON_EDITOR_STAGES = frozenset({
+    "retention_editor",
+    "hook_editor",
+    "flow_editor",
+    "persona_editor",
+    "voiceover_editor",
+})
+
+
+def _rewrite_stage_editor_changes_cell_key(stage_key: str) -> str:
+    return "voiceover_changes" if stage_key == "voiceover_editor" else f"{stage_key}_changes"
 
 
 def _sanitize_scene_deprecated(scene: dict[str, Any]) -> None:
@@ -807,6 +822,32 @@ def _parse_structure_splitter_blocks_with_error(raw_text: str) -> tuple[list[dic
     return [], "json_is_not_list_or_blocks_object"
 
 
+_STRUCTURE_SPLITTER_CHECK_MAX_DELTA_CHARS = 50
+
+
+def _rewrite_stage_last_result_text(
+    rewrite_id: str, stages_snap: dict[str, Any], stage_key: str
+) -> str:
+    t = str((stages_snap.get(stage_key) or {}).get("last_result") or "")
+    if not t.strip():
+        p = _rewrite_stage_result_path(rewrite_id, stage_key)
+        if p.exists():
+            try:
+                t = p.read_text(encoding="utf-8")
+            except OSError:
+                t = ""
+    return t
+
+
+def _structure_splitter_check_input_text(
+    *,
+    rewrite_id: str,
+    stages_snap: dict[str, Any],
+    voiceover_plain: str,
+) -> str:
+    return voiceover_plain
+
+
 def _build_structure_splitter_check(input_text: str, splitter_result_text: str) -> dict[str, Any]:
     blocks = _parse_structure_splitter_blocks(splitter_result_text)
     input_txt = str(input_text or "")
@@ -820,8 +861,12 @@ def _build_structure_splitter_check(input_text: str, splitter_result_text: str) 
     output_compact_chars = len(output_compact)
     delta_compact_chars = output_compact_chars - input_compact_chars
     has_blocks = len(blocks) > 0
-    has_output_text = output_compact_chars > 0
-    structure_ok = has_blocks and has_output_text
+    has_output_text = output_chars > 0
+    structure_ok = (
+        has_blocks
+        and has_output_text
+        and abs(delta_chars) <= _STRUCTURE_SPLITTER_CHECK_MAX_DELTA_CHARS
+    )
     return {
         "type": "structure_splitter_check",
         "summary": {
@@ -994,18 +1039,29 @@ def _sanitize_editor_result_json(raw_result: str) -> str:
     if not isinstance(obj, dict):
         return raw
     et = obj.get("edited_text")
-    if not isinstance(et, str):
+    tt = obj.get("text")
+
+    def _norm_inline(s: str) -> str:
+        t = str(s or "")
+        t = re.sub(r"\\+r\\+n", " ", t)
+        t = re.sub(r"\\+n", " ", t)
+        t = re.sub(r"\\+r", " ", t)
+        t = t.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+        t = re.sub(r"[ \t]{2,}", " ", t).strip()
+        return t
+
+    changed = False
+    if isinstance(et, str):
+        nt = _norm_inline(et)
+        obj["edited_text"] = nt
+        changed = True
+    if isinstance(tt, str):
+        nt2 = _norm_inline(tt)
+        obj["text"] = nt2
+        changed = True
+    if not changed:
         return raw
 
-    txt = et
-    # Handle literal escaped sequences first (possibly double-escaped).
-    txt = re.sub(r"\\+r\\+n", " ", txt)
-    txt = re.sub(r"\\+n", " ", txt)
-    txt = re.sub(r"\\+r", " ", txt)
-    # Then normalize real line breaks.
-    txt = txt.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
-    txt = re.sub(r"[ \t]{2,}", " ", txt).strip()
-    obj["edited_text"] = txt
     return json.dumps(obj, ensure_ascii=False)
 
 
@@ -1450,7 +1506,7 @@ def _rewrite_legacy_filepath(rewrite_id: str) -> Path:
 
 
 # System prompt for «Перевести на русский» (исходный текст, батчи ~5000 симв.).
-# Хранится в каталоге `locked_prompts/` и редактируется из UI только по
+# Хранится в каталоге `locked_prompt_files/` и редактируется из UI только по
 # пин-коду (см. модуль `locked_prompts.py`). Дефолт лежит в реестре.
 def _translate_to_ru_system_prompt() -> str:
     return get_locked_prompt("translate_to_ru")
@@ -1525,8 +1581,12 @@ def _rewrite_stage_result_path(rewrite_id: str, stage_key: str) -> Path:
     return _rewrite_project_dir(rewrite_id) / f"{stage_key}.result.txt"
 
 
+def _rewrite_stage_editor_changes_path(rewrite_id: str, stage_key: str) -> Path:
+    return _rewrite_project_dir(rewrite_id) / f"{stage_key}.changes.txt"
+
+
 def _rewrite_stage_voiceover_changes_path(rewrite_id: str) -> Path:
-    return _rewrite_project_dir(rewrite_id) / "voiceover_editor.changes.txt"
+    return _rewrite_stage_editor_changes_path(rewrite_id, "voiceover_editor")
 
 
 def _rewrite_block_writer_dir(rewrite_id: str) -> Path:
@@ -3046,9 +3106,9 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
                 continue
             data.setdefault("stages", {})
             data["stages"].setdefault(sk, {})
-            if sk == "voiceover_editor":
-                vo_text, vo_changes = parse_voiceover_editor_payload(txt)
-                ch_path = _rewrite_stage_voiceover_changes_path(rewrite_id)
+            if sk in _REWRITE_JSON_EDITOR_STAGES:
+                main_text, editor_changes = parse_voiceover_editor_payload(txt)
+                ch_path = _rewrite_stage_editor_changes_path(rewrite_id, sk)
                 if ch_path.is_file():
                     try:
                         ch_raw = ch_path.read_text(encoding="utf-8").strip()
@@ -3056,15 +3116,16 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
                             try:
                                 parsed_ch = json.loads(ch_raw)
                                 if isinstance(parsed_ch, list):
-                                    vo_changes = parsed_ch
+                                    editor_changes = parsed_ch
                             except json.JSONDecodeError:
                                 pass
                     except OSError:
                         pass
-                data["stages"][sk]["last_result"] = vo_text if vo_text else txt
-                data["stages"][sk]["voiceover_changes"] = (
-                    json.dumps(vo_changes, ensure_ascii=False, indent=2)
-                    if vo_changes
+                data["stages"][sk]["last_result"] = main_text if main_text else txt
+                ck = _rewrite_stage_editor_changes_cell_key(sk)
+                data["stages"][sk][ck] = (
+                    json.dumps(editor_changes, ensure_ascii=False, indent=2)
+                    if editor_changes
                     else ""
                 )
             else:
@@ -3114,16 +3175,17 @@ def save_rewrite_job(rewrite_id: str, data: dict) -> None:
         for sk in REWRITE_STAGE_KEYS:
             cell = stages.get(sk) if isinstance(stages.get(sk), dict) else {}
             res_text = str((cell or {}).get("last_result") or "")
-            if sk == "voiceover_editor":
-                vo_text, _vo_ch = parse_voiceover_editor_payload(res_text)
+            if sk in _REWRITE_JSON_EDITOR_STAGES:
+                main_text, builtin_ch = parse_voiceover_editor_payload(res_text)
                 _rewrite_stage_result_path(rewrite_id, sk).write_text(
-                    vo_text if vo_text else res_text,
+                    main_text if main_text else res_text,
                     encoding="utf-8",
                 )
-                ch_text = str((cell or {}).get("voiceover_changes") or "").strip()
-                if not ch_text and _vo_ch:
-                    ch_text = json.dumps(_vo_ch, ensure_ascii=False, indent=2)
-                _rewrite_stage_voiceover_changes_path(rewrite_id).write_text(
+                ck = _rewrite_stage_editor_changes_cell_key(sk)
+                ch_text = str((cell or {}).get(ck) or "").strip()
+                if not ch_text and builtin_ch:
+                    ch_text = json.dumps(builtin_ch, ensure_ascii=False, indent=2)
+                _rewrite_stage_editor_changes_path(rewrite_id, sk).write_text(
                     ch_text,
                     encoding="utf-8",
                 )
@@ -3429,7 +3491,7 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
     for _k in preset_keys_current:
         if _k in ("scene_writer", "scene_writer_live"):
             continue
-        if len(collapsible_pipeline_stages) >= 10:
+        if len(collapsible_pipeline_stages) >= 11:
             break
         collapsible_pipeline_stages.append(_k)
     collapsible_pipeline_stage_range_end = sum(
@@ -5044,14 +5106,10 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
     preset = snapshot_rewrite_preset_from_body(body, rw_job)
     api_key = os.getenv("OPENAI_API_KEY") or ""
 
-    # Voiceover Editor / Title Strategist / Structure Splitter в пресетах
-    # «Я уже ЗАrewriteИЛ» и «Мягкий Rewrite» читают исходник из rewrite.last_result
-    # (если Rewrite выполнен) либо из inbox.last_result / поля Source (фолбэк).
-    # Если в снимке соответствующие ячейки пришли пустыми (рестарт вкладки и т.п.),
-    # подтягиваем последнее сохранённое значение из JSON проекта.
+    # Пресет «Я уже ЗАrewriteИЛ»: подтягиваем inbox.last_result из JSON проекта.
     if (
         preset == REWRITE_PRESET_PREWRITTEN
-        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and stage_key in ("voiceover_editor", "elevenlabs_editor", "title_strategist", "structure_splitter")
         and isinstance(stages_snap, dict)
     ):
         _snap = dict(stages_snap)
@@ -5062,18 +5120,11 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
         if _ibx:
             _ibx_cell["last_result"] = _ibx
             _snap["inbox"] = _ibx_cell
-        _rw_cell = dict(_snap.get("rewrite") or {}) if isinstance(_snap.get("rewrite"), dict) else {}
-        _rw_res = str(_rw_cell.get("last_result") or "").strip()
-        if not _rw_res:
-            _rw_res = str(((rw_job.get("stages") or {}).get("rewrite") or {}).get("last_result") or "").strip()
-        if _rw_res:
-            _rw_cell["last_result"] = _rw_res
-            _snap["rewrite"] = _rw_cell
         stages_snap = _snap
     # «Мягкий Rewrite»: те же три агента, но без Inbox — подтягиваем только Rewrite.Result с диска.
     if (
         preset == REWRITE_PRESET_SOFT
-        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and stage_key in ("voiceover_editor", "elevenlabs_editor", "title_strategist", "structure_splitter")
         and isinstance(stages_snap, dict)
     ):
         _snap_s = dict(stages_snap)
@@ -5085,23 +5136,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             _rw_cell_s["last_result"] = _rw_res_s
             _snap_s["rewrite"] = _rw_cell_s
         stages_snap = _snap_s
-    # Сам этап Rewrite в prewritten тоже опирается на inbox.last_result —
-    # подгрузим его из project.json, если в снапе пусто.
-    if (
-        preset == REWRITE_PRESET_PREWRITTEN
-        and stage_key == "rewrite"
-        and isinstance(stages_snap, dict)
-    ):
-        _snap_rw = dict(stages_snap)
-        _ibx_cell_rw = dict(_snap_rw.get("inbox") or {}) if isinstance(_snap_rw.get("inbox"), dict) else {}
-        _ibx_rw = str(_ibx_cell_rw.get("last_result") or "").strip()
-        if not _ibx_rw:
-            _ibx_rw = str(((rw_job.get("stages") or {}).get("inbox") or {}).get("last_result") or "").strip()
-        if _ibx_rw:
-            _ibx_cell_rw["last_result"] = _ibx_rw
-            _snap_rw["inbox"] = _ibx_cell_rw
-        stages_snap = _snap_rw
-
     def gen():
         if stage_key not in REWRITE_STAGE_KEYS:
             yield json.dumps(
@@ -5116,6 +5150,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             "flow_editor",
             "persona_editor",
             "voiceover_editor",
+            "elevenlabs_editor",
             "title_strategist",
             "structure_splitter",
             "scene_writer",
@@ -5169,16 +5204,17 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 except OSError:
                     persona_editor_text = ""
         voiceover_editor_text = ""
-        if stage_key in ("title_strategist", "structure_splitter"):
-            voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
+        elevenlabs_editor_text = ""
+        if stage_key in ("elevenlabs_editor", "title_strategist", "structure_splitter"):
+            voiceover_editor_text = _extract_voiceover_plain_text(
+                _rewrite_stage_last_result_text(rewrite_id, stages_snap, "voiceover_editor")
+            )
             if not voiceover_editor_text.strip():
-                p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
-                if p.exists():
-                    try:
-                        voiceover_editor_text = p.read_text(encoding="utf-8")
-                    except OSError:
-                        voiceover_editor_text = ""
-            voiceover_editor_text = _extract_voiceover_plain_text(voiceover_editor_text)
+                voiceover_editor_text = downstream_script_input_text(
+                    preset,
+                    stages_snap,
+                    source_text=source_text,
+                )
         structure_splitter_text = ""
         if stage_key == "scene_writer":
             structure_splitter_text = str((stages_snap.get("structure_splitter") or {}).get("last_result") or "")
@@ -5224,6 +5260,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             flow_editor_text=flow_editor_text,
             persona_editor_text=persona_editor_text,
             voiceover_editor_text=voiceover_editor_text,
+            elevenlabs_editor_text=elevenlabs_editor_text,
             structure_splitter_text=structure_splitter_text,
             title_strategist_result_text=title_strategist_result_text,
             scene_writer_result_text=scene_writer_result_text,
@@ -5268,9 +5305,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 body,
                 rw_job,
             )
-            hero_for_bw = rewrite_placeholder_apply_from_request(
-                hero_prompt, body, rw_job, allow_nested_master_hero=False
-            )
             bw_dir = _rewrite_block_writer_dir(rewrite_id)
             bw_dir.mkdir(parents=True, exist_ok=True)
             for old in bw_dir.glob("block_*.json"):
@@ -5312,15 +5346,35 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 prompt,
                 analysis_res,
                 structure_res,
-                hero_prompt=hero_for_bw,
                 block_writer_user_prompt=block_writer_user_prompt,
                 on_block_completed=on_block_completed,
                 on_all_completed=on_all_completed,
                 chat_temperature=chat_temp,
             ):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
+        elif stage_key == "elevenlabs_editor":
+            el_result = ""
+            for item in iter_rewrite_completion(api_key, model, prompt, user_text, chat_temperature=chat_temp):
+                t = str(item.get("type") or "")
+                if t == "result":
+                    el_result = str(item.get("content") or "")
+                elif t == "error":
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+                    return
+                else:
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+            yield json.dumps(
+                build_elevenlabs_editor_check(voiceover_editor_text, el_result),
+                ensure_ascii=False,
+            ) + "\n"
+            yield json.dumps({"type": "result", "content": el_result}, ensure_ascii=False) + "\n"
         elif stage_key == "structure_splitter":
             split_result = ""
+            ss_check_in = _structure_splitter_check_input_text(
+                rewrite_id=rewrite_id,
+                stages_snap=stages_snap,
+                voiceover_plain=voiceover_editor_text,
+            )
             for item in iter_rewrite_completion(api_key, model, prompt, user_text, chat_temperature=chat_temp):
                 t = str(item.get("type") or "")
                 if t == "result":
@@ -5331,7 +5385,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 else:
                     yield json.dumps(item, ensure_ascii=False) + "\n"
             yield json.dumps(
-                _build_structure_splitter_check(voiceover_editor_text, split_result),
+                _build_structure_splitter_check(ss_check_in, split_result),
                 ensure_ascii=False,
             ) + "\n"
             yield json.dumps({"type": "result", "content": split_result}, ensure_ascii=False) + "\n"
@@ -5779,16 +5833,11 @@ def rewrite_project_api_payload(rewrite_id: str):
             except OSError:
                 persona_editor_text = ""
     voiceover_editor_text = ""
-    if stage_key in ("title_strategist", "structure_splitter"):
-        voiceover_editor_text = str((stages_snap.get("voiceover_editor") or {}).get("last_result") or "")
-        if not voiceover_editor_text.strip():
-            p = _rewrite_stage_result_path(rewrite_id, "voiceover_editor")
-            if p.exists():
-                try:
-                    voiceover_editor_text = p.read_text(encoding="utf-8")
-                except OSError:
-                    voiceover_editor_text = ""
-        voiceover_editor_text = _extract_voiceover_plain_text(voiceover_editor_text)
+    elevenlabs_editor_text = ""
+    if stage_key in ("elevenlabs_editor", "title_strategist", "structure_splitter"):
+        voiceover_editor_text = _extract_voiceover_plain_text(
+            _rewrite_stage_last_result_text(rewrite_id, stages_snap, "voiceover_editor")
+        )
     structure_splitter_text = ""
     if stage_key == "scene_writer":
         structure_splitter_text = str((stages_snap.get("structure_splitter") or {}).get("last_result") or "")
@@ -5820,12 +5869,10 @@ def rewrite_project_api_payload(rewrite_id: str):
                 except OSError:
                     title_strategist_result_text = ""
     preset_ap = snapshot_rewrite_preset_from_body(body, rw_job)
-    # api-payload в пресете «Я уже ЗАrewriteИЛ»: то же тело, что при запуске стадии.
-    # Voiceover Editor / Title Strategist / Structure Splitter читают сначала Rewrite.Result,
-    # затем Inbox.Result; сам Rewrite — только Inbox.Result.
+    # api-payload в пресете «Я уже ЗАrewriteИЛ»: подтягиваем inbox.last_result из JSON.
     if (
         preset_ap == REWRITE_PRESET_PREWRITTEN
-        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and stage_key in ("voiceover_editor", "elevenlabs_editor", "title_strategist", "structure_splitter")
         and isinstance(stages_snap, dict)
     ):
         _snap_ib = dict(stages_snap)
@@ -5836,17 +5883,10 @@ def rewrite_project_api_payload(rewrite_id: str):
         if _ibx_ap:
             _ibx_cell_ap["last_result"] = _ibx_ap
             _snap_ib["inbox"] = _ibx_cell_ap
-        _rw_cell_ap = dict(_snap_ib.get("rewrite") or {}) if isinstance(_snap_ib.get("rewrite"), dict) else {}
-        _rw_res_ap = str(_rw_cell_ap.get("last_result") or "").strip()
-        if not _rw_res_ap:
-            _rw_res_ap = str(((rw_job.get("stages") or {}).get("rewrite") or {}).get("last_result") or "").strip()
-        if _rw_res_ap:
-            _rw_cell_ap["last_result"] = _rw_res_ap
-            _snap_ib["rewrite"] = _rw_cell_ap
         stages_snap = _snap_ib
     if (
         preset_ap == REWRITE_PRESET_SOFT
-        and stage_key in ("voiceover_editor", "title_strategist", "structure_splitter")
+        and stage_key in ("voiceover_editor", "elevenlabs_editor", "title_strategist", "structure_splitter")
         and isinstance(stages_snap, dict)
     ):
         _snap_sap = dict(stages_snap)
@@ -5858,20 +5898,13 @@ def rewrite_project_api_payload(rewrite_id: str):
             _rw_cell_sap["last_result"] = _rw_res_sap
             _snap_sap["rewrite"] = _rw_cell_sap
         stages_snap = _snap_sap
-    if (
-        preset_ap == REWRITE_PRESET_PREWRITTEN
-        and stage_key == "rewrite"
-        and isinstance(stages_snap, dict)
-    ):
-        _snap_rw_ap = dict(stages_snap)
-        _ibx_cell_rw_ap = dict(_snap_rw_ap.get("inbox") or {}) if isinstance(_snap_rw_ap.get("inbox"), dict) else {}
-        _ibx_rw_ap = str(_ibx_cell_rw_ap.get("last_result") or "").strip()
-        if not _ibx_rw_ap:
-            _ibx_rw_ap = str(((rw_job.get("stages") or {}).get("inbox") or {}).get("last_result") or "").strip()
-        if _ibx_rw_ap:
-            _ibx_cell_rw_ap["last_result"] = _ibx_rw_ap
-            _snap_rw_ap["inbox"] = _ibx_cell_rw_ap
-        stages_snap = _snap_rw_ap
+    if stage_key in ("elevenlabs_editor", "title_strategist", "structure_splitter"):
+        if not voiceover_editor_text.strip():
+            voiceover_editor_text = downstream_script_input_text(
+                preset_ap,
+                stages_snap,
+                source_text=source_text,
+            )
     payload, err = compose_rewrite_openai_request_body(
         stage_key,
         source_text=source_text,
@@ -5887,6 +5920,7 @@ def rewrite_project_api_payload(rewrite_id: str):
         flow_editor_text=flow_editor_text,
         persona_editor_text=persona_editor_text,
         voiceover_editor_text=voiceover_editor_text,
+        elevenlabs_editor_text=elevenlabs_editor_text,
         structure_splitter_text=structure_splitter_text,
         title_strategist_result_text=title_strategist_result_text,
         scene_writer_result_text=scene_writer_result_text,
@@ -5921,15 +5955,11 @@ def rewrite_project_api_payload(rewrite_id: str):
             body,
             rw_job,
         )
-        hero_for_export = rewrite_placeholder_apply_from_request(
-            hero_prompt, body, rw_job, allow_nested_master_hero=False
-        )
         saved = _load_block_writer_saved_short_summaries(rewrite_id)
         wire_bodies, ctx_exact = list_draft1_wire_chat_payloads_for_export(
             model_m,
             sys_c,
             structure_raw,
-            hero_for_export,
             block_writer_user_prompt,
             saved,
             chat_temperature=chat_temp_export,
