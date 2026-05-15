@@ -1815,15 +1815,20 @@ input.rewrite-source-title-input.rewrite-source-textarea {
    Верхний padding задаётся общим правилом .scene-card.rewrite-stage-card--collapsible
    (после .scene-card), чтобы совпадал с развёрнутым. */
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed {
-    padding-bottom: 0.55rem;
-    /* flex-start: иначе в высокой ячейке сетки шапка уезжает вниз (center), строка
-       «Analysis» не совпадает с развёрнутым состоянием. */
+    /* height:100% у .rewrite-stage-card тянет карточку на всю строку сетки — снизу
+       пустота; в свёрнутом виде высота только по шапке. */
+    height: auto;
+    align-self: start;
+    padding: 0.55rem 1.25rem;
     justify-content: flex-start;
 }
 
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-subtitle,
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-api-export {
-    display: none;
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
 }
 
 .rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-json-export-row {
@@ -2016,6 +2021,47 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     box-sizing: border-box;
 }
 
+/* Подзаголовок и блок промтов: одинаковые отступы до горизонтальных линий. */
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] {
+    --rewrite-stage-edge-pad: 0.5rem;
+}
+
+/* Линии сверху/снизу подзаголовка; padding сверху = padding снизу. */
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] .rewrite-stage-subtitle {
+    margin-top: 0.45rem;
+    padding-top: var(--rewrite-stage-edge-pad);
+    border-top: 1px solid var(--border);
+    margin-bottom: 0;
+    padding-bottom: var(--rewrite-stage-edge-pad);
+    border-bottom: 1px solid var(--border);
+}
+
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] .scene-header:has(.rewrite-stage-subtitle) {
+    margin-bottom: 0;
+}
+
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] .rewrite-stage-header-row:has(.rewrite-stage-subtitle) {
+    margin-bottom: 0;
+}
+
+/* System Promt → линия сверху = User Promt → линия снизу (перед Result). */
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] .rewrite-stage-row--controls {
+    padding-top: var(--rewrite-stage-edge-pad);
+    padding-bottom: var(--rewrite-stage-edge-pad);
+    margin-bottom: 0.2rem;
+}
+
+/* J в шапке — пустая строка под json в теле не нужна. */
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] .rewrite-stage-json-export-row--compact-header {
+    display: none;
+    min-height: 0;
+    margin: 0;
+}
+
+#rewrite-stages-list .rewrite-stage-card[data-stage-key] .rewrite-stage-rewrite-locked-badges-row {
+    margin-bottom: 0;
+}
+
 /* Имена полей в подзаголовке этапа — как <code> на карточке «Итоговый текст». */
 .rewrite-stage-card .rewrite-stage-subtitle code {
     font-family: ui-monospace, monospace;
@@ -2057,9 +2103,7 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     min-width: 0;
 }
 
-/* Верх карточки: без вертикального «центрирования» всей строки относительно Result+↻
-   — иначе при свёрнутом теле блок с «1 / Rewrite» визуально смещается вниз, а в
-   развёрнутом (без Result) остаётся выше → разный отступ от верха рамки. */
+/* Верх карточки: flex-start — строка не центрируется в карточке; min-height 24px у title/? см. ниже. */
 .rewrite-stage-card .rewrite-stage-header-top {
     align-items: flex-start;
 }
@@ -2176,25 +2220,44 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     flex-shrink: 0;
 }
 
-/* Result + ↻ в заголовке карточки — только в свёрнутом теле этапа. */
+/* Result + ↻ / J в заголовке: свёрнуто — Result+↻, развёрнуто — J на месте ↻. */
 .rewrite-stage-card-compact-result {
     display: none;
     align-items: center;
     flex-shrink: 0;
 }
 
-.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-card-compact-result {
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-card-compact-result,
+.rewrite-stage-card.rewrite-stage-card--collapsible:not(.rewrite-stage-card--body-collapsed) .rewrite-stage-card-compact-result {
     display: inline-flex;
     align-self: center;
 }
 
-/* Высота строки названия — для выравнивания с 24px-кнопками Result/↻ при flex-start. */
-.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-title-row {
+/* Свёрнуто: ↻ видна, J в шапке скрыта. */
+.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-compact-api-export {
+    display: none !important;
+}
+
+/* Развёрнуто: J на месте ↻, Result в шапке не дублируем. */
+.rewrite-stage-card.rewrite-stage-card--collapsible:not(.rewrite-stage-card--body-collapsed) .rewrite-stage-compact-run,
+.rewrite-stage-card.rewrite-stage-card--collapsible:not(.rewrite-stage-card--body-collapsed) .rewrite-stage-compact-run-blocked,
+.rewrite-stage-card.rewrite-stage-card--collapsible:not(.rewrite-stage-card--body-collapsed) .rewrite-stage-compact-result-badge {
+    display: none !important;
+}
+
+.rewrite-stage-json-export-row--compact-header {
+    min-height: 30px;
+    box-sizing: border-box;
+}
+
+/* Высота «1 / Rewrite / ?» как при свёрнутой карточке (24px) — и в развёрнутой,
+   чтобы при раскрытии тела этапа заголовок не подпрыгивал вверх. */
+.rewrite-stage-card.rewrite-stage-card--collapsible .rewrite-stage-title-row {
     min-height: 24px;
     align-items: center;
 }
 
-.rewrite-stage-card.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-header-tools {
+.rewrite-stage-card.rewrite-stage-card--collapsible .rewrite-stage-header-tools {
     min-height: 24px;
     align-items: center;
 }
@@ -2229,7 +2292,8 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 /* Author rules for .btn-regenerate set display; must beat that so [hidden] actually hides. */
 .rewrite-stage-run[hidden],
 .rewrite-stage-run-blocked[hidden],
-.rewrite-stage-compact-run[hidden] {
+.rewrite-stage-compact-run[hidden],
+.rewrite-stage-compact-run-blocked[hidden] {
     display: none !important;
 }
 
@@ -2250,8 +2314,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.65rem 1rem;
     align-items: start;
-    padding-bottom: 0.55rem;
-    margin-bottom: 0.2rem;
     border-bottom: 1px solid var(--border);
 }
 
@@ -2261,7 +2323,9 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
         grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
     }
 
-    .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls {
+    .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-row--controls,
+    .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls {
         grid-template-columns: auto minmax(0, 1fr);
     }
 
@@ -2274,9 +2338,20 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
         padding-left: calc(9.5rem + 1rem);
     }
 
-    .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-subtitle {
+    .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-subtitle,
+    .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-subtitle {
         padding-left: calc(9.5rem + 1rem);
     }
+}
+
+/* Voiceover / Title Strategist: User в колонку под отдельным System Promt (как Rewrite без textarea). */
+.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-rewrite-locked-badges-row,
+.rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-rewrite-locked-badges-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
 }
 
 /* Браузеры без container queries: широкий viewport — прежняя сетка, без отступа подзаголовка (он ломает узкие карточки в сетке 3×N). */
@@ -2286,7 +2361,9 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
             grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
         }
 
-        .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls {
+        .rewrite-stage-card[data-stage-key="rewrite"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-row--controls,
+        .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls {
             grid-template-columns: auto minmax(0, 1fr);
         }
 
@@ -2367,6 +2444,12 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     display: none;
 }
 
+.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
+.rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-scene-writer-check[data-editor-check]:empty {
+    display: block;
+    min-height: 2.5rem;
+}
+
 /* Слот превью YouTube packaging в шаблоне изначально пустой — не скрывать до первого renderYoutubePackagingPreview */
 .rewrite-scene-writer-check.rewrite-youtube-packaging-preview:empty {
     display: block;
@@ -2436,6 +2519,24 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .rewrite-editor-check-line__right {
     margin-left: auto;
     text-align: right;
+}
+
+/* Дельта в скобках: те же цвета, что OK / NO в заголовке проверки. */
+.rewrite-editor-check-delta {
+    font-variant-numeric: tabular-nums;
+}
+
+.rewrite-editor-check-delta--pos {
+    color: #6ad09d;
+}
+
+.rewrite-editor-check-delta--neg {
+    color: #ff8080;
+}
+
+.rewrite-editor-check-delta--zero {
+    color: var(--text-muted);
+    opacity: 0.85;
 }
 
 .rewrite-structure-splitter-check-line {
@@ -3011,8 +3112,17 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     gap: 0.35rem;
 }
 
-/* Result: старт ~3 строки, прокрутка; можно растянуть за уголок по вертикали */
-.rewrite-stage-card .rewrite-slot--stage-result .rewrite-stage-result.rewrite-source-textarea {
+/* Result / Changes: старт ~3 строки, прокрутка; можно растянуть за уголок по вертикали */
+.rewrite-stage-changes-block {
+    margin-top: 0.5rem;
+}
+
+.rewrite-stage-changes-block .slot-header {
+    margin-bottom: 0.5rem;
+}
+
+.rewrite-stage-card .rewrite-slot--stage-result .rewrite-stage-result.rewrite-source-textarea,
+.rewrite-stage-card .rewrite-slot--stage-changes .rewrite-stage-changes.rewrite-source-textarea {
     --rewrite-result-visible-lines: 3;
     flex: 0 0 auto;
     min-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);

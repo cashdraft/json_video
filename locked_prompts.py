@@ -79,6 +79,21 @@ LOCKED_PROMPTS: dict[str, dict] = {
             "ТЕКСТ ДЛЯ АНАЛИЗА:\n"
         ),
     },
+    "system_prompt_voiceover_editor": {
+        "label": "Voiceover Editor — System Promt",
+        "filename": "system_prompt_voiceover_editor.txt",
+        "default": "",
+    },
+    "voiceover_editor_system_rules": {
+        "label": "Voiceover Editor — System Rules",
+        "filename": "voiceover_editor_system_rules.txt",
+        "default": "",
+    },
+    "system_prompt_title_strategist": {
+        "label": "Title Strategist — System Promt",
+        "filename": "system_prompt_title_strategist.txt",
+        "default": "",
+    },
     "rewrite_system_rules": {
         "label": "Rewrite — System Rules",
         "filename": "rewrite_system_rules.txt",

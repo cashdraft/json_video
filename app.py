@@ -122,6 +122,7 @@ from rewrite_pipeline import (
     REWRITE_STAGE_SUBTITLES,
     REWRITE_STAGES,
     _extract_edited_text,
+    parse_voiceover_editor_payload,
     any_stage_has_result,
     clamp_target_chars,
     apply_title_strategist_original_title_to_user_json,
@@ -775,16 +776,8 @@ def _norm_ws(text: str) -> str:
 
 
 def _extract_voiceover_plain_text(raw_text: str) -> str:
-    txt = str(raw_text or "")
-    try:
-        obj = json.loads(txt)
-    except json.JSONDecodeError:
-        return txt
-    if isinstance(obj, dict):
-        edited = obj.get("edited_text")
-        if isinstance(edited, str) and edited.strip():
-            return edited
-    return txt
+    text, _changes = parse_voiceover_editor_payload(raw_text)
+    return text if text else str(raw_text or "")
 
 
 def _parse_structure_splitter_blocks(raw_text: str) -> list[dict]:
@@ -1530,6 +1523,10 @@ def _split_text_into_translation_batches(text: str, max_chars: int = 5000) -> li
 
 def _rewrite_stage_result_path(rewrite_id: str, stage_key: str) -> Path:
     return _rewrite_project_dir(rewrite_id) / f"{stage_key}.result.txt"
+
+
+def _rewrite_stage_voiceover_changes_path(rewrite_id: str) -> Path:
+    return _rewrite_project_dir(rewrite_id) / "voiceover_editor.changes.txt"
 
 
 def _rewrite_block_writer_dir(rewrite_id: str) -> Path:
@@ -3049,7 +3046,29 @@ def load_rewrite_job(rewrite_id: str) -> dict | None:
                 continue
             data.setdefault("stages", {})
             data["stages"].setdefault(sk, {})
-            data["stages"][sk]["last_result"] = txt
+            if sk == "voiceover_editor":
+                vo_text, vo_changes = parse_voiceover_editor_payload(txt)
+                ch_path = _rewrite_stage_voiceover_changes_path(rewrite_id)
+                if ch_path.is_file():
+                    try:
+                        ch_raw = ch_path.read_text(encoding="utf-8").strip()
+                        if ch_raw:
+                            try:
+                                parsed_ch = json.loads(ch_raw)
+                                if isinstance(parsed_ch, list):
+                                    vo_changes = parsed_ch
+                            except json.JSONDecodeError:
+                                pass
+                    except OSError:
+                        pass
+                data["stages"][sk]["last_result"] = vo_text if vo_text else txt
+                data["stages"][sk]["voiceover_changes"] = (
+                    json.dumps(vo_changes, ensure_ascii=False, indent=2)
+                    if vo_changes
+                    else ""
+                )
+            else:
+                data["stages"][sk]["last_result"] = txt
         # Block Writer check: если в project.json ещё нет, но есть block_writer/all_blocks.json,
         # строим проверку на лету, чтобы UI не показывал "ожидание данных" для уже готового draft1.
         st = data.get("stages") if isinstance(data.get("stages"), dict) else {}
@@ -3095,7 +3114,21 @@ def save_rewrite_job(rewrite_id: str, data: dict) -> None:
         for sk in REWRITE_STAGE_KEYS:
             cell = stages.get(sk) if isinstance(stages.get(sk), dict) else {}
             res_text = str((cell or {}).get("last_result") or "")
-            _rewrite_stage_result_path(rewrite_id, sk).write_text(res_text, encoding="utf-8")
+            if sk == "voiceover_editor":
+                vo_text, _vo_ch = parse_voiceover_editor_payload(res_text)
+                _rewrite_stage_result_path(rewrite_id, sk).write_text(
+                    vo_text if vo_text else res_text,
+                    encoding="utf-8",
+                )
+                ch_text = str((cell or {}).get("voiceover_changes") or "").strip()
+                if not ch_text and _vo_ch:
+                    ch_text = json.dumps(_vo_ch, ensure_ascii=False, indent=2)
+                _rewrite_stage_voiceover_changes_path(rewrite_id).write_text(
+                    ch_text,
+                    encoding="utf-8",
+                )
+            else:
+                _rewrite_stage_result_path(rewrite_id, sk).write_text(res_text, encoding="utf-8")
 
     # Keep project JSON lean: stage results are persisted in separate files.
     project_data = json.loads(json.dumps(data, ensure_ascii=False))

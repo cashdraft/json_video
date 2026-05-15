@@ -50,6 +50,29 @@ def _stage_user_prompt_text(stage_key: str, cell: dict[str, Any]) -> str:
     return str((cell or {}).get("user_prompt") or "").strip()
 
 
+def _stage_system_prompt_text(stage_key: str, cell: dict[str, Any]) -> str:
+    """System Promt этапа: locked `system_prompt_<stage_key>`, иначе legacy из cell.prompt."""
+    name = f"system_prompt_{stage_key}"
+    try:
+        locked = str(get_locked_prompt(name) or "").strip()
+    except KeyError:
+        locked = ""
+    if locked:
+        return locked
+    return str((cell or {}).get("prompt") or "").strip()
+
+
+def _voiceover_editor_system_rules_text(cell: dict[str, Any]) -> str:
+    """System Rules для Voiceover Editor: locked_prompts, иначе legacy из cell."""
+    try:
+        locked = str(get_locked_prompt("voiceover_editor_system_rules") or "").strip()
+    except KeyError:
+        locked = ""
+    if locked:
+        return locked
+    return str((cell or {}).get("voiceover_system_rules") or "").strip()
+
+
 def clamp_target_chars(n: int | None) -> int:
     """500–40 000 симв., шаг 500."""
     try:
@@ -147,10 +170,34 @@ def _extract_edited_text(raw_payload: str) -> str:
     try:
         obj = json.loads(raw)
         if isinstance(obj, dict):
+            if isinstance(obj.get("text"), str) and str(obj.get("text") or "").strip():
+                return _normalize_edited_text(str(obj.get("text") or ""))
             return _normalize_edited_text(str(obj.get("edited_text") or ""))
     except json.JSONDecodeError:
         pass
     return _normalize_edited_text(raw)
+
+
+def parse_voiceover_editor_payload(raw_payload: str) -> tuple[str, list[Any]]:
+    """Разбор ответа Voiceover Editor: plain text или JSON {text, changes}."""
+    raw = str(raw_payload or "").strip()
+    if not raw:
+        return "", []
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            text = ""
+            if isinstance(obj.get("text"), str):
+                text = _normalize_edited_text(obj.get("text") or "")
+            elif isinstance(obj.get("edited_text"), str):
+                text = _normalize_edited_text(obj.get("edited_text") or "")
+            changes = obj.get("changes")
+            if not isinstance(changes, list):
+                changes = []
+            return text, changes
+    except json.JSONDecodeError:
+        pass
+    return _normalize_edited_text(raw), []
 
 
 def build_rewrite_system_prompt(
@@ -326,9 +373,14 @@ def build_rewrite_stage_user_message(
 
 def build_voiceover_editor_system_prompt(
     voiceover_editor_prompt: str,
+    voiceover_system_rules: str = "",
 ) -> str:
-    """Этап voiceover_editor: в system только Voiceover Editor System Promt."""
-    return (voiceover_editor_prompt or "").strip()
+    """Этап voiceover_editor: System Promt + необязательный блок System Rules."""
+    vp = (voiceover_editor_prompt or "").strip()
+    vr = (voiceover_system_rules or "").strip()
+    if vp and vr:
+        return f"{vp}\n\n{vr}"
+    return vp or vr
 
 
 def build_voiceover_editor_user_message(
@@ -755,6 +807,7 @@ def default_stage_entry() -> dict[str, Any]:
         "past_prompt_locked": True,
         "rewrite_system_rules": "",
         "rewrite_system_rules_locked": True,
+        "voiceover_changes": "",
     }
 
 
@@ -1000,6 +1053,8 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["model"] = normalize_rewrite_model(str(sv.get("model") or ""))
         if "last_result" in sv:
             e["last_result"] = str(sv.get("last_result") or "")
+        if sk == "voiceover_editor" and "voiceover_changes" in sv:
+            e["voiceover_changes"] = str(sv.get("voiceover_changes") or "")
 
 
 _STAGE_LABEL_BY_KEY: dict[str, str] = {k: lbl for k, lbl in REWRITE_STAGES}
@@ -1265,8 +1320,11 @@ def compose_rewrite_openai_request_body(
             inbox_text,
         )
     elif stage_key == "voiceover_editor":
+        vo_sys = subp(_stage_system_prompt_text("voiceover_editor", cell))
+        vo_rules = subp(_voiceover_editor_system_rules_text(cell))
         prompt = build_voiceover_editor_system_prompt(
-            stage_prompt_t,
+            vo_sys,
+            vo_rules,
         )
         # В пресете «Я уже ЗАrewriteИЛ» (prewritten) Voiceover Editor запускается
         # после Inbox/Rewrite: на вход подаём Result Rewrite (если запускали Rewrite),
@@ -1290,8 +1348,9 @@ def compose_rewrite_openai_request_body(
             ve_input_text,
         )
     elif stage_key == "title_strategist":
+        ts_sys = subp(_stage_system_prompt_text("title_strategist", cell))
         prompt = build_title_strategist_system_prompt(
-            stage_prompt_t,
+            ts_sys,
         )
         # В пресете «Я уже ЗАrewriteИЛ» Title Strategist берёт исходный текст
         # из Rewrite.Result (если есть) или, как фолбэк, из Inbox.Result —
