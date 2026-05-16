@@ -3736,7 +3736,10 @@
         <div class="confirm-modal__card image-template-editor-card" role="dialog" aria-modal="true" aria-labelledby="image-template-editor-title">
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="image-template-editor-title">Шаблон изображений</h3>
-                <button type="button" class="btn btn-secondary btn-sm" data-image-template-modal-close aria-label="Закрыть">✕</button>
+                <div class="image-template-editor-head-actions">
+                    <button type="button" class="btn btn-danger btn-sm hidden" id="image-template-editor-delete" title="Удалить шаблон" aria-label="Удалить шаблон"><span class="template-trash-icon" aria-hidden="true"></span></button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-image-template-modal-close aria-label="Закрыть">✕</button>
+                </div>
             </div>
             <p class="confirm-modal__lead image-template-editor-lead">Название, логотип (можно выделить область на большой картинке) и до 7 референсов для Nano Banana.</p>
             <div class="image-template-editor-field">
@@ -3744,23 +3747,25 @@
                 <input type="text" id="image-template-editor-name" class="project-name-input" autocomplete="off" placeholder="Имя папки шаблона">
             </div>
             <div class="image-template-editor-field image-template-editor-field--logo">
-                <div class="image-template-editor-label-row">
-                    <span class="image-template-editor-label">Логотип</span>
-                    <label class="btn btn-secondary btn-sm image-template-editor-file-btn">
-                        Загрузить
-                        <input type="file" id="image-template-editor-logo-file" accept="image/jpeg,image/png,image/webp" hidden>
-                    </label>
-                </div>
-                <div class="image-template-editor-logo-preview-wrap hidden" id="image-template-editor-logo-preview-wrap">
-                    <img id="image-template-editor-logo-preview" class="image-template-editor-logo-preview" alt="" />
-                </div>
+                <span class="image-template-editor-label">Логотип</span>
+                <input type="file" id="image-template-editor-logo-file" accept="image/jpeg,image/png,image/webp" hidden>
+                <button type="button" class="image-template-editor-logo-hit" id="image-template-editor-logo-hit" aria-label="Изменить логотип">
+                    <span class="image-template-editor-logo-preview-wrap image-template-editor-logo-preview-wrap--empty" id="image-template-editor-logo-preview-wrap">
+                        <img id="image-template-editor-logo-preview" class="image-template-editor-logo-preview hidden" alt="" />
+                        <span class="image-template-editor-logo-placeholder" id="image-template-editor-logo-placeholder" aria-hidden="true"></span>
+                        <span class="image-template-editor-logo-edit" aria-hidden="true">✎</span>
+                    </span>
+                </button>
                 <div class="image-template-editor-crop hidden" id="image-template-editor-crop-wrap">
-                    <p class="image-template-editor-hint">Перетащите рамку — в логотип попадёт выделенная область.</p>
-                    <div class="image-template-editor-crop-stage" id="image-template-editor-crop-stage">
-                        <canvas id="image-template-editor-crop-canvas"></canvas>
-                        <div class="image-template-editor-crop-box" id="image-template-editor-crop-box"></div>
+                    <p class="image-template-editor-hint">Квадрат логотипа. Перетащите для сдвига, кнопки ± — приближение.</p>
+                    <div class="image-template-editor-crop-toolbar">
+                        <button type="button" class="btn btn-secondary btn-sm" id="image-template-editor-crop-zoom-out" aria-label="Уменьшить">−</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="image-template-editor-crop-zoom-in" aria-label="Увеличить">+</button>
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" id="image-template-editor-crop-apply">Применить выделение как логотип</button>
+                    <div class="image-template-editor-crop-stage image-template-editor-crop-stage--square" id="image-template-editor-crop-stage">
+                        <canvas id="image-template-editor-crop-canvas" width="320" height="320"></canvas>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="image-template-editor-crop-apply">Применить как логотип</button>
                 </div>
             </div>
             <div class="image-template-editor-field">
@@ -3787,6 +3792,20 @@
                 <div class="image-template-editor-ref-grid" id="image-template-editor-ref-grid"></div>
             </div>
             <p class="image-template-editor-status hidden" id="image-template-editor-status" aria-live="polite"></p>
+        </div>
+    </div>
+
+    <div class="confirm-modal hidden" id="image-template-delete-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-image-template-delete-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="image-template-delete-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="image-template-delete-title">Удалить шаблон</h3>
+            </div>
+            <p class="confirm-modal__lead" id="image-template-delete-lead">Это действие безвозвратно. Удалить шаблон и все его файлы?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="image-template-delete-cancel-btn">Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm" id="image-template-delete-ok">Да, удалить</button>
+            </div>
         </div>
     </div>
 

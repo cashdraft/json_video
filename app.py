@@ -68,6 +68,7 @@ from image_templates import (
     collect_reference_and_logo,
     create_template_dir,
     delete_reference_file,
+    delete_template_dir,
     list_templates,
     rename_template_dir,
     safe_template_dir,
@@ -541,16 +542,31 @@ def public_base_url_for_kie() -> str:
     return ""
 
 
+def _image_template_asset_url(folder_name: str, filename: str) -> str:
+    """Публичный URL файла шаблона; ?v=mtime сбрасывает кэш после замены logo.png."""
+    base = url_for("template_assets", template_name=folder_name, filename=filename)
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return base
+    target = (td / filename).resolve()
+    try:
+        target.relative_to(td.resolve())
+    except ValueError:
+        return base
+    if not target.is_file():
+        return base
+    try:
+        return f"{base}?v={int(target.stat().st_mtime)}"
+    except OSError:
+        return base
+
+
 def templates_ui_rows() -> list[dict]:
     rows = list_templates()
     for r in rows:
         lf = r.get("logo_file")
         if lf:
-            r["logo_url"] = url_for(
-                "template_assets",
-                template_name=r["folder_name"],
-                filename=lf,
-            )
+            r["logo_url"] = _image_template_asset_url(r["folder_name"], lf)
         else:
             r["logo_url"] = None
     return rows
@@ -565,11 +581,7 @@ def job_template_display(folder_name: str) -> dict:
     if not td:
         return {"kind": "missing", "folder_name": name}
     _refs, logo = collect_reference_and_logo(td)
-    logo_url = (
-        url_for("template_assets", template_name=name, filename=logo.name)
-        if logo
-        else None
-    )
+    logo_url = _image_template_asset_url(name, logo.name) if logo else None
     return {"kind": "ok", "folder_name": name, "logo_url": logo_url}
 
 
@@ -589,11 +601,8 @@ def template_assets(template_name: str, filename: str):
         abort(404)
     if not target.is_file():
         abort(404)
-    return send_from_directory(d, filename, max_age=86400)
-
-
-def _image_template_asset_url(folder_name: str, filename: str) -> str:
-    return url_for("template_assets", template_name=folder_name, filename=filename)
+    # Короткий max-age: при смене logo.png URL обновляется через ?v=mtime
+    return send_from_directory(d, filename, max_age=300)
 
 
 def _image_template_detail_json(folder_name: str) -> dict | None:
@@ -660,6 +669,15 @@ def api_image_templates_update(folder_name: str):
     if not detail:
         return jsonify({"ok": False, "error": "not_found"}), 404
     return jsonify({"ok": True, "template": detail})
+
+
+@app.route("/api/image-templates/<path:folder_name>", methods=["DELETE"])
+def api_image_templates_delete(folder_name: str):
+    err = delete_template_dir(str(folder_name or "").strip())
+    if err:
+        code = 404 if "не найден" in err.lower() else 400
+        return jsonify({"ok": False, "error": err}), code
+    return jsonify({"ok": True, "deleted": folder_name})
 
 
 @app.route("/api/image-templates/<path:folder_name>/logo", methods=["POST"])

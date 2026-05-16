@@ -14,9 +14,13 @@
     var logoPreviewImg = document.getElementById('image-template-editor-logo-preview');
     var cropWrap = document.getElementById('image-template-editor-crop-wrap');
     var cropCanvas = document.getElementById('image-template-editor-crop-canvas');
-    var cropBox = document.getElementById('image-template-editor-crop-box');
     var cropStage = document.getElementById('image-template-editor-crop-stage');
     var cropApplyBtn = document.getElementById('image-template-editor-crop-apply');
+    var cropZoomIn = document.getElementById('image-template-editor-crop-zoom-in');
+    var cropZoomOut = document.getElementById('image-template-editor-crop-zoom-out');
+    var logoHit = document.getElementById('image-template-editor-logo-hit');
+    var logoPlaceholder = document.getElementById('image-template-editor-logo-placeholder');
+    var LOGO_CROP_SIZE = 320;
     var dropzone = document.getElementById('image-template-editor-dropzone');
     var dropzoneLoading = document.getElementById('image-template-editor-dropzone-loading');
     var dropzoneLoadingText = document.getElementById('image-template-editor-dropzone-loading-text');
@@ -25,6 +29,11 @@
     var refCountEl = document.getElementById('image-template-editor-ref-count');
     var statusEl = document.getElementById('image-template-editor-status');
     var titleEl = document.getElementById('image-template-editor-title');
+    var deleteBtn = document.getElementById('image-template-editor-delete');
+    var deleteModal = document.getElementById('image-template-delete-modal');
+    var deleteLeadEl = document.getElementById('image-template-delete-lead');
+    var deleteOkBtn = document.getElementById('image-template-delete-ok');
+    var deleteCancelBtn = document.getElementById('image-template-delete-cancel-btn');
 
     var state = {
         mode: 'create',
@@ -33,8 +42,8 @@
         logoUrl: null,
         pendingLogoBlob: null,
         cropImage: null,
-        cropRect: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },
-        cropDrag: null,
+        logoCrop: { zoom: 1, panX: 0, panY: 0 },
+        logoPanDrag: null,
         dragRefFilename: null,
         orderSaving: false,
         openFolder: '',
@@ -44,7 +53,7 @@
     var closing = false;
 
     var DROPZONE_LOADING_RE = /^(Загрузка|Создание шаблона|Удаление|Сохранение)/;
-    var DROPZONE_ERROR_RE = /(максимум|фото|изображен|загруз|файл|передан|не удалось|нет файлов|слот|шаблон)/i;
+    var DROPZONE_ERROR_RE = /(максимум|фото|изображен|загруз|файл|передан|не удалось|нет файлов|слот|шаблон|логотип)/i;
 
     function shouldShowInDropzone(msg, isError) {
         if (!msg) return false;
@@ -99,10 +108,26 @@
     }
 
     async function parseJson(resp) {
+        var text = '';
         try {
-            return await resp.json();
+            text = await resp.text();
+            var data = text ? JSON.parse(text) : {};
+            if (!resp.ok && data && !data.error) {
+                data.error = 'Ошибка сервера (HTTP ' + resp.status + ')';
+                data.ok = false;
+            }
+            return data;
         } catch (e) {
-            return { ok: false, error: 'Некорректный ответ сервера' };
+            if (resp.status === 405) {
+                return {
+                    ok: false,
+                    error: 'Сервер не поддерживает этот запрос. Обновите страницу или перезапустите json-video.',
+                };
+            }
+            return {
+                ok: false,
+                error: 'Некорректный ответ сервера (HTTP ' + resp.status + ')',
+            };
         }
     }
 
@@ -263,21 +288,162 @@
         updateRefCount();
     }
 
+    function syncPickerLogoPreview(folder, logoUrl) {
+        if (!folder || !logoUrl) return;
+        var esc = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(folder) : folder.replace(/"/g, '\\"');
+        var card = document.querySelector('.template-option[data-template-folder="' + esc + '"]');
+        if (!card) return;
+        var img = card.querySelector('.template-logo-preview');
+        if (!img) return;
+        var sep = logoUrl.indexOf('?') >= 0 ? '&' : '?';
+        img.src = logoUrl + sep + 't=' + Date.now();
+    }
+
     function showLogoPreview(url) {
         if (!logoPreviewWrap || !logoPreviewImg) return;
         if (url) {
-            logoPreviewImg.src = url;
-            logoPreviewWrap.classList.remove('hidden');
+            var sep = url.indexOf('?') >= 0 ? '&' : '?';
+            logoPreviewImg.src = url + sep + 't=' + Date.now();
+            logoPreviewImg.classList.remove('hidden');
+            logoPreviewWrap.classList.remove('image-template-editor-logo-preview-wrap--empty');
+            if (logoPlaceholder) logoPlaceholder.classList.add('hidden');
         } else {
             logoPreviewImg.removeAttribute('src');
-            logoPreviewWrap.classList.add('hidden');
+            logoPreviewImg.classList.add('hidden');
+            logoPreviewWrap.classList.add('image-template-editor-logo-preview-wrap--empty');
+            if (logoPlaceholder) logoPlaceholder.classList.remove('hidden');
         }
     }
 
     function resetCrop() {
         state.cropImage = null;
         state.pendingLogoBlob = null;
+        state.logoCrop = { zoom: 1, panX: 0, panY: 0 };
+        state.logoPanDrag = null;
         if (cropWrap) cropWrap.classList.add('hidden');
+    }
+
+    function resetLogoCropView() {
+        state.logoCrop = { zoom: 1, panX: 0, panY: 0 };
+    }
+
+    function drawLogoCropCanvas() {
+        if (!cropCanvas || !state.cropImage) return;
+        var S = LOGO_CROP_SIZE;
+        cropCanvas.width = S;
+        cropCanvas.height = S;
+        var ctx = cropCanvas.getContext('2d');
+        ctx.fillStyle = '#0a0c12';
+        ctx.fillRect(0, 0, S, S);
+        var img = state.cropImage;
+        var iw = img.width;
+        var ih = img.height;
+        var coverScale = Math.max(S / iw, S / ih);
+        var scale = coverScale * state.logoCrop.zoom;
+        var dw = iw * scale;
+        var dh = ih * scale;
+        var cx = S / 2 + state.logoCrop.panX;
+        var cy = S / 2 + state.logoCrop.panY;
+        ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+    }
+
+    function canvasToBlob(canvas) {
+        return new Promise(function (resolve, reject) {
+            canvas.toBlob(function (blob) {
+                if (blob) resolve(blob);
+                else reject(new Error('Не удалось подготовить логотип.'));
+            }, 'image/png');
+        });
+    }
+
+    async function ensureFolderForLogo() {
+        var folder = state.folder;
+        var newName = (nameEl && nameEl.value || '').trim();
+        if (folder) return folder;
+        if (!newName) throw new Error('Сначала введите название шаблона.');
+        setStatus('Создание шаблона…');
+        var created = await ensureFolderExists(newName);
+        if (!created.ok) throw new Error(created.error || 'Ошибка создания');
+        folder = created.template.folder_name;
+        state.folder = folder;
+        state.openFolder = folder;
+        if (!state.openName) state.openName = newName;
+        state.mode = 'edit';
+        setStatus('');
+        return folder;
+    }
+
+    async function applyLogoCrop() {
+        if (!state.cropImage) return;
+        drawLogoCropCanvas();
+        var blob = await canvasToBlob(cropCanvas);
+        setStatus('Сохранение логотипа…');
+        try {
+            var folder = await ensureFolderForLogo();
+            var logoRes = await uploadLogo(folder, blob);
+            if (!logoRes.ok) throw new Error(logoRes.error || 'Ошибка логотипа');
+            state.pendingLogoBlob = null;
+            if (logoRes.template) {
+                loadTemplateIntoModal(logoRes.template);
+                syncPickerLogoPreview(folder, logoRes.template.logo_url);
+            } else {
+                showLogoPreview(state.logoUrl);
+            }
+            if (cropWrap) cropWrap.classList.add('hidden');
+            setStatus('');
+        } catch (e) {
+            setStatus(String(e.message || e), true);
+        }
+    }
+
+    function openLogoFilePicker() {
+        if (logoFileEl) logoFileEl.click();
+    }
+
+    function syncDeleteBtnVisibility() {
+        if (!deleteBtn) return;
+        deleteBtn.classList.toggle('hidden', !state.folder);
+    }
+
+    function openDeleteConfirmModal() {
+        if (!deleteModal || !state.folder) return;
+        if (deleteLeadEl) {
+            deleteLeadEl.textContent =
+                'Это действие безвозвратно. Удалить шаблон «' + state.folder + '» и все файлы?';
+        }
+        deleteModal.classList.remove('hidden');
+        deleteModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDeleteConfirmModal() {
+        if (!deleteModal) return;
+        deleteModal.classList.add('hidden');
+        deleteModal.setAttribute('aria-hidden', 'true');
+    }
+
+    async function confirmDeleteTemplate() {
+        if (!state.folder) return;
+        var folder = state.folder;
+        if (deleteOkBtn) deleteOkBtn.disabled = true;
+        try {
+            var resp = await fetch(apiUrl('/' + encodePath(folder)), {
+                method: 'DELETE',
+                credentials: 'same-origin',
+            });
+            var data = await parseJson(resp);
+            if (!data.ok) throw new Error(data.error || 'Не удалось удалить шаблон');
+            closeDeleteConfirmModal();
+            hideModalUI();
+            try {
+                sessionStorage.removeItem('json_video_select_image_template');
+            } catch (e) { /* ignore */ }
+            window.location.reload();
+        } catch (e) {
+            closeDeleteConfirmModal();
+            setStatus(String(e.message || e), true);
+        } finally {
+            if (deleteOkBtn) deleteOkBtn.disabled = false;
+        }
     }
 
     function loadTemplateIntoModal(tpl) {
@@ -291,6 +457,7 @@
         if (nameEl) nameEl.value = state.folder;
         showLogoPreview(state.logoUrl);
         renderReferences();
+        syncDeleteBtnVisibility();
     }
 
     function openModalCreate() {
@@ -309,6 +476,7 @@
         }
         showLogoPreview(null);
         renderReferences();
+        syncDeleteBtnVisibility();
         setStatus('');
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
@@ -480,56 +648,26 @@
             var img = new Image();
             img.onload = function () {
                 state.cropImage = img;
-                state.cropRect = { x: 0.2, y: 0.2, w: 0.6, h: 0.6 };
+                resetLogoCropView();
                 if (cropWrap) cropWrap.classList.remove('hidden');
-                drawCropCanvas();
-                positionCropBox();
+                drawLogoCropCanvas();
             };
             img.src = reader.result;
         };
         reader.readAsDataURL(file);
     }
 
-    function drawCropCanvas() {
-        if (!cropCanvas || !state.cropImage) return;
-        var maxW = 420;
-        var scale = Math.min(1, maxW / state.cropImage.width);
-        var w = Math.round(state.cropImage.width * scale);
-        var h = Math.round(state.cropImage.height * scale);
-        cropCanvas.width = w;
-        cropCanvas.height = h;
-        var ctx = cropCanvas.getContext('2d');
-        ctx.drawImage(state.cropImage, 0, 0, w, h);
-        cropCanvas.dataset.scale = String(scale);
+    function changeLogoZoom(delta) {
+        if (!state.cropImage) return;
+        var next = state.logoCrop.zoom * delta;
+        state.logoCrop.zoom = Math.max(1, Math.min(4, next));
+        drawLogoCropCanvas();
     }
 
-    function positionCropBox() {
-        if (!cropBox || !cropCanvas) return;
-        var r = state.cropRect;
-        cropBox.style.left = (r.x * 100) + '%';
-        cropBox.style.top = (r.y * 100) + '%';
-        cropBox.style.width = (r.w * 100) + '%';
-        cropBox.style.height = (r.h * 100) + '%';
-    }
-
-    function cropToBlob(cb) {
-        if (!state.cropImage || !cropCanvas) return;
-        var scale = parseFloat(cropCanvas.dataset.scale || '1');
-        var iw = state.cropImage.width;
-        var ih = state.cropImage.height;
-        var r = state.cropRect;
-        var sx = Math.round(r.x * iw);
-        var sy = Math.round(r.y * ih);
-        var sw = Math.max(1, Math.round(r.w * iw));
-        var sh = Math.max(1, Math.round(r.h * ih));
-        var out = document.createElement('canvas');
-        out.width = sw;
-        out.height = sh;
-        var ctx = out.getContext('2d');
-        ctx.drawImage(state.cropImage, sx, sy, sw, sh, 0, 0, sw, sh);
-        out.toBlob(function (blob) {
-            if (blob) cb(blob);
-        }, 'image/png');
+    if (logoHit) {
+        logoHit.addEventListener('click', function () {
+            openLogoFilePicker();
+        });
     }
 
     if (logoFileEl) {
@@ -543,43 +681,53 @@
 
     if (cropApplyBtn) {
         cropApplyBtn.addEventListener('click', function () {
-            cropToBlob(function (blob) {
-                state.pendingLogoBlob = blob;
-                var url = URL.createObjectURL(blob);
-                showLogoPreview(url);
-                if (cropWrap) cropWrap.classList.add('hidden');
-                setStatus('Логотип сохранится при закрытии окна.');
-            });
+            applyLogoCrop();
         });
     }
 
-    if (cropBox && cropStage) {
-        cropBox.addEventListener('pointerdown', function (ev) {
+    if (cropZoomIn) {
+        cropZoomIn.addEventListener('click', function (ev) {
             ev.preventDefault();
-            state.cropDrag = {
+            changeLogoZoom(1.18);
+        });
+    }
+
+    if (cropZoomOut) {
+        cropZoomOut.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            changeLogoZoom(1 / 1.18);
+        });
+    }
+
+    if (cropStage) {
+        cropStage.addEventListener('pointerdown', function (ev) {
+            if (!state.cropImage) return;
+            ev.preventDefault();
+            state.logoPanDrag = {
                 startX: ev.clientX,
                 startY: ev.clientY,
-                rect: Object.assign({}, state.cropRect),
+                panX: state.logoCrop.panX,
+                panY: state.logoCrop.panY,
             };
-            cropBox.setPointerCapture(ev.pointerId);
+            cropStage.setPointerCapture(ev.pointerId);
         });
-        cropBox.addEventListener('pointermove', function (ev) {
-            if (!state.cropDrag || !cropStage) return;
-            var sr = cropStage.getBoundingClientRect();
-            var dx = (ev.clientX - state.cropDrag.startX) / sr.width;
-            var dy = (ev.clientY - state.cropDrag.startY) / sr.height;
-            var r = state.cropDrag.rect;
-            var nx = Math.max(0, Math.min(1 - r.w, r.x + dx));
-            var ny = Math.max(0, Math.min(1 - r.h, r.y + dy));
-            state.cropRect = { x: nx, y: ny, w: r.w, h: r.h };
-            positionCropBox();
+        cropStage.addEventListener('pointermove', function (ev) {
+            if (!state.logoPanDrag) return;
+            state.logoCrop.panX = state.logoPanDrag.panX + (ev.clientX - state.logoPanDrag.startX);
+            state.logoCrop.panY = state.logoPanDrag.panY + (ev.clientY - state.logoPanDrag.startY);
+            drawLogoCropCanvas();
         });
-        cropBox.addEventListener('pointerup', function () {
-            state.cropDrag = null;
+        cropStage.addEventListener('pointerup', function () {
+            state.logoPanDrag = null;
         });
-        cropBox.addEventListener('pointercancel', function () {
-            state.cropDrag = null;
+        cropStage.addEventListener('pointercancel', function () {
+            state.logoPanDrag = null;
         });
+        cropStage.addEventListener('wheel', function (ev) {
+            if (!state.cropImage) return;
+            ev.preventDefault();
+            changeLogoZoom(ev.deltaY < 0 ? 1.1 : 1 / 1.1);
+        }, { passive: false });
     }
 
     function handleRefFiles(fileList) {
@@ -611,6 +759,7 @@
                     state.openFolder = folder;
                     if (!state.openName) state.openName = newName;
                     state.mode = 'edit';
+                    syncDeleteBtnVisibility();
                 } catch (e) {
                     setStatus(String(e.message || e), true);
                     return;
@@ -666,6 +815,37 @@
             requestCloseModal();
         });
     });
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openDeleteConfirmModal();
+        });
+    }
+
+    if (deleteOkBtn) {
+        deleteOkBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            confirmDeleteTemplate();
+        });
+    }
+
+    if (deleteCancelBtn) {
+        deleteCancelBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            closeDeleteConfirmModal();
+        });
+    }
+
+    if (deleteModal) {
+        deleteModal.querySelectorAll('[data-image-template-delete-close]').forEach(function (el) {
+            el.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                closeDeleteConfirmModal();
+            });
+        });
+    }
 
     document.querySelectorAll('.template-option-edit-btn').forEach(function (btn) {
         btn.addEventListener('mousedown', function (ev) {

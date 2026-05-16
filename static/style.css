@@ -468,6 +468,28 @@ textarea::placeholder {
     overflow-y: auto;
 }
 
+.image-template-editor-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+#image-template-editor-delete {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#image-template-delete-modal {
+    z-index: 1250;
+}
+
 .image-template-editor-lead {
     margin-bottom: 0.65rem;
 }
@@ -500,22 +522,86 @@ textarea::placeholder {
     color: var(--text-muted);
 }
 
-.image-template-editor-file-btn {
+.image-template-editor-field--logo .image-template-editor-label {
+    margin-bottom: 0.35rem;
+}
+
+.image-template-editor-logo-hit {
+    display: block;
     margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
     cursor: pointer;
+    text-align: left;
 }
 
 .image-template-editor-logo-preview-wrap {
-    margin-top: 0.35rem;
+    position: relative;
+    display: block;
+    width: 5.25rem;
+    height: 5.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    overflow: hidden;
+}
+
+.image-template-editor-logo-preview-wrap--empty {
+    border-style: dashed;
 }
 
 .image-template-editor-logo-preview {
-    width: 4.5rem;
-    height: 4.5rem;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    border-radius: 6px;
-    border: 1px solid var(--border);
     display: block;
+}
+
+.image-template-editor-logo-placeholder {
+    position: absolute;
+    inset: 0;
+    background: rgba(14, 16, 22, 0.35);
+}
+
+.image-template-editor-logo-edit {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    z-index: 2;
+    width: 1.45rem;
+    height: 1.45rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: rgba(8, 10, 14, 0.88);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.72rem;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.image-template-editor-logo-hit:hover .image-template-editor-logo-edit,
+.image-template-editor-logo-hit:focus-visible .image-template-editor-logo-edit {
+    opacity: 1;
+}
+
+.image-template-editor-crop-toolbar {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.image-template-editor-crop-toolbar .btn {
+    min-width: 2.25rem;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .image-template-editor-hint {
@@ -534,19 +620,21 @@ textarea::placeholder {
     border: 1px solid var(--border);
 }
 
-.image-template-editor-crop-stage canvas {
-    display: block;
-    max-width: 100%;
-    height: auto;
+.image-template-editor-crop-stage--square {
+    width: min(320px, 100%);
+    aspect-ratio: 1;
+    cursor: grab;
+    touch-action: none;
 }
 
-.image-template-editor-crop-box {
-    position: absolute;
-    border: 2px solid var(--accent);
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-    cursor: move;
-    box-sizing: border-box;
-    touch-action: none;
+.image-template-editor-crop-stage--square:active {
+    cursor: grabbing;
+}
+
+.image-template-editor-crop-stage--square canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 .image-template-editor-dropzone {

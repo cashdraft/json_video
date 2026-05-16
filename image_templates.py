@@ -197,6 +197,18 @@ def create_template_dir(name: str) -> tuple[Path | None, str | None]:
     return target, None
 
 
+def delete_template_dir(folder_name: str) -> str | None:
+    """Удалить папку шаблона целиком. None при успехе."""
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return "Шаблон не найден."
+    try:
+        shutil.rmtree(td)
+    except OSError:
+        return "Не удалось удалить шаблон."
+    return None
+
+
 def rename_template_dir(old_name: str, new_name: str) -> str | None:
     err = validate_template_name(new_name)
     if err:
