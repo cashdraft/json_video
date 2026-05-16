@@ -523,12 +523,11 @@ app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
 
 @app.context_processor
 def _inject_static_style_mtime() -> dict[str, str]:
-    """Cache-bust для style.css: добавляем `?v=<mtime>` к URL.
-    После любой правки CSS браузер автоматически подтягивает свежую версию,
-    без ручного Ctrl+F5. Если файла нет — отдаём пустую строку (link останется без ?v=)."""
+    """Cache-bust для style.css: `?v=<mtime>-<hash>` — меняется при любой правке файла."""
     try:
         p = Path(app.static_folder) / "style.css"
-        v = str(int(p.stat().st_mtime))
+        raw = p.read_bytes()
+        v = f"{int(p.stat().st_mtime)}-{hashlib.md5(raw).hexdigest()[:10]}"
     except (OSError, AttributeError, TypeError):
         v = ""
     return {"static_style_mtime": v}
@@ -6999,6 +6998,35 @@ def job_elevenlabs_defaults_save(job_id: str):
             job["tts_script_source"] = normalize_tts_script_source(body.get("tts_script_source"))
         save_job(job_id, job)
     return jsonify({"ok": True})
+
+
+@app.route("/job/<job_id>/elevenlabs/tts/clear", methods=["POST"])
+def job_elevenlabs_tts_clear(job_id: str):
+    """Удалить MP3 озвучки и парные words.json с диска для проекта."""
+    with _job_file_lock(job_id):
+        if load_job(job_id) is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+
+    audio_dir = JOB_AUDIO_DIR / job_id
+    removed: list[str] = []
+    if audio_dir.is_dir():
+        for mp3 in list(audio_dir.glob("*.mp3")):
+            stem = mp3.stem
+            candidates = [
+                mp3,
+                audio_dir / f"{stem}.words.json",
+                audio_dir / f"{stem}.whisper.words.json",
+            ]
+            for path in candidates:
+                if not path.is_file():
+                    continue
+                try:
+                    path.unlink()
+                    removed.append(path.name)
+                except OSError:
+                    pass
+
+    return jsonify({"ok": True, "removed": removed})
 
 
 @app.route("/job/<job_id>/elevenlabs/tts", methods=["POST"])

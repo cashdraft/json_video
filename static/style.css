@@ -1155,8 +1155,8 @@ textarea::placeholder {
     color: var(--text);
 }
 
-/* ReWrite: карточки как у сцен (scene-card + слоты) */
-.rewrite-source-card {
+/* ReWrite: карточки как у сцен (scene-card + слоты). «Итоговый текст» в сетке этапов — без margin (только grid-gap). */
+.rewrite-source-card:not(.rewrite-voiceover-final-card) {
     margin-bottom: 1rem;
 }
 
@@ -2009,7 +2009,9 @@ input.rewrite-source-title-input.rewrite-source-textarea {
    её в нейтральном «outline»-стиле, как соседняя «Остановить» — прозрачный фон,
    тонкая серая обводка, приглушённый текст. .btn:disabled добавляет opacity 0.5. */
 #rewrite-youtube-decode:disabled,
-#rewrite-youtube-decode[disabled] {
+#rewrite-youtube-decode[disabled],
+#tts-generate:disabled,
+#tts-generate[disabled] {
     background: transparent;
     color: var(--text-muted);
     border: 1px solid var(--border);
@@ -2064,6 +2066,15 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.85rem 1rem;
     align-items: start;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+/* Только grid-gap между карточками этапов — без margin у дочерних .scene-card / .rewrite-source-card */
+#rewrite-stages-list.scenes-grid.rewrite-stages-list > * {
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 @media (max-width: 60rem) {
@@ -2288,9 +2299,15 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     transform: rotate(-90deg);
 }
 
-.rewrite-stage-card[data-extra-collapse='1'] .scene-header:hover {
+.rewrite-stage-card[data-extra-collapse='1']:not(.rewrite-scene-writer-module):not(.rewrite-youtube-packaging-module) .scene-header:hover {
     background: rgba(255, 255, 255, 0.04);
     border-radius: 6px;
+}
+
+.rewrite-youtube-packaging-card-header:hover,
+.rewrite-youtube-packaging-card-header:focus-visible {
+    background: transparent;
+    outline: none;
 }
 
 .rewrite-stage-card {
@@ -2312,11 +2329,121 @@ input.rewrite-source-title-input.rewrite-source-textarea {
    без явного span он занимает одну колонку как карточка агента. Тянем на всю ширину, как «Исходный текст». */
 .scenes-grid.rewrite-stages-list > .rewrite-voiceover-final-card {
     grid-column: 1 / -1;
+    /* В сетке этапов зазор только через grid-gap (как между Scene Writer и YouTube). */
+    margin-bottom: 0;
 }
 
 /* Оверлей «ожидаем Voiceover» позиционируется на всю карточку */
 .rewrite-voiceover-final-card {
     position: relative;
+    overflow: hidden;
+}
+
+/* Как Scene Writer / YouTube / Озвучка: верх 0.55rem (не прыгает при раскрытии), снизу 1.25rem. */
+.scene-card.rewrite-voiceover-final-card.rewrite-voiceover-final-card--collapsible {
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+    height: auto;
+    align-self: start;
+}
+
+.scene-card.rewrite-voiceover-final-card.rewrite-voiceover-final-card--collapsible.rewrite-voiceover-final-card--body-collapsed {
+    padding-bottom: 0.55rem;
+}
+
+.rewrite-voiceover-final-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.rewrite-voiceover-final-card--collapsible .rewrite-voiceover-final-card-header {
+    min-height: 24px;
+}
+
+.rewrite-voiceover-final-card-header:hover,
+.rewrite-voiceover-final-card-header:focus-visible {
+    background: transparent;
+    outline: none;
+}
+
+.rewrite-voiceover-final-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.rewrite-voiceover-final-title-row .rewrite-source-body-title,
+.rewrite-voiceover-final-title-row .rewrite-stage-title-text,
+.rewrite-voiceover-final-title-row .scene-id {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    align-self: center;
+}
+
+.rewrite-voiceover-final-card-compact.rewrite-stages-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.rewrite-voiceover-final-card-compact .rewrite-voiceover-final-compact-counts {
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+}
+
+.rewrite-voiceover-final-card--collapsible:not(.rewrite-voiceover-final-card--body-collapsed) .rewrite-voiceover-final-collapsible-inner {
+    margin-top: 0.65rem;
+}
+
+.rewrite-voiceover-final-card--collapsible.rewrite-voiceover-final-card--body-collapsed .rewrite-voiceover-final-collapsible-inner {
+    display: none;
+}
+
+.rewrite-voiceover-final-card--collapsible:not(.rewrite-voiceover-final-card--body-collapsed) .rewrite-voiceover-final-card-compact {
+    display: none;
+}
+
+.rewrite-voiceover-final-card--collapsible.rewrite-voiceover-final-card--body-collapsed .rewrite-voiceover-final-card-header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+    align-items: center;
+}
+
+.rewrite-voiceover-final-card--collapsible.rewrite-voiceover-final-card--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+/* Ожидание Voiceover: затемнение на всю карточку (включая заголовок), клики по шапке проходят */
+.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-empty-overlay {
+    pointer-events: none;
+}
+
+.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-card-header {
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.rewrite-voiceover-final-card--collapsible.rewrite-voiceover-final-card--body-collapsed.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-empty-overlay {
+    display: block;
 }
 
 .rewrite-voiceover-final-card .rewrite-stage-subtitle {
@@ -2330,36 +2457,104 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
 }
 
-/* Пустой Result «Итоговый текст» и ожидание Structure Splitter у Scene Writer: затемнение всей карточки */
+/* Пустой Result «Итоговый текст» и ожидание Structure Splitter у Scene Writer.
+   Оверлей только рисуется поверх (не flex — иначе длинный текст раздувает min-width карточки). */
 .rewrite-voiceover-final-empty-overlay,
-.rewrite-scene-writer-wait-overlay {
+.rewrite-scene-writer-wait-overlay,
+.rewrite-youtube-packaging-wait-overlay,
+.tts-section-wait-overlay,
+.video-json-panel-wait-overlay {
     position: absolute;
     inset: 0;
+    margin: 0;
+    padding: 0;
     border-radius: inherit;
     background: rgba(12, 14, 20, 0.66);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
     z-index: 25;
     pointer-events: auto;
+    overflow: hidden;
+    contain: strict;
 }
 
 .rewrite-voiceover-final-empty-overlay.hidden,
-.rewrite-scene-writer-wait-overlay.hidden {
+.rewrite-scene-writer-wait-overlay.hidden,
+.rewrite-youtube-packaging-wait-overlay.hidden,
+.tts-section-wait-overlay.hidden,
+.video-json-panel-wait-overlay.hidden {
     display: none !important;
 }
 
+/* Scene Writer: оверлей ожидания Structure Splitter (в т.ч. в свёрнутой карточке) */
+.rewrite-stage-card.rewrite-scene-writer-module {
+    position: relative;
+    overflow: hidden;
+}
+
+.scenes-grid.rewrite-stages-list > .rewrite-stage-card.rewrite-stage-card--full {
+    margin-bottom: 0;
+}
+
+.rewrite-stage-card.rewrite-scene-writer-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-stage-header-top {
+    align-items: center;
+}
+
+.rewrite-stage-card.rewrite-scene-writer-module--waiting .rewrite-scene-writer-wait-overlay {
+    pointer-events: none;
+}
+
+.rewrite-stage-card.rewrite-scene-writer-module--waiting .scene-header {
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.rewrite-stage-card.rewrite-scene-writer-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed.rewrite-scene-writer-module--waiting .rewrite-scene-writer-wait-overlay {
+    display: block;
+}
+
+/* YouTube packaging: оверлей ожидания Title Strategist (как Scene Writer) */
+.rewrite-stage-card.rewrite-youtube-packaging-module {
+    position: relative;
+    overflow: hidden;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-youtube-packaging-card-header {
+    align-items: center;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-wait-overlay {
+    pointer-events: none;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-card-header {
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-wait-overlay {
+    display: block;
+}
+
+/* Текст оверлея: только поверх карточки (absolute), без margin/padding, влияющих на высоту блока */
 .rewrite-voiceover-final-empty-overlay__text,
 .rewrite-scene-writer-wait-overlay__text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     margin: 0;
-    padding: 0 1.25rem;
-    max-width: min(26rem, 92%);
+    padding: 0;
+    width: auto;
+    max-width: calc(100% - 2.5rem);
+    box-sizing: border-box;
     text-align: center;
-    font-size: 0.95rem;
-    line-height: 1.45;
+    font-size: 0.9rem;
+    line-height: 1.35;
     font-weight: 500;
-    color: rgba(248, 249, 252, 0.96);
-    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.75);
+    color: var(--text-muted);
+    text-shadow: none;
+    overflow-wrap: anywhere;
+    pointer-events: none;
 }
 
 .rewrite-voiceover-final-textarea {
@@ -3697,11 +3892,134 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     display: flex;
 }
 
+.video-parse-panel--locked .video-json-panel-collapsible-inner,
 .video-parse-panel--locked #json_input,
 .video-parse-panel--locked .settings-section,
 .video-parse-panel--locked .buttons-section,
 .video-parse-panel--locked .input-actions {
     pointer-events: none;
+}
+
+.video-parse-panel--locked .video-json-panel-card-header {
+    position: relative;
+    z-index: 6;
+    pointer-events: auto;
+}
+
+/* JSON-код сцен — сворачиваемая шапка как у Озвучка / YouTube packaging */
+.video-json-panel.video-json-panel--collapsible {
+    position: relative;
+    overflow: hidden;
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+}
+
+.video-json-panel--waiting .video-json-panel-wait-overlay {
+    pointer-events: none;
+}
+
+.video-json-panel--waiting .video-json-panel-card-header {
+    z-index: 26;
+    pointer-events: auto;
+}
+
+.video-json-panel--collapsible.video-json-panel--body-collapsed.video-json-panel--waiting .video-json-panel-wait-overlay {
+    display: block;
+}
+
+.video-json-panel--collapsible.video-json-panel--body-collapsed.video-json-panel--waiting .video-json-panel-card-header {
+    align-items: center;
+}
+
+.video-json-panel.video-json-panel--collapsible.video-json-panel--body-collapsed {
+    padding-bottom: 0.55rem;
+}
+
+.video-json-panel-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.video-json-panel--collapsible .video-json-panel-card-header {
+    min-height: 24px;
+}
+
+.video-json-panel-card-header:hover,
+.video-json-panel-card-header:focus-visible {
+    background: transparent;
+    outline: none;
+}
+
+.video-json-panel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.video-json-panel-title-row .rewrite-source-body-title,
+.video-json-panel-title-row .rewrite-stage-title-text,
+.video-json-panel-title-row .scene-id,
+.video-json-panel-title-row .video-json-title {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    align-self: center;
+}
+
+.video-json-panel-card-compact.rewrite-stages-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.video-json-panel-card-compact .video-json-panel-compact-counts {
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.video-json-panel--collapsible:not(.video-json-panel--body-collapsed) .video-json-panel-collapsible-inner {
+    margin-top: 0.65rem;
+}
+
+.video-json-panel--collapsible.video-json-panel--body-collapsed .video-json-panel-collapsible-inner {
+    display: none;
+}
+
+.video-json-panel--collapsible:not(.video-json-panel--body-collapsed) .video-json-panel-card-compact {
+    display: none;
+}
+
+.video-json-panel--collapsible.video-json-panel--body-collapsed .video-json-panel-card-header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+}
+
+.video-json-panel--collapsible.video-json-panel--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.video-json-panel.video-json-panel--collapsible .video-parse-lock-overlay {
+    border-radius: inherit;
 }
 
 .job-page .video-panel .summary {
@@ -3710,16 +4028,238 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     border: 1px solid var(--border);
 }
 
-.tts-section h2 {
+.tts-section-collapsible-inner > h2.scene-id.rewrite-pipeline-runner__title {
     font-size: 1.1rem;
     font-weight: 600;
     margin: 0 0 0.65rem 0;
 }
 
-.tts-section h2.scene-id.rewrite-pipeline-runner__title {
+/* Как Scene Writer / YouTube packaging: верх 0.55rem (не прыгает при раскрытии), снизу 1.25rem. */
+.tts-section.video-panel.tts-section--collapsible {
+    position: relative;
+    overflow: hidden;
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+}
+
+.tts-section--waiting .tts-section-wait-overlay {
+    pointer-events: none;
+}
+
+.tts-section--waiting .tts-section-card-header {
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.tts-section--collapsible.tts-section--body-collapsed.tts-section--waiting .tts-section-wait-overlay {
+    display: block;
+}
+
+.tts-section--collapsible.tts-section--body-collapsed.tts-section--waiting .tts-section-card-header {
+    align-items: center;
+}
+
+.tts-section.video-panel.tts-section--collapsible.tts-section--body-collapsed {
+    padding-bottom: 0.55rem;
+}
+
+.tts-section-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* В свёрнутом виде справа compact (24px); при раскрытии он скрыт — без min-height шапка сжимается и строка уезжает вверх. */
+.tts-section--collapsible .tts-section-card-header {
+    min-height: 24px;
+}
+
+.tts-section-card-header:hover,
+.tts-section-card-header:focus-visible {
+    background: transparent;
+    outline: none;
+}
+
+.tts-section--collapsible:not(.tts-section--body-collapsed) .tts-section-collapsible-inner {
+    margin-top: 0.65rem;
+}
+
+.tts-section-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.tts-section-title-row .rewrite-stage-body-collapse-chevron {
+    align-self: center;
+}
+
+.tts-section-logo {
+    height: 1.05rem;
+    width: auto;
+    max-width: min(7.25rem, 40vw);
+    display: block;
+    flex-shrink: 0;
+    align-self: center;
+    object-fit: contain;
+    object-position: left center;
+    background: transparent;
+}
+
+.tts-section-title-row .rewrite-stage-title-text,
+.tts-section-title-row .rewrite-source-body-title,
+.tts-section-title-row .scene-id {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
     font-size: 0.9rem;
     font-weight: 600;
-    margin: 0 0 0.35rem 0;
+    align-self: center;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tts-section-card-compact.rewrite-stages-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.tts-section-card-compact .tts-section-compact-counts {
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+}
+
+.tts-section--collapsible.tts-section--body-collapsed .tts-section-collapsible-inner {
+    display: none;
+}
+
+.tts-section--collapsible:not(.tts-section--body-collapsed) .tts-section-card-compact {
+    display: none;
+}
+
+.tts-section--collapsible.tts-section--body-collapsed .tts-section-card-header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+}
+
+.tts-section--collapsible.tts-section--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.tts-section-collapsible-inner > h2.scene-id.rewrite-pipeline-runner__title,
+.tts-section-collapsible-inner > .rewrite-pipeline-runner__title.scene-id {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* YouTube packaging engine — шапка как у «Озвучка» */
+.rewrite-stage-card.rewrite-youtube-packaging-module .rewrite-youtube-packaging-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+}
+
+.rewrite-youtube-packaging-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    line-height: 1;
+}
+
+.rewrite-youtube-packaging-title-row .rewrite-stage-body-collapse-chevron {
+    align-self: center;
+}
+
+.rewrite-youtube-packaging-logo {
+    height: 1.2rem;
+    width: auto;
+    max-width: min(8.5rem, 44vw);
+    display: block;
+    flex-shrink: 0;
+    align-self: center;
+    object-fit: contain;
+    object-position: left center;
+    background: transparent;
+}
+
+.rewrite-youtube-packaging-title-row .rewrite-stage-title-text,
+.rewrite-youtube-packaging-title-row .rewrite-source-body-title {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    align-self: center;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rewrite-youtube-packaging-card-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+
+.rewrite-youtube-packaging-card-compact.rewrite-stages-compact {
+    justify-content: flex-end;
+    gap: 0.4rem;
+}
+
+.rewrite-youtube-packaging-card-compact .rewrite-youtube-packaging-compact-counts {
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible:not(.rewrite-stage-card--body-collapsed) .rewrite-youtube-packaging-card-compact {
+    display: none;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible:not(.rewrite-stage-card--body-collapsed) .rewrite-stage-collapsible-inner {
+    margin-top: 0.65rem;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed .rewrite-youtube-packaging-card-header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin: 0;
+}
+
+/* Как Scene Writer: свёрнуто 0.55rem по вертикали; при раскрытии верх не прыгает (0.55rem), снизу 1.25rem. */
+.scene-card.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible {
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+    height: auto;
+    align-self: start;
+}
+
+.scene-card.rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed {
+    padding-bottom: 0.55rem;
+}
+
+.rewrite-stage-card.rewrite-youtube-packaging-module .scene-header {
+    margin-bottom: 0;
 }
 
 .tts-warning {
@@ -3812,6 +4352,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .tts-row {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-end;
     gap: 1rem;
 }
 
@@ -4042,9 +4583,12 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     width: 100%;
 }
 
-.tts-voice-btn-preview .tts-voice-option-avatar {
+.tts-voice-btn-preview .tts-voice-option-avatar,
+#elevenlabs-tts .tts-voice-dropdown__btn .tts-voice-option-avatar {
     width: 1.65rem;
     height: 1.65rem;
+    min-height: 1.65rem;
+    max-height: 1.65rem;
     font-size: 0.72rem;
 }
 
@@ -4064,13 +4608,27 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     white-space: nowrap;
 }
 
-#elevenlabs-tts [data-job-model-field='tts-model'] .rewrite-anim-dropdown__btn,
-.tts-voice-dropdown__btn {
+/* Одна высота: аватар 1.65rem + вертикальные отступы по 0.425rem */
+#elevenlabs-tts .tts-elevenlabs-dropdown__btn {
     display: flex;
     align-items: center;
-    min-height: 2.35rem;
-    padding: 0.42rem 0.6rem;
+    justify-content: space-between;
+    gap: 0.4rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
+    max-height: 2.5rem;
+    padding: 0 0.6rem;
     box-sizing: border-box;
+    line-height: 1.2;
+    overflow: hidden;
+}
+
+#elevenlabs-tts .tts-elevenlabs-dropdown__btn-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tts-voice-dropdown__btn .rewrite-anim-dropdown__btn-label--voice {
@@ -4185,30 +4743,196 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     width: 100%;
 }
 
-/* Окно с пословными таймингами (collapsible) под плеером */
-.tts-words-wrap {
+.tts-result-block .tts-result-toolbar {
+    margin-bottom: 0.5rem;
+}
+
+.tts-result-toolbar .tts-result-duration {
+    margin-left: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.tts-result-slot {
+    aspect-ratio: auto;
+    min-height: 4.75rem;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    padding: 0.35rem 0.45rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tts-result-slot .slot-status-row {
+    margin: 0;
+    flex: 1 1 auto;
+    min-height: 3.5rem;
+}
+
+.tts-result-slot[data-status="generating"] #tts-player-body,
+.tts-result-slot[data-status="generating"] .tts-player-body {
+    display: none !important;
+}
+
+.tts-result-slot[data-status="generating"] #tts-result-status-row,
+.tts-result-slot[data-status="error"] #tts-result-status-row {
+    display: flex;
+}
+
+.tts-result-slot[data-status="error"] #tts-player-body,
+.tts-result-slot[data-status="error"] .tts-player-body {
+    display: block;
+}
+
+.tts-result-slot .tts-player-body {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.tts-player-bar--empty .tts-play-btn,
+.tts-player-bar--empty .tts-seek,
+.tts-player-bar--empty .tts-download-btn,
+.tts-player-bar--empty .tts-clear-btn {
+    opacity: 0.38;
+    pointer-events: none;
+}
+
+/* Два столбца: Eleven / Whisper — пословные тайминги под плеером */
+.tts-word-timings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
     margin-top: 0.75rem;
     width: 100%;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .tts-word-timings-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tts-word-timings-panel {
+    min-width: 0;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.02);
 }
 
-.tts-words-toggle {
+.tts-word-timings-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    padding: 0.55rem 0.75rem;
+    cursor: pointer;
+    margin: 0;
+    border-radius: 8px;
+    user-select: none;
+}
+
+.tts-word-timings-panel__header:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.tts-word-timings-panel__title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.tts-word-timings-panel__title-row .scene-id {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.tts-word-timings-panel[aria-expanded="false"] .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.tts-word-timings-panel__summary {
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 52%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.tts-word-timings-panel__body {
+    padding: 0 0.75rem 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tts-word-timings-whisper-run {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    width: 100%;
-    padding: 0.55rem 0.75rem;
-    background: transparent;
-    border: 0;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
+    flex-wrap: wrap;
+    padding: 0.65rem 0 0.45rem;
 }
 
-.tts-words-toggle:hover { background: rgba(255, 255, 255, 0.04); }
+.tts-word-timings-result.rewrite-stage-row--result {
+    margin-top: 0.15rem;
+}
+
+.tts-word-timings-panel .rewrite-slot--stage-result {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0.35rem;
+}
+
+/* Result JSON — те же фон, пунктир, шрифт и отступы, что у textarea этапов */
+.tts-word-timings-panel .rewrite-slot--stage-result pre.rewrite-stage-result.rewrite-source-textarea {
+    --rewrite-result-visible-lines: 10;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    max-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    margin: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    resize: vertical;
+    cursor: default;
+    white-space: pre;
+    font-family: inherit;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    padding: 0.55rem 0.65rem;
+    box-sizing: border-box;
+}
+
+.tts-word-timings-panel .rewrite-slot--stage-result pre.rewrite-stage-result.rewrite-source-textarea:empty::before {
+    content: 'Pending';
+    color: var(--text-muted);
+}
+
+.tts-word-timings-panel .rewrite-slot--stage-result pre.rewrite-stage-result.rewrite-source-textarea.rewrite-stage-result--busy {
+    color: var(--text-muted);
+    filter: saturate(0.85);
+}
+
+.tts-word-timings-check {
+    margin-top: 0.5rem;
+}
 
 .tts-words-source-row {
     display: flex;
@@ -4242,52 +4966,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     font-weight: 600;
 }
 
-.tts-words-chevron {
-    display: inline-block;
-    transition: transform 0.15s ease;
-    color: rgba(255, 255, 255, 0.65);
-}
-
-.tts-words-wrap[aria-expanded="true"] .tts-words-chevron { transform: rotate(90deg); }
-
-.tts-words-title {
-    font-weight: 600;
-}
-
-.tts-words-summary {
-    margin-left: 0.5rem;
-    color: rgba(255, 255, 255, 0.55);
-    font-size: 0.85rem;
-}
-
-.tts-words-body {
-    padding: 0.5rem 0.75rem 0.75rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.tts-words-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.tts-words-json {
-    max-height: 360px;
-    overflow: auto;
-    margin: 0;
-    padding: 0.6rem 0.75rem;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 6px;
-    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
-    font-size: 0.78rem;
-    line-height: 1.4;
-    white-space: pre;
-    color: rgba(255, 255, 255, 0.86);
-}
-
 .tts-player-native {
     position: absolute;
     width: 0;
@@ -4302,10 +4980,12 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     gap: 0.65rem;
     width: 100%;
     box-sizing: border-box;
-    padding: 0.55rem 0.65rem 0.5rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    padding: 0;
+    margin: 0;
+    min-height: 3.5rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     position: relative;
 }
 
@@ -4331,7 +5011,8 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .tts-play-btn:focus-visible,
-.tts-download-btn:focus-visible {
+.tts-download-btn:focus-visible,
+.tts-clear-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
@@ -4434,6 +5115,33 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     background: rgba(74, 158, 255, 0.12);
     border-color: var(--accent);
     color: var(--accent-hover);
+}
+
+.tts-clear-btn {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tts-clear-btn:hover:not(:disabled) {
+    background: rgba(255, 77, 79, 0.12);
+    border-color: var(--error, #ff4d4f);
+    color: #ffb0b2;
+}
+
+.tts-clear-btn:disabled {
+    opacity: 0.38;
+    cursor: default;
+    pointer-events: none;
 }
 
 .job-settings,
@@ -5001,6 +5709,13 @@ button.job-download-all-link {
 
 .scene-header {
     margin-bottom: 1rem;
+}
+
+/* В сетке этапов: шапки свёрнутых блоков без нижнего margin (иначе лишний зазор до следующей карточки). */
+#rewrite-stages-list .rewrite-voiceover-final-card-header.scene-header,
+#rewrite-stages-list .rewrite-stage-card--full.rewrite-stage-card--body-collapsed > .scene-header,
+#rewrite-stages-list .rewrite-stage-card--full > .rewrite-youtube-packaging-card-header.scene-header {
+    margin-bottom: 0;
 }
 
 .scene-audio-timing-badge {
@@ -6764,4 +7479,3 @@ button.job-download-all-link {
     animation: spin 0.8s linear infinite;
     box-sizing: border-box;
 }
-

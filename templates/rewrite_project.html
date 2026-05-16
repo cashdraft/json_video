@@ -398,7 +398,7 @@
                 {% endif %}
             {% endfor %}
             {% set collapsible_pipeline_stages = ns_col.lst %}
-            {% set collapsible_extra_stages = ['youtube_packaging'] %}
+            {% set collapsible_extra_stages = ['youtube_packaging', 'scene_writer'] %}
             {# Объединение по ВСЕМ пресетам — нужно, чтобы при переключении пресета на клиенте
                карточки уже имели класс --collapsible и обёртку rewrite-stage-collapsible-inner.
                Иначе после переключения пресета карточки чужих этапов есть, но без
@@ -456,7 +456,14 @@
                текущего пресета и обновляется JS-скриптом при переключении. #}
             {% set stage_collapsible = stage_key in union_collapsible_stages or stage_key in collapsible_extra_stages %}
             {% set _in_current_preset = stage_key in _preset_keys or stage_key in ('scene_writer', 'youtube_packaging') %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+            {% if stage_key == 'scene_writer' %}
+            {% set _sw_ss_cell = rw.stages.structure_splitter %}
+            {% set _sw_ss_has = ((_sw_ss_cell.last_result or '')|trim|length) > 0 %}
+            {% endif %}
+            {% if stage_key == 'youtube_packaging' %}
+            {% set _yt_ts_has = ((rw.stages.title_strategist.last_result or '')|trim|length) > 0 %}
+            {% endif %}
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_key == 'youtube_packaging' %} rewrite-youtube-packaging-module rewrite-stage-card--body-collapsed{% if not _yt_ts_has %} rewrite-youtube-packaging-module--waiting{% endif %}{% endif %}{% if stage_key == 'scene_writer' %} rewrite-scene-writer-module rewrite-stage-card--body-collapsed{% if not _sw_ss_has %} rewrite-scene-writer-module--waiting{% endif %}{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-user-prompt-locked="{{ '1' if user_prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-header-top">
@@ -623,10 +630,13 @@
                     </div>
                     {% endif %}
                     {% if stage_key == 'scene_writer' %}
-                    {% set _sw_ss_cell = rw.stages.structure_splitter %}
-                    {% set _sw_ss_has = ((_sw_ss_cell.last_result or '')|trim|length) > 0 %}
                     <div class="rewrite-scene-writer-wait-overlay{% if _sw_ss_has %} hidden{% endif %}" id="rewrite-scene-writer-wait-overlay" aria-hidden="{{ 'true' if _sw_ss_has else 'false' }}">
                         <p class="rewrite-scene-writer-wait-overlay__text">Ожидаем результата от Structure Splitter</p>
+                    </div>
+                    {% endif %}
+                    {% if stage_key == 'youtube_packaging' %}
+                    <div class="rewrite-youtube-packaging-wait-overlay{% if _yt_ts_has %} hidden{% endif %}" id="rewrite-youtube-packaging-wait-overlay" aria-hidden="{{ 'true' if _yt_ts_has else 'false' }}">
+                        <p class="rewrite-scene-writer-wait-overlay__text">Ожидаем результата от Title Strategist</p>
                     </div>
                     {% endif %}
                 </article>
@@ -875,6 +885,7 @@
     })();
     /** Вне списков пресетов, но всегда на странице (см. `rewrite_pipeline.REWRITE_STAGE_KEYS_ALWAYS_VISIBLE`). */
     var REWRITE_ALWAYS_VISIBLE_STAGE_KEYS = { scene_writer: true, youtube_packaging: true };
+    var REWRITE_ALWAYS_COLLAPSED_UI_KEYS = { scene_writer: true, youtube_packaging: true };
     const REWRITE_PRESET_LABELS = {{ rewrite_preset_labels | tojson }};
     let currentRewritePreset = {{ rewrite_preset_current | tojson }};
     const rewriteIdForStageCollapse = {{ rw.rewrite_id | tojson }};
@@ -2514,13 +2525,30 @@
         return true;
     }
 
-    function syncSceneWriterStructureSplitterWaitOverlay() {
-        var overlay = document.getElementById('rewrite-scene-writer-wait-overlay');
-        if (!overlay) return;
-        var ssBlock = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
-        var has = ssBlock ? stageResultNonEmpty(ssBlock) : false;
-        overlay.classList.toggle('hidden', has);
-        overlay.setAttribute('aria-hidden', has ? 'true' : 'false');
+function syncSceneWriterStructureSplitterWaitOverlay() {
+        var swOverlay = document.getElementById('rewrite-scene-writer-wait-overlay');
+        var swCard = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"]');
+        var ytOverlay = document.getElementById('rewrite-youtube-packaging-wait-overlay');
+        var ytCard = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
+        if (!swOverlay && !swCard && !ytOverlay && !ytCard) return;
+        var cards = Array.from(document.querySelectorAll('.rewrite-stage-card'));
+        var byKey = {};
+        cards.forEach(function (c) {
+            var k = c.getAttribute('data-stage-key');
+            if (k) byKey[k] = c;
+        });
+        var ssHas = stageLastResultNonEmpty(byKey, 'structure_splitter');
+        var tsHas = stageLastResultNonEmpty(byKey, 'title_strategist');
+        if (swCard) swCard.classList.toggle('rewrite-scene-writer-module--waiting', !ssHas);
+        if (swOverlay) {
+            swOverlay.classList.toggle('hidden', ssHas);
+            swOverlay.setAttribute('aria-hidden', ssHas ? 'true' : 'false');
+        }
+        if (ytCard) ytCard.classList.toggle('rewrite-youtube-packaging-module--waiting', !tsHas);
+        if (ytOverlay) {
+            ytOverlay.classList.toggle('hidden', tsHas);
+            ytOverlay.setAttribute('aria-hidden', tsHas ? 'true' : 'false');
+        }
     }
 
     function syncStageRunButtons() {
@@ -5029,6 +5057,11 @@
     if (youtubePackagingBlockInit) {
         renderYoutubePackagingPreview(youtubePackagingBlockInit);
     }
+    var titleStrategistTaInit = document.querySelector('.rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-result');
+    if (titleStrategistTaInit) {
+        titleStrategistTaInit.addEventListener('input', syncSceneWriterStructureSplitterWaitOverlay);
+        titleStrategistTaInit.addEventListener('change', syncSceneWriterStructureSplitterWaitOverlay);
+    }
     var structureSplitterBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="structure_splitter"]');
     if (structureSplitterBlockInit) {
         var persistedStructureCheck = readStructureSplitterCheckFromBlock(structureSplitterBlockInit);
@@ -5667,16 +5700,28 @@
             var saved = loadProjectCollapseMap();
             document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
                 var sk = card.getAttribute('data-stage-key') || '';
-                if (sk === 'scene_writer') {
-                    applyCardCollapsed(card, false);
-                    return;
+                var collapsed = true;
+                if (!REWRITE_ALWAYS_COLLAPSED_UI_KEYS[sk] && Object.prototype.hasOwnProperty.call(saved, sk)) {
+                    collapsed = !!saved[sk];
                 }
-                var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
                 applyCardCollapsed(card, collapsed);
             });
             syncPipelineDisplayBtn();
         }
         window.__rewriteApplyStageCollapseFromStorage = applyStageCollapseFromStorage;
+        function collapseAlwaysCollapsedUiSections() {
+            document.querySelectorAll('.rewrite-stage-card[data-extra-collapse="1"]').forEach(function (card) {
+                var sk = card.getAttribute('data-stage-key') || '';
+                if (REWRITE_ALWAYS_COLLAPSED_UI_KEYS[sk]) applyCardCollapsed(card, true);
+            });
+            if (typeof window.__applyTtsSectionCollapsed === 'function') {
+                try { window.__applyTtsSectionCollapsed(true); } catch (_) { /* ignore */ }
+            }
+            if (typeof window.__applyVideoJsonPanelCollapsed === 'function') {
+                try { window.__applyVideoJsonPanelCollapsed(true); } catch (_) { /* ignore */ }
+            }
+        }
+        window.__rewriteCollapseAlwaysCollapsedUiSections = collapseAlwaysCollapsedUiSections;
         var pipelineDispBtn = document.getElementById('rewrite-stages-pipeline-display-btn');
         if (pipelineDispBtn) {
             pipelineDispBtn.addEventListener('click', function () {
@@ -5686,7 +5731,6 @@
             });
         }
 
-        applyStageCollapseFromStorage();
         document.querySelectorAll('.rewrite-stage-card[data-extra-collapse="1"]').forEach(function (card) {
             var hdr = card.querySelector('.scene-header');
             if (!hdr) return;
@@ -5705,6 +5749,8 @@
                 applyCardCollapsed(card, next);
             });
         });
+        applyStageCollapseFromStorage();
+        collapseAlwaysCollapsedUiSections();
     })();
 
     // --- Browser-independent task reattach ----------------------------------
@@ -5801,7 +5847,8 @@
                 card.removeAttribute('data-pipeline-collapse');
             }
             if (REWRITE_ALWAYS_VISIBLE_STAGE_KEYS[key]) {
-                card.classList.remove('rewrite-stage-card--body-collapsed');
+                card.classList.add('rewrite-stage-card--body-collapsed');
+                card.setAttribute('aria-expanded', 'false');
             }
             // Если этап выпал из видимого пресета, не оставляем его в "свёрнутом"
             // состоянии — иначе при возврате он откроется уже схлопнутым визуально.
@@ -5838,6 +5885,9 @@
             applyRewritePresetVisibility(preset);
             if (typeof window.__rewriteSetAllCollapsed === 'function') {
                 try { window.__rewriteSetAllCollapsed(true); } catch (_) { /* ignore */ }
+            }
+            if (typeof window.__rewriteCollapseAlwaysCollapsedUiSections === 'function') {
+                try { window.__rewriteCollapseAlwaysCollapsedUiSections(); } catch (_) { /* ignore */ }
             }
             try { syncStageRunButtons(); } catch (_) { /* ignore */ }
             try { await saveToServer(); } catch (e) {

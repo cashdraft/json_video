@@ -549,7 +549,7 @@
                 {% endif %}
             {% endfor %}
             {% set collapsible_pipeline_stages = ns_col.lst %}
-            {% set collapsible_extra_stages = ['youtube_packaging'] %}
+            {% set collapsible_extra_stages = ['youtube_packaging', 'scene_writer'] %}
             {# Объединение по ВСЕМ пресетам — нужно, чтобы при переключении пресета на клиенте
                карточки уже имели класс --collapsible и обёртку rewrite-stage-collapsible-inner. #}
             {% set ns_union = namespace(lst=[]) %}
@@ -629,7 +629,47 @@
                текущего пресета и обновляется JS-скриптом при переключении. #}
             {% set stage_collapsible = stage_key in union_collapsible_stages or stage_key in collapsible_extra_stages %}
             {% set _in_current_preset = stage_key in _preset_keys or stage_key in ('scene_writer', 'youtube_packaging') %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+            {% if stage_key == 'scene_writer' %}
+            {% set _sw_ss_cell = rw.stages.structure_splitter %}
+            {% set _sw_ss_has = ((_sw_ss_cell.last_result or '')|trim|length) > 0 %}
+            {% endif %}
+            {% if stage_key == 'youtube_packaging' %}
+            {% set _yt_ts_has = ((rw.stages.title_strategist.last_result or '')|trim|length) > 0 %}
+            {% endif %}
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_key == 'youtube_packaging' %} rewrite-youtube-packaging-module rewrite-stage-card--body-collapsed{% if not _yt_ts_has %} rewrite-youtube-packaging-module--waiting{% endif %}{% endif %}{% if stage_key == 'scene_writer' %} rewrite-scene-writer-module rewrite-stage-card--body-collapsed{% if not _sw_ss_has %} rewrite-scene-writer-module--waiting{% endif %}{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                    {% if stage_key == 'youtube_packaging' %}
+                    <div class="rewrite-youtube-packaging-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
+                        <div class="rewrite-youtube-packaging-title-row">
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <img
+                                src="{{ url_for('static', filename='img/youtube-logo.png') }}?v=2"
+                                alt=""
+                                class="rewrite-youtube-packaging-logo"
+                                width="1024"
+                                height="428"
+                                decoding="async"
+                            >
+                            <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">{{ stage_label }}</div>
+                        </div>
+                        <div class="rewrite-youtube-packaging-card-header-right">
+                            <div class="rewrite-youtube-packaging-card-compact rewrite-stages-compact rewrite-stage-card-compact-result" aria-live="polite">
+                                <span class="rewrite-stages-compact__pair">
+                                    <span class="slot-badge badge-{{ 'yes' if has_result else 'no' }} rewrite-stage-result-badge rewrite-stage-compact-result-badge" id="rewrite-youtube-packaging-compact-result-badge">Result</span>
+                                    <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" title="Запустить этап" aria-label="Запустить этап" {% if not openai_key_set or not can_run_stage %}disabled{% endif %} {% if not can_run_stage %}hidden{% endif %}>↻</button>
+                                    <span class="rewrite-stage-run-blocked rewrite-stage-compact-run-blocked" role="img" aria-label="Предыдущий этап без результата" title="Сначала выполните предыдущий этап и дождитесь результата" {% if can_run_stage %}hidden{% endif %}>✕</span>
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export rewrite-stage-compact-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+                                </span>
+                                <span class="rewrite-source-counts rewrite-youtube-packaging-compact-counts" id="rewrite-youtube-packaging-compact-counts"></span>
+                            </div>
+                            <div class="rewrite-stage-header-tools">
+                                <div class="rewrite-stage-help" tabindex="0" aria-label="Подсказка по этапу">
+                                    <span class="rewrite-stage-help__icon" aria-hidden="true">?</span>
+                                    <span class="rewrite-stage-help__tip">{{ rewrite_stage_help_hints[stage_key] }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
                             <div class="rewrite-stage-header-top">
@@ -685,6 +725,7 @@
                             {% endif %}
                         </div>
                     </div>
+                    {% endif %}
                     {% if stage_collapsible %}
                     <div class="rewrite-stage-collapsible-inner">
                     {% endif %}
@@ -956,10 +997,13 @@
                     </div>
                     {% endif %}
                     {% if stage_key == 'scene_writer' %}
-                    {% set _sw_ss_cell = rw.stages.structure_splitter %}
-                    {% set _sw_ss_has = ((_sw_ss_cell.last_result or '')|trim|length) > 0 %}
                     <div class="rewrite-scene-writer-wait-overlay{% if _sw_ss_has %} hidden{% endif %}" id="rewrite-scene-writer-wait-overlay" aria-hidden="{{ 'true' if _sw_ss_has else 'false' }}">
                         <p class="rewrite-scene-writer-wait-overlay__text">Ожидаем результата от Structure Splitter</p>
+                    </div>
+                    {% endif %}
+                    {% if stage_key == 'youtube_packaging' %}
+                    <div class="rewrite-youtube-packaging-wait-overlay{% if _yt_ts_has %} hidden{% endif %}" id="rewrite-youtube-packaging-wait-overlay" aria-hidden="{{ 'true' if _yt_ts_has else 'false' }}">
+                        <p class="rewrite-scene-writer-wait-overlay__text">Ожидаем результата от Title Strategist</p>
                     </div>
                     {% endif %}
                 </article>
@@ -976,11 +1020,30 @@
                 {% set _vf_sa_user_lp = (locked_prompts_state or {}).get('semantic_text_analyzer_user') or {} %}
                 {% set _vf_sa_sys_present = _vf_sa_sys_lp.get('present')|default(false) %}
                 {% set _vf_sa_user_present = _vf_sa_user_lp.get('present')|default(false) %}
-                <div class="scene-card rewrite-source-card rewrite-source-card--body rewrite-voiceover-final-card" id="rewrite-voiceover-final-card" aria-label="Итоговый текст для озвучки">
-                    <div class="rewrite-source-body-header">
-                        <div class="scene-id rewrite-source-body-title">Итоговый текст</div>
-                        <p class="scene-text rewrite-source-lead">Готовый текст для озвучки из Result Voiceover Editor (<code>text</code>). Ниже: <strong>Russian</strong> — перевод этого Result на русский (<code>translate_to_ru</code>); <strong>Semantic</strong> — тот же анализ, что у «Исходный текст», но по <strong>русскому переводу итога</strong> (сохраняется отдельно в <code>voiceover_final_semantic_text_analysis</code>, не смешивается с анализом исходника).</p>
+                <div class="scene-card rewrite-source-card rewrite-source-card--body rewrite-voiceover-final-card rewrite-voiceover-final-card--collapsible rewrite-voiceover-final-card--body-collapsed{% if not _vf_res %} rewrite-voiceover-final-card--waiting{% endif %}" id="rewrite-voiceover-final-card" data-voiceover-final-collapse="1" aria-label="Итоговый текст для озвучки" aria-expanded="false">
+                    <div class="rewrite-voiceover-final-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
+                        <div class="rewrite-voiceover-final-title-row">
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Итоговый текст</div>
+                        </div>
+                        <div class="rewrite-voiceover-final-card-compact rewrite-stages-compact" aria-live="polite">
+                            <span class="rewrite-stages-compact__pair">
+                                <span class="slot-badge badge-{{ 'yes' if _vf_res else 'no' }} rewrite-voiceover-final-compact-result-badge" id="rewrite-voiceover-final-compact-result-badge">Result</span>
+                            </span>
+                            <span class="rewrite-stages-compact__pair">
+                                <span class="slot-badge badge-{{ 'yes' if _vf_ru_has else 'no' }}" id="rewrite-voiceover-final-header-compact-ru-badge">Russian</span>
+                                <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-voiceover-final-header-compact-ru-btn" title="Перевести итог на русский" aria-label="Перевести итог на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                            </span>
+                            <span class="rewrite-stages-compact__sep" aria-hidden="true">—</span>
+                            <span class="rewrite-stages-compact__pair">
+                                <span class="slot-badge badge-{{ 'yes' if _vf_sa_result else 'no' }}" id="rewrite-voiceover-final-header-compact-sa-badge">Semantic</span>
+                                <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-voiceover-final-header-compact-sa-btn" title="Semantic по русскому переводу итога" aria-label="Semantic по русскому переводу итога" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                            </span>
+                            <span class="rewrite-source-counts rewrite-voiceover-final-compact-counts" id="rewrite-voiceover-final-compact-counts"></span>
+                        </div>
                     </div>
+                    <div class="rewrite-voiceover-final-collapsible-inner">
+                    <p class="scene-text rewrite-source-lead rewrite-voiceover-final-lead">Готовый текст для озвучки из Result Voiceover Editor (<code>text</code>). Ниже: <strong>Russian</strong> — перевод этого Result на русский (<code>translate_to_ru</code>); <strong>Semantic</strong> — тот же анализ, что у «Исходный текст», но по <strong>русскому переводу итога</strong> (сохраняется отдельно в <code>voiceover_final_semantic_text_analysis</code>, не смешивается с анализом исходника).</p>
                     <div class="rewrite-source-toolbar slot-header">
                         <span class="slot-badge badge-{{ 'yes' if _vf_res else 'no' }}" id="rewrite-voiceover-final-result-badge" data-text-badge-for="rewrite-voiceover-final-textarea">Result</span>
                         <button type="button" class="rewrite-lock-toggle btn-icon{% if vf_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
@@ -1109,6 +1172,7 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
                     </div>
                     <div class="rewrite-voiceover-final-empty-overlay{% if _vf_res %} hidden{% endif %}" id="rewrite-voiceover-final-empty-overlay" aria-hidden="{{ 'true' if _vf_res else 'false' }}">
                         <p class="rewrite-voiceover-final-empty-overlay__text">Ожидаем результата от Voiceover Editor</p>

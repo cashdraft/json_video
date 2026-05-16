@@ -90,6 +90,8 @@
     var PIPELINE_LABEL_SKIP = { scene_writer: true, youtube_packaging: true };
     /** Этапы вне списков пресетов: всегда видимы на странице (см. `rewrite_pipeline.REWRITE_STAGE_KEYS_ALWAYS_VISIBLE`). */
     var REWRITE_ALWAYS_VISIBLE_STAGE_KEYS = { scene_writer: true, youtube_packaging: true };
+    /** Нижние блоки UI: при F5 и смене пресета всегда свёрнуты (LS не восстанавливаем). */
+    var REWRITE_ALWAYS_COLLAPSED_UI_KEYS = { scene_writer: true, youtube_packaging: true };
     const REWRITE_PRESET_STAGE_KEYS_SERVER = {{ rewrite_preset_stage_keys | tojson }};
     /* Дублируем серверный REWRITE_PRESET_STAGE_KEYS: если в встроенном JSON нет
        ключа soft (старый HTML/кеш), раньше applyRewritePresetVisibility сбрасывала
@@ -2459,19 +2461,31 @@
         return block ? stageResultNonEmpty(block) : false;
     }
 
-    /** Scene Writer: затемнение карточки, пока у Structure Splitter нет Result. */
+    /** Scene Writer — ожидание Structure Splitter; YouTube packaging — Title Strategist. */
     function syncSceneWriterStructureSplitterWaitOverlay() {
-        var overlay = document.getElementById('rewrite-scene-writer-wait-overlay');
-        if (!overlay) return;
+        var swOverlay = document.getElementById('rewrite-scene-writer-wait-overlay');
+        var swCard = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"]');
+        var ytOverlay = document.getElementById('rewrite-youtube-packaging-wait-overlay');
+        var ytCard = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
+        if (!swOverlay && !swCard && !ytOverlay && !ytCard) return;
         var cards = Array.from(document.querySelectorAll('.rewrite-stage-card'));
         var byKey = {};
         cards.forEach(function (c) {
             var k = c.getAttribute('data-stage-key');
             if (k) byKey[k] = c;
         });
-        var has = stageLastResultNonEmpty(byKey, 'structure_splitter');
-        overlay.classList.toggle('hidden', has);
-        overlay.setAttribute('aria-hidden', has ? 'true' : 'false');
+        var ssHas = stageLastResultNonEmpty(byKey, 'structure_splitter');
+        var tsHas = stageLastResultNonEmpty(byKey, 'title_strategist');
+        if (swCard) swCard.classList.toggle('rewrite-scene-writer-module--waiting', !ssHas);
+        if (swOverlay) {
+            swOverlay.classList.toggle('hidden', ssHas);
+            swOverlay.setAttribute('aria-hidden', ssHas ? 'true' : 'false');
+        }
+        if (ytCard) ytCard.classList.toggle('rewrite-youtube-packaging-module--waiting', !tsHas);
+        if (ytOverlay) {
+            ytOverlay.classList.toggle('hidden', tsHas);
+            ytOverlay.setAttribute('aria-hidden', tsHas ? 'true' : 'false');
+        }
     }
 
     function voiceoverPlainNonEmpty(byKey) {
@@ -2617,6 +2631,12 @@
         });
         syncPipelineRunButton();
         syncSceneWriterStructureSplitterWaitOverlay();
+        if (typeof window.__syncTtsPrereqWaitOverlay === 'function') {
+            try { window.__syncTtsPrereqWaitOverlay(); } catch (_) { /* ignore */ }
+        }
+        if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
+            try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) { /* ignore */ }
+        }
     }
 
     /** В пресете «Я уже ЗАrewriteИЛ» Inbox — только поле ввода, без POST /run; цепочка начинается с Voiceover Editor. */
@@ -4227,6 +4247,16 @@
         if (el.getAttribute('data-copy-hold') === '1') return;
         var text = ta.value || '';
         el.textContent = formatNumRu(text.length) + ' симв. · ' + formatNumRu(countWords(text)) + ' сл.';
+        if (sk === 'youtube_packaging') {
+            var ytCompactCounts = document.getElementById('rewrite-youtube-packaging-compact-counts');
+            if (ytCompactCounts) ytCompactCounts.textContent = el.textContent;
+            var ytCompactBadge = document.getElementById('rewrite-youtube-packaging-compact-result-badge');
+            var mainBadge = block.querySelector('.rewrite-stage-result-badge');
+            if (ytCompactBadge && mainBadge) {
+                ytCompactBadge.classList.toggle('badge-yes', mainBadge.classList.contains('badge-yes'));
+                ytCompactBadge.classList.toggle('badge-no', mainBadge.classList.contains('badge-no'));
+            }
+        }
     }
 
     function syncStageErrorBorder(block) {
@@ -5302,11 +5332,25 @@
             if (swInitTa && String(swInitTa.value || '').trim()) {
                 recomputeSceneWriterCheckLocal(sceneWriterBlockInit);
             }
+            if (swInitTa) {
+                var syncJsonSwOverlay = function () {
+                    if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
+                        try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) { /* ignore */ }
+                    }
+                };
+                swInitTa.addEventListener('input', syncJsonSwOverlay);
+                swInitTa.addEventListener('change', syncJsonSwOverlay);
+            }
         } catch (e) { /* noop */ }
     }
     var youtubePackagingBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
     if (youtubePackagingBlockInit) {
         renderYoutubePackagingPreview(youtubePackagingBlockInit);
+    }
+    var titleStrategistTaInit = document.querySelector('.rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-result');
+    if (titleStrategistTaInit) {
+        titleStrategistTaInit.addEventListener('input', syncSceneWriterStructureSplitterWaitOverlay);
+        titleStrategistTaInit.addEventListener('change', syncSceneWriterStructureSplitterWaitOverlay);
     }
     var elevenlabsEditorBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="elevenlabs_editor"]');
     if (elevenlabsEditorBlockInit) {
@@ -5361,6 +5405,9 @@
         }
     }
     syncSceneWriterStructureSplitterWaitOverlay();
+    if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
+        try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) { /* ignore */ }
+    }
 
     (function voiceoverFinalCard() {
         var ta = document.getElementById('rewrite-voiceover-final-textarea');
@@ -5420,14 +5467,23 @@
         }
         function updateCounts() {
             if (resultBadge) applyTextBadgeState(resultBadge, ta);
+            var has = String(ta.value || '').trim().length > 0;
+            var vfCard = document.getElementById('rewrite-voiceover-final-card');
+            if (vfCard) vfCard.classList.toggle('rewrite-voiceover-final-card--waiting', !has);
             if (emptyOverlay) {
-                var has = String(ta.value || '').trim().length > 0;
                 emptyOverlay.classList.toggle('hidden', has);
                 emptyOverlay.setAttribute('aria-hidden', has ? 'true' : 'false');
             }
-            if (!counts) return;
             var v = ta.value || '';
-            counts.textContent = formatNumRu(v.length) + ' симв. · ' + formatNumRu(countWords(v)) + ' сл.';
+            var countLine = formatNumRu(v.length) + ' симв. · ' + formatNumRu(countWords(v)) + ' сл.';
+            if (counts) counts.textContent = countLine;
+            var compactCounts = document.getElementById('rewrite-voiceover-final-compact-counts');
+            if (compactCounts) compactCounts.textContent = countLine;
+            var compactBadge = document.getElementById('rewrite-voiceover-final-compact-result-badge');
+            if (compactBadge && resultBadge) {
+                compactBadge.classList.toggle('badge-yes', resultBadge.classList.contains('badge-yes'));
+                compactBadge.classList.toggle('badge-no', resultBadge.classList.contains('badge-no'));
+            }
         }
         function applyVfLockUI() {
             if (!ta) return;
@@ -6329,16 +6385,29 @@
             var saved = loadProjectCollapseMap();
             document.querySelectorAll('.rewrite-stage-card.rewrite-stage-card--collapsible').forEach(function (card) {
                 var sk = card.getAttribute('data-stage-key') || '';
-                if (sk === 'scene_writer') {
-                    applyCardCollapsed(card, false);
-                    return;
+                var collapsed = true;
+                if (!REWRITE_ALWAYS_COLLAPSED_UI_KEYS[sk] && Object.prototype.hasOwnProperty.call(saved, sk)) {
+                    collapsed = !!saved[sk];
                 }
-                var collapsed = Object.prototype.hasOwnProperty.call(saved, sk) ? !!saved[sk] : true;
                 applyCardCollapsed(card, collapsed);
             });
             syncPipelineDisplayBtn();
         }
         window.__rewriteApplyStageCollapseFromStorage = applyStageCollapseFromStorage;
+        function collapseAlwaysCollapsedUiSections() {
+            document.querySelectorAll('.rewrite-stage-card[data-extra-collapse="1"]').forEach(function (card) {
+                var sk = card.getAttribute('data-stage-key') || '';
+                if (REWRITE_ALWAYS_COLLAPSED_UI_KEYS[sk]) applyCardCollapsed(card, true);
+            });
+            if (vfFinalCard) applyVoiceoverFinalCardCollapsed(true);
+            if (typeof window.__applyTtsSectionCollapsed === 'function') {
+                try { window.__applyTtsSectionCollapsed(true); } catch (_) { /* ignore */ }
+            }
+            if (typeof window.__applyVideoJsonPanelCollapsed === 'function') {
+                try { window.__applyVideoJsonPanelCollapsed(true); } catch (_) { /* ignore */ }
+            }
+        }
+        window.__rewriteCollapseAlwaysCollapsedUiSections = collapseAlwaysCollapsedUiSections;
         var pipelineDispBtn = document.getElementById('rewrite-stages-pipeline-display-btn');
         if (pipelineDispBtn) {
             pipelineDispBtn.addEventListener('click', function () {
@@ -6355,7 +6424,35 @@
             });
         }
 
-        applyStageCollapseFromStorage();
+        var vfFinalCard = document.getElementById('rewrite-voiceover-final-card');
+        var VOICEOVER_FINAL_BLOCK_COLLAPSE_SK = 'voiceover_final';
+        function applyVoiceoverFinalCardCollapsed(collapsed) {
+            if (!vfFinalCard) return;
+            vfFinalCard.classList.toggle('rewrite-voiceover-final-card--body-collapsed', !!collapsed);
+            vfFinalCard.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+        if (vfFinalCard && vfFinalCard.getAttribute('data-voiceover-final-collapse') === '1') {
+            applyVoiceoverFinalCardCollapsed(true);
+            var vfHdr = vfFinalCard.querySelector('.rewrite-voiceover-final-card-header');
+            if (vfHdr) {
+                vfHdr.addEventListener('click', function (e) {
+                    if (e.target.closest('button, a, input, select, textarea, label')) return;
+                    var cur = vfFinalCard.classList.contains('rewrite-voiceover-final-card--body-collapsed');
+                    var next = !cur;
+                    var vfMap = loadProjectCollapseMap();
+                    vfMap[VOICEOVER_FINAL_BLOCK_COLLAPSE_SK] = next;
+                    saveProjectCollapseMap(vfMap);
+                    applyVoiceoverFinalCardCollapsed(next);
+                });
+                vfHdr.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        vfHdr.click();
+                    }
+                });
+            }
+        }
+        window.__rewriteApplyVoiceoverFinalCardCollapsed = applyVoiceoverFinalCardCollapsed;
 
         document.querySelectorAll('.rewrite-stage-card[data-extra-collapse="1"]').forEach(function (card) {
             var hdr = card.querySelector('.scene-header');
@@ -6365,6 +6462,7 @@
             hdr.addEventListener('click', function (e) {
                 if (e.target.closest('.rewrite-stage-header-tools')) return;
                 if (e.target.closest('.rewrite-stage-card-compact-result')) return;
+                if (e.target.closest('button, a, input, select, textarea, label')) return;
                 var sk = card.getAttribute('data-stage-key') || '';
                 if (!sk) return;
                 var cur = card.classList.contains('rewrite-stage-card--body-collapsed');
@@ -6375,6 +6473,8 @@
                 applyCardCollapsed(card, next);
             });
         });
+        applyStageCollapseFromStorage();
+        collapseAlwaysCollapsedUiSections();
     })();
 
     // --- Восстановление статус-блока YouTube из сохранённого состояния -------
@@ -6547,7 +6647,8 @@
                 card.removeAttribute('data-pipeline-collapse');
             }
             if (REWRITE_ALWAYS_VISIBLE_STAGE_KEYS[key]) {
-                card.classList.remove('rewrite-stage-card--body-collapsed');
+                card.classList.add('rewrite-stage-card--body-collapsed');
+                card.setAttribute('aria-expanded', 'false');
             }
             // Если этап выпал из видимого пресета, не оставляем его в "свёрнутом"
             // состоянии — иначе при возврате он откроется уже схлопнутым визуально.
@@ -6606,6 +6707,9 @@
             if (typeof window.__rewriteSetAllCollapsed === 'function') {
                 try { window.__rewriteSetAllCollapsed(true); } catch (_) { /* ignore */ }
             }
+            if (typeof window.__rewriteCollapseAlwaysCollapsedUiSections === 'function') {
+                try { window.__rewriteCollapseAlwaysCollapsedUiSections(); } catch (_) { /* ignore */ }
+            }
             performClearRewritePresetSwitchableStagesDom();
             try { syncStageRunButtons(); } catch (_) { /* ignore */ }
             if (window.__rewriteSyncTranslateRuRunPrereq) window.__rewriteSyncTranslateRuRunPrereq();
@@ -6623,6 +6727,9 @@
             try { syncStageRunButtons(); } catch (_) { /* ignore */ }
             if (typeof window.__rewriteApplyStageCollapseFromStorage === 'function') {
                 try { window.__rewriteApplyStageCollapseFromStorage(); } catch (_) { /* ignore */ }
+            }
+            if (typeof window.__rewriteCollapseAlwaysCollapsedUiSections === 'function') {
+                try { window.__rewriteCollapseAlwaysCollapsedUiSections(); } catch (_) { /* ignore */ }
             }
         }
         var presetSel = document.getElementById('rewrite-preset-select');
@@ -7835,6 +7942,10 @@
         var compactSaBadge = document.getElementById('rewrite-voiceover-final-stages-compact-sa-badge');
         var compactRuBtn = document.getElementById('rewrite-voiceover-final-stages-compact-ru-btn');
         var compactSaBtn = document.getElementById('rewrite-voiceover-final-stages-compact-sa-btn');
+        var headerCompactRuBadge = document.getElementById('rewrite-voiceover-final-header-compact-ru-badge');
+        var headerCompactSaBadge = document.getElementById('rewrite-voiceover-final-header-compact-sa-badge');
+        var headerCompactRuBtn = document.getElementById('rewrite-voiceover-final-header-compact-ru-btn');
+        var headerCompactSaBtn = document.getElementById('rewrite-voiceover-final-header-compact-sa-btn');
 
         var hostCard = wrap.closest('.rewrite-source-card--body');
         function applyHostCardCollapsed(isCollapsed) {
@@ -7883,35 +7994,41 @@
             if (aria) dst.setAttribute('aria-label', aria);
         }
 
-        function syncAll() {
-            mirrorBadge(ruBadge, compactRuBadge);
-            if (saBadgeMain && compactSaBadge) mirrorBadge(saBadgeMain, compactSaBadge);
-            mirrorButton(ruBtn, compactRuBtn);
-            if (saBtn && compactSaBtn) mirrorButton(saBtn, compactSaBtn);
+        function mirrorBadgeToAll(src, dstList) {
+            (dstList || []).forEach(function (dst) { mirrorBadge(src, dst); });
+        }
+        function mirrorButtonToAll(src, dstList) {
+            (dstList || []).forEach(function (dst) { mirrorButton(src, dst); });
+        }
+        function wireCompactBtn(dst, src) {
+            if (!dst || !src) return;
+            dst.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (dst.disabled) return;
+                src.click();
+            });
         }
 
-        if (compactRuBtn && ruBtn) {
-            compactRuBtn.addEventListener('click', function (ev) {
-                ev.preventDefault();
-                if (compactRuBtn.disabled) return;
-                ruBtn.click();
-            });
+        function syncAll() {
+            mirrorBadgeToAll(ruBadge, [compactRuBadge, headerCompactRuBadge]);
+            if (saBadgeMain) mirrorBadgeToAll(saBadgeMain, [compactSaBadge, headerCompactSaBadge]);
+            mirrorButtonToAll(ruBtn, [compactRuBtn, headerCompactRuBtn]);
+            if (saBtn) mirrorButtonToAll(saBtn, [compactSaBtn, headerCompactSaBtn]);
         }
-        if (compactSaBtn && saBtn) {
-            compactSaBtn.addEventListener('click', function (ev) {
-                ev.preventDefault();
-                if (compactSaBtn.disabled) return;
-                saBtn.click();
-            });
-        }
+
+        wireCompactBtn(compactRuBtn, ruBtn);
+        wireCompactBtn(compactSaBtn, saBtn);
+        wireCompactBtn(headerCompactRuBtn, ruBtn);
+        wireCompactBtn(headerCompactSaBtn, saBtn);
 
         var btnObsCfg = { attributes: true, attributeFilter: ['class', 'disabled', 'title', 'aria-label'] };
         var badgeObsCfg = { attributes: true, attributeFilter: ['class'] };
         var obs = new MutationObserver(syncAll);
         if (ruBadge) obs.observe(ruBadge, badgeObsCfg);
-        if (saBadgeMain && compactSaBadge) obs.observe(saBadgeMain, badgeObsCfg);
+        if (saBadgeMain) obs.observe(saBadgeMain, badgeObsCfg);
         if (ruBtn) obs.observe(ruBtn, btnObsCfg);
-        if (saBtn && compactSaBtn) obs.observe(saBtn, btnObsCfg);
+        if (saBtn) obs.observe(saBtn, btnObsCfg);
         syncAll();
     })();
 
