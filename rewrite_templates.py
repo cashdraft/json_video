@@ -1,5 +1,5 @@
 """
-Шаблоны ReWrite — одна подпапка на шаблон (как data/image_templates).
+Шаблоны ReWrite — одна подпапка на шаблон (как image_templates/).
 
   rewrite_templates/
     <имя_шаблона>/          ← имя папки попадает в список в UI (Base Template, my_project, …)

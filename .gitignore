@@ -32,8 +32,10 @@ data/logs/*
 data/input/*
 
 # Image reference templates (user content; keep only marker in git)
-data/image_templates/*
-!data/image_templates/.gitkeep
+image_templates/*
+!image_templates/.gitkeep
+# legacy symlink data/image_templates → ../image_templates
+data/image_templates
 
 # Per-job TTS audio (ElevenLabs)
 data/job_audio/*

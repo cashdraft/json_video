@@ -540,13 +540,11 @@
                 </div>
             </div>
 
-            {# «Свернуть все»: до 11 этапов с начала пресета, но без Scene Writer —
-               Deep: включаем structure_splitter (11-й); иначе карточка без data-pipeline-collapse
-               навсегда в rewrite-stage-card--body-collapsed. #}
+            {# «Свернуть все»: до 11 этапов с начала пресета (Scene Writer / YouTube packaging — вне пресетов, отдельные модули). #}
             {% set _preset_keys = rewrite_preset_stage_keys[rewrite_preset_current] %}
             {% set ns_col = namespace(lst=[]) %}
             {% for k in _preset_keys %}
-                {% if k != 'scene_writer' and ns_col.lst|length < 11 %}
+                {% if ns_col.lst|length < 11 %}
                     {% set _ = ns_col.lst.append(k) %}
                 {% endif %}
             {% endfor %}
@@ -558,7 +556,7 @@
             {% for _preset_id, _plist in rewrite_preset_stage_keys.items() %}
                 {% set ns_each = namespace(cnt=0) %}
                 {% for _k in _plist %}
-                    {% if _k != 'scene_writer' and ns_each.cnt < 11 %}
+                    {% if ns_each.cnt < 11 %}
                         {% if _k not in ns_union.lst %}{% set _ = ns_union.lst.append(_k) %}{% endif %}
                         {% set ns_each.cnt = ns_each.cnt + 1 %}
                     {% endif %}
@@ -606,11 +604,10 @@
                 </button>
                 <span class="rewrite-stages-pipeline-display-label" id="rewrite-stages-pipeline-stage-range" aria-live="polite">Этапы 1–{{ collapsible_pipeline_stage_range_end }}</span>
                 <button type="button"
-                    class="rewrite-stages-collapsible__toggle rewrite-stages-pipeline-clear-btn"
-                    id="rewrite-stages-pipeline-clear-btn"
-                    title="Очистить Result, Changes и проверки всех этапов, кроме Inbox">
-                    <span class="rewrite-stages-collapsible__title">Очистить</span>
-                </button>
+                    class="btn btn-primary btn-sm rewrite-pipeline-run-btn"
+                    id="rewrite-pipeline-run-btn"
+                    title="Очистить результаты этапов выбранного пресета и запустить цепочку подряд"
+                    {% if not openai_key_set %}disabled{% endif %}>Запустить</button>
             </div>
 
             <div class="scenes-grid rewrite-stages-list" id="rewrite-stages-list">
@@ -631,7 +628,7 @@
                этапов (объединение по пресетам). data-pipeline-collapse уже зависит от
                текущего пресета и обновляется JS-скриптом при переключении. #}
             {% set stage_collapsible = stage_key in union_collapsible_stages or stage_key in collapsible_extra_stages %}
-            {% set _in_current_preset = stage_key in _preset_keys %}
+            {% set _in_current_preset = stage_key in _preset_keys or stage_key in ('scene_writer', 'youtube_packaging') %}
                 <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     <div class="scene-header">
                         <div class="rewrite-stage-header-row">
@@ -958,23 +955,34 @@
                     {% if stage_collapsible %}
                     </div>
                     {% endif %}
+                    {% if stage_key == 'scene_writer' %}
+                    {% set _sw_ss_cell = rw.stages.structure_splitter %}
+                    {% set _sw_ss_has = ((_sw_ss_cell.last_result or '')|trim|length) > 0 %}
+                    <div class="rewrite-scene-writer-wait-overlay{% if _sw_ss_has %} hidden{% endif %}" id="rewrite-scene-writer-wait-overlay" aria-hidden="{{ 'true' if _sw_ss_has else 'false' }}">
+                        <p class="rewrite-scene-writer-wait-overlay__text">Ожидаем результата от Structure Splitter</p>
+                    </div>
+                    {% endif %}
                 </article>
                 {% if stage_key == 'structure_splitter' %}
                 {% set vf_locked = rw.voiceover_final_locked|default(true) %}
                 {% set vfr_locked = rw.voiceover_final_text_ru_locked|default(false) %}
-                <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index rewrite-voiceover-final-card rewrite-source-card--body" id="rewrite-voiceover-final-card" aria-label="Итоговый текст для озвучки">
-                    <div class="scene-header">
-                        <div class="rewrite-stage-header-row">
-                            <div class="rewrite-stage-header-top">
-                                <div class="rewrite-stage-title-row">
-                                    <div class="scene-id rewrite-stage-title-text">Итоговый текст</div>
-                                </div>
-                            </div>
-                            <div class="rewrite-stage-subtitle">Готовый текст для озвучки. Берётся из Result Voiceover Editor (поле <code>text</code>, без служебных <code>\n</code> и экранирования).</div>
-                        </div>
+                {% set _vf_res = (voiceover_final_text or '')|trim %}
+                {% set _vf_ru_has = (rw.voiceover_final_text_ru or '')|trim %}
+                {% set _vf_sa_result = (rw.voiceover_final_semantic_text_analysis or '')|trim %}
+                {% set vf_sa_res_locked = rw.voiceover_final_semantic_text_analysis_locked|default(true) %}
+                {# Бейджи Semantic — свои set'ы: не зависеть от области видимости переменных
+                   из блока «Исходный текст» (иначе на части серверов Jinja → 500). #}
+                {% set _vf_sa_sys_lp = (locked_prompts_state or {}).get('semantic_text_analyzer_system') or {} %}
+                {% set _vf_sa_user_lp = (locked_prompts_state or {}).get('semantic_text_analyzer_user') or {} %}
+                {% set _vf_sa_sys_present = _vf_sa_sys_lp.get('present')|default(false) %}
+                {% set _vf_sa_user_present = _vf_sa_user_lp.get('present')|default(false) %}
+                <div class="scene-card rewrite-source-card rewrite-source-card--body rewrite-voiceover-final-card" id="rewrite-voiceover-final-card" aria-label="Итоговый текст для озвучки">
+                    <div class="rewrite-source-body-header">
+                        <div class="scene-id rewrite-source-body-title">Итоговый текст</div>
+                        <p class="scene-text rewrite-source-lead">Готовый текст для озвучки из Result Voiceover Editor (<code>text</code>). Ниже: <strong>Russian</strong> — перевод этого Result на русский (<code>translate_to_ru</code>); <strong>Semantic</strong> — тот же анализ, что у «Исходный текст», но по <strong>русскому переводу итога</strong> (сохраняется отдельно в <code>voiceover_final_semantic_text_analysis</code>, не смешивается с анализом исходника).</p>
                     </div>
                     <div class="rewrite-source-toolbar slot-header">
-                        <span class="slot-badge badge-{{ 'yes' if (voiceover_final_text or '')|trim else 'no' }}" id="rewrite-voiceover-final-result-badge">Result</span>
+                        <span class="slot-badge badge-{{ 'yes' if _vf_res else 'no' }}" id="rewrite-voiceover-final-result-badge" data-text-badge-for="rewrite-voiceover-final-textarea">Result</span>
                         <button type="button" class="rewrite-lock-toggle btn-icon{% if vf_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                             <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
                             <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
@@ -988,33 +996,124 @@
                         <textarea id="rewrite-voiceover-final-textarea" class="rewrite-source-textarea rewrite-voiceover-final-textarea{% if vf_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" {% if vf_locked %}readonly{% endif %} placeholder="Сначала получите Result в Voiceover Editor." {% if not openai_key_set %}disabled{% endif %}>{{ voiceover_final_text }}</textarea>
                     </div>
                     <div class="rewrite-source-translate-block">
-                        <div class="rewrite-source-translate-actions">
-                            <button type="button" class="btn btn-secondary btn-sm" id="rewrite-voiceover-final-translate-ru-btn" {% if not openai_key_set %}disabled{% endif %}>Перевести на русский</button>
-                        </div>
-                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-voiceover-final-translate-ru-status-wrap" aria-hidden="true">
-                            <div class="slot-status-row">
-                                <span class="slot-status slot-status-with-spinner" id="rewrite-voiceover-final-translate-ru-status" aria-live="polite"></span>
-                                <button type="button" class="btn-cancel-generation" id="rewrite-voiceover-final-translate-ru-cancel">Cancel</button>
-                            </div>
-                        </div>
-                        <div class="rewrite-slot--source-ru-wrap{% if not (rw.voiceover_final_text_ru or '')|trim %} hidden{% endif %}" id="rewrite-voiceover-final-text-ru-wrap"{% if not (rw.voiceover_final_text_ru or '')|trim %} aria-hidden="true"{% endif %}>
-                            <div class="rewrite-source-toolbar slot-header">
-                                <span class="slot-badge badge-yes">Russian</span>
-                                <button type="button" class="rewrite-lock-toggle btn-icon{% if vfr_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-ru-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        <div class="rewrite-stages-collapsible" id="rewrite-voiceover-final-stages-collapsible" data-collapsed="true">
+                            <div class="rewrite-stages-collapsible__header">
+                                <button type="button"
+                                    class="rewrite-stages-collapsible__toggle"
+                                    id="rewrite-voiceover-final-stages-collapsible-toggle"
+                                    aria-expanded="false"
+                                    aria-controls="rewrite-voiceover-final-stages-collapsible-body">
+                                    <span class="rewrite-stages-collapsible__chev" aria-hidden="true">▾</span>
+                                    <span class="rewrite-stages-collapsible__title">Подробнее</span>
                                 </button>
-                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-voiceover-final-ru-copy-btn" id="rewrite-voiceover-final-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
-                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                                </button>
-                                <span class="rewrite-source-counts" id="rewrite-voiceover-final-ru-counts" aria-live="polite"></span>
+                                <div class="rewrite-stages-compact" id="rewrite-voiceover-final-stages-compact" aria-live="polite">
+                                    <span class="rewrite-stages-compact__pair">
+                                        <span class="slot-badge badge-{{ 'yes' if _vf_ru_has else 'no' }}" id="rewrite-voiceover-final-stages-compact-ru-badge">Russian</span>
+                                        <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-voiceover-final-stages-compact-ru-btn" title="Перевести итог на русский" aria-label="Перевести итог на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                    </span>
+                                    <span class="rewrite-stages-compact__sep" aria-hidden="true">—</span>
+                                    <span class="rewrite-stages-compact__pair">
+                                        <span class="slot-badge badge-{{ 'yes' if _vf_sa_result else 'no' }}" id="rewrite-voiceover-final-stages-compact-sa-badge">Semantic</span>
+                                        <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-voiceover-final-stages-compact-sa-btn" title="Semantic по русскому переводу итога" aria-label="Semantic по русскому переводу итога" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                    </span>
+                                </div>
+                                <div class="rewrite-stages-collapsible__right">
+                                    <span class="rewrite-stages-compact__hint">Russian и Semantic здесь относятся только к Result выше (не к Inbox).</span>
+                                    <div class="rewrite-anim-field rewrite-anim-field--single rewrite-stages-lang-model" data-lang-model-field="voiceover-final" title="Модель GPT для перевода итога и для Semantic по итогу (как у «Исходный текст» → Russian / Semantic; не влияет на остальные этапы)">
+                                        <button type="button" class="rewrite-anim-dropdown__btn rewrite-stages-lang-model__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Модель для Russian и Semantic итога">
+                                            <span class="rewrite-stages-lang-model__sizer">
+                                                <span class="rewrite-stages-lang-model__label rewrite-anim-dropdown__btn-label" data-lang-model-label>{{ ns_rsm.label }}</span>
+                                                {% for m in _rsm_models %}
+                                                <span class="rewrite-stages-lang-model__sizer-ghost" aria-hidden="true">{{ m.label }}</span>
+                                                {% endfor %}
+                                            </span>
+                                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                                        </button>
+                                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-stages-lang-model__panel" hidden role="listbox">
+                                            {% for m in _rsm_models %}
+                                            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                                <input type="radio" name="rewrite-vf-stages-lang-model-radio-{{ rw.rewrite_id }}" class="rewrite-anim-radio rewrite-vf-lang-model-radio visually-hidden-input" value="{{ m.id }}" {% if _rsm_active == m.id %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                                <span class="rewrite-anim-option__body">
+                                                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                                </span>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <select id="rewrite-voiceover-final-lang-model" class="rewrite-global-model-select-hidden rewrite-voiceover-final-lang-model-select" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                                        {% for m in _rsm_models %}
+                                        <option value="{{ m.id }}" {% if _rsm_active == m.id %}selected{% endif %}>{{ m.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
                             </div>
-                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--source-ru">
-                                <textarea id="rewrite-voiceover-final-text-ru" class="rewrite-source-textarea{% if vfr_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Появится после нажатия «Перевести на русский»…" {% if not openai_key_set %}disabled{% elif vfr_locked %}readonly{% endif %}>{{ rw.voiceover_final_text_ru or '' }}</textarea>
+                            <div class="rewrite-stages-collapsible__body" id="rewrite-voiceover-final-stages-collapsible-body">
+                                <div class="rewrite-slot--source-ru-wrap" id="rewrite-voiceover-final-text-ru-wrap">
+                                    <div class="rewrite-source-toolbar slot-header">
+                                        <span class="slot-badge badge-{{ 'yes' if _vf_ru_has else 'no' }}" id="rewrite-voiceover-final-ru-badge" data-text-badge-for="rewrite-voiceover-final-text-ru">Russian</span>
+                                        <button type="button" class="btn-regenerate rewrite-stage-run" id="rewrite-voiceover-final-translate-ru-btn" title="Перевести на русский (запустить / повторить)" aria-label="Перевести на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon{% if vfr_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-ru-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
+                                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                        </button>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-voiceover-final-ru-copy-btn" id="rewrite-voiceover-final-ru-copy-btn" title="Копировать перевод в буфер обмена" aria-label="Копировать перевод">
+                                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                        </button>
+                                        <span class="locked-prompts-group">
+                                            <span class="rewrite-source-counts rewrite-source-counts--inline" id="rewrite-voiceover-final-ru-counts" aria-live="polite"></span>
+                                            <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _tr_present else 'no' }}" data-locked-prompt-badge="translate_to_ru" title="Системный промт перевода (под пин-кодом)">System Promt: {{ 'YES' if _tr_present else 'NO' }}</span>
+                                            <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="translate_to_ru" data-locked-prompt-label="Промт перевода на русский" title="Редактировать промт перевода (пин-код)" aria-label="Редактировать промт перевода"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                            <button type="button" class="rewrite-json-export-btn rewrite-aux-api-export" id="rewrite-voiceover-final-translate-ru-api-export" data-aux-api-stage="translate_voiceover_final_ru" title="Скачать тело POST к OpenAI (JSON, как при переводе итога)" aria-label="Скачать JSON запроса перевода" {% if not openai_key_set %}disabled{% endif %}>J</button>
+                                        </span>
+                                    </div>
+                                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-source-translate-ru-status-wrap hidden" id="rewrite-voiceover-final-translate-ru-status-wrap" aria-hidden="true">
+                                        <div class="slot-status-row">
+                                            <span class="slot-status slot-status-with-spinner" id="rewrite-voiceover-final-translate-ru-status" aria-live="polite"></span>
+                                            <button type="button" class="btn-cancel-generation" id="rewrite-voiceover-final-translate-ru-cancel">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-source-translate-ru-textarea-wrap" id="rewrite-voiceover-final-translate-ru-textarea-wrap">
+                                        <textarea id="rewrite-voiceover-final-text-ru" class="rewrite-source-textarea{% if vfr_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Нажмите ↻ справа от «Russian» — перевод появится здесь." {% if not openai_key_set %}disabled{% elif vfr_locked %}readonly{% endif %}>{{ rw.voiceover_final_text_ru or '' }}</textarea>
+                                    </div>
+
+                                    <div class="semantic-analyzer-block" id="rewrite-voiceover-final-semantic-block">
+                                        <div class="semantic-analyzer-header">
+                                            <span class="slot-badge badge-{{ 'yes' if _vf_sa_result else 'no' }}" id="rewrite-voiceover-final-semantic-badge" data-text-badge-for="rewrite-voiceover-final-semantic-result">Semantic</span>
+                                            <button type="button" class="btn-regenerate rewrite-stage-run" id="rewrite-voiceover-final-semantic-run-btn" title="Запустить Semantic по русскому переводу итога" aria-label="Запустить Semantic по русскому переводу итога" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-voiceover-final-semantic-result-toggle{% if vf_sa_res_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-voiceover-final-semantic-result-toggle" title="Редактировать результат" aria-label="Редактировать результат" {% if not openai_key_set %}disabled{% endif %}>
+                                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                            </button>
+                                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-voiceover-final-semantic-result-copy-btn" id="rewrite-voiceover-final-semantic-result-copy-btn" title="Копировать результат в буфер обмена" aria-label="Копировать результат">
+                                                <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                            </button>
+                                            <span class="locked-prompts-group">
+                                                <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _vf_sa_sys_present else 'no' }}" data-locked-prompt-badge="semantic_text_analyzer_system" title="System Promt (под пин-кодом), тот же что у Semantic исходника">System Promt: {{ 'YES' if _vf_sa_sys_present else 'NO' }}</span>
+                                                <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="semantic_text_analyzer_system" data-locked-prompt-label="Semantic Text Analyzer — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                                <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if _vf_sa_user_present else 'no' }}" data-locked-prompt-badge="semantic_text_analyzer_user" title="User Promt (под пин-кодом). К нему добавляется русский перевод итога (поле Russian выше).">User Promt: {{ 'YES' if _vf_sa_user_present else 'NO' }}</span>
+                                                <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="semantic_text_analyzer_user" data-locked-prompt-label="Semantic Text Analyzer — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                                <button type="button" class="rewrite-json-export-btn rewrite-aux-api-export" id="rewrite-voiceover-final-semantic-api-export" data-aux-api-stage="semantic_text_analyzer_voiceover_final" title="Скачать тело POST к OpenAI (JSON, Semantic по итогу)" aria-label="Скачать JSON запроса Semantic по итогу" {% if not openai_key_set %}disabled{% endif %}>J</button>
+                                            </span>
+                                        </div>
+                                        <div class="slot-placeholder rewrite-slot-placeholder semantic-analyzer-status-wrap hidden" id="rewrite-voiceover-final-semantic-status-wrap" aria-hidden="true">
+                                            <div class="slot-status-row">
+                                                <span class="slot-status slot-status-with-spinner" id="rewrite-voiceover-final-semantic-result-status" aria-live="polite"></span>
+                                                <button type="button" class="btn-cancel-generation" id="rewrite-voiceover-final-semantic-cancel-btn">Cancel</button>
+                                            </div>
+                                        </div>
+                                        <div class="rewrite-scene-writer-check semantic-analyzer-textarea-wrap" id="rewrite-voiceover-final-semantic-textarea-wrap">
+                                            <textarea id="rewrite-voiceover-final-semantic-result" class="semantic-analyzer-result-textarea{% if vf_sa_res_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Сначала получите Russian выше, затем нажмите ↻ — JSON-анализ итога появится здесь." {% if not openai_key_set %}disabled{% elif vf_sa_res_locked %}readonly{% endif %}>{{ rw.voiceover_final_semantic_text_analysis or '' }}</textarea>
+                                        </div>
+                                        <div class="rewrite-scene-writer-check semantic-analyzer-preview hidden" id="rewrite-voiceover-final-semantic-preview" aria-hidden="true"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </article>
+                    <div class="rewrite-voiceover-final-empty-overlay{% if _vf_res %} hidden{% endif %}" id="rewrite-voiceover-final-empty-overlay" aria-hidden="{{ 'true' if _vf_res else 'false' }}">
+                        <p class="rewrite-voiceover-final-empty-overlay__text">Ожидаем результата от Voiceover Editor</p>
+                    </div>
+                </div>
                 {% endif %}
             {% endfor %}
             </div>
@@ -1072,6 +1171,20 @@
             <div class="confirm-modal__actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-clear-results-confirm-cancel">Отмена</button>
                 <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-clear-results-confirm-ok">Да, очистить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-modal hidden" id="rewrite-preset-change-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-preset-change-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-preset-change-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-preset-change-confirm-title">Смена пресета</h3>
+            </div>
+            <p class="confirm-modal__lead">При переключении пресета будут очищены только результаты этапов конвейера пресетов (ответы, правки, проверки). Scene Writer, YouTube packaging, перевод исходника (Russian) и Semantic не затрагиваются. Продолжить?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-preset-change-confirm-cancel">Нет</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-preset-change-confirm-ok">Да, очистить и переключить</button>
             </div>
         </div>
     </div>

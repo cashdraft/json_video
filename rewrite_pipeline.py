@@ -600,6 +600,12 @@ _STAGE_ORDER_INDEX: dict[str, int] = {k: i for i, (k, _) in enumerate(REWRITE_ST
 #     требовал результат «чужого» этапа из другого пресета;
 #   - UI (скрывает карточки не из текущего пресета и определяет порядок «Run pipeline»);
 #   - runner-ом запуска этапов.
+#
+# Scene Writer и YouTube packaging — отдельные модули: всегда на странице, не входят
+# в списки пресетов (см. REWRITE_STAGE_KEYS_ALWAYS_VISIBLE).
+REWRITE_STAGE_KEYS_ALWAYS_VISIBLE: frozenset[str] = frozenset(
+    {"scene_writer", "youtube_packaging"}
+)
 REWRITE_PRESET_DEEP = "deep"
 REWRITE_PRESET_PREWRITTEN = "prewritten"
 REWRITE_PRESET_SOFT = "soft"
@@ -627,8 +633,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
-        "scene_writer",
-        "youtube_packaging",
     ],
     # «Я уже ЗАrewriteИЛ»: Inbox → Voiceover Editor (из Inbox) → ElevenLabs → Title /
     # Structure → … Без этапа Rewrite.
@@ -638,8 +642,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
-        "scene_writer",
-        "youtube_packaging",
     ],
     # «Мягкий Rewrite» — как prewritten, но без Inbox: исходник в поле Source.
     REWRITE_PRESET_SOFT: [
@@ -648,8 +650,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "elevenlabs_editor",
         "title_strategist",
         "structure_splitter",
-        "scene_writer",
-        "youtube_packaging",
     ],
 }
 
@@ -916,6 +916,18 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     job["voiceover_final_text_ru"] = str(job.get("voiceover_final_text_ru") or "")
     job.setdefault("voiceover_final_text_ru_locked", False)
     job["voiceover_final_text_ru_locked"] = bool(job.get("voiceover_final_text_ru_locked"))
+    job.setdefault("voiceover_final_semantic_text_analysis", "")
+    job["voiceover_final_semantic_text_analysis"] = str(
+        job.get("voiceover_final_semantic_text_analysis") or ""
+    )
+    job.setdefault("voiceover_final_semantic_text_analysis_locked", True)
+    job["voiceover_final_semantic_text_analysis_locked"] = bool(
+        job.get("voiceover_final_semantic_text_analysis_locked", True)
+    )
+    job.setdefault("voiceover_final_semantic_text_analysis_at", "")
+    job["voiceover_final_semantic_text_analysis_at"] = str(
+        job.get("voiceover_final_semantic_text_analysis_at") or ""
+    )
     if not (job.get("source_text") or "").strip():
         legacy = (job.get("last_text") or "").strip()
         if legacy:
@@ -1061,6 +1073,12 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
 
     job.setdefault("source_title", "")
     job["source_title"] = str(job.get("source_title") or "")
+
+    # Итоговый текст в UI = тот же edited_text, что в Result Voiceover Editor
+    # (после нормализации JSON). Убираем «осиротевший» voiceover_final_text в JSON.
+    voe_final = stages.get("voiceover_editor") if isinstance(stages.get("voiceover_editor"), dict) else None
+    if isinstance(voe_final, dict):
+        job["voiceover_final_text"] = _extract_edited_text(str(voe_final.get("last_result") or ""))
 
     return job
 
@@ -1254,6 +1272,10 @@ def validate_prerequisites(
         return None
     preset = normalize_rewrite_preset(preset)
     preset_order = REWRITE_PRESET_STAGE_KEYS.get(preset, [])
+    if stage_key in REWRITE_STAGE_KEYS_ALWAYS_VISIBLE:
+        return _validate_stage_input_sources(
+            stage_key, preset, stages, source_text=source_text
+        )
     if stage_key not in preset_order:
         return None
     return _validate_stage_input_sources(

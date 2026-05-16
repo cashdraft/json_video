@@ -407,6 +407,353 @@ textarea::placeholder {
     color: var(--text);
 }
 
+.template-option-edit-btn {
+    position: absolute;
+    top: 0.12rem;
+    right: 0.12rem;
+    z-index: 4;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(12, 14, 20, 0.88);
+    color: var(--text);
+    font-size: 0.72rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.template-option:hover .template-option-edit-btn,
+.template-option:has(.template-option-input:checked) .template-option-edit-btn {
+    opacity: 1;
+}
+
+.template-option-edit-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.template-option--add {
+    cursor: pointer;
+}
+
+.template-option--add .template-option-frame {
+    border-style: dashed;
+}
+
+.template-option-visual--add {
+    font-size: 1.65rem;
+    font-weight: 300;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.template-option--add:hover .template-option-frame {
+    border-color: var(--accent);
+}
+
+.template-option--add:hover .template-option-visual--add {
+    color: var(--accent);
+}
+
+.image-template-editor-card {
+    width: min(720px, calc(100vw - 2rem));
+    max-height: min(92vh, 880px);
+    overflow-y: auto;
+}
+
+.image-template-editor-lead {
+    margin-bottom: 0.65rem;
+}
+
+.image-template-editor-field {
+    margin-bottom: 0.75rem;
+}
+
+.image-template-editor-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+}
+
+.image-template-editor-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.image-template-editor-label-row .image-template-editor-label {
+    margin-bottom: 0;
+}
+
+.image-template-editor-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.image-template-editor-file-btn {
+    margin: 0;
+    cursor: pointer;
+}
+
+.image-template-editor-logo-preview-wrap {
+    margin-top: 0.35rem;
+}
+
+.image-template-editor-logo-preview {
+    width: 4.5rem;
+    height: 4.5rem;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    display: block;
+}
+
+.image-template-editor-hint {
+    margin: 0 0 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.image-template-editor-crop-stage {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin-bottom: 0.45rem;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.image-template-editor-crop-stage canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+.image-template-editor-crop-box {
+    position: absolute;
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+    cursor: move;
+    box-sizing: border-box;
+    touch-action: none;
+}
+
+.image-template-editor-dropzone {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 1.35rem 1rem 1.25rem;
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    background: rgba(14, 16, 22, 0.65);
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    box-sizing: border-box;
+}
+
+.image-template-editor-dropzone-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+    background: rgba(10, 12, 18, 0.82);
+    pointer-events: none;
+}
+
+.image-template-editor-dropzone-loading-text {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text);
+    text-align: center;
+    padding: 0 1rem;
+    line-height: 1.4;
+}
+
+.image-template-editor-dropzone-loading--error .image-template-editor-dropzone-loading-text {
+    color: #f0a8a8;
+}
+
+.image-template-editor-dropzone--loading {
+    cursor: wait;
+    pointer-events: none;
+}
+
+.image-template-editor-dropzone--loading .image-template-editor-dropzone-inner {
+    opacity: 0.35;
+}
+
+.image-template-editor-dropzone:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.image-template-editor-dropzone-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: none;
+    user-select: none;
+}
+
+.image-template-editor-dropzone-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.55rem;
+    color: var(--text-muted);
+    transition: color 0.18s ease;
+}
+
+.image-template-editor-dropzone-icon svg {
+    display: block;
+}
+
+.image-template-editor-dropzone-title {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--text-muted);
+    transition: color 0.18s ease;
+}
+
+.image-template-editor-dropzone:hover {
+    border-color: rgba(74, 158, 255, 0.55);
+    background: rgba(74, 158, 255, 0.06);
+}
+
+.image-template-editor-dropzone:hover .image-template-editor-dropzone-icon,
+.image-template-editor-dropzone:hover .image-template-editor-dropzone-title {
+    color: var(--text);
+}
+
+.image-template-editor-dropzone--over {
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.1);
+    box-shadow: 0 0 0 1px rgba(74, 158, 255, 0.15);
+}
+
+.image-template-editor-dropzone--over .image-template-editor-dropzone-icon,
+.image-template-editor-dropzone--over .image-template-editor-dropzone-title {
+    color: var(--text);
+}
+
+.image-template-editor-ref-hint {
+    margin: 0 0 0.35rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.image-template-editor-ref-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.55rem 0.5rem;
+    align-items: end;
+    margin-top: 0.35rem;
+}
+
+.image-template-editor-ref-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.28rem;
+    min-width: 0;
+}
+
+.image-template-editor-ref-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+
+.image-template-editor-ref-thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 5 / 3;
+    height: auto;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    cursor: grab;
+    touch-action: none;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.image-template-editor-ref-thumb:active {
+    cursor: grabbing;
+}
+
+.image-template-editor-ref-thumb--dragging {
+    opacity: 0.45;
+}
+
+.image-template-editor-ref-thumb--drop-before {
+    box-shadow: -3px 0 0 0 var(--accent);
+}
+
+.image-template-editor-ref-thumb--drop-after {
+    box-shadow: 3px 0 0 0 var(--accent);
+}
+
+.image-template-editor-ref-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+}
+
+.image-template-editor-ref-del {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    z-index: 2;
+    width: 1.2rem;
+    height: 1.2rem;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: rgba(8, 10, 14, 0.85);
+    color: #fff;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.image-template-editor-ref-del:hover {
+    background: var(--danger, #c44);
+}
+
+.image-template-editor-status {
+    margin: 0.35rem 0 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.image-template-editor-status--error {
+    color: var(--danger, #e57373);
+}
+
 .setting label {
     display: block;
     font-size: 0.85rem;
@@ -1634,30 +1981,17 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     opacity: 0.85;
 }
 
-.rewrite-stages-pipeline-clear-btn {
+/* «Запустить» у списка этапов: те же состояния, что у «Расшифровать» (YouTube). */
+.rewrite-pipeline-run-btn {
     margin-left: auto;
+    flex-shrink: 0;
 }
 
-.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn {
-    border-color: var(--error);
-    color: var(--error);
-}
-
-.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn:hover {
-    background: rgba(255, 77, 79, 0.12);
-    border-color: var(--error);
-    color: var(--error);
-}
-
-.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn:active {
-    background: rgba(255, 77, 79, 0.18);
-    border-color: var(--error);
-    color: var(--error);
-}
-
-.rewrite-stages-collapsible__toggle.rewrite-stages-pipeline-clear-btn:focus-visible {
-    outline: 2px solid var(--error);
-    outline-offset: 2px;
+#rewrite-pipeline-run-btn:disabled,
+#rewrite-pipeline-run-btn[disabled] {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
 }
 
 /* --- Пресет ReWrite: сегментированный переключатель (3 равные колонки, как 1K/2K/4K). --- */
@@ -1856,6 +2190,17 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     grid-column: 1 / -1;
 }
 
+/* «Итоговый текст» — не article.rewrite-stage-card, но стоит в той же сетке этапов:
+   без явного span он занимает одну колонку как карточка агента. Тянем на всю ширину, как «Исходный текст». */
+.scenes-grid.rewrite-stages-list > .rewrite-voiceover-final-card {
+    grid-column: 1 / -1;
+}
+
+/* Оверлей «ожидаем Voiceover» позиционируется на всю карточку */
+.rewrite-voiceover-final-card {
+    position: relative;
+}
+
 .rewrite-voiceover-final-card .rewrite-stage-subtitle {
     padding-left: 0;
     color: var(--text-muted);
@@ -1865,6 +2210,38 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 
 .rewrite-voiceover-final-slot {
     min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
+}
+
+/* Пустой Result «Итоговый текст» и ожидание Structure Splitter у Scene Writer: затемнение всей карточки */
+.rewrite-voiceover-final-empty-overlay,
+.rewrite-scene-writer-wait-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(12, 14, 20, 0.66);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 25;
+    pointer-events: auto;
+}
+
+.rewrite-voiceover-final-empty-overlay.hidden,
+.rewrite-scene-writer-wait-overlay.hidden {
+    display: none !important;
+}
+
+.rewrite-voiceover-final-empty-overlay__text,
+.rewrite-scene-writer-wait-overlay__text {
+    margin: 0;
+    padding: 0 1.25rem;
+    max-width: min(26rem, 92%);
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    font-weight: 500;
+    color: rgba(248, 249, 252, 0.96);
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.75);
 }
 
 .rewrite-voiceover-final-textarea {
@@ -5788,14 +6165,15 @@ button.job-download-all-link {
     padding: 0.45rem 0.75rem;
 }
 
-/* «Подробнее» — размер обычной кнопки (как .btn-secondary.btn-sm). Hover: только
-   фон, без ореола (box-shadow) и без смены/утолщения обводки. */
+/* «Подробнее» / «Отобразить» — светло-серый контур и текст (без синего акцента). */
 .rewrite-stages-collapsible__toggle {
     appearance: none;
+    --rewrite-collapsible-toggle-fg: rgba(245, 245, 247, 0.92);
+    --rewrite-collapsible-toggle-border: rgba(245, 245, 247, 0.42);
     background: transparent;
-    border: 1px solid var(--accent);
+    border: 1px solid var(--rewrite-collapsible-toggle-border);
     border-radius: 6px;
-    color: var(--accent);
+    color: var(--rewrite-collapsible-toggle-fg);
     padding: 0.35rem 0.7rem;
     font-size: 0.85rem;
     font-weight: 500;
@@ -5805,19 +6183,21 @@ button.job-download-all-link {
     gap: 0.4rem;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background 0.18s ease, color 0.18s ease;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .rewrite-stages-collapsible__toggle:hover {
-    background: rgba(74, 158, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(245, 245, 247, 0.58);
+    color: rgba(255, 255, 255, 0.98);
 }
 
 .rewrite-stages-collapsible__toggle:active {
-    background: rgba(74, 158, 255, 0.18);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .rewrite-stages-collapsible__toggle:focus-visible {
-    outline: 2px solid var(--accent-hover);
+    outline: 2px solid rgba(245, 245, 247, 0.55);
     outline-offset: 2px;
 }
 
@@ -5827,7 +6207,8 @@ button.job-download-all-link {
     line-height: 1;
     transform: rotate(-90deg);
     transition: transform 0.15s ease;
-    opacity: 0.85;
+    opacity: 0.92;
+    color: inherit;
 }
 
 .rewrite-stages-collapsible[data-collapsed="false"] .rewrite-stages-collapsible__chev {

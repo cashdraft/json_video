@@ -340,8 +340,9 @@
                                 </span>
                             </label>
                             {% for t in image_templates %}
-                            <label class="template-option">
+                            <label class="template-option" data-template-folder="{{ t.folder_name|e }}">
                                 <input class="template-option-input" type="radio" name="image_template" value="{{ t.folder_name }}" {{ 'checked' if _tpl == t.folder_name else '' }}>
+                                <button type="button" class="template-option-edit-btn" title="Редактировать шаблон" aria-label="Редактировать шаблон" data-template-folder="{{ t.folder_name|e }}">✎</button>
                                 <span class="template-option-inner">
                                     <span class="template-option-frame">
                                         {% if t.logo_url %}
@@ -356,10 +357,28 @@
                                 </span>
                             </label>
                             {% endfor %}
+                            <button type="button" class="template-option template-option--add image-template-add-btn" title="Создать шаблон" aria-label="Создать новый шаблон">
+                                <span class="template-option-inner">
+                                    <span class="template-option-frame">
+                                        <span class="template-option-visual template-option-visual--add" aria-hidden="true">+</span>
+                                    </span>
+                                    <span class="template-option-name">Новый</span>
+                                </span>
+                            </button>
                         </div>
                         {% else %}
+                        <div class="template-picker template-picker--empty">
+                            <button type="button" class="template-option template-option--add image-template-add-btn" title="Создать шаблон" aria-label="Создать новый шаблон">
+                                <span class="template-option-inner">
+                                    <span class="template-option-frame">
+                                        <span class="template-option-visual template-option-visual--add" aria-hidden="true">+</span>
+                                    </span>
+                                    <span class="template-option-name">Новый</span>
+                                </span>
+                            </button>
+                        </div>
                         <input type="hidden" name="image_template" value="">
-                        <p class="template-setting-empty">Шаблонов пока нет — создай подпапки в <code>data/image_templates/</code>.</p>
+                        <p class="template-setting-empty">Шаблонов пока нет — нажмите «+» или создайте папку в <code>image_templates/</code>.</p>
                         {% endif %}
                     </div>
                 </div>
@@ -3712,6 +3731,66 @@
         updateSummary();
     })();
     </script>
+    <div class="confirm-modal hidden" id="image-template-editor-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-image-template-modal-close></div>
+        <div class="confirm-modal__card image-template-editor-card" role="dialog" aria-modal="true" aria-labelledby="image-template-editor-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="image-template-editor-title">Шаблон изображений</h3>
+                <button type="button" class="btn btn-secondary btn-sm" data-image-template-modal-close aria-label="Закрыть">✕</button>
+            </div>
+            <p class="confirm-modal__lead image-template-editor-lead">Название, логотип (можно выделить область на большой картинке) и до 7 референсов для Nano Banana.</p>
+            <div class="image-template-editor-field">
+                <label class="image-template-editor-label" for="image-template-editor-name">Название</label>
+                <input type="text" id="image-template-editor-name" class="project-name-input" autocomplete="off" placeholder="Имя папки шаблона">
+            </div>
+            <div class="image-template-editor-field image-template-editor-field--logo">
+                <div class="image-template-editor-label-row">
+                    <span class="image-template-editor-label">Логотип</span>
+                    <label class="btn btn-secondary btn-sm image-template-editor-file-btn">
+                        Загрузить
+                        <input type="file" id="image-template-editor-logo-file" accept="image/jpeg,image/png,image/webp" hidden>
+                    </label>
+                </div>
+                <div class="image-template-editor-logo-preview-wrap hidden" id="image-template-editor-logo-preview-wrap">
+                    <img id="image-template-editor-logo-preview" class="image-template-editor-logo-preview" alt="" />
+                </div>
+                <div class="image-template-editor-crop hidden" id="image-template-editor-crop-wrap">
+                    <p class="image-template-editor-hint">Перетащите рамку — в логотип попадёт выделенная область.</p>
+                    <div class="image-template-editor-crop-stage" id="image-template-editor-crop-stage">
+                        <canvas id="image-template-editor-crop-canvas"></canvas>
+                        <div class="image-template-editor-crop-box" id="image-template-editor-crop-box"></div>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="image-template-editor-crop-apply">Применить выделение как логотип</button>
+                </div>
+            </div>
+            <div class="image-template-editor-field">
+                <div class="image-template-editor-label-row">
+                    <span class="image-template-editor-label">Фотографии (до 7)</span>
+                    <span class="image-template-editor-count" id="image-template-editor-ref-count"></span>
+                </div>
+                <p class="image-template-editor-ref-hint">Порядок слева направо — порядок загрузки в модель. Перетащите превью, чтобы изменить.</p>
+                <div class="image-template-editor-dropzone" id="image-template-editor-dropzone" role="button" tabindex="0" aria-label="Перетащите изображения сюда">
+                    <div class="image-template-editor-dropzone-loading hidden" id="image-template-editor-dropzone-loading" aria-live="polite" aria-hidden="true">
+                        <span class="image-template-editor-dropzone-loading-text" id="image-template-editor-dropzone-loading-text"></span>
+                    </div>
+                    <div class="image-template-editor-dropzone-inner">
+                        <span class="image-template-editor-dropzone-icon" aria-hidden="true">
+                            <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M14 32h20a8 8 0 0 0 1.4-15.9A10 10 0 0 0 16.2 18 7 7 0 0 0 14 32z" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M24 22v12M20 26l4-4 4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <p class="image-template-editor-dropzone-title">Перетащите сюда изображения</p>
+                    </div>
+                    <input type="file" id="image-template-editor-refs-file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                </div>
+                <div class="image-template-editor-ref-grid" id="image-template-editor-ref-grid"></div>
+            </div>
+            <p class="image-template-editor-status hidden" id="image-template-editor-status" aria-live="polite"></p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='image_template_editor.js') }}?v={{ static_style_mtime }}"></script>
     {% if rw %}
     {% include '_rewrite_block_scripts.html' %}
     {% endif %}

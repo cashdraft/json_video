@@ -63,10 +63,18 @@ from yt_dlp import YoutubeDL
 
 from image_templates import (
     IMAGE_TEMPLATES_DIR,
+    add_reference_files,
     build_image_input_urls,
     collect_reference_and_logo,
+    create_template_dir,
+    delete_reference_file,
     list_templates,
+    rename_template_dir,
     safe_template_dir,
+    save_logo_file,
+    save_reference_order,
+    template_detail,
+    validate_template_name,
 )
 from elevenlabs_client import (
     TTS_MODELS,
@@ -582,6 +590,153 @@ def template_assets(template_name: str, filename: str):
     if not target.is_file():
         abort(404)
     return send_from_directory(d, filename, max_age=86400)
+
+
+def _image_template_asset_url(folder_name: str, filename: str) -> str:
+    return url_for("template_assets", template_name=folder_name, filename=filename)
+
+
+def _image_template_detail_json(folder_name: str) -> dict | None:
+    detail = template_detail(folder_name)
+    if not detail:
+        return None
+    fn = detail["folder_name"]
+    logo_file = detail.get("logo_file")
+    detail["logo_url"] = (
+        _image_template_asset_url(fn, logo_file) if logo_file else None
+    )
+    refs_out = []
+    for r in detail.get("references") or []:
+        fname = r.get("filename") or ""
+        if fname:
+            refs_out.append(
+                {
+                    "filename": fname,
+                    "url": _image_template_asset_url(fn, fname),
+                }
+            )
+    detail["references"] = refs_out
+    return detail
+
+
+@app.route("/api/image-templates", methods=["GET"])
+def api_image_templates_list():
+    return jsonify({"ok": True, "templates": templates_ui_rows()})
+
+
+@app.route("/api/image-templates", methods=["POST"])
+def api_image_templates_create():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    _td, err = create_template_dir(name)
+    if err:
+        code = 409 if "уже существует" in err else 400
+        return jsonify({"ok": False, "error": err}), code
+    return jsonify({"ok": True, "template": _image_template_detail_json(name)})
+
+
+@app.route("/api/image-templates/<path:folder_name>", methods=["GET"])
+def api_image_templates_get(folder_name: str):
+    detail = _image_template_detail_json(folder_name)
+    if not detail:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "template": detail})
+
+
+@app.route("/api/image-templates/<path:folder_name>", methods=["PUT"])
+def api_image_templates_update(folder_name: str):
+    body = request.get_json(silent=True) or {}
+    new_name = str(body.get("name") or "").strip()
+    if not new_name:
+        return jsonify({"ok": False, "error": "Введите название шаблона."}), 400
+    old = str(folder_name or "").strip()
+    if new_name != old:
+        err = rename_template_dir(old, new_name)
+        if err:
+            code = 409 if "уже существует" in err else 400
+            return jsonify({"ok": False, "error": err}), code
+        folder_name = new_name
+    detail = _image_template_detail_json(folder_name)
+    if not detail:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "template": detail})
+
+
+@app.route("/api/image-templates/<path:folder_name>/logo", methods=["POST"])
+def api_image_templates_upload_logo(folder_name: str):
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "Файл логотипа не передан."}), 400
+    data = f.read()
+    if not data:
+        return jsonify({"ok": False, "error": "Пустой файл."}), 400
+    ext = Path(f.filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".png"
+    try:
+        save_logo_file(td, data, ext)
+    except OSError:
+        return jsonify({"ok": False, "error": "Не удалось сохранить логотип."}), 500
+    detail = _image_template_detail_json(td.name)
+    return jsonify({"ok": True, "template": detail})
+
+
+@app.route("/api/image-templates/<path:folder_name>/references", methods=["POST"])
+def api_image_templates_upload_references(folder_name: str):
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    uploads: list[tuple[str, bytes]] = []
+    for key in request.files:
+        for f in request.files.getlist(key):
+            if not f or not f.filename:
+                continue
+            raw = f.read()
+            if raw:
+                uploads.append((f.filename, raw))
+    if not uploads:
+        return jsonify({"ok": False, "error": "Нет файлов для загрузки."}), 400
+    saved, err = add_reference_files(td, uploads)
+    if err and not saved:
+        return jsonify({"ok": False, "error": err}), 400
+    detail = _image_template_detail_json(td.name)
+    return jsonify({"ok": True, "saved": saved, "template": detail, "warning": err})
+
+
+@app.route(
+    "/api/image-templates/<path:folder_name>/references/order",
+    methods=["PUT"],
+)
+def api_image_templates_reorder_references(folder_name: str):
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    order = body.get("order")
+    if not isinstance(order, list):
+        return jsonify({"ok": False, "error": "Передайте массив order с именами файлов."}), 400
+    err = save_reference_order(td, order)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    detail = _image_template_detail_json(td.name)
+    return jsonify({"ok": True, "template": detail})
+
+
+@app.route(
+    "/api/image-templates/<path:folder_name>/references/<path:filename>",
+    methods=["DELETE"],
+)
+def api_image_templates_delete_reference(folder_name: str, filename: str):
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if not delete_reference_file(td, filename):
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    detail = _image_template_detail_json(td.name)
+    return jsonify({"ok": True, "template": detail})
 
 
 # --- Parsing logic ---
@@ -1475,6 +1630,79 @@ def _export_wire_payloads_translate_source_ru(body: dict[str, Any], rw_job: dict
             )
         )
     return _format_openai_wire_payloads_txt(wire, header_lines=hdr or None)
+
+
+def _export_wire_payloads_translate_voiceover_final_ru(body: dict[str, Any], rw_job: dict[str, Any]) -> str:
+    """Скачиваемый JSON: те же POST, что при переводе «Итоговый текст» → RU (по батчам)."""
+    src = str(
+        body.get("voiceover_final_text")
+        if "voiceover_final_text" in body
+        else rw_job.get("voiceover_final_text") or ""
+    )
+    model = normalize_rewrite_model(
+        str(
+            body.get("russian_semantic_model")
+            or body.get("model")
+            or rw_job.get("russian_semantic_model")
+            or ""
+        )
+    )
+    chat_temp = clamp_chat_temperature(rw_job.get("chat_temperature"))
+    hdr: list[str] = []
+    if not src.strip():
+        hdr.append("[Russian / Итоговый текст] Нет текста для перевода — POST не формируется.")
+        return _format_openai_wire_payloads_txt([], header_lines=hdr)
+    sys_prompt = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("translate_to_ru"), body, rw_job
+    )
+    batches = _split_text_into_translation_batches(src, 5000)
+    nb = len(batches)
+    hdr.append(
+        f"Перевод (итог озвучки): {nb} POST (батчи до {_fmt_num_ru(5000)} симв.), один system + user на батч."
+    )
+    wire: list[dict[str, Any]] = []
+    for chunk in batches:
+        wire.append(
+            rewrite_chat_completion_wire_payload(
+                model, sys_prompt, chunk, chat_temperature=chat_temp
+            )
+        )
+    return _format_openai_wire_payloads_txt(wire, header_lines=hdr or None)
+
+
+def _export_wire_payload_semantic_voiceover_final(body: dict[str, Any], rw_job: dict[str, Any]) -> str:
+    """Скачиваемый JSON: Semantic по русскому переводу итога озвучки (отдельно от source)."""
+    src_ru = str(
+        body.get("voiceover_final_text_ru")
+        if "voiceover_final_text_ru" in body
+        else rw_job.get("voiceover_final_text_ru") or ""
+    )
+    model = normalize_rewrite_model(
+        str(
+            body.get("russian_semantic_model")
+            or body.get("model")
+            or rw_job.get("russian_semantic_model")
+            or ""
+        )
+    )
+    chat_temp = clamp_chat_temperature(rw_job.get("chat_temperature"))
+    hdr: list[str] = []
+    if not src_ru.strip():
+        hdr.append("[Semantic итог] Нет русского перевода итога — POST не формируется.")
+        return _format_openai_wire_payloads_txt([], header_lines=hdr)
+    system_prompt = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_system"), body, rw_job
+    )
+    user_template = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_user"), body, rw_job
+    )
+    user_msg = (user_template or "").rstrip() + "\n\n" + src_ru.strip()
+    wire = [
+        rewrite_chat_completion_wire_payload(
+            model, system_prompt, user_msg, chat_temperature=chat_temp
+        )
+    ]
+    return _format_openai_wire_payloads_txt(wire)
 
 
 def _export_wire_payload_semantic_text_analyzer(body: dict[str, Any], rw_job: dict[str, Any]) -> str:
@@ -2632,6 +2860,9 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "voiceover_final_locked": True,
         "voiceover_final_text_ru": "",
         "voiceover_final_text_ru_locked": False,
+        "voiceover_final_semantic_text_analysis": "",
+        "voiceover_final_semantic_text_analysis_locked": True,
+        "voiceover_final_semantic_text_analysis_at": "",
         "master_prompt": "",
         "master_prompt_locked": False,
         "target_chars": clamp_target_chars(5 * 344),
@@ -3224,19 +3455,13 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
+    # После normalize_rewrite_job_data совпадает с Result Voiceover Editor.
     voiceover_final_text = str(rw.get("voiceover_final_text") or "")
-    if not voiceover_final_text.strip():
-        voiceover_final_text = _extract_edited_text(
-            str(((st.get("voiceover_editor") or {}).get("last_result")) or "")
-        )
-    # Совпадает с логикой `_rewrite_block.html` / прежнего шаблона: первые
-    # до 10 ключей текущего пресета, исключая Scene Writer (не сворачивается,
-    # отдельная карточка с собственным collapsible-чевроном).
+    # Совпадает с логикой `_rewrite_block.html`: до 11 ключей текущего пресета
+    # для массового сворачивания верхних этапов.
     preset_keys_current = REWRITE_PRESET_STAGE_KEYS.get(rewrite_preset_current, [])
     collapsible_pipeline_stages: list[str] = []
     for _k in preset_keys_current:
-        if _k == "scene_writer":
-            continue
         if len(collapsible_pipeline_stages) >= 11:
             break
         collapsible_pipeline_stages.append(_k)
@@ -3307,11 +3532,8 @@ def _rewrite_project_page_legacy_unused(rewrite_id: str):
         for sk in REWRITE_STAGE_KEYS
     }
     rewrite_stage_key_order = [k for k, _ in REWRITE_STAGES]
+    # После normalize_rewrite_job_data совпадает с Result Voiceover Editor.
     voiceover_final_text = str(rw.get("voiceover_final_text") or "")
-    if not voiceover_final_text.strip():
-        voiceover_final_text = _extract_edited_text(
-            str(((st.get("voiceover_editor") or {}).get("last_result")) or "")
-        )
     try:
         resp = make_response(
             render_template(
@@ -3561,11 +3783,27 @@ def rewrite_project_save(rewrite_id: str):
         rsm_raw = str(body.get("russian_semantic_model") or "").strip()
         rw["russian_semantic_model"] = normalize_rewrite_model(rsm_raw) if rsm_raw else ""
     merge_stages_from_request(rw, body.get("stages"))
+    st_after = rw.get("stages")
+    if isinstance(st_after, dict):
+        vo_cell = st_after.get("voiceover_editor")
+        if isinstance(vo_cell, dict):
+            rw["voiceover_final_text"] = _extract_edited_text(str(vo_cell.get("last_result") or ""))
     if "semantic_text_analysis" in body:
         rw["semantic_text_analysis"] = str(body.get("semantic_text_analysis") or "")
     sa_lock_in = body.get("semantic_text_analysis_locked") if "semantic_text_analysis_locked" in body else None
     if sa_lock_in is not None:
         rw["semantic_text_analysis_locked"] = bool(sa_lock_in)
+    if "voiceover_final_semantic_text_analysis" in body:
+        rw["voiceover_final_semantic_text_analysis"] = str(
+            body.get("voiceover_final_semantic_text_analysis") or ""
+        )
+    vfsa_lock_in = (
+        body.get("voiceover_final_semantic_text_analysis_locked")
+        if "voiceover_final_semantic_text_analysis_locked" in body
+        else None
+    )
+    if vfsa_lock_in is not None:
+        rw["voiceover_final_semantic_text_analysis_locked"] = bool(vfsa_lock_in)
     if "model" in body:
         rw["model"] = normalize_rewrite_model(str(body.get("model") or ""))
     if "chat_temperature" in body and body.get("chat_temperature") is not None and str(body.get("chat_temperature", "")).strip() != "":
@@ -3690,6 +3928,9 @@ TRANSLATE_SOURCE_RU_TASK_REF_ID = "source"
 
 SEMANTIC_TEXT_ANALYZER_TASK_KIND = "semantic_text_analyzer"
 SEMANTIC_TEXT_ANALYZER_TASK_REF_ID = "semantic"
+
+SEMANTIC_TEXT_ANALYZER_VO_FINAL_TASK_KIND = "semantic_text_analyzer_voiceover_final"
+SEMANTIC_TEXT_ANALYZER_VO_FINAL_TASK_REF_ID = "voiceover_final_semantic"
 
 
 def _iter_translate_source_ru_events(
@@ -3940,6 +4181,91 @@ def _iter_semantic_text_analyzer_events(
     yield {"type": "result", "content": result_text, "chars": len(result_text)}
 
 
+def _iter_semantic_voiceover_final_events(
+    rewrite_id: str,
+    vf_text_ru: str,
+    model: str,
+    *,
+    cancel_event: threading.Event | None = None,
+    body: dict[str, Any] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Semantic по русскому переводу итога озвучки (voiceover_final_text_ru)."""
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not vf_text_ru.strip():
+        yield {
+            "type": "error",
+            "message": (
+                "Нет русского перевода итога озвучки. Сначала нажмите ↻ у Russian "
+                "в блоке «Итоговый текст»."
+            ),
+        }
+        return
+    if not api_key_present or not api_key:
+        yield {"type": "error", "message": "Не задан OPENAI_API_KEY."}
+        return
+    if cancel_event is not None and cancel_event.is_set():
+        yield {"type": "error", "message": "Задача отменена пользователем."}
+        return
+    rw_ph = load_rewrite_job(rewrite_id) or {}
+    chat_temp = clamp_chat_temperature(rw_ph.get("chat_temperature"))
+    system_prompt = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_system"), body, rw_ph
+    )
+    user_template = rewrite_placeholder_apply_from_request(
+        get_locked_prompt("semantic_text_analyzer_user"), body, rw_ph
+    )
+    user_msg = (user_template or "").rstrip() + "\n\n" + vf_text_ru.strip()
+    yield {"type": "status", "message": f"Модель: {model}; вход (итог RU): {_fmt_num_ru(len(vf_text_ru))} симв."}
+    yield {
+        "type": "status",
+        "message": (
+            "Старт Semantic по итогу… (System Promt: "
+            + _locked_prompt_fingerprint(system_prompt)
+            + "; User Promt: "
+            + _locked_prompt_fingerprint(user_template)
+            + ")"
+        ),
+    }
+    got_result = False
+    err_text: str | None = None
+    result_text = ""
+    for ev in iter_rewrite_completion(api_key, model, system_prompt, user_msg, chat_temperature=chat_temp):
+        if cancel_event is not None and cancel_event.is_set():
+            yield {"type": "error", "message": "Задача отменена пользователем."}
+            return
+        etype = str(ev.get("type") or "")
+        if etype == "status":
+            yield {"type": "status", "message": str(ev.get("message") or "")}
+        elif etype == "error":
+            err_text = str(ev.get("message") or "Ошибка OpenAI")
+            break
+        elif etype == "result":
+            result_text = str(ev.get("content") or "").strip()
+            got_result = True
+    if err_text is not None:
+        yield {"type": "error", "message": err_text}
+        return
+    if not got_result or not result_text:
+        yield {"type": "error", "message": "Пустой ответ модели."}
+        return
+    rw_save = load_rewrite_job(rewrite_id)
+    if rw_save is None:
+        yield {"type": "error", "message": "Проект не найден при сохранении анализа."}
+        return
+    try:
+        rw_save["voiceover_final_semantic_text_analysis"] = result_text
+        rw_save["voiceover_final_semantic_text_analysis_at"] = datetime.now(timezone.utc).isoformat()
+        save_rewrite_job(rewrite_id, rw_save)
+        yield {
+            "type": "status",
+            "message": "Сохранено в project.json (поле voiceover_final_semantic_text_analysis).",
+        }
+    except Exception as e:
+        yield {"type": "status", "message": f"Не удалось сохранить project.json: {e}"}
+    yield {"type": "result", "content": result_text, "chars": len(result_text)}
+
+
 def _semantic_text_analyzer_task_target(
     emit: Callable[[dict[str, Any]], None],
     cancel_event: threading.Event,
@@ -3952,6 +4278,22 @@ def _semantic_text_analyzer_task_target(
     ph_body = ph if isinstance(ph, dict) else {}
     for ev in _iter_semantic_text_analyzer_events(
         rewrite_id, src_ru, model, cancel_event=cancel_event, body=ph_body
+    ):
+        emit(ev)
+
+
+def _semantic_voiceover_final_task_target(
+    emit: Callable[[dict[str, Any]], None],
+    cancel_event: threading.Event,
+    request_payload: dict[str, Any],
+) -> None:
+    rewrite_id = str(request_payload.get("rewrite_id") or "").strip()
+    vf_ru = str(request_payload.get("voiceover_final_text_ru") or "")
+    model = str(request_payload.get("model") or "")
+    ph = request_payload.get("placeholder_request_body")
+    ph_body = ph if isinstance(ph, dict) else {}
+    for ev in _iter_semantic_voiceover_final_events(
+        rewrite_id, vf_ru, model, cancel_event=cancel_event, body=ph_body
     ):
         emit(ev)
 
@@ -4019,6 +4361,55 @@ def rewrite_semantic_text_analyzer(rewrite_id: str):
             yield json.dumps(ev, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(gen()), mimetype="application/x-ndjson")
+
+
+@app.route("/rewrite/<rewrite_id>/semantic-voiceover-final/start", methods=["POST"])
+def rewrite_semantic_voiceover_final_start(rewrite_id: str):
+    """Фоновый Semantic по русскому переводу итога озвучки (отдельно от source)."""
+    if not rewrite_id_ok(rewrite_id):
+        return jsonify({"ok": False, "error": "bad_id"}), 400
+    rw = load_rewrite_job(rewrite_id)
+    if rw is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    vf_ru = str(
+        body.get("voiceover_final_text_ru")
+        if "voiceover_final_text_ru" in body
+        else rw.get("voiceover_final_text_ru") or ""
+    )
+    api_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    model = normalize_rewrite_model(
+        str(body.get("model") or rw.get("russian_semantic_model") or "")
+    )
+    if not vf_ru.strip():
+        return jsonify(
+            {
+                "ok": False,
+                "error": "no_voiceover_final_text_ru",
+                "message": (
+                    "Нет русского перевода итога озвучки. Сначала нажмите ↻ у Russian "
+                    "в блоке «Итоговый текст»."
+                ),
+            }
+        ), 400
+    if not api_key_present or not (os.getenv("OPENAI_API_KEY") or "").strip():
+        return jsonify({"ok": False, "error": "no_api_key", "message": "Не задан OPENAI_API_KEY."}), 400
+    proj_dir = _rewrite_project_dir(rewrite_id)
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    meta = _tm_start_task(
+        proj_dir,
+        kind=SEMANTIC_TEXT_ANALYZER_VO_FINAL_TASK_KIND,
+        ref_id=SEMANTIC_TEXT_ANALYZER_VO_FINAL_TASK_REF_ID,
+        target=_semantic_voiceover_final_task_target,
+        request_payload={
+            "rewrite_id": rewrite_id,
+            "voiceover_final_text_ru": vf_ru,
+            "model": model,
+            "placeholder_request_body": body,
+        },
+        reuse_active=True,
+    )
+    return jsonify({"ok": True, "task": meta})
 
 
 @app.route("/rewrite/<rewrite_id>/translate-voiceover-final-ru", methods=["POST"])
@@ -5418,9 +5809,23 @@ def rewrite_project_api_payload(rewrite_id: str):
         resp.headers["Content-Type"] = "application/json; charset=utf-8"
         resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
         return resp
+    if stage_key == "translate_voiceover_final_ru":
+        txt = _export_wire_payloads_translate_voiceover_final_ru(body, rw_job)
+        fname = f"{rewrite_id}_translate_voiceover_final_ru_openai_request.json"
+        resp = make_response(txt)
+        resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
     if stage_key == "semantic_text_analyzer":
         txt = _export_wire_payload_semantic_text_analyzer(body, rw_job)
         fname = f"{rewrite_id}_semantic_text_analyzer_openai_request.json"
+        resp = make_response(txt)
+        resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
+    if stage_key == "semantic_text_analyzer_voiceover_final":
+        txt = _export_wire_payload_semantic_voiceover_final(body, rw_job)
+        fname = f"{rewrite_id}_semantic_text_analyzer_voiceover_final_openai_request.json"
         resp = make_response(txt)
         resp.headers["Content-Type"] = "application/json; charset=utf-8"
         resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
@@ -5686,7 +6091,7 @@ def parse_for_job(job_id: str):
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
     image_template = request.form.get("image_template", "").strip()
     if image_template and not safe_template_dir(IMAGE_TEMPLATES_DIR, image_template):
-        flash("Выбранный шаблон не найден в data/image_templates/.", "error")
+        flash("Выбранный шаблон не найден в image_templates/.", "error")
         return redirect(url_for("job_page", job_id=job_id))
 
     scenes, errors = parse_scene_blocks(raw_text)
