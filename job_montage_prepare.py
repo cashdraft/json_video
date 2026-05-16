@@ -152,7 +152,7 @@ def _montage_zoom_scale_resolve(montage: dict[str, Any]) -> float:
 def _aspect_to_size(aspect: str) -> tuple[int, int]:
     s = str(aspect or "16:9").strip()
     if s == "9:16":
-        return 1080, 1920
+        s = "16:9"
     if s == "1:1":
         return 1080, 1080
     if s == "4:5":

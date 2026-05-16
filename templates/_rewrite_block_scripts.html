@@ -4218,6 +4218,10 @@
         block.querySelectorAll('.rewrite-stage-result-badge').forEach(function (badge) {
             if (badge && ta) applyTextBadgeState(badge, ta);
         });
+        var sk = block.getAttribute('data-stage-key') || '';
+        if ((sk === 'voiceover_editor' || sk === 'elevenlabs_editor') && typeof window.__updateTtsScriptSourceBadges === 'function') {
+            try { window.__updateTtsScriptSourceBadges(); } catch (_eTtsBadge) {}
+        }
         const el = block.querySelector('.rewrite-stage-result-counts');
         if (!ta || !el) return;
         if (el.getAttribute('data-copy-hold') === '1') return;

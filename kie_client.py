@@ -61,41 +61,23 @@ def normalize_aspect_ratio(value: str | None, default: str = "16:9") -> str:
     if not raw:
         return default
     raw = raw.replace("/", ":").replace(" ", "")
-    allowed = {"16:9", "9:16", "1:1", "3:2", "2:3"}
+    if raw == "9:16":
+        return "16:9"
+    allowed = {"16:9", "1:1", "3:2", "2:3"}
     return raw if raw in allowed else default
 
 
 def _aspect_ratio_gpt_image2_i2i(ratio: str) -> str:
     """Map normalized W:H to gpt-image-2-image-to-image allowed aspect_ratio values."""
     r = (ratio or "").strip().replace("/", ":").replace(" ", "")
-    if r in {"auto", "1:1", "9:16", "16:9", "4:3", "3:4"}:
+    if r == "9:16":
+        return "16:9"
+    if r in {"auto", "1:1", "16:9", "4:3", "3:4"}:
         return r
     if r == "3:2":
         return "16:9"
     if r == "2:3":
-        return "9:16"
-    return "16:9"
-
-
-def _aspect_ratio_wan_27(ratio: str) -> str:
-    """Map UI aspect ratio to wan/2-7-image allowed values (text-to-image, no input_urls)."""
-    r = (ratio or "").strip().replace("/", ":").replace(" ", "")
-    allowed = {"1:1", "16:9", "4:3", "21:9", "3:4", "9:16", "8:1", "1:8"}
-    if r in allowed:
-        return r
-    if r == "3:2":
         return "16:9"
-    if r == "2:3":
-        return "9:16"
-    return "16:9"
-
-
-def _image_size_qwen2_edit(ratio: str) -> str:
-    """Map UI aspect ratio to qwen2/image-edit image_size enum."""
-    r = (ratio or "").strip().replace("/", ":").replace(" ", "")
-    allowed = {"1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"}
-    if r in allowed:
-        return r
     return "16:9"
 
 
@@ -115,8 +97,6 @@ def create_image_task(
         "nano-banana-2",
         "gpt-image-2-image-to-image",
         "grok-imagine/image-to-image",
-        "wan/2-7-image",
-        "qwen2/image-edit",
     }:
         mid_raw = "nano-banana-pro"
 
@@ -146,44 +126,6 @@ def create_image_task(
             "nsfw_checker": False,
         }
         payload = {"model": "grok-imagine/image-to-image", "input": inp_grok}
-    elif mid_raw == "wan/2-7-image":
-        res = resolution if resolution in ("1K", "2K", "4K") else "2K"
-        ratio_wan = _aspect_ratio_wan_27(normalize_aspect_ratio(aspect_ratio, "16:9"))
-        inp_wan: dict[str, Any] = {
-            "prompt": prompt,
-            "n": 1,
-            "enable_sequential": False,
-            "resolution": res,
-            "thinking_mode": False,
-            "watermark": False,
-            "seed": 0,
-            "nsfw_checker": False,
-        }
-        if image_input:
-            # Несколько input_urls в одном createTask у Wan = несколько правок/выходов и списаний.
-            # Держим один референс + n=1 → одна платная генерация (см. также prompt/n в доке Kie).
-            urls = image_input[:1]
-            inp_wan["input_urls"] = urls
-            inp_wan["bbox_list"] = [[]]
-        else:
-            inp_wan["aspect_ratio"] = ratio_wan
-        payload = {"model": "wan/2-7-image", "input": inp_wan}
-    elif mid_raw == "qwen2/image-edit":
-        if not image_input:
-            raise ValueError(
-                "Для Qwen2 Image Edit нужен URL исходного изображения: выберите шаблон с изображениями."
-            )
-        ratio_q = _image_size_qwen2_edit(normalize_aspect_ratio(aspect_ratio, "16:9"))
-        fmt = (output_format or "png").strip().lower()
-        out_fmt = "jpeg" if fmt in {"jpg", "jpeg"} else "png"
-        inp_qwen: dict[str, Any] = {
-            "prompt": (prompt or "")[:800],
-            "image_url": image_input[0],
-            "image_size": ratio_q,
-            "output_format": out_fmt,
-            "nsfw_checker": False,
-        }
-        payload = {"model": "qwen2/image-edit", "input": inp_qwen}
     else:
         ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
         inp: dict[str, Any] = {

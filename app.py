@@ -78,10 +78,13 @@ from image_templates import (
     validate_template_name,
 )
 from elevenlabs_client import (
+    SPEED_PCT_DEFAULT,
     TTS_MODELS,
     chars_to_words_ms,
     list_voices as elevenlabs_list_voices,
     max_chars_for_model,
+    normalize_tts_model_id,
+    normalize_tts_script_source,
     merge_mp3_files_ffmpeg,
     mp3_duration_seconds_ffprobe,
     split_tts_text_into_chunks,
@@ -3312,7 +3315,6 @@ IMAGE_MODELS_REQUIRE_REFERENCE_URLS: frozenset[str] = frozenset(
     (
         "gpt-image-2-image-to-image",
         "grok-imagine/image-to-image",
-        "qwen2/image-edit",
     )
 )
 
@@ -3327,10 +3329,8 @@ def normalize_image_model(value: str | None) -> str:
         return "gpt-image-2-image-to-image"
     if raw == "grok-imagine/image-to-image":
         return "grok-imagine/image-to-image"
-    if raw == "wan/2-7-image":
-        return "wan/2-7-image"
-    if raw == "qwen2/image-edit":
-        return "qwen2/image-edit"
+    if raw in ("wan/2-7-image", "qwen2/image-edit"):
+        return "nano-banana-pro"
     return "nano-banana-pro"
 
 
@@ -3346,10 +3346,8 @@ def image_model_label(value: str | None) -> str:
         return "GPT Image 2 - Image To Image"
     if raw == "grok-imagine/image-to-image":
         return "Grok Imagine — Image To Image"
-    if raw == "wan/2-7-image":
-        return "Wan 2.7 Image"
-    if raw == "qwen2/image-edit":
-        return "Qwen2 - Image Edit"
+    if raw in ("wan/2-7-image", "qwen2/image-edit"):
+        return "Nano Banana Pro"
     return (value or "").strip() or "Nano Banana Pro"
 
 
@@ -6974,7 +6972,7 @@ def job_elevenlabs_defaults_save(job_id: str):
             return default
 
     voice_id = str(body.get("voice_id") or "").strip()
-    model_id = str(body.get("model_id") or "eleven_v3").strip() or "eleven_v3"
+    model_id = normalize_tts_model_id(body.get("model_id"))
     voice_name = str(body.get("voice_name") or "").strip()
     raw_boost = body.get("use_speaker_boost", True)
     if isinstance(raw_boost, str):
@@ -6994,9 +6992,11 @@ def job_elevenlabs_defaults_save(job_id: str):
             "stability_pct": _pct("stability_pct", 50),
             "similarity_pct": _pct("similarity_pct", 75),
             "style_pct": _pct("style_pct", 0),
-            "speed_pct": _pct("speed_pct", 50),
+            "speed_pct": _pct("speed_pct", 20),
             "use_speaker_boost": use_speaker_boost,
         }
+        if "tts_script_source" in body:
+            job["tts_script_source"] = normalize_tts_script_source(body.get("tts_script_source"))
         save_job(job_id, job)
     return jsonify({"ok": True})
 
@@ -7007,7 +7007,7 @@ def job_elevenlabs_tts(job_id: str):
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
     voice_id = (data.get("voice_id") or "").strip()
-    model_id = (data.get("model_id") or "eleven_multilingual_v2").strip()
+    model_id = normalize_tts_model_id(data.get("model_id"))
     voice_name = (data.get("voice_name") or "").strip() or voice_id
 
     if not text:
@@ -7019,7 +7019,7 @@ def job_elevenlabs_tts(job_id: str):
         if load_job(job_id) is None:
             return jsonify({"error": "Job not found"}), 404
 
-    max_c = max_chars_for_model(model_id)
+    max_c = max_chars_for_model()
     chunks = split_tts_text_into_chunks(text, max_c)
     if not chunks:
         return jsonify({"error": "Пустой текст"}), 400
@@ -7033,7 +7033,7 @@ def job_elevenlabs_tts(job_id: str):
     stability_pct = _pct("stability_pct", 50)
     similarity_pct = _pct("similarity_pct", 75)
     style_pct = _pct("style_pct", 0)
-    speed_pct = _pct("speed_pct", 50)
+    speed_pct = _pct("speed_pct", SPEED_PCT_DEFAULT)
     raw_boost = data.get("use_speaker_boost", True)
     if isinstance(raw_boost, str):
         use_speaker_boost = raw_boost.lower() in ("true", "1", "yes", "on")
@@ -7132,7 +7132,7 @@ def job_elevenlabs_tts_stream(job_id: str):
 
         text = (data.get("text") or "").strip()
         voice_id = (data.get("voice_id") or "").strip()
-        model_id = (data.get("model_id") or "eleven_multilingual_v2").strip()
+        model_id = normalize_tts_model_id(data.get("model_id"))
         voice_name = (data.get("voice_name") or "").strip() or voice_id
 
         if not text:
@@ -7147,7 +7147,7 @@ def job_elevenlabs_tts_stream(job_id: str):
                 yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
                 return
 
-        max_c = max_chars_for_model(model_id)
+        max_c = max_chars_for_model()
         try:
             chunks = split_tts_text_into_chunks(text, max_c)
         except RuntimeError as e:
@@ -7166,7 +7166,7 @@ def job_elevenlabs_tts_stream(job_id: str):
         stability_pct = _pct("stability_pct", 50)
         similarity_pct = _pct("similarity_pct", 75)
         style_pct = _pct("style_pct", 0)
-        speed_pct = _pct("speed_pct", 50)
+        speed_pct = _pct("speed_pct", SPEED_PCT_DEFAULT)
         raw_boost = data.get("use_speaker_boost", True)
         if isinstance(raw_boost, str):
             use_speaker_boost = raw_boost.lower() in ("true", "1", "yes", "on")
@@ -9015,6 +9015,8 @@ def job_page(job_id: str):
         elevenlabs_key_set=elevenlabs_key_set,
         openai_key_set=openai_key_set,
         tts_defaults=job.get("tts_defaults") or {},
+        tts_script_source=normalize_tts_script_source(job.get("tts_script_source")),
+        rewrite_block_present=bool(rewrite_ctx.get("rw")),
         montage_zoom_scale=montage_zoom_scale,
         montage_zoom_mode=montage_zoom_mode,
         montage_zoom_modes=list(_MONTAGE_ZOOM_MODES),

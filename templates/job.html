@@ -104,38 +104,106 @@
             </p>
             {% else %}
             <p class="scene-text rewrite-pipeline-runner__lead">
-                Число справа — лимит <strong>одного</strong> запроса к API (зависит от модели). Если текст длиннее, он автоматически делится по символу <strong>точки</strong> на предложения,
+                Модель <strong>Eleven v3</strong> — до <strong>~5 000</strong> символов на один запрос. Если текст длиннее, он автоматически делится по символу <strong>точки</strong> на предложения,
                 пакуется в куски ≤ лимита, для каждого куска уходит отдельный запрос, затем фрагменты <strong>склеиваются в один MP3</strong> (на сервере нужен <code>ffmpeg</code>).
                 С баланса списываются все символы. Точки в «Dr.» и числах 3.14 тоже режут текст — при необходимости временно замените их.
             </p>
             <div class="tts-form">
-                <label class="tts-label" for="tts-text">Текст</label>
-                <textarea id="tts-text" class="tts-textarea" rows="7" placeholder="Вставьте текст для озвучки…">{{ tts_last_text|e }}</textarea>
-                <div class="tts-char-row">
-                    <span id="tts-char-count">0</span> символов · лимит <strong>одного</strong> запроса: <span id="tts-char-max">10000</span>
-                    <span id="tts-split-hint" class="tts-split-hint hidden"></span>
+                {% set _tts_src = tts_script_source|default('voiceover_editor') %}
+                <div class="tts-script-source-block{% if not rw %} tts-script-source-block--disabled{% endif %}">
+                    <h3 class="rewrite-source-subtitle">Источник текста</h3>
+                    <div class="tts-script-source-options" role="radiogroup" aria-label="Источник текста для озвучки">
+                        <label class="tts-script-source-option" for="tts-src-voiceover" data-tts-stage="voiceover_editor">
+                            <input type="radio" class="tts-script-source-option__radio" id="tts-src-voiceover" name="tts_script_source" value="voiceover_editor" {{ 'checked' if _tts_src == 'voiceover_editor' else '' }}{% if not rw %} disabled{% endif %}>
+                            <span class="tts-script-source-option__main">
+                                <span class="tts-script-source-option__name">Voiceover Editor</span>
+                                <span class="slot-badge badge-no rewrite-stage-result-badge tts-script-source-result-badge" id="tts-src-badge-voiceover" data-tts-stage="voiceover_editor">Result</span>
+                            </span>
+                        </label>
+                        <label class="tts-script-source-option" for="tts-src-elevenlabs" data-tts-stage="elevenlabs_editor">
+                            <input type="radio" class="tts-script-source-option__radio" id="tts-src-elevenlabs" name="tts_script_source" value="elevenlabs_editor" {{ 'checked' if _tts_src == 'elevenlabs_editor' else '' }}{% if not rw %} disabled{% endif %}>
+                            <span class="tts-script-source-option__main">
+                                <span class="tts-script-source-option__name">ElevenLabs Editor</span>
+                                <span class="slot-badge badge-no rewrite-stage-result-badge tts-script-source-result-badge" id="tts-src-badge-elevenlabs" data-tts-stage="elevenlabs_editor">Result</span>
+                            </span>
+                        </label>
+                    </div>
+                    <p class="tts-script-source-hint" id="tts-script-source-hint" aria-live="polite">{% if not rw %}Сначала загрузите блок ReWrite выше — тогда сюда подставится Result выбранного этапа.{% endif %}</p>
+                </div>
+                {% set _tts_has_text = (tts_last_text or '')|trim %}
+                <div class="tts-text-block">
+                    <div class="rewrite-source-toolbar slot-header">
+                        <span class="slot-badge badge-{{ 'yes' if _tts_has_text else 'no' }}" id="tts-text-badge" data-text-badge-for="tts-text">ElevenLabs</span>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="tts-text-toggle" title="Редактировать" aria-label="Редактировать">
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon tts-text-copy-btn" id="tts-text-copy-btn" title="Копировать текст озвучки" aria-label="Копировать текст">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-source-counts" id="tts-text-counts" aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source tts-text-slot">
+                        <textarea id="tts-text" class="rewrite-source-textarea rewrite-source-textarea--locked" rows="7" placeholder="Вставьте текст для озвучки…" readonly>{{ tts_last_text|e }}</textarea>
+                    </div>
+                    <div class="tts-char-row tts-char-row--meta">
+                        <span class="tts-char-row__limit">Лимит <strong>одного</strong> запроса: <span id="tts-char-max">5000</span> символов</span>
+                        <span id="tts-char-count" class="tts-char-count-warn hidden" aria-live="polite"></span>
+                        <span id="tts-split-hint" class="tts-split-hint hidden"></span>
+                    </div>
                 </div>
                 <div class="tts-row">
-                    <div class="tts-field">
-                        <label class="tts-label" for="tts-model">Модель</label>
-                        <select id="tts-model" class="tts-select">
+                    <div class="tts-field setting-model-dropdown">
+                        {% set ns_tts_ml = namespace(d='Eleven v3 — ~5 000 символов') %}
+                        <h3 class="rewrite-source-subtitle">Модель</h3>
+                        <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single"
+                            data-job-model-field="tts-model"
+                            data-job-model-select="tts-model"
+                            data-job-model-radio-name="job-tts-model-radio">
+                            <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Модель ElevenLabs">
+                                <span class="rewrite-anim-dropdown__btn-label" data-job-model-label="tts-model">{{ ns_tts_ml.d }}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                {% for m in tts_models %}
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="job-tts-model-radio" class="rewrite-anim-radio visually-hidden-input" value="{{ m.id }}" data-max="{{ m.max_chars }}" checked>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">{{ m.label }} — {{ m.hint }}</span>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <select id="tts-model" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1">
                             {% for m in tts_models %}
-                            <option value="{{ m.id }}" data-max="{{ m.max_chars }}">{{ m.label }} — {{ m.hint }}</option>
+                            <option value="{{ m.id }}" data-max="{{ m.max_chars }}" selected>{{ m.label }} — {{ m.hint }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="tts-field tts-field-grow">
-                        <label class="tts-label" for="tts-voice">Голос</label>
-                        <select id="tts-voice" class="tts-select" disabled>
+                    <div class="tts-field tts-field-grow setting-model-dropdown">
+                        <h3 class="rewrite-source-subtitle">Голос</h3>
+                        <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single"
+                            data-job-model-field="tts-voice"
+                            data-job-model-select="tts-voice"
+                            data-job-model-radio-name="job-tts-voice-radio"
+                            data-job-model-rich="voice">
+                            <button type="button" class="rewrite-anim-dropdown__btn tts-voice-dropdown__btn" id="tts-voice-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Голос ElevenLabs" disabled>
+                                <span class="rewrite-anim-dropdown__btn-label rewrite-anim-dropdown__btn-label--voice" data-job-model-label="tts-voice">Загрузка голосов…</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox"></div>
+                        </div>
+                        <select id="tts-voice" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1" disabled>
                             <option value="">Загрузка голосов…</option>
                         </select>
                     </div>
                 </div>
                 <div class="tts-sliders">
                     <div class="tts-slider-block">
-                        <label class="tts-slider-label" for="tts-speed">Скорость <span class="tts-slider-val" id="tts-speed-val">{{ tts_defaults.speed_pct | default(50) | int }}</span></label>
-                        <input type="range" id="tts-speed" min="0" max="100" value="{{ tts_defaults.speed_pct | default(50) | int }}" class="tts-range">
-                        <div class="tts-slider-ends"><span>Медленнее</span><span>Быстрее</span></div>
+                        <label class="tts-slider-label" for="tts-speed">Скорость <span class="tts-slider-val" id="tts-speed-val">1.00×</span></label>
+                        <input type="range" id="tts-speed" min="0" max="100" value="{{ tts_defaults.speed_pct | default(20) | int }}" class="tts-range">
+                        <div class="tts-slider-ends"><span>0.25×</span><span>4.0×</span></div>
                     </div>
                     <div class="tts-slider-block">
                         <label class="tts-slider-label" for="tts-stability">Стабильность <span class="tts-slider-val" id="tts-stability-val">{{ tts_defaults.stability_pct | default(50) | int }}</span></label>
@@ -266,10 +334,6 @@
             <section class="input-section">
                 <div class="input-header">
                     <label for="json_input" class="scene-id rewrite-pipeline-runner__title video-json-title">JSON-код сцен</label>
-                    <div class="input-actions">
-                        <button type="button" id="load-example" class="btn btn-secondary btn-sm">Load Example</button>
-                        <button type="button" id="clear-btn" class="btn btn-secondary btn-sm">Clear</button>
-                    </div>
                 </div>
                 <textarea
                     id="json_input"
@@ -287,11 +351,31 @@
 
             <section class="settings-section">
                 <div class="settings-grid">
-                    <div class="setting">
-                        <label for="aspect_ratio">Aspect Ratio</label>
-                        <select id="aspect_ratio" name="aspect_ratio">
-                            <option value="16:9" {{ 'selected' if (job.job_meta.aspect_ratio or '16:9') == '16:9' else '' }}>16:9</option>
-                            <option value="9:16" {{ 'selected' if (job.job_meta.aspect_ratio or '') == '9:16' else '' }}>9:16</option>
+                    <div class="setting setting-model-dropdown">
+                        {% set _ar = job.job_meta.aspect_ratio or '16:9' %}
+                        {% if _ar == '9:16' %}{% set _ar = '16:9' %}{% endif %}
+                        {% set _aspect_options = [('16:9', '16:9')] %}
+                        <h3 class="rewrite-source-subtitle">Aspect Ratio</h3>
+                        <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-job-model-field="aspect">
+                            <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Aspect Ratio">
+                                <span class="rewrite-anim-dropdown__btn-label" data-job-model-label="aspect">{{ _ar }}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                {% for aid, albl in _aspect_options %}
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="job-aspect-ratio-radio" class="rewrite-anim-radio visually-hidden-input" value="{{ aid }}" {% if _ar == aid %}checked{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">{{ albl }}</span>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <select id="aspect_ratio" name="aspect_ratio" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1">
+                            {% for aid, albl in _aspect_options %}
+                            <option value="{{ aid }}" {% if _ar == aid %}selected{% endif %}>{{ albl }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="setting">
@@ -306,25 +390,74 @@
                             <label for="res_4k">4K</label>
                         </div>
                     </div>
-                    <div class="setting">
-                        <label for="image_model">Image Model</label>
+                    <div class="setting setting-model-dropdown">
                         {% set _im = job.job_meta.image_model or job.selected_image_model or 'nano-banana-pro' %}
-                        <select id="image_model" name="image_model">
-                            <option value="nano-banana-pro" {{ 'selected' if _im == 'nano-banana-pro' else '' }}>Nano Banana Pro</option>
-                            <option value="nano-banana-2" {{ 'selected' if _im == 'nano-banana-2' else '' }}>Google - Nano Banana 2</option>
-                            <option value="gpt-image-2-image-to-image" {{ 'selected' if _im == 'gpt-image-2-image-to-image' else '' }}>GPT Image 2 - Image To Image</option>
-                            <option value="grok-imagine/image-to-image" {{ 'selected' if _im == 'grok-imagine/image-to-image' else '' }}>Grok Imagine — Image To Image</option>
-                            <option value="wan/2-7-image" {{ 'selected' if _im == 'wan/2-7-image' else '' }}>Wan 2.7 Image</option>
-                            <option value="qwen2/image-edit" {{ 'selected' if _im == 'qwen2/image-edit' else '' }}>Qwen2 - Image Edit</option>
+                        {% if _im in ['wan/2-7-image', 'qwen2/image-edit'] %}{% set _im = 'nano-banana-pro' %}{% endif %}
+                        {% set _image_models = [
+                            ('nano-banana-pro', 'Nano Banana Pro'),
+                            ('nano-banana-2', 'Google - Nano Banana 2'),
+                            ('gpt-image-2-image-to-image', 'GPT Image 2 - Image To Image'),
+                            ('grok-imagine/image-to-image', 'Grok Imagine — Image To Image'),
+                        ] %}
+                        {% set ns_im_lbl = namespace(d='Nano Banana Pro') %}
+                        {% for mid, mlbl in _image_models %}
+                        {% if _im == mid %}{% set ns_im_lbl.d = mlbl %}{% endif %}
+                        {% endfor %}
+                        <h3 class="rewrite-source-subtitle">Image Model</h3>
+                        <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-job-model-field="image">
+                            <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Image Model">
+                                <span class="rewrite-anim-dropdown__btn-label" data-job-model-label="image">{{ ns_im_lbl.d }}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                {% for mid, mlbl in _image_models %}
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="job-image-model-radio" class="rewrite-anim-radio visually-hidden-input" value="{{ mid }}" {% if _im == mid %}checked{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">{{ mlbl }}</span>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <select id="image_model" name="image_model" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1">
+                            {% for mid, mlbl in _image_models %}
+                            <option value="{{ mid }}" {% if _im == mid %}selected{% endif %}>{{ mlbl }}</option>
+                            {% endfor %}
                         </select>
                     </div>
-                    <div class="setting">
-                        <label for="video_model">Video Model</label>
+                    <div class="setting setting-model-dropdown">
                         {% set _vm = job.job_meta.video_model or 'veo3_fast' %}
-                        <select id="video_model" name="video_model">
-                            <option value="veo3" {{ 'selected' if _vm == 'veo3' else '' }}>Veo 3.1 Quality</option>
-                            <option value="veo3_fast" {{ 'selected' if _vm == 'veo3_fast' else '' }}>Veo 3.1 Fast</option>
-                            <option value="grok-imagine/image-to-video" {{ 'selected' if _vm == 'grok-imagine/image-to-video' else '' }}>Grok Imagine Image to Video</option>
+                        {% set _video_models = [
+                            ('veo3', 'Veo 3.1 Quality'),
+                            ('veo3_fast', 'Veo 3.1 Fast'),
+                            ('grok-imagine/image-to-video', 'Grok Imagine Image to Video'),
+                        ] %}
+                        {% set ns_vm_lbl = namespace(d='Veo 3.1 Fast') %}
+                        {% for mid, mlbl in _video_models %}
+                        {% if _vm == mid %}{% set ns_vm_lbl.d = mlbl %}{% endif %}
+                        {% endfor %}
+                        <h3 class="rewrite-source-subtitle">Video Model</h3>
+                        <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-job-model-field="video">
+                            <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Video Model">
+                                <span class="rewrite-anim-dropdown__btn-label" data-job-model-label="video">{{ ns_vm_lbl.d }}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                {% for mid, mlbl in _video_models %}
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="job-video-model-radio" class="rewrite-anim-radio visually-hidden-input" value="{{ mid }}" {% if _vm == mid %}checked{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">{{ mlbl }}</span>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <select id="video_model" name="video_model" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1">
+                            {% for mid, mlbl in _video_models %}
+                            <option value="{{ mid }}" {% if _vm == mid %}selected{% endif %}>{{ mlbl }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="setting setting-wide template-setting">
@@ -441,9 +574,9 @@
 
         <section
             class="scenes-section"
-            style="--slot-aspect-ratio: {{ (job.job_meta.aspect_ratio or '16:9')|replace(':', '/') }};"
+            style="--slot-aspect-ratio: 16/9;"
         >
-            <div class="scenes-grid {{ 'portrait-layout' if (job.job_meta.aspect_ratio or '16:9') == '9:16' else '' }}">
+            <div class="scenes-grid">
                 {% for scene in scenes %}
                 {% set has_start_prompt = scene.start.prompt|default('', true) %}
                 {% set has_end_prompt = scene.end.prompt|default('', true) %}
@@ -1367,13 +1500,6 @@
     let bulkStopReadyUntil = 0;
     const bulkStartedTaskIds = new Set();
     const jsonInputEl = document.getElementById('json_input');
-    const loadExampleBtn = document.getElementById('load-example');
-    const clearBtn = document.getElementById('clear-btn');
-    const EXAMPLE_JSON = `{"scene_id":"scene_001"}
-{"text":"Intentional money habits build long-term stability."}
-{"start":{"prompt":"Naomi at a desk organizing bills into clear categories, modern finance style."}}
-{"end":{"prompt":"Naomi smiling with clear savings and investment boards behind her."}}
-{"video":{"prompt":"Camera slowly pushes in as icons move from chaos to organized budget lanes."}}`;
     const jsonParseForm = document.getElementById('job-parse-form');
     const jsonConfirmModal = document.getElementById('json-confirm-modal');
     const jsonConfirmText = document.getElementById('json-confirm-text');
@@ -1387,20 +1513,215 @@
     let jsonConfirmResolver = null;
     let jsonEditConfirmResolver = null;
 
-    if (loadExampleBtn && jsonInputEl) {
-        loadExampleBtn.addEventListener('click', () => {
-            jsonInputEl.value = EXAMPLE_JSON;
-            jsonInputEl.focus();
-            updateJsonStats();
+    (function initJobModelDropdowns() {
+        function voiceHueFromId(id) {
+            var h = 0;
+            var s = String(id || '');
+            for (var i = 0; i < s.length; i++) {
+                h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+            }
+            return Math.abs(h) % 360;
+        }
+        function voiceOptMeta(opt) {
+            if (!opt) return null;
+            return {
+                title: opt.dataset.voiceTitle || String(opt.textContent || '').trim(),
+                hue: opt.dataset.voiceHue || String(voiceHueFromId(opt.value)),
+                fullName: String(opt.textContent || opt.dataset.voiceTitle || '').trim(),
+            };
+        }
+        function appendVoiceAvatar(parent, meta) {
+            var av = document.createElement('span');
+            av.className = 'tts-voice-option-avatar';
+            av.setAttribute('aria-hidden', 'true');
+            av.textContent = (meta.title || '?').charAt(0).toUpperCase();
+            av.style.setProperty('--voice-hue', meta.hue);
+            parent.appendChild(av);
+        }
+        function renderVoiceBtnLabel(lbl, meta) {
+            if (!lbl || !meta) return;
+            lbl.classList.add('rewrite-anim-dropdown__btn-label--voice');
+            lbl.textContent = '';
+            var wrap = document.createElement('span');
+            wrap.className = 'tts-voice-btn-preview';
+            appendVoiceAvatar(wrap, meta);
+            var text = document.createElement('span');
+            text.className = 'tts-voice-btn-preview__text';
+            var t = document.createElement('span');
+            t.className = 'tts-voice-btn-preview__title';
+            t.textContent = meta.fullName || meta.title;
+            text.appendChild(t);
+            wrap.appendChild(text);
+            lbl.appendChild(wrap);
+        }
+        function appendVoiceOptionPreview(parent, meta) {
+            var wrap = document.createElement('span');
+            wrap.className = 'tts-voice-btn-preview';
+            appendVoiceAvatar(wrap, meta);
+            var text = document.createElement('span');
+            text.className = 'tts-voice-btn-preview__text';
+            var t = document.createElement('span');
+            t.className = 'tts-voice-btn-preview__title';
+            t.textContent = meta.fullName || meta.title;
+            text.appendChild(t);
+            wrap.appendChild(text);
+            parent.appendChild(wrap);
+        }
+        function closeAllPanelsExcept(except) {
+            document.querySelectorAll('[data-job-model-field] .rewrite-anim-dropdown__panel').forEach(function (p) {
+                if (p === except) return;
+                p.hidden = true;
+                var b = p.parentElement && p.parentElement.querySelector('.rewrite-anim-dropdown__btn');
+                if (b) b.setAttribute('aria-expanded', 'false');
+            });
+        }
+        function initOne(field, selectId, radioName, labelAttr) {
+            var select = document.getElementById(selectId);
+            if (!field || !select) return;
+            var btn = field.querySelector('.rewrite-anim-dropdown__btn');
+            var panel = field.querySelector('.rewrite-anim-dropdown__panel');
+            var radioSel = 'input[name="' + radioName + '"]';
+            var lbl = field.querySelector('[data-job-model-label="' + labelAttr + '"]');
+            var isVoiceRich = field.getAttribute('data-job-model-rich') === 'voice';
+            function syncSelectFromRadios() {
+                var checked = field.querySelector(radioSel + ':checked');
+                if (checked) select.value = checked.value;
+            }
+            function updateBtnLabel() {
+                if (!lbl) return;
+                var checked = field.querySelector(radioSel + ':checked');
+                if (isVoiceRich) {
+                    var selOpt = select.options[select.selectedIndex];
+                    if (checked) {
+                        selOpt = Array.from(select.options).find(function (o) {
+                            return o.value === checked.value;
+                        }) || selOpt;
+                    }
+                    var meta = voiceOptMeta(selOpt);
+                    if (meta && meta.title) {
+                        renderVoiceBtnLabel(lbl, meta);
+                        return;
+                    }
+                }
+                if (checked) {
+                    var lab = checked.closest('label');
+                    var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
+                    lbl.textContent = title ? String(title.textContent || '').trim() : String(checked.value || '');
+                    return;
+                }
+                var opt = select.options[select.selectedIndex];
+                if (opt) lbl.textContent = String(opt.textContent || '').trim();
+            }
+            function closePanel() {
+                if (panel) panel.hidden = true;
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+            function rebuildPanelFromSelect() {
+                if (!panel) return;
+                var selectedVal = select.value;
+                panel.innerHTML = '';
+                Array.from(select.options).forEach(function (opt) {
+                    if (!String(opt.value || '').trim() && !String(opt.textContent || '').trim()) return;
+                    var meta = voiceOptMeta(opt);
+                    var lab = document.createElement('label');
+                    lab.className = 'rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option'
+                        + (isVoiceRich ? ' rewrite-anim-option--voice' : '');
+                    var inp = document.createElement('input');
+                    inp.type = 'radio';
+                    inp.name = radioName;
+                    inp.className = 'rewrite-anim-radio visually-hidden-input';
+                    inp.value = opt.value;
+                    if (opt.dataset.max) inp.dataset.max = opt.dataset.max;
+                    inp.checked = opt.selected || opt.value === selectedVal;
+                    lab.appendChild(inp);
+                    if (isVoiceRich && meta) {
+                        appendVoiceOptionPreview(lab, meta);
+                    } else {
+                        var body = document.createElement('span');
+                        body.className = 'rewrite-anim-option__body';
+                        var title = document.createElement('span');
+                        title.className = 'rewrite-anim-option__title';
+                        title.textContent = String(opt.textContent || '').trim();
+                        body.appendChild(title);
+                        lab.appendChild(body);
+                    }
+                    panel.appendChild(lab);
+                });
+                syncSelectFromRadios();
+                updateBtnLabel();
+            }
+            field._jobModelRebuild = rebuildPanelFromSelect;
+            rebuildPanelFromSelect();
+            if (btn) btn.disabled = !!select.disabled;
+            if (!field.dataset.jobModelBound) {
+                field.dataset.jobModelBound = '1';
+                if (btn && panel) {
+                    btn.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        if (btn.disabled) return;
+                        var open = !panel.hidden;
+                        if (open) closePanel();
+                        else {
+                            closeAllPanelsExcept(panel);
+                            panel.hidden = false;
+                            btn.setAttribute('aria-expanded', 'true');
+                        }
+                    });
+                    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+                }
+                field.addEventListener('change', function (e) {
+                    var rb = e.target;
+                    if (!rb || rb.name !== radioName) return;
+                    select.value = rb.value;
+                    updateBtnLabel();
+                    closePanel();
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                select.addEventListener('change', function () {
+                    var val = select.value;
+                    field.querySelectorAll(radioSel).forEach(function (r) {
+                        r.checked = r.value === val;
+                    });
+                    updateBtnLabel();
+                    if (btn) btn.disabled = !!select.disabled;
+                });
+            }
+        }
+        document.querySelectorAll('[data-job-model-field="image"]').forEach(function (field) {
+            initOne(field, 'image_model', 'job-image-model-radio', 'image');
         });
-    }
-    if (clearBtn && jsonInputEl) {
-        clearBtn.addEventListener('click', () => {
-            jsonInputEl.value = '';
-            jsonInputEl.focus();
-            updateJsonStats();
+        document.querySelectorAll('[data-job-model-field="video"]').forEach(function (field) {
+            initOne(field, 'video_model', 'job-video-model-radio', 'video');
         });
-    }
+        document.querySelectorAll('[data-job-model-field="aspect"]').forEach(function (field) {
+            initOne(field, 'aspect_ratio', 'job-aspect-ratio-radio', 'aspect');
+        });
+        document.querySelectorAll('[data-job-model-field="tts-model"]').forEach(function (field) {
+            initOne(field, 'tts-model', 'job-tts-model-radio', 'tts-model');
+        });
+        document.querySelectorAll('[data-job-model-field="tts-voice"]').forEach(function (field) {
+            initOne(field, 'tts-voice', 'job-tts-voice-radio', 'tts-voice');
+        });
+        window.rebuildJobModelDropdown = function (fieldKey) {
+            var field = document.querySelector('[data-job-model-field="' + fieldKey + '"]');
+            if (field && typeof field._jobModelRebuild === 'function') field._jobModelRebuild();
+        };
+        window.syncJobModelDropdownDisabled = function (selectId, fieldKey) {
+            var select = document.getElementById(selectId);
+            var field = document.querySelector('[data-job-model-field="' + fieldKey + '"]');
+            var btn = field && field.querySelector('.rewrite-anim-dropdown__btn');
+            if (select && btn) btn.disabled = !!select.disabled;
+        };
+        document.addEventListener('click', function () {
+            document.querySelectorAll('[data-job-model-field] .rewrite-anim-dropdown__panel').forEach(function (p) {
+                if (!p.hidden) {
+                    p.hidden = true;
+                    var b = p.parentElement && p.parentElement.querySelector('.rewrite-anim-dropdown__btn');
+                    if (b) b.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+    })();
 
     const computeJsonPromptStats = (rawText) => {
         const text = String(rawText || '').trim();
@@ -2758,13 +3079,22 @@
         const ttsLastWordsFilename = {{ (tts_last_words_name or '') | tojson }};
         const ttsLastWordsUrl      = {{ (tts_last_words_href or '') | tojson }};
         const defaultVoiceId = {{ (tts_defaults.voice_id or '') | tojson }};
-        const defaultModelId = {{ (tts_defaults.model_id or '') | tojson }};
+        const ttsScriptSourceInitial = {{ (tts_script_source|default('voiceover_editor')) | tojson }};
+        let rewriteBlockPresent = {% if rw %}true{% else %}false{% endif %};
+        rewriteBlockPresent = rewriteBlockPresent || !!document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-result');
+        const TTS_MODEL_ID = 'eleven_v3';
+        const TTS_MAX_CHARS = 5000;
         const modelSel = document.getElementById('tts-model');
         const voiceSel = document.getElementById('tts-voice');
         const textEl = document.getElementById('tts-text');
+        const ttsTextBadgeEl = document.getElementById('tts-text-badge');
+        const ttsTextCountsEl = document.getElementById('tts-text-counts');
+        const ttsTextToggleBtn = document.getElementById('tts-text-toggle');
+        const ttsTextCopyBtn = document.getElementById('tts-text-copy-btn');
         const charCountEl = document.getElementById('tts-char-count');
         const charMaxEl = document.getElementById('tts-char-max');
         const splitHintEl = document.getElementById('tts-split-hint');
+        let ttsTextLocked = true;
         const btnGen = document.getElementById('tts-generate');
         const busyEl = document.getElementById('tts-busy');
         const errEl = document.getElementById('tts-error');
@@ -2841,8 +3171,8 @@
         }
 
         const getMaxChars = () => {
-            const opt = modelSel.options[modelSel.selectedIndex];
-            return parseInt(opt?.dataset?.max || '10000', 10);
+            const max = modelSel?.dataset?.max;
+            return parseInt(max || String(TTS_MAX_CHARS), 10);
         };
 
         // --- Тайминги слов (collapsible под плеером) ---
@@ -3226,19 +3556,56 @@
             return 'запросов';
         };
 
+        const ttsFormatNumRu = (typeof formatNumRu === 'function')
+            ? formatNumRu
+            : (n) => String(Math.trunc(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202F');
+        const ttsCountWords = (typeof countWords === 'function')
+            ? countWords
+            : (s) => {
+                const t = String(s || '').trim();
+                if (!t) return 0;
+                return t.split(/\s+/).filter(Boolean).length;
+            };
+        const styleTtsTextToggleBtn = (locked) => {
+            if (!ttsTextToggleBtn) return;
+            ttsTextToggleBtn.classList.toggle('rewrite-lock-toggle--locked', locked);
+            ttsTextToggleBtn.setAttribute('aria-label', locked ? 'Редактировать' : 'Сохранить');
+            ttsTextToggleBtn.title = locked ? 'Редактировать' : 'Сохранить';
+        };
+        const applyTtsTextLockUi = () => {
+            if (!textEl) return;
+            textEl.readOnly = ttsTextLocked;
+            textEl.classList.toggle('rewrite-source-textarea--locked', ttsTextLocked);
+            styleTtsTextToggleBtn(ttsTextLocked);
+        };
         const updateCharUi = () => {
             const max = getMaxChars();
-            charMaxEl.textContent = String(max);
+            if (charMaxEl) charMaxEl.textContent = String(max);
             const raw = textEl?.value || '';
             const n = raw.length;
-            charCountEl.textContent = String(n);
             const nChunks = countTtsChunks(raw, max);
             const over = n > max;
-            charCountEl.classList.toggle('tts-char-warn', over);
+            if (ttsTextCountsEl) {
+                ttsTextCountsEl.textContent = ttsFormatNumRu(n) + ' симв. · ' + ttsFormatNumRu(ttsCountWords(raw)) + ' сл.';
+            }
+            if (ttsTextBadgeEl) {
+                const has = !!String(raw).trim();
+                ttsTextBadgeEl.classList.toggle('badge-yes', has);
+                ttsTextBadgeEl.classList.toggle('badge-no', !has);
+            }
+            if (charCountEl) {
+                if (over) {
+                    charCountEl.classList.remove('hidden');
+                    charCountEl.textContent = 'Превышен лимит одного запроса: ' + ttsFormatNumRu(n) + ' > ' + ttsFormatNumRu(max);
+                } else {
+                    charCountEl.classList.add('hidden');
+                    charCountEl.textContent = '';
+                }
+            }
             if (splitHintEl) {
                 if (nChunks > 1) {
                     splitHintEl.classList.remove('hidden');
-                    splitHintEl.textContent = `→ будет ${nChunks} ${ruRequestsWord(nChunks)} к API и склейка MP3`;
+                    splitHintEl.textContent = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
                 } else {
                     splitHintEl.classList.add('hidden');
                     splitHintEl.textContent = '';
@@ -3249,10 +3616,12 @@
         const collectCurrentTtsSettings = () => {
             const voice_id = voiceSel.value || '';
             const voice_name = voiceSel.options[voiceSel.selectedIndex]?.textContent || '';
+            const srcEl = document.querySelector('input[name="tts_script_source"]:checked');
             return {
-                model_id: modelSel.value,
+                model_id: TTS_MODEL_ID,
                 voice_id,
                 voice_name,
+                tts_script_source: srcEl ? srcEl.value : 'manual',
                 speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
                 stability_pct: parseInt(document.getElementById('tts-stability').value, 10),
                 similarity_pct: parseInt(document.getElementById('tts-similarity').value, 10),
@@ -3278,6 +3647,10 @@
                 persistTtsDefaults().catch(() => {});
             }, 250);
         };
+        const ttsSpeedPctToApi = (pct) => {
+            const u = Math.max(0, Math.min(100, Number(pct) || 0)) / 100;
+            return Math.round((0.25 + u * 3.75) * 100) / 100;
+        };
         const bindSlider = (rangeId, valId) => {
             const r = document.getElementById(rangeId);
             const v = document.getElementById(valId);
@@ -3286,7 +3659,14 @@
             r.addEventListener('input', sync);
             sync();
         };
-        bindSlider('tts-speed', 'tts-speed-val');
+        (function bindTtsSpeedSlider() {
+            const r = document.getElementById('tts-speed');
+            const v = document.getElementById('tts-speed-val');
+            if (!r || !v) return;
+            const sync = () => { v.textContent = `${ttsSpeedPctToApi(r.value).toFixed(2)}×`; };
+            r.addEventListener('input', sync);
+            sync();
+        })();
         bindSlider('tts-stability', 'tts-stability-val');
         bindSlider('tts-similarity', 'tts-similarity-val');
         bindSlider('tts-style', 'tts-style-val');
@@ -3296,18 +3676,221 @@
         });
         document.getElementById('tts-speaker-boost')?.addEventListener('change', schedulePersistTtsDefaults);
 
-        modelSel.addEventListener('change', updateCharUi);
-        modelSel.addEventListener('change', schedulePersistTtsDefaults);
-        textEl?.addEventListener('input', updateCharUi);
-        if (defaultModelId) {
-            for (let i = 0; i < modelSel.options.length; i++) {
-                if (modelSel.options[i].value === defaultModelId) {
-                    modelSel.selectedIndex = i;
-                    break;
+        modelSel?.addEventListener('change', updateCharUi);
+        if (ttsTextToggleBtn && textEl) {
+            ttsTextToggleBtn.addEventListener('click', () => {
+                ttsTextLocked = !ttsTextLocked;
+                applyTtsTextLockUi();
+                if (!ttsTextLocked) textEl.focus();
+            });
+        }
+        if (ttsTextCopyBtn && textEl) {
+            ttsTextCopyBtn.addEventListener('click', () => {
+                const raw = textEl.value || '';
+                const prevTitle = ttsTextCopyBtn.getAttribute('title') || 'Копировать текст озвучки';
+                const flashTitle = (t) => {
+                    ttsTextCopyBtn.setAttribute('title', t);
+                    setTimeout(() => ttsTextCopyBtn.setAttribute('title', prevTitle), 1500);
+                };
+                if (!raw.trim()) { flashTitle('Нет текста для копирования'); return; }
+                const fallback = () => {
+                    try {
+                        textEl.removeAttribute('readonly');
+                        const wasLocked = ttsTextLocked;
+                        textEl.focus();
+                        textEl.select();
+                        document.execCommand('copy');
+                        if (wasLocked) textEl.setAttribute('readonly', '');
+                        flashTitle('Скопировано');
+                    } catch (_) { flashTitle('Не удалось скопировать'); }
+                };
+                if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(raw).then(() => flashTitle('Скопировано')).catch(fallback);
+                } else { fallback(); }
+            });
+        }
+        applyTtsTextLockUi();
+        updateCharUi();
+
+        const ttsScriptSourceHint = document.getElementById('tts-script-source-hint');
+        const parseVoiceoverEditorPlain = (raw) => {
+            const txt = String(raw || '').trim();
+            if (!txt) return '';
+            try {
+                const obj = JSON.parse(txt);
+                if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+                    if (typeof obj.text === 'string') return obj.text;
+                    if (typeof obj.edited_text === 'string') return obj.edited_text;
+                }
+            } catch (_) { /* plain text */ }
+            return txt;
+        };
+        const readRewriteStageResult = (stageKey) => {
+            const ta = document.querySelector('.rewrite-stage-card[data-stage-key="' + stageKey + '"] .rewrite-stage-result');
+            return ta ? String(ta.value || '').trim() : '';
+        };
+        const ttsStageHasResult = (stageKey) => {
+            const raw = readRewriteStageResult(stageKey);
+            if (stageKey === 'voiceover_editor') {
+                return !!parseVoiceoverEditorPlain(raw).trim();
+            }
+            return !!raw.trim();
+        };
+        const updateTtsScriptSourceBadges = () => {
+            const blockDisabled = !!document.querySelector('.tts-script-source-block--disabled');
+            document.querySelectorAll('.tts-script-source-result-badge').forEach((badge) => {
+                const sk = badge.getAttribute('data-tts-stage') || '';
+                if (!sk) return;
+                const has = ttsStageHasResult(sk);
+                badge.classList.toggle('badge-yes', has);
+                badge.classList.toggle('badge-no', !has);
+                const opt = document.querySelector('.tts-script-source-option[data-tts-stage="' + sk + '"]');
+                const inp = document.getElementById(sk === 'elevenlabs_editor' ? 'tts-src-elevenlabs' : 'tts-src-voiceover');
+                if (opt) {
+                    opt.classList.toggle('tts-script-source-option--no-result', !has);
+                    opt.setAttribute('aria-disabled', has ? 'false' : 'true');
+                }
+                if (inp && !blockDisabled) {
+                    if (!has && inp.checked) {
+                        inp.checked = false;
+                        if (ttsScriptLinkedSource === sk || getCheckedTtsScriptSource() === sk) {
+                            clearTtsScriptSourceSelection({ skipPersist: false });
+                        }
+                    }
+                    inp.disabled = !has;
+                }
+            });
+        };
+        window.__updateTtsScriptSourceBadges = updateTtsScriptSourceBadges;
+        const resolveTtsScriptFromSource = (source) => {
+            const src = source || ttsScriptSourceInitial;
+            if (src === 'elevenlabs_editor') {
+                return readRewriteStageResult('elevenlabs_editor');
+            }
+            return parseVoiceoverEditorPlain(readRewriteStageResult('voiceover_editor'));
+        };
+        const getCheckedTtsScriptSource = () => {
+            const el = document.querySelector('input[name="tts_script_source"]:checked');
+            return el ? el.value : null;
+        };
+        const updateTtsScriptSourceHint = (source, text) => {
+            if (!ttsScriptSourceHint) return;
+            if (!source || source === 'manual') {
+                ttsScriptSourceHint.textContent = 'Текст изменён вручную — выбор источника снят. Нажмите Voiceover Editor или ElevenLabs Editor, чтобы снова подставить Result.';
+                return;
+            }
+            const label = source === 'elevenlabs_editor' ? 'ElevenLabs Editor' : 'Voiceover Editor';
+            if (!text.trim()) {
+                ttsScriptSourceHint.textContent = 'Result в «' + label + '» пуст — заполните этап ReWrite или переключите источник.';
+                return;
+            }
+            ttsScriptSourceHint.textContent = 'Подставлен Result из «' + label + '» (' + text.length + ' симв.).';
+        };
+        let ttsScriptApplyingFromSource = false;
+        let ttsScriptLinkedSource = null;
+        let ttsScriptSyncTimer = null;
+        const setTtsScriptSourceSelection = (source) => {
+            document.querySelectorAll('input[name="tts_script_source"]').forEach((inp) => {
+                inp.checked = inp.value === source;
+            });
+            ttsScriptLinkedSource = source;
+        };
+        const clearTtsScriptSourceSelection = (opts) => {
+            document.querySelectorAll('input[name="tts_script_source"]').forEach((inp) => {
+                inp.checked = false;
+            });
+            ttsScriptLinkedSource = null;
+            updateTtsScriptSourceHint('manual', textEl ? textEl.value : '');
+            if (!(opts && opts.skipPersist)) schedulePersistTtsDefaults();
+        };
+        const applyTtsScriptFromSource = (source, opts) => {
+            if (!rewriteBlockPresent || !textEl) return;
+            const src = source || getCheckedTtsScriptSource() || ttsScriptSourceInitial;
+            if (!src || src === 'manual') return;
+            const fresh = resolveTtsScriptFromSource(src);
+            setTtsScriptSourceSelection(src);
+            updateTtsScriptSourceHint(src, fresh);
+            if (!(opts && opts.hintOnly)) {
+                ttsScriptApplyingFromSource = true;
+                try {
+                    textEl.value = fresh;
+                    updateCharUi();
+                } finally {
+                    ttsScriptApplyingFromSource = false;
                 }
             }
+        };
+        const onTtsTextMaybeManualEdit = () => {
+            if (ttsScriptApplyingFromSource || !getCheckedTtsScriptSource()) return;
+            clearTtsScriptSourceSelection({ skipPersist: false });
+        };
+        textEl?.addEventListener('input', () => {
+            updateCharUi();
+            onTtsTextMaybeManualEdit();
+        });
+        textEl?.addEventListener('change', () => {
+            updateCharUi();
+            onTtsTextMaybeManualEdit();
+        });
+        const scheduleTtsScriptSync = (source) => {
+            if (ttsScriptSyncTimer) clearTimeout(ttsScriptSyncTimer);
+            ttsScriptSyncTimer = setTimeout(() => applyTtsScriptFromSource(source), 200);
+        };
+        ['voiceover_editor', 'elevenlabs_editor'].forEach((sk) => {
+            const ta = document.querySelector('.rewrite-stage-card[data-stage-key="' + sk + '"] .rewrite-stage-result');
+            if (!ta) return;
+            ta.addEventListener('input', () => {
+                updateTtsScriptSourceBadges();
+                if (!rewriteBlockPresent) return;
+                const active = getCheckedTtsScriptSource();
+                if (active === sk) scheduleTtsScriptSync(sk);
+            });
+            ta.addEventListener('change', () => {
+                updateTtsScriptSourceBadges();
+                if (!rewriteBlockPresent) return;
+                const active = getCheckedTtsScriptSource();
+                if (active === sk) scheduleTtsScriptSync(sk);
+            });
+        });
+        updateTtsScriptSourceBadges();
+        if (rewriteBlockPresent) {
+            document.querySelectorAll('input[name="tts_script_source"]').forEach((inp) => {
+                inp.addEventListener('change', () => {
+                    applyTtsScriptFromSource(inp.value);
+                    schedulePersistTtsDefaults();
+                });
+            });
+            document.querySelectorAll('.tts-script-source-option').forEach((lab) => {
+                lab.addEventListener('mousedown', () => {
+                    const inp = lab.querySelector('input[name="tts_script_source"]');
+                    lab.dataset.ttsWasChecked = inp && inp.checked ? '1' : '0';
+                });
+                lab.addEventListener('click', () => {
+                    const inp = lab.querySelector('input[name="tts_script_source"]');
+                    if (!inp || inp.disabled) return;
+                    if (lab.dataset.ttsWasChecked === '1') {
+                        applyTtsScriptFromSource(inp.value);
+                        schedulePersistTtsDefaults();
+                    }
+                });
+            });
+            const initialChecked = getCheckedTtsScriptSource();
+            const initialSrc = initialChecked || (ttsScriptSourceInitial !== 'manual' ? ttsScriptSourceInitial : null);
+            const existingText = String(textEl?.value || '').trim();
+            if (!existingText && initialSrc) {
+                applyTtsScriptFromSource(initialSrc);
+            } else if (existingText && initialSrc) {
+                const fromSrc = resolveTtsScriptFromSource(initialSrc);
+                if (fromSrc === (textEl.value || '')) {
+                    setTtsScriptSourceSelection(initialSrc);
+                    updateTtsScriptSourceHint(initialSrc, fromSrc);
+                } else {
+                    clearTtsScriptSourceSelection({ skipPersist: true });
+                }
+            } else if (existingText && !initialSrc) {
+                clearTtsScriptSourceSelection({ skipPersist: true });
+            }
         }
-        updateCharUi();
 
         const initLastTtsPlayer = () => {
             if (!ttsLastAudioUrl || !player || !playerWrap) return;
@@ -3338,12 +3921,21 @@
                 if (data.error || !data.voices?.length) {
                     voiceSel.innerHTML = `<option value="">${data.error || 'Нет голосов'}</option>`;
                     voiceSel.disabled = true;
+                    window.rebuildJobModelDropdown?.('tts-voice');
+                    window.syncJobModelDropdownDisabled?.('tts-voice', 'tts-voice');
                     return;
                 }
                 data.voices.forEach((v) => {
                     const o = document.createElement('option');
                     o.value = v.voice_id;
-                    o.textContent = v.name;
+                    o.textContent = v.name || v.title || v.voice_id;
+                    o.dataset.voiceTitle = v.title || '';
+                    let hue = 0;
+                    const sid = String(v.voice_id || '');
+                    for (let i = 0; i < sid.length; i++) {
+                        hue = ((hue << 5) - hue + sid.charCodeAt(i)) | 0;
+                    }
+                    o.dataset.voiceHue = String(Math.abs(hue) % 360);
                     voiceSel.appendChild(o);
                 });
                 voiceSel.disabled = false;
@@ -3355,10 +3947,18 @@
                         }
                     }
                 }
-                voiceSel.addEventListener('change', schedulePersistTtsDefaults);
+                window.rebuildJobModelDropdown?.('tts-voice');
+                window.syncJobModelDropdownDisabled?.('tts-voice', 'tts-voice');
+                if (!voiceSel.dataset.persistBound) {
+                    voiceSel.dataset.persistBound = '1';
+                    voiceSel.addEventListener('change', schedulePersistTtsDefaults);
+                }
             })
             .catch(() => {
                 voiceSel.innerHTML = '<option value="">Ошибка загрузки голосов</option>';
+                voiceSel.disabled = true;
+                window.rebuildJobModelDropdown?.('tts-voice');
+                window.syncJobModelDropdownDisabled?.('tts-voice', 'tts-voice');
             });
 
         btnGen?.addEventListener('click', async () => {
@@ -3395,7 +3995,7 @@
                         text,
                         voice_id,
                         voice_name,
-                        model_id: modelSel.value,
+                        model_id: TTS_MODEL_ID,
                         speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
                         stability_pct: parseInt(document.getElementById('tts-stability').value, 10),
                         similarity_pct: parseInt(document.getElementById('tts-similarity').value, 10),
@@ -3737,8 +4337,8 @@
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="image-template-editor-title">Шаблон изображений</h3>
                 <div class="image-template-editor-head-actions">
-                    <button type="button" class="btn btn-danger btn-sm hidden" id="image-template-editor-delete" title="Удалить шаблон" aria-label="Удалить шаблон"><span class="template-trash-icon" aria-hidden="true"></span></button>
-                    <button type="button" class="btn btn-secondary btn-sm" data-image-template-modal-close aria-label="Закрыть">✕</button>
+                    <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn hidden" id="image-template-editor-delete" title="Удалить шаблон" aria-label="Удалить шаблон"><span class="template-trash-icon" aria-hidden="true"></span></button>
+                    <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-image-template-modal-close aria-label="Закрыть">✕</button>
                 </div>
             </div>
             <p class="confirm-modal__lead image-template-editor-lead">Название, логотип (можно выделить область на большой картинке) и до 7 референсов для Nano Banana.</p>

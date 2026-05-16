@@ -2,7 +2,7 @@
 ElevenLabs Text-to-Speech API (server-side only).
 
 Docs: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
-Лимиты символов на один запрос зависят от модели (см. TTS_MODELS и help.elevenlabs.io).
+Озвучка только через Eleven v3 (~5000 символов на один запрос; длинный текст режется по точкам).
 """
 
 from __future__ import annotations
@@ -19,33 +19,31 @@ import requests
 
 ELEVEN_BASE = "https://api.elevenlabs.io"
 
-# Ориентиры по лимитам на один запрос (ElevenLabs может менять — при 422 уменьшите текст).
+TTS_MODEL_ID = "eleven_v3"
+TTS_MAX_CHARS = 5000
+
 TTS_MODELS: list[dict[str, Any]] = [
     {
-        "id": "eleven_multilingual_v2",
-        "label": "Multilingual v2",
-        "max_chars": 10000,
-        "hint": "~10 000 символов на запрос",
-    },
-    {
-        "id": "eleven_turbo_v2_5",
-        "label": "Turbo v2.5",
-        "max_chars": 40000,
-        "hint": "до ~40 000 символов",
-    },
-    {
-        "id": "eleven_flash_v2_5",
-        "label": "Flash v2.5",
-        "max_chars": 40000,
-        "hint": "до ~40 000 символов",
-    },
-    {
-        "id": "eleven_v3",
+        "id": TTS_MODEL_ID,
         "label": "Eleven v3",
-        "max_chars": 5000,
+        "max_chars": TTS_MAX_CHARS,
         "hint": "~5 000 символов",
     },
 ]
+
+
+def normalize_tts_model_id(value: str | None) -> str:
+    """Всегда eleven_v3 (старые model_id из job игнорируются)."""
+    return TTS_MODEL_ID
+
+
+def normalize_tts_script_source(value: str | None) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in ("manual", "none", "off", ""):
+        return "manual"
+    if raw in ("elevenlabs_editor", "elevenlabs", "el"):
+        return "elevenlabs_editor"
+    return "voiceover_editor"
 
 DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
 
@@ -57,11 +55,8 @@ def _api_key() -> str:
     return key
 
 
-def max_chars_for_model(model_id: str) -> int:
-    for m in TTS_MODELS:
-        if m["id"] == model_id:
-            return int(m["max_chars"])
-    return 10000
+def max_chars_for_model(model_id: str | None = None) -> int:
+    return TTS_MAX_CHARS
 
 
 def sentences_split_by_dot(text: str) -> list[str]:
@@ -210,8 +205,17 @@ def merge_mp3_files_ffmpeg(part_paths: list[Path], out_path: Path) -> None:
             pass
 
 
-def list_voices() -> list[dict[str, str]]:
-    """Список голосов аккаунта: voice_id, name."""
+def _voice_title_from_name(name: str) -> str:
+    n = (name or "").strip()
+    if " - " in n:
+        return n.split(" - ", 1)[0].strip() or n
+    if " – " in n:
+        return n.split(" – ", 1)[0].strip() or n
+    return n or "?"
+
+
+def list_voices() -> list[dict[str, Any]]:
+    """Список голосов аккаунта для UI (id, имя, короткий заголовок)."""
     resp = requests.get(
         f"{ELEVEN_BASE}/v1/voices",
         headers={"xi-api-key": _api_key()},
@@ -222,13 +226,23 @@ def list_voices() -> list[dict[str, str]]:
         msg = data.get("detail", {}).get("message") if isinstance(data.get("detail"), dict) else None
         raise RuntimeError(msg or data.get("message") or resp.text or f"HTTP {resp.status_code}")
     voices = data.get("voices") or []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for v in voices:
+        if not isinstance(v, dict):
+            continue
         vid = v.get("voice_id") or v.get("voiceId")
-        name = v.get("name") or vid or "?"
-        if vid:
-            out.append({"voice_id": vid, "name": name})
-    out.sort(key=lambda x: x["name"].lower())
+        name = (v.get("name") or vid or "?").strip()
+        if not vid:
+            continue
+        title = _voice_title_from_name(name)
+        out.append(
+            {
+                "voice_id": str(vid),
+                "name": name,
+                "title": title,
+            }
+        )
+    out.sort(key=lambda x: str(x.get("name") or "").lower())
     return out
 
 
@@ -241,10 +255,27 @@ def pct_to_unit(pct: float | int) -> float:
     return round(p / 100.0, 4)
 
 
+SPEED_MIN = 0.25
+SPEED_MAX = 4.0
+# Слайдер 0–100%: 20% ≈ 1.0× (нормальная скорость ElevenLabs).
+SPEED_PCT_DEFAULT = 20
+
+
 def pct_to_speed(pct: float | int) -> float:
-    """0% = медленнее (0.7), 100% = быстрее (1.2), как в UI ElevenLabs."""
+    """Слайдер 0–100% → API speed 0.25–4.0 (ElevenLabs voice_settings.speed)."""
     u = pct_to_unit(pct)
-    return round(0.7 + u * 0.5, 4)
+    return round(SPEED_MIN + u * (SPEED_MAX - SPEED_MIN), 4)
+
+
+def speed_to_pct(speed: float | int) -> int:
+    """API speed → слайдер 0–100% (для отображения/миграции)."""
+    s = float(speed)
+    if s <= SPEED_MIN:
+        return 0
+    if s >= SPEED_MAX:
+        return 100
+    u = (s - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)
+    return int(round(u * 100))
 
 
 def text_to_speech_bytes(
@@ -446,8 +477,8 @@ def chars_to_words_ms(
             raise RuntimeError(
                 "ElevenLabs with-timestamps: модель вернула битый character-alignment "
                 "(у большинства слов одинаковые start/end). Перегенерируйте озвучку "
-                "с моделью Multilingual v2 / Turbo v2.5 / Flash v2.5 — eleven_v3 "
-                "сейчас часто отдаёт сломанный alignment на длинных чанках."
+                "(eleven_v3). Попробуйте перегенерировать озвучку или используйте "
+                "локальный Whisper для пословных таймингов."
             )
     return out
 
