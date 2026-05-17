@@ -20,13 +20,79 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
-
 from typing import Any
 
-from image_templates import safe_template_dir
+from image_templates import (
+    is_logo_file,
+    remove_logo_files,
+    safe_template_dir,
+    save_logo_file,
+    validate_template_name,
+)
 from rewrite_pipeline import REWRITE_STAGE_KEYS, clamp_target_chars
+
+META_FILENAME = "template_meta.json"
+DEFAULT_REWRITE_TEMPLATE_NAME = "Template"
+
+# Поля, которые входят в редактор шаблона (остальное — настройки проекта, не шаблона).
+REWRITE_TEMPLATE_SCOPE_STAGE_KEYS: tuple[str, ...] = ("rewrite", "scene_writer")
+
+
+def filter_stages_for_template_scope(stages: dict[str, Any] | None) -> dict[str, dict[str, str]]:
+    stages = stages if isinstance(stages, dict) else {}
+    out: dict[str, dict[str, str]] = {}
+    for sk in REWRITE_TEMPLATE_SCOPE_STAGE_KEYS:
+        cell = stages.get(sk) if isinstance(stages.get(sk), dict) else {}
+        out[sk] = {
+            "prompt": str(cell.get("prompt") or ""),
+            "user_prompt": str(cell.get("user_prompt") or ""),
+            "style_prompt": str(cell.get("style_prompt") or ""),
+            "past_prompt": str(cell.get("past_prompt") or ""),
+        }
+    return out
+
+
+def resolve_rewrite_template_name(name: str | None) -> str:
+    n = str(name or "").strip()
+    return n if n else DEFAULT_REWRITE_TEMPLATE_NAME
+
+
+def allocate_rewrite_template_name(
+    name: str | None,
+    *,
+    exclude: str | None = None,
+) -> str:
+    """Имя папки шаблона: пустое → «Template»; если занято — Template 1, Template 2, …"""
+    desired = resolve_rewrite_template_name(name)
+    known = set(list_rewrite_template_names())
+    ex = str(exclude or "").strip()
+    if ex:
+        known.discard(ex)
+    if desired not in known:
+        return desired
+    if desired != DEFAULT_REWRITE_TEMPLATE_NAME:
+        return desired
+    n = 1
+    while n < 10000:
+        candidate = f"Template {n}"
+        if candidate not in known:
+            return candidate
+        n += 1
+    return f"Template {n}"
+
+DEFAULT_TTS_DEFAULTS: dict[str, Any] = {
+    "voice_id": "",
+    "voice_name": "",
+    "model_id": "eleven_multilingual_v2",
+    "stability_pct": 50,
+    "similarity_pct": 75,
+    "style_pct": 0,
+    "speed_pct": 20,
+    "use_speaker_boost": True,
+}
 
 MODULE_DIR = Path(__file__).resolve().parent
 REWRITE_TEMPLATES_DIR = MODULE_DIR / "rewrite_templates"
@@ -284,6 +350,93 @@ def parse_template_config(raw: str) -> dict[str, int]:
     return result
 
 
+def find_logo_file(template_dir: Path) -> Path | None:
+    for f in template_dir.iterdir():
+        if f.is_file() and is_logo_file(f):
+            return f
+    return None
+
+
+def load_template_meta(template_dir: Path) -> dict[str, Any]:
+    """description + tts_defaults из template_meta.json."""
+    out: dict[str, Any] = {
+        "description": "",
+        "tts_defaults": dict(DEFAULT_TTS_DEFAULTS),
+    }
+    p = template_dir / META_FILENAME
+    if not p.is_file():
+        return out
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return out
+    if not isinstance(raw, dict):
+        return out
+    out["description"] = str(raw.get("description") or "")
+    tts = raw.get("tts_defaults")
+    if isinstance(tts, dict):
+        merged = dict(DEFAULT_TTS_DEFAULTS)
+        for k in DEFAULT_TTS_DEFAULTS:
+            if k in tts:
+                merged[k] = tts[k]
+        out["tts_defaults"] = merged
+    return out
+
+
+def save_template_meta(
+    template_dir: Path,
+    *,
+    description: str,
+    tts_defaults: dict[str, Any] | None,
+) -> None:
+    tts_in: dict[str, Any] = dict(DEFAULT_TTS_DEFAULTS)
+    if isinstance(tts_defaults, dict):
+        for k in DEFAULT_TTS_DEFAULTS:
+            if k in tts_defaults:
+                tts_in[k] = tts_defaults[k]
+    try:
+        tts_in["stability_pct"] = max(0, min(100, int(tts_in.get("stability_pct", 50))))
+        tts_in["similarity_pct"] = max(0, min(100, int(tts_in.get("similarity_pct", 75))))
+        tts_in["style_pct"] = max(0, min(100, int(tts_in.get("style_pct", 0))))
+        tts_in["speed_pct"] = max(0, min(100, int(tts_in.get("speed_pct", 20))))
+    except (TypeError, ValueError):
+        pass
+    raw_boost = tts_in.get("use_speaker_boost", True)
+    if isinstance(raw_boost, str):
+        tts_in["use_speaker_boost"] = raw_boost.lower() in ("true", "1", "yes", "on")
+    else:
+        tts_in["use_speaker_boost"] = bool(raw_boost)
+    tts_in["voice_id"] = str(tts_in.get("voice_id") or "").strip()
+    tts_in["voice_name"] = str(tts_in.get("voice_name") or "").strip()
+    tts_in["model_id"] = str(tts_in.get("model_id") or DEFAULT_TTS_DEFAULTS["model_id"]).strip()
+    payload = {
+        "description": str(description or "").strip(),
+        "tts_defaults": tts_in,
+    }
+    (template_dir / META_FILENAME).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def rename_rewrite_template_dir(old_name: str, new_name: str) -> str | None:
+    err = validate_template_name(new_name)
+    if err:
+        return err
+    old_d = safe_template_dir(REWRITE_TEMPLATES_DIR, old_name)
+    if not old_d:
+        return "Шаблон не найден."
+    new_stem = new_name.strip()
+    new_d = REWRITE_TEMPLATES_DIR / new_stem
+    if new_d.exists() and new_d.resolve() != old_d.resolve():
+        return "Шаблон с таким именем уже существует."
+    try:
+        old_d.rename(new_d)
+    except OSError:
+        return "Не удалось переименовать шаблон."
+    return None
+
+
 def list_rewrite_template_names() -> list[str]:
     root = REWRITE_TEMPLATES_DIR
     if not root.is_dir():
@@ -371,6 +524,12 @@ def load_rewrite_template(name: str) -> dict | None:
                 cpm = 344
             out["target_chars"] = clamp_target_chars(dm * cpm)
 
+    meta = load_template_meta(d)
+    out["description"] = meta["description"]
+    out["tts_defaults"] = meta["tts_defaults"]
+    logo = find_logo_file(d)
+    out["logo_file"] = logo.name if logo else None
+
     return out
 
 
@@ -379,39 +538,40 @@ def save_rewrite_template_to_disk(
     *,
     hero_prompt: str,
     master_prompt: str,
-    target_chars: int,
+    target_chars: int | None = None,
     stages: dict[str, Any],
+    description: str | None = None,
+    tts_defaults: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
     """
     Перезаписывает .txt в подпапке шаблона. Папка должна уже существовать.
+    В шаблон пишутся только hero/master, этапы из REWRITE_TEMPLATE_SCOPE_STAGE_KEYS,
+    meta (description, tts_defaults). target_chars (Duration) в шаблон не входит.
     Возвращает (True, "") или (False, код_ошибки).
     """
     d = safe_template_dir(REWRITE_TEMPLATES_DIR, name)
     if d is None:
         return False, "not_found"
-    try:
-        tc = clamp_target_chars(int(target_chars))
-    except (TypeError, ValueError):
-        tc = 1500
-    cfg_text = f"target_chars: {tc}\n"
-    (d / _TARGET_TO_FILENAME["template_config"]).write_text(cfg_text, encoding="utf-8")
+    if target_chars is not None:
+        try:
+            tc = clamp_target_chars(int(target_chars))
+        except (TypeError, ValueError):
+            tc = 1500
+        cfg_text = f"target_chars: {tc}\n"
+        (d / _TARGET_TO_FILENAME["template_config"]).write_text(cfg_text, encoding="utf-8")
     (d / _TARGET_TO_FILENAME["hero_prompt"]).write_text(
         (hero_prompt or "").rstrip() + "\n", encoding="utf-8"
     )
     (d / _TARGET_TO_FILENAME["master_prompt"]).write_text(
         (master_prompt or "").rstrip() + "\n", encoding="utf-8"
     )
-    for sk in REWRITE_STAGE_KEYS:
-        cell = stages.get(sk) if isinstance(stages, dict) else None
-        prompt = ""
-        user_prompt = ""
-        style_prompt = ""
-        past_prompt = ""
-        if isinstance(cell, dict):
-            prompt = str(cell.get("prompt") or "")
-            user_prompt = str(cell.get("user_prompt") or "")
-            style_prompt = str(cell.get("style_prompt") or "")
-            past_prompt = str(cell.get("past_prompt") or "")
+    scoped_stages = filter_stages_for_template_scope(stages)
+    for sk in REWRITE_TEMPLATE_SCOPE_STAGE_KEYS:
+        cell = scoped_stages.get(sk) if isinstance(scoped_stages.get(sk), dict) else {}
+        prompt = str(cell.get("prompt") or "")
+        user_prompt = str(cell.get("user_prompt") or "")
+        style_prompt = str(cell.get("style_prompt") or "")
+        past_prompt = str(cell.get("past_prompt") or "")
 
         # New naming: explicit System Promt / User Promt files.
         fn = _TARGET_TO_FILENAME.get(f"stage:{sk}")
@@ -431,4 +591,24 @@ def save_rewrite_template_to_disk(
         legacy_title = _STAGE_TARGETS.get(sk, sk.capitalize())
         legacy_system_fn = f"{legacy_title} Prompt.txt"
         (d / legacy_system_fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
+    if description is not None or tts_defaults is not None:
+        cur_meta = load_template_meta(d)
+        save_template_meta(
+            d,
+            description=description if description is not None else cur_meta["description"],
+            tts_defaults=tts_defaults if tts_defaults is not None else cur_meta["tts_defaults"],
+        )
+    return True, ""
+
+
+def save_rewrite_template_logo(name: str, data: bytes, ext: str = ".png") -> tuple[bool, str]:
+    d = safe_template_dir(REWRITE_TEMPLATES_DIR, name)
+    if d is None:
+        return False, "not_found"
+    if not data:
+        return False, "empty"
+    try:
+        save_logo_file(d, data, ext)
+    except OSError:
+        return False, "write_failed"
     return True, ""

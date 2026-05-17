@@ -163,6 +163,11 @@ LOCKED_PROMPTS: dict[str, dict] = {
         "filename": "voiceover_editor_system_rules.txt",
         "default": "",
     },
+    "scene_writer_system_rules": {
+        "label": "Scene Writer — System Rules",
+        "filename": "scene_writer_system_rules.txt",
+        "default": "",
+    },
     "system_prompt_title_strategist": {
         "label": "Title Strategist — System Promt",
         "filename": "system_prompt_title_strategist.txt",
@@ -171,6 +176,11 @@ LOCKED_PROMPTS: dict[str, dict] = {
     "system_prompt_structure_splitter": {
         "label": "Structure Splitter — System Promt",
         "filename": "system_prompt_structure_splitter.txt",
+        "default": "",
+    },
+    "system_prompt_youtube_packaging": {
+        "label": "YouTube packaging engine — System Promt",
+        "filename": "system_prompt_youtube_packaging.txt",
         "default": "",
     },
     "system_prompt_elevenlabs_editor": {

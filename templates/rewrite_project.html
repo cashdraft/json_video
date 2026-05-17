@@ -1407,7 +1407,6 @@
         templateCreateBtn.addEventListener('click', async function () {
             if (!openaiOk || !templateSelectEl) return;
             var name = (await openTemplateCreateModal() || '').trim();
-            if (!name) return;
             templateCreateBtn.disabled = true;
             try {
                 var snap = collectSnapshot();
@@ -1427,8 +1426,9 @@
                     setTemplateOpStatus(data.message || 'Не удалось создать шаблон.', true);
                     return;
                 }
-                await reloadRewriteTemplateOptions(name);
-                setTemplateOpStatus('Шаблон создан: ' + name, false);
+                var createdName = (data.name || name || '').trim();
+                await reloadRewriteTemplateOptions(createdName);
+                setTemplateOpStatus('Шаблон создан: ' + createdName, false);
                 await saveToServer();
             } catch (e) {
                 setTemplateOpStatus(String(e), true);

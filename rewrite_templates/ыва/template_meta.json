@@ -1,0 +1,13 @@
+{
+  "description": "",
+  "tts_defaults": {
+    "voice_id": "hIru3zkEJ3dBYHTbMy2V",
+    "voice_name": "Alexander - Clear, Steady and Refined",
+    "model_id": "eleven_v3",
+    "stability_pct": 49,
+    "similarity_pct": 26,
+    "style_pct": 45,
+    "speed_pct": 43,
+    "use_speaker_boost": true
+  }
+}

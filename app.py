@@ -71,6 +71,7 @@ from image_templates import (
     delete_template_dir,
     list_templates,
     rename_template_dir,
+    is_logo_file,
     safe_template_dir,
     save_logo_file,
     save_reference_order,
@@ -156,8 +157,15 @@ from rewrite_pipeline import (
 )
 from rewrite_templates import (
     REWRITE_TEMPLATES_DIR,
+    REWRITE_TEMPLATE_SCOPE_STAGE_KEYS,
+    allocate_rewrite_template_name,
+    filter_stages_for_template_scope,
+    find_logo_file,
     list_rewrite_template_names,
     load_rewrite_template,
+    rename_rewrite_template_dir,
+    resolve_rewrite_template_name,
+    save_rewrite_template_logo,
     save_rewrite_template_to_disk,
 )
 from locked_prompts import (
@@ -1938,6 +1946,7 @@ def _youtube_proxy_config_path() -> Path:
 def _youtube_proxy_default_config() -> dict[str, Any]:
     return {
         "proxy_url": "",
+        "proxy_input": "",
         "updated_at": None,
         "last_test_ok": None,
         "last_test_at": None,
@@ -1960,6 +1969,9 @@ def _youtube_proxy_load() -> dict[str, Any]:
         if k in data:
             cfg[k] = data[k]
     cfg["proxy_url"] = str(cfg.get("proxy_url") or "").strip()
+    cfg["proxy_input"] = str(cfg.get("proxy_input") or "").strip()
+    if not cfg["proxy_input"] and cfg["proxy_url"]:
+        cfg["proxy_input"] = _youtube_proxy_compact(cfg["proxy_url"])
     return cfg
 
 
@@ -2080,8 +2092,13 @@ def youtube_proxy_status_dict() -> dict[str, Any]:
     last_ok = cfg.get("last_test_ok")
     if last_ok is not None:
         last_ok = bool(last_ok)
-    file_compact = _youtube_proxy_compact(file_url)
-    active_compact = _youtube_proxy_compact(active)
+    file_input = str(cfg.get("proxy_input") or "").strip()
+    file_compact = file_input or _youtube_proxy_compact(file_url)
+    active_compact = (
+        _youtube_proxy_compact(active)
+        if env_overrides
+        else file_compact
+    )
     return {
         "env_overrides_file": env_overrides,
         "file_configured": bool(file_url),
@@ -3518,6 +3535,7 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         "claude_rewrite_model_ids": sorted(CLAUDE_MODEL_IDS),
         "default_chat_temperature": REWRITE_CHAT_TEMPERATURE,
         "rewrite_template_names": list_rewrite_template_names(),
+        "rewrite_templates_ui": rewrite_templates_ui_rows(),
         "voiceover_final_text": voiceover_final_text,
         "youtube_cookies_status": youtube_cookies_status_dict(),
         "youtube_proxy_status": youtube_proxy_status_dict(),
@@ -3611,14 +3629,9 @@ def rewrite_api_templates_list():
 def rewrite_api_templates_create():
     """Создать новый rewrite-шаблон из текущих данных формы."""
     body = request.get_json(silent=True) or {}
-    name = str(body.get("name") or "").strip()
-    if not name:
-        return jsonify({"ok": False, "error": "bad_name", "message": "Введите название шаблона."}), 400
+    name = allocate_rewrite_template_name(body.get("name"))
     if any(ch in name for ch in ('/', '\\')) or name.startswith('.'):
         return jsonify({"ok": False, "error": "bad_name", "message": "Недопустимое имя шаблона."}), 400
-    known = set(list_rewrite_template_names())
-    if name in known:
-        return jsonify({"ok": False, "error": "already_exists", "message": "Шаблон с таким именем уже существует."}), 409
 
     d = REWRITE_TEMPLATES_DIR / name
     try:
@@ -3626,31 +3639,13 @@ def rewrite_api_templates_create():
     except OSError:
         return jsonify({"ok": False, "error": "mkdir_failed", "message": "Не удалось создать папку шаблона."}), 400
 
-    stages = body.get("stages")
-    if not isinstance(stages, dict):
-        stages = {}
-    tc_raw = body.get("target_chars")
-    if tc_raw is not None and str(tc_raw).strip() != "":
-        try:
-            target_chars = clamp_target_chars(int(tc_raw))
-        except (TypeError, ValueError):
-            target_chars = clamp_target_chars(5 * 344)
-    else:
-        try:
-            cpm = int(body.get("chars_per_minute", 344))
-        except (TypeError, ValueError):
-            cpm = 344
-        try:
-            dm = int(body.get("duration_minutes", 5))
-        except (TypeError, ValueError):
-            dm = 5
-        target_chars = clamp_target_chars(cpm * dm)
+    stages = filter_stages_for_template_scope(body.get("stages"))
 
     ok, err = save_rewrite_template_to_disk(
         name,
         hero_prompt=str(body.get("hero_prompt") or ""),
         master_prompt=str(body.get("master_prompt") or ""),
-        target_chars=target_chars,
+        target_chars=None,
         stages=stages,
     )
     if not ok:
@@ -3679,12 +3674,178 @@ def rewrite_api_template_delete(name: str):
     return jsonify({"ok": True})
 
 
+def _rewrite_template_logo_url(name: str) -> str | None:
+    d = safe_template_dir(REWRITE_TEMPLATES_DIR, name)
+    if d is None:
+        return None
+    logo = find_logo_file(d)
+    if not logo:
+        return None
+    base = url_for(
+        "rewrite_api_template_logo_asset",
+        name=name,
+        filename=logo.name,
+    )
+    try:
+        return f"{base}?v={int(logo.stat().st_mtime)}"
+    except OSError:
+        return base
+
+
+def rewrite_templates_ui_rows() -> list[dict[str, Any]]:
+    """Список rewrite-шаблонов для пикера: имя + logo_url (если есть файл)."""
+    rows: list[dict[str, Any]] = []
+    for name in list_rewrite_template_names():
+        rows.append(
+            {
+                "name": name,
+                "logo_url": _rewrite_template_logo_url(name),
+            }
+        )
+    return rows
+
+
+@app.route("/rewrite/api/templates/<path:name>/logo/<path:filename>")
+def rewrite_api_template_logo_asset(name: str, filename: str):
+    d = safe_template_dir(REWRITE_TEMPLATES_DIR, name)
+    if d is None:
+        return "Not found", 404
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return "Not found", 404
+    path = (d / filename).resolve()
+    try:
+        path.relative_to(d.resolve())
+    except ValueError:
+        return "Not found", 404
+    if not path.is_file() or not is_logo_file(path):
+        return "Not found", 404
+    return send_from_directory(d, filename)
+
+
 @app.route("/rewrite/api/templates/<name>", methods=["GET"])
 def rewrite_api_template_get(name: str):
     data = load_rewrite_template(name)
     if data is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
+    data = dict(data)
+    data["logo_url"] = _rewrite_template_logo_url(name)
     return jsonify({"ok": True, **data})
+
+
+@app.route("/rewrite/api/templates/<path:name>/edit")
+def rewrite_template_edit_page(name: str):
+    """Старый URL: редактирование только во всплывающем окне на странице проекта."""
+    flash("Откройте шаблон двойным щелчком по кружку на странице проекта.", "info")
+    return redirect(request.referrer or url_for("index"))
+
+
+def rewrite_template_display_label(name: str) -> str:
+    n = str(name or "").strip()
+    if n.lower() == "base template":
+        return "Базовый"
+    return n
+
+
+@app.route("/rewrite/api/elevenlabs/voices", methods=["GET"])
+def rewrite_api_elevenlabs_voices():
+    if not (os.getenv("ELEVENLABS_API_KEY") or "").strip():
+        return jsonify({"error": "ELEVENLABS_API_KEY не задан"}), 503
+    try:
+        voices = elevenlabs_list_voices()
+        return jsonify({"voices": voices})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/rewrite/api/templates/<path:name>", methods=["PUT"])
+def rewrite_api_template_put(name: str):
+    """Полное сохранение шаблона: имя, описание, промты, TTS."""
+    old_name = str(name or "").strip()
+    body = request.get_json(silent=True) or {}
+    new_name = allocate_rewrite_template_name(body.get("name") or old_name, exclude=old_name)
+    if old_name.lower() == "base template" and new_name.lower() != "base template":
+        return jsonify(
+            {"ok": False, "error": "protected", "message": "Base Template нельзя переименовать."}
+        ), 400
+    if new_name != old_name:
+        err = rename_rewrite_template_dir(old_name, new_name)
+        if err:
+            code = 409 if "уже существует" in err else 400
+            return jsonify({"ok": False, "error": "rename_failed", "message": err}), code
+        name_key = new_name
+    else:
+        name_key = old_name
+    known = set(list_rewrite_template_names())
+    if name_key not in known:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    existing = load_rewrite_template(name_key) or {}
+    stages_in = body.get("stages")
+    if not isinstance(stages_in, dict):
+        stages_in = {}
+    stages: dict[str, Any] = {}
+    base_stages = existing.get("stages") if isinstance(existing.get("stages"), dict) else {}
+    for sk in REWRITE_TEMPLATE_SCOPE_STAGE_KEYS:
+        cell = base_stages.get(sk) if isinstance(base_stages.get(sk), dict) else {}
+        merged = {
+            "prompt": str(cell.get("prompt") or ""),
+            "user_prompt": str(cell.get("user_prompt") or ""),
+            "style_prompt": str(cell.get("style_prompt") or ""),
+            "past_prompt": str(cell.get("past_prompt") or ""),
+        }
+        if sk in stages_in and isinstance(stages_in.get(sk), dict):
+            inc = stages_in[sk]
+            for fld in ("prompt", "user_prompt", "style_prompt", "past_prompt"):
+                if fld in inc:
+                    merged[fld] = str(inc.get(fld) or "")
+        stages[sk] = merged
+    tts_defaults = body.get("tts_defaults")
+    if not isinstance(tts_defaults, dict):
+        tts_defaults = None
+    ok, err = save_rewrite_template_to_disk(
+        name_key,
+        hero_prompt=str(body.get("hero_prompt") or ""),
+        master_prompt=str(body.get("master_prompt") or ""),
+        target_chars=None,
+        stages=stages,
+        description=str(body.get("description") or ""),
+        tts_defaults=tts_defaults,
+    )
+    if not ok:
+        return jsonify({"ok": False, "error": err or "save_failed"}), 400
+    data = load_rewrite_template(name_key)
+    if data is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    data = dict(data)
+    data["logo_url"] = _rewrite_template_logo_url(name_key)
+    return jsonify({"ok": True, "name": name_key, **data})
+
+
+@app.route("/rewrite/api/templates/<path:name>/logo", methods=["POST"])
+def rewrite_api_template_upload_logo(name: str):
+    nn = str(name or "").strip()
+    d = safe_template_dir(REWRITE_TEMPLATES_DIR, nn)
+    if d is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "Файл логотипа не передан."}), 400
+    data = f.read()
+    if not data:
+        return jsonify({"ok": False, "error": "Пустой файл."}), 400
+    ext = Path(f.filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".png"
+    ok, err = save_rewrite_template_logo(nn, data, ext)
+    if not ok:
+        return jsonify({"ok": False, "error": err or "write_failed"}), 500
+    return jsonify(
+        {
+            "ok": True,
+            "logo_url": _rewrite_template_logo_url(nn),
+        }
+    )
 
 
 @app.route("/rewrite/api/templates/<name>/save", methods=["POST"])
@@ -3694,30 +3855,12 @@ def rewrite_api_template_save(name: str):
     known = set(list_rewrite_template_names())
     if name.strip() not in known:
         return jsonify({"ok": False, "error": "not_found"}), 404
-    stages = body.get("stages")
-    if not isinstance(stages, dict):
-        stages = {}
-    tc_raw = body.get("target_chars")
-    if tc_raw is not None and str(tc_raw).strip() != "":
-        try:
-            target_chars = clamp_target_chars(int(tc_raw))
-        except (TypeError, ValueError):
-            target_chars = clamp_target_chars(5 * 344)
-    else:
-        try:
-            cpm = int(body.get("chars_per_minute", 344))
-        except (TypeError, ValueError):
-            cpm = 344
-        try:
-            dm = int(body.get("duration_minutes", 5))
-        except (TypeError, ValueError):
-            dm = 5
-        target_chars = clamp_target_chars(cpm * dm)
+    stages = filter_stages_for_template_scope(body.get("stages"))
     ok, err = save_rewrite_template_to_disk(
         name.strip(),
         hero_prompt=str(body.get("hero_prompt") or ""),
         master_prompt=str(body.get("master_prompt") or ""),
-        target_chars=target_chars,
+        target_chars=None,
         stages=stages,
     )
     if not ok:
@@ -4718,6 +4861,7 @@ def rewrite_youtube_proxy_save(rewrite_id: str):
     ok, msg = _youtube_proxy_run_test(norm)
     cfg = _youtube_proxy_load()
     cfg["proxy_url"] = norm
+    cfg["proxy_input"] = raw
     cfg["updated_at"] = now_iso
     cfg["last_test_ok"] = ok
     cfg["last_test_at"] = now_iso

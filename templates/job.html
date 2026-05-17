@@ -1813,10 +1813,14 @@
                 field.addEventListener('change', function (e) {
                     var rb = e.target;
                     if (!rb || rb.name !== radioName) return;
+                    var prev = select.value;
                     select.value = rb.value;
                     updateBtnLabel();
                     closePanel();
                     select.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (selectId === 'tts-voice' && select.value !== prev) {
+                        schedulePersistTtsDefaults();
+                    }
                 });
                 select.addEventListener('change', function () {
                     var val = select.value;
@@ -5241,11 +5245,24 @@
             const payload = {
                 ...collectCurrentTtsSettings(),
             };
-            await fetch(`/job/${jobId}/elevenlabs/defaults`, {
+            const r = await fetch(`/job/${jobId}/elevenlabs/defaults`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
+            if (!r.ok) return;
+            if (rewriteBlockPresent && typeof window.syncJobTtsToRewriteTemplateAndNotify === 'function') {
+                await window.syncJobTtsToRewriteTemplateAndNotify({
+                    voice_id: payload.voice_id || '',
+                    voice_name: payload.voice_name || '',
+                    model_id: payload.model_id || TTS_MODEL_ID,
+                    stability_pct: payload.stability_pct,
+                    similarity_pct: payload.similarity_pct,
+                    style_pct: payload.style_pct,
+                    speed_pct: payload.speed_pct,
+                    use_speaker_boost: payload.use_speaker_boost
+                });
+            }
         };
         const schedulePersistTtsDefaults = () => {
             if (saveDefaultsTimer) clearTimeout(saveDefaultsTimer);
@@ -6158,7 +6175,12 @@
                     <span class="image-template-editor-logo-preview-wrap image-template-editor-logo-preview-wrap--empty" id="image-template-editor-logo-preview-wrap">
                         <img id="image-template-editor-logo-preview" class="image-template-editor-logo-preview hidden" alt="" />
                         <span class="image-template-editor-logo-placeholder" id="image-template-editor-logo-placeholder" aria-hidden="true"></span>
-                        <span class="image-template-editor-logo-edit" aria-hidden="true">✎</span>
+                        <span class="template-logo-upload-hover" aria-hidden="true">
+                            <svg class="template-logo-upload-hover__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                        </span>
                     </span>
                 </button>
                 <div class="image-template-editor-crop hidden" id="image-template-editor-crop-wrap">
@@ -6218,5 +6240,6 @@
     {% if rw %}
     {% include '_rewrite_block_scripts.html' %}
     {% endif %}
+    <script src="{{ url_for('static', filename='rewrite_template_editor.js') }}?v={{ static_style_mtime }}"></script>
 </body>
 </html>

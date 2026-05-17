@@ -154,8 +154,6 @@
     const heroPromptEl = document.getElementById('rewrite-hero-prompt');
     const templateSelectEl = document.getElementById('rewrite-template-select');
     const templateCreateBtn = document.getElementById('rewrite-template-create');
-    const templateDeleteBtn = document.getElementById('rewrite-template-delete');
-    const templateApplyBtn = document.getElementById('rewrite-template-apply');
     const templateOpStatusEl = document.getElementById('rewrite-template-op-status');
     const ytUrlEl = document.getElementById('rewrite-youtube-url');
     const ytDecodeBtn = document.getElementById('rewrite-youtube-decode');
@@ -208,17 +206,10 @@
     const presetChangeConfirmModal = document.getElementById('rewrite-preset-change-confirm-modal');
     const presetChangeConfirmCancelBtn = document.getElementById('rewrite-preset-change-confirm-cancel');
     const presetChangeConfirmOkBtn = document.getElementById('rewrite-preset-change-confirm-ok');
-    const templateApplyConfirmModal = document.getElementById('rewrite-template-apply-confirm-modal');
-    const templateApplyConfirmCancelBtn = document.getElementById('rewrite-template-apply-confirm-cancel');
-    const templateApplyConfirmOkBtn = document.getElementById('rewrite-template-apply-confirm-ok');
     const templateCreateModal = document.getElementById('rewrite-template-create-modal');
     const templateCreateNameEl = document.getElementById('rewrite-template-create-name');
     const templateCreateCancelBtn = document.getElementById('rewrite-template-create-cancel');
     const templateCreateOkBtn = document.getElementById('rewrite-template-create-ok');
-    const templateDeleteModal = document.getElementById('rewrite-template-delete-modal');
-    const templateDeleteLeadEl = document.getElementById('rewrite-template-delete-lead');
-    const templateDeleteCancelBtn = document.getElementById('rewrite-template-delete-cancel');
-    const templateDeleteOkBtn = document.getElementById('rewrite-template-delete-ok');
     {# `_rewrite_block.html` определяет `rw_yt_transcript_trim` через {% set %},
        но это локальная для include переменная — в этом скрипте она Undefined,
        а `Undefined != ''` в Jinja даёт `true` и поле блокировалось без причины.
@@ -230,9 +221,7 @@
     let youtubeInsertConfirmResolver = null;
     let clearResultsConfirmResolver = null;
     let presetChangeConfirmResolver = null;
-    let templateApplyConfirmResolver = null;
     let templateCreateResolver = null;
-    let templateDeleteResolver = null;
     var ytTranscriptReady = false;
     var ytWorking = false;
     var ytAbortController = null;
@@ -651,8 +640,6 @@
         if (active) {
             html += '<code class="rewrite-youtube-proxy-modal__footer-code" id="rewrite-youtube-proxy-saved-code">'
                 + ytProxyMsgEscapeHtml(active) + '</code>';
-        } else if (d.masked_active) {
-            html += ytProxyMsgEscapeHtml(String(d.masked_active));
         }
         var testMsg = (d.last_test_message != null) ? String(d.last_test_message).trim() : '';
         if (d.last_test_ok === false) {
@@ -774,11 +761,28 @@
         ytProxyModal.setAttribute('aria-hidden', 'true');
     }
 
+    function renderYtProxyFooterError(text) {
+        if (!ytProxySavedLineEl) return;
+        var s = String(text || '').trim();
+        ytProxySavedLineEl.classList.toggle('rewrite-youtube-proxy-modal__footer--empty', !s);
+        if (!s) {
+            ytProxySavedLineEl.textContent = '';
+            return;
+        }
+        ytProxySavedLineEl.innerHTML =
+            '<span class="rewrite-youtube-proxy-modal__footer-test rewrite-youtube-proxy-modal__footer-test--bad">'
+            + ytProxyMsgEscapeHtml(s) + '</span>';
+    }
+
     async function submitYtProxySave() {
         if (ytProxySaving) return;
         var raw = ytProxyInputEl ? String(ytProxyInputEl.value || '').trim() : '';
         ytProxySaving = true;
-        setYtProxyMsg('Сохраняем и проверяем…', false);
+        setYtProxyMsg('', false);
+        if (ytProxySavedLineEl) {
+            ytProxySavedLineEl.classList.remove('rewrite-youtube-proxy-modal__footer--empty');
+            ytProxySavedLineEl.textContent = 'Сохраняем и проверяем…';
+        }
         try {
             var r = await fetch(ytProxySaveUrl, {
                 method: 'POST',
@@ -788,21 +792,14 @@
             });
             var d = await r.json().catch(function () { return {}; });
             if (!d || !d.ok) {
-                setYtProxyMsg((d && d.message) ? String(d.message) : 'Ошибка сохранения прокси.', true);
+                renderYtProxyFooterError((d && d.message) ? String(d.message) : 'Ошибка сохранения прокси.');
                 return;
             }
             applyYtProxyStatusUi(d);
             ytProxyInputDirty = false;
-            if (d.test_ok === true) {
-                setYtProxyMsg('Проверка прошла: ' + String(d.test_message || 'OK') + '.', false);
-                if (ytProxyInputEl) ytProxyInputEl.value = '';
-            } else if (d.test_ok === false) {
-                setYtProxyMsg('Проверка не прошла', true);
-            } else if (d.cleared) {
-                setYtProxyMsg('Прокси очищен.', false);
-            }
+            if (d.test_ok === true && ytProxyInputEl) ytProxyInputEl.value = '';
         } catch (e) {
-            setYtProxyMsg(String(e && e.message ? e.message : e), true);
+            renderYtProxyFooterError(String(e && e.message ? e.message : e));
         } finally {
             ytProxySaving = false;
         }
@@ -952,36 +949,6 @@
     }
 
 
-    function openTemplateApplyConfirm() {
-        if (!templateApplyConfirmModal || !templateApplyConfirmCancelBtn || !templateApplyConfirmOkBtn) {
-            return Promise.resolve(window.confirm('Подставить шаблон и заблокировать все поля для редактирования?'));
-        }
-        templateApplyConfirmModal.classList.remove('hidden');
-        templateApplyConfirmModal.setAttribute('aria-hidden', 'false');
-        return new Promise(function (resolve) {
-            templateApplyConfirmResolver = resolve;
-        });
-    }
-
-    function closeTemplateApplyConfirm(accepted) {
-        if (!templateApplyConfirmModal) return;
-        templateApplyConfirmModal.classList.add('hidden');
-        templateApplyConfirmModal.setAttribute('aria-hidden', 'true');
-        if (templateApplyConfirmResolver) {
-            var fn = templateApplyConfirmResolver;
-            templateApplyConfirmResolver = null;
-            fn(Boolean(accepted));
-        }
-    }
-
-    if (templateApplyConfirmCancelBtn) templateApplyConfirmCancelBtn.addEventListener('click', function () { closeTemplateApplyConfirm(false); });
-    if (templateApplyConfirmOkBtn) templateApplyConfirmOkBtn.addEventListener('click', function () { closeTemplateApplyConfirm(true); });
-    if (templateApplyConfirmModal) {
-        templateApplyConfirmModal.addEventListener('click', function (e) {
-            if (e.target && e.target.hasAttribute('data-template-apply-confirm-close')) closeTemplateApplyConfirm(false);
-        });
-    }
-
     function openTemplateCreateModal() {
         if (!templateCreateModal || !templateCreateNameEl || !templateCreateCancelBtn || !templateCreateOkBtn) {
             var n0 = window.prompt('Введите название нового шаблона:');
@@ -1024,41 +991,10 @@
         });
     }
 
-    function openTemplateDeleteConfirm(name) {
-        if (!templateDeleteModal || !templateDeleteLeadEl || !templateDeleteCancelBtn || !templateDeleteOkBtn) {
-            return Promise.resolve(window.confirm('Удалить шаблон «' + name + '»? Он будет удалён безвозвратно.'));
-        }
-        templateDeleteLeadEl.textContent = 'Точно удалить шаблон «' + name + '»? Он будет удалён безвозвратно.';
-        templateDeleteModal.classList.remove('hidden');
-        templateDeleteModal.setAttribute('aria-hidden', 'false');
-        return new Promise(function (resolve) { templateDeleteResolver = resolve; });
-    }
-
-    function closeTemplateDeleteConfirm(accepted) {
-        if (templateDeleteModal) {
-            templateDeleteModal.classList.add('hidden');
-            templateDeleteModal.setAttribute('aria-hidden', 'true');
-        }
-        if (templateDeleteResolver) {
-            var fn = templateDeleteResolver;
-            templateDeleteResolver = null;
-            fn(Boolean(accepted));
-        }
-    }
-
-    if (templateDeleteCancelBtn) templateDeleteCancelBtn.addEventListener('click', function () { closeTemplateDeleteConfirm(false); });
-    if (templateDeleteOkBtn) templateDeleteOkBtn.addEventListener('click', function () { closeTemplateDeleteConfirm(true); });
-    if (templateDeleteModal) {
-        templateDeleteModal.addEventListener('click', function (e) {
-            if (e.target && e.target.hasAttribute('data-template-delete-close')) closeTemplateDeleteConfirm(false);
-        });
-    }
-
     if (templateCreateBtn) {
         templateCreateBtn.addEventListener('click', async function () {
             if (!openaiOk || !templateSelectEl) return;
             var name = (await openTemplateCreateModal() || '').trim();
-            if (!name) return;
             templateCreateBtn.disabled = true;
             try {
                 var snap = collectSnapshot();
@@ -1069,8 +1005,7 @@
                         name: name,
                         hero_prompt: snap.hero_prompt,
                         master_prompt: snap.master_prompt,
-                        target_chars: snap.target_chars,
-                        stages: snap.stages
+                        stages: collectTemplateScopeStages(snap.stages)
                     })
                 });
                 const data = await r.json().catch(function () { return {}; });
@@ -1078,60 +1013,15 @@
                     setTemplateOpStatus(data.message || 'Не удалось создать шаблон.', true);
                     return;
                 }
-                await reloadRewriteTemplateOptions(name);
-                setTemplateOpStatus('Шаблон создан: ' + name, false);
+                var createdName = (data.name || name || '').trim();
+                await reloadRewriteTemplateOptions(createdName);
+                setTemplateOpStatus('Шаблон создан: ' + createdName, false);
                 await saveToServer();
             } catch (e) {
                 setTemplateOpStatus(String(e), true);
             } finally {
                 templateCreateBtn.disabled = !openaiOk;
-                if (templateDeleteBtn) {
-                    var sel = templateSelectEl ? (templateSelectEl.value || '').trim() : '';
-                    templateDeleteBtn.disabled = !openaiOk || templateIsProtected(sel);
-                }
             }
-        });
-    }
-
-    if (templateDeleteBtn) {
-        templateDeleteBtn.addEventListener('click', async function () {
-            if (!openaiOk || !templateSelectEl) return;
-            var name = (templateSelectEl.value || '').trim();
-            if (!name) return;
-            if (templateIsProtected(name)) {
-                setTemplateOpStatus('Base Template нельзя удалить.', true);
-                return;
-            }
-            var okDel = await openTemplateDeleteConfirm(name);
-            if (!okDel) return;
-            templateDeleteBtn.disabled = true;
-            try {
-                const r = await fetch(rewriteTemplateDeleteUrl(name), { method: 'DELETE' });
-                const data = await r.json().catch(function () { return {}; });
-                if (!r.ok || !data.ok) {
-                    setTemplateOpStatus(data.message || 'Не удалось удалить шаблон.', true);
-                    return;
-                }
-                await reloadRewriteTemplateOptions('Base Template');
-                setTemplateOpStatus('Шаблон удалён: ' + name, false);
-                await saveToServer();
-            } catch (e) {
-                setTemplateOpStatus(String(e), true);
-            } finally {
-                if (templateSelectEl) {
-                    var sel2 = (templateSelectEl.value || '').trim();
-                    templateDeleteBtn.disabled = !openaiOk || templateIsProtected(sel2);
-                } else {
-                    templateDeleteBtn.disabled = !openaiOk;
-                }
-            }
-        });
-    }
-
-    if (templateSelectEl) {
-        templateSelectEl.addEventListener('change', function () {
-            var sel = (templateSelectEl.value || '').trim();
-            if (templateDeleteBtn) templateDeleteBtn.disabled = !openaiOk || templateIsProtected(sel);
         });
     }
 
@@ -1185,6 +1075,100 @@
         return templateListUrl + '/' + encodeURIComponent(name);
     }
 
+    var lastAutoAppliedTemplate = templateSelectEl ? (templateSelectEl.value || '').trim() : '';
+    var templateApplySeq = 0;
+    var REWRITE_TEMPLATE_SCOPE_STAGE_KEYS = { rewrite: true, scene_writer: true };
+
+    function collectTemplateScopeStages(stagesIn) {
+        stagesIn = stagesIn || {};
+        var out = {};
+        Object.keys(REWRITE_TEMPLATE_SCOPE_STAGE_KEYS).forEach(function (sk) {
+            var cell = stagesIn[sk];
+            if (!cell || typeof cell !== 'object') cell = {};
+            out[sk] = {
+                prompt: cell.prompt || '',
+                user_prompt: '',
+                style_prompt: sk === 'scene_writer' ? (cell.style_prompt || '') : '',
+                past_prompt: sk === 'scene_writer' ? (cell.past_prompt || '') : ''
+            };
+        });
+        return out;
+    }
+
+    function collectTemplateDiskPayload() {
+        var snap = collectSnapshot();
+        return {
+            hero_prompt: snap.hero_prompt,
+            master_prompt: snap.master_prompt,
+            stages: collectTemplateScopeStages(snap.stages)
+        };
+    }
+
+    function populateRewriteFormFromTemplateData(data) {
+        if (!data) return;
+        if (heroPromptEl) heroPromptEl.value = data.hero_prompt || '';
+        refreshHeroBadge();
+        if (masterEl) masterEl.value = data.master_prompt || '';
+        refreshMasterBadge();
+        var st = data.stages || {};
+        document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+            var key = block.getAttribute('data-stage-key');
+            if (!key || !REWRITE_TEMPLATE_SCOPE_STAGE_KEYS[key]) return;
+            var cell = st[key];
+            if (cell && typeof cell.prompt === 'string') {
+                var ta = block.querySelector('.rewrite-stage-prompt');
+                if (ta) {
+                    ta.value = cell.prompt;
+                    syncPromptBadge(block);
+                }
+            }
+            if (key === 'scene_writer' && cell && typeof cell.style_prompt === 'string') {
+                var sta = block.querySelector('.rewrite-stage-style-prompt');
+                if (sta) {
+                    sta.value = cell.style_prompt;
+                    syncStylePromptBadge(block);
+                }
+            }
+            if (key === 'scene_writer' && cell && typeof cell.past_prompt === 'string') {
+                var pta = block.querySelector('.rewrite-stage-past-prompt');
+                if (pta) {
+                    pta.value = cell.past_prompt;
+                    syncPastPromptBadge(block);
+                }
+            }
+        });
+    }
+
+    async function applyRewriteTemplateFromDisk(name) {
+        name = String(name || '').trim();
+        if (!name || !openaiOk || !templateSelectEl) return false;
+        if (name === lastAutoAppliedTemplate) return true;
+        var seq = ++templateApplySeq;
+        try {
+            var r = await fetch(rewriteTemplateFetchUrl(name));
+            var data = await r.json();
+            if (seq !== templateApplySeq) return false;
+            if (!r.ok || !data.ok) {
+                setTemplateOpStatus('Шаблон не найден или ошибка загрузки.', true);
+                return false;
+            }
+            populateRewriteFormFromTemplateData(data);
+            templateSelectEl.value = name;
+            syncTemplatePickerUIFromSelect();
+            lastAutoAppliedTemplate = name;
+            var ok = await saveToServer();
+            if (!ok) {
+                setTemplateOpStatus('Поля обновлены, но не удалось сохранить на сервер.', true);
+            }
+            return ok;
+        } catch (e) {
+            if (seq === templateApplySeq) {
+                setTemplateOpStatus(String(e), true);
+            }
+            return false;
+        }
+    }
+
     function rewriteTemplateSaveDiskUrl(name) {
         return templateListUrl + '/' + encodeURIComponent(name) + '/save';
     }
@@ -1197,30 +1181,124 @@
         return String(name || '').trim().toLowerCase() === 'base template';
     }
 
+    function getRewriteTemplatePickerLogoUrl(name) {
+        var n = String(name || '').trim();
+        if (!n) return null;
+        var esc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(n) : n.replace(/"/g, '\\"');
+        var opt = document.querySelector('.rewrite-template-option[data-template-name="' + esc + '"]');
+        if (!opt) return null;
+        var img = opt.querySelector('.template-logo-preview');
+        if (img && img.getAttribute('src')) return img.getAttribute('src');
+        return null;
+    }
+
+    var _rewriteTemplateChangedToastTimer = null;
+
+    function showRewriteTemplateChangedToast(templateName, logoUrl) {
+        var name = String(templateName || '').trim();
+        if (!name) {
+            if (templateSelectEl) name = (templateSelectEl.value || '').trim();
+        }
+        if (!name) return;
+        var label = rewriteTemplateDisplayLabel(name);
+        var logo = String(logoUrl || '').trim() || getRewriteTemplatePickerLogoUrl(name) || '';
+        var toast = document.getElementById('rewrite-template-changed-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'rewrite-template-changed-toast';
+            toast.className = 'rewrite-template-changed-toast';
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+            toast.innerHTML =
+                '<span class="rewrite-template-changed-toast__logo" data-toast-logo></span>' +
+                '<span class="rewrite-template-changed-toast__body">' +
+                '<strong class="rewrite-template-changed-toast__name" data-toast-name></strong>' +
+                '<span class="rewrite-template-changed-toast__msg">Шаблон изменён</span>' +
+                '</span>';
+            document.body.appendChild(toast);
+        }
+        var logoWrap = toast.querySelector('[data-toast-logo]');
+        var nameEl = toast.querySelector('[data-toast-name]');
+        if (nameEl) nameEl.textContent = label;
+        if (logoWrap) {
+            logoWrap.innerHTML = '';
+            if (logo) {
+                var img = document.createElement('img');
+                img.src = logo;
+                img.alt = '';
+                logoWrap.appendChild(img);
+            } else {
+                var letter = document.createElement('span');
+                letter.className = 'rewrite-template-changed-toast__logo-letter';
+                letter.textContent = rewriteTemplateCircleLetter(name);
+                logoWrap.appendChild(letter);
+            }
+        }
+        toast.classList.add('rewrite-template-changed-toast--visible');
+        clearTimeout(_rewriteTemplateChangedToastTimer);
+        _rewriteTemplateChangedToastTimer = setTimeout(function () {
+            toast.classList.remove('rewrite-template-changed-toast--visible');
+        }, 4200);
+    }
+
+    window.showRewriteTemplateChangedToast = showRewriteTemplateChangedToast;
+
+    function rewriteTemplateDisplayLabel(name) {
+        var n = String(name || '').trim();
+        if (n.toLowerCase() === 'base template') return 'Базовый';
+        return n;
+    }
+
+    function rewriteTemplateCircleLetter(name) {
+        var n = String(name || '').trim();
+        if (n.toLowerCase() === 'base template') return 'Б';
+        return (n.slice(0, 1) || '·').toUpperCase();
+    }
+
+    function buildRewriteTemplateOptionEl(opt) {
+        var val = String(opt.value || '').trim();
+        var label = document.createElement('label');
+        label.className = 'template-option rewrite-template-option';
+        label.setAttribute('data-template-name', val);
+        label.title = 'Двойной щелчок — редактировать шаблон';
+        if (String(opt.textContent || '').indexOf('(нет на диске)') >= 0) {
+            label.classList.add('rewrite-template-option--missing');
+        }
+        var input = document.createElement('input');
+        input.type = 'radio';
+        input.name = rewriteTemplateRadioGroup;
+        input.className = 'template-option-input rewrite-template-radio';
+        input.value = val;
+        if (opt.selected) input.checked = true;
+        input.disabled = !!templateSelectEl.disabled;
+        var inner = document.createElement('span');
+        inner.className = 'template-option-inner';
+        var frame = document.createElement('span');
+        frame.className = 'template-option-frame';
+        var visual = document.createElement('span');
+        visual.className = 'template-option-visual template-option-visual--letter';
+        if (val.toLowerCase() === 'base template') visual.classList.add('template-option-visual--base');
+        visual.setAttribute('aria-hidden', 'true');
+        visual.textContent = label.classList.contains('rewrite-template-option--missing')
+            ? '?' : rewriteTemplateCircleLetter(val);
+        frame.appendChild(visual);
+        var nameEl = document.createElement('span');
+        nameEl.className = 'template-option-name';
+        nameEl.textContent = rewriteTemplateDisplayLabel(val);
+        inner.appendChild(frame);
+        inner.appendChild(nameEl);
+        label.appendChild(input);
+        label.appendChild(inner);
+        return label;
+    }
+
     function rebuildTemplatePickerFromSelect() {
-        var field = document.querySelector('[data-template-picker-field="1"]');
-        var panel = field && field.querySelector('.rewrite-anim-dropdown__panel');
-        if (!panel || !templateSelectEl) return;
-        while (panel.firstChild) panel.removeChild(panel.firstChild);
+        var picker = document.getElementById('rewrite-template-picker');
+        var addBtn = document.getElementById('rewrite-template-create');
+        if (!picker || !templateSelectEl || !addBtn) return;
+        picker.querySelectorAll('label.rewrite-template-option').forEach(function (el) { el.remove(); });
         Array.prototype.forEach.call(templateSelectEl.options, function (opt) {
-            var label = document.createElement('label');
-            label.className = 'rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option';
-            var input = document.createElement('input');
-            input.type = 'radio';
-            input.name = rewriteTemplateRadioGroup;
-            input.className = 'rewrite-anim-radio rewrite-template-radio visually-hidden-input';
-            input.value = opt.value;
-            if (opt.selected) input.checked = true;
-            input.disabled = !!templateSelectEl.disabled;
-            var body = document.createElement('span');
-            body.className = 'rewrite-anim-option__body';
-            var title = document.createElement('span');
-            title.className = 'rewrite-anim-option__title';
-            title.textContent = String(opt.textContent || '').trim();
-            body.appendChild(title);
-            label.appendChild(input);
-            label.appendChild(body);
-            panel.appendChild(label);
+            picker.insertBefore(buildRewriteTemplateOptionEl(opt), addBtn);
         });
     }
 
@@ -1231,10 +1309,6 @@
         field.querySelectorAll('input.rewrite-template-radio').forEach(function (rb) {
             rb.checked = (rb.value === v);
         });
-        var lbl = field.querySelector('[data-template-picker-label]');
-        var idx = templateSelectEl.selectedIndex;
-        var opt = idx >= 0 ? templateSelectEl.options[idx] : null;
-        if (lbl && opt) lbl.textContent = String(opt.textContent || '').trim();
     }
 
     function setTemplateOpStatus(msg, isError) {
@@ -1286,27 +1360,64 @@
         templateSelectEl.value = selected;
         rebuildTemplatePickerFromSelect();
         syncTemplatePickerUIFromSelect();
-        if (templateDeleteBtn) templateDeleteBtn.disabled = !openaiOk || templateIsProtected(selected);
+        if (selected && selected !== lastAutoAppliedTemplate) {
+            await applyRewriteTemplateFromDisk(selected);
+        }
     }
+
+    window.refreshRewriteTemplatePicker = reloadRewriteTemplateOptions;
+
+    async function syncJobTtsToRewriteTemplateAndNotify(ttsPayload) {
+        if (!templateSelectEl || !openaiOk || !ttsPayload) return false;
+        var name = (templateSelectEl.value || '').trim();
+        if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) return false;
+        try {
+            var r0 = await fetch(rewriteTemplateFetchUrl(name), { cache: 'no-store' });
+            var existing = await r0.json().catch(function () { return {}; });
+            if (!r0.ok || !existing.ok) return false;
+            var r = await fetch(rewriteTemplateFetchUrl(name), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    description: existing.description || '',
+                    hero_prompt: existing.hero_prompt || '',
+                    master_prompt: existing.master_prompt || '',
+                    stages: existing.stages || {},
+                    tts_defaults: ttsPayload
+                })
+            });
+            var data = await r.json().catch(function () { return {}; });
+            if (r.ok && data.ok) {
+                showRewriteTemplateChangedToast(name);
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.warn('syncJobTtsToRewriteTemplateAndNotify failed:', e);
+            return false;
+        }
+    }
+
+    window.syncJobTtsToRewriteTemplateAndNotify = syncJobTtsToRewriteTemplateAndNotify;
 
     async function trySyncRewriteTemplateToDisk() {
         if (!templateSelectEl || !openaiOk) return true;
         var name = (templateSelectEl.value || '').trim();
         if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) return true;
         try {
-            var snap = collectSnapshot();
+            var diskPayload = collectTemplateDiskPayload();
             var r = await _fetchWithRetry(rewriteTemplateSaveDiskUrl(name), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    hero_prompt: snap.hero_prompt,
-                    master_prompt: snap.master_prompt,
-                    target_chars: snap.target_chars,
-                    stages: snap.stages
-                })
+                body: JSON.stringify(diskPayload)
             }, 3);
             var data = await r.json().catch(function () { return {}; });
-            return r.ok && !!data.ok;
+            if (r.ok && !!data.ok) {
+                showRewriteTemplateChangedToast(name);
+                return true;
+            }
+            return false;
         } catch (e) {
             console.warn('trySyncRewriteTemplateToDisk failed:', e);
             return false;
@@ -3500,93 +3611,12 @@
         });
     }
 
-    if (templateApplyBtn && templateSelectEl) {
-        templateApplyBtn.addEventListener('click', async function () {
-            var name = (templateSelectEl.value || '').trim();
-            if (!name) {
-                alert('Выберите шаблон в списке.');
-                return;
-            }
-            var okTemplateApply = await openTemplateApplyConfirm();
-            if (!okTemplateApply) {
-                return;
-            }
-            templateApplyBtn.disabled = true;
-            try {
-                var r = await fetch(rewriteTemplateFetchUrl(name));
-                var data = await r.json();
-                if (!r.ok || !data.ok) {
-                    alert('Шаблон не найден или ошибка загрузки.');
-                    return;
-                }
-                if (heroPromptEl) heroPromptEl.value = data.hero_prompt || '';
-                refreshHeroBadge();
-                if (targetCharsRangeEl) {
-                    var dt = data.target_chars;
-                    if (dt == null && data.duration_minutes != null && data.chars_per_minute != null) {
-                        dt = clampTargetChars(
-                            (parseInt(String(data.chars_per_minute), 10) || 344) *
-                            (parseInt(String(data.duration_minutes), 10) || 5)
-                        );
-                    } else {
-                        dt = clampTargetChars(dt != null ? dt : 1500);
-                    }
-                    targetCharsRangeEl.value = String(dt);
-                    if (targetCharsValEl) targetCharsValEl.textContent = formatNumRu(dt);
-                }
-                if (masterEl) masterEl.value = data.master_prompt || '';
-                refreshMasterBadge();
-                var st = data.stages || {};
-                document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
-                    var key = block.getAttribute('data-stage-key');
-                    if (!key) return;
-                    var cell = st[key];
-                    if (cell && typeof cell.prompt === 'string') {
-                        var ta = block.querySelector('.rewrite-stage-prompt');
-                        if (ta) {
-                            ta.value = cell.prompt;
-                            syncPromptBadge(block);
-                        }
-                    }
-                    if (key === 'scene_writer' && cell && typeof cell.style_prompt === 'string') {
-                        var sta = block.querySelector('.rewrite-stage-style-prompt');
-                        if (sta) {
-                            sta.value = cell.style_prompt;
-                            syncStylePromptBadge(block);
-                        }
-                    }
-                    if (key === 'scene_writer' && cell && typeof cell.past_prompt === 'string') {
-                        var pta = block.querySelector('.rewrite-stage-past-prompt');
-                        if (pta) {
-                            pta.value = cell.past_prompt;
-                            syncPastPromptBadge(block);
-                        }
-                    }
-                    block.setAttribute('data-prompt-locked', '1');
-                    if (key === 'scene_writer') {
-                        block.setAttribute('data-style-prompt-locked', '1');
-                        block.setAttribute('data-past-prompt-locked', '1');
-                    }
-                });
-                templateSelectEl.value = name;
-                syncTemplatePickerUIFromSelect();
-                templateSelectEl.dispatchEvent(new Event('change', { bubbles: true }));
-                sourceLocked = true;
-                masterLocked = true;
-                heroLocked = true;
-                audioTimingLocked = true;
-                applyAllLockUIs();
-                var ok = await saveToServer();
-                if (!ok) {
-                    alert('Поля обновлены, но не удалось сохранить на сервер.');
-                } else if (!(await trySyncRewriteTemplateToDisk())) {
-                    alertTemplateSyncFailed();
-                }
-            } catch (e) {
-                alert(String(e));
-            } finally {
-                templateApplyBtn.disabled = !openaiOk;
-            }
+    if (templateSelectEl) {
+        templateSelectEl.addEventListener('change', function () {
+            var sel = (templateSelectEl.value || '').trim();
+            syncTemplatePickerUIFromSelect();
+            if (!sel || sel === lastAutoAppliedTemplate) return;
+            applyRewriteTemplateFromDisk(sel);
         });
     }
 
@@ -4116,8 +4146,10 @@
                         alert('Не удалось сохранить');
                     } else {
                         stateRef.apply();
-                        if (!(await trySyncRewriteTemplateToDisk())) {
-                            alertTemplateSyncFailed();
+                        if (stateRef.syncTemplate === true) {
+                            if (!(await trySyncRewriteTemplateToDisk())) {
+                                alertTemplateSyncFailed();
+                            }
                         }
                         if (typeof stateRef.afterLockCommit === 'function') {
                             try { stateRef.afterLockCommit(); } catch (_e) {}
@@ -4136,7 +4168,8 @@
         get: function () { return masterLocked; },
         set: function (v) { masterLocked = v; },
         apply: applyMasterLockUI,
-        focusEl: masterEl
+        focusEl: masterEl,
+        syncTemplate: true
     });
 
     wireTextLockToggle(sourceToggleBtn, {
@@ -4164,15 +4197,22 @@
         get: function () { return heroLocked; },
         set: function (v) { heroLocked = v; },
         apply: applyHeroLockUI,
-        focusEl: heroPromptEl
+        focusEl: heroPromptEl,
+        syncTemplate: true
     });
 
     wireTextLockToggle(audioToggleBtn, {
         get: function () { return audioTimingLocked; },
         set: function (v) { audioTimingLocked = v; },
         apply: applyAudioLockUI,
-        focusEl: targetCharsRangeEl
+        focusEl: targetCharsRangeEl,
+        syncTemplate: false
     });
+
+    function stageKeySyncsToTemplate(block) {
+        var key = block ? block.getAttribute('data-stage-key') : '';
+        return !!(key && REWRITE_TEMPLATE_SCOPE_STAGE_KEYS[key]);
+    }
 
     function applyPromptLockUI(block) {
         if (!block) return;
@@ -4393,8 +4433,6 @@
         }
         if (templateSelectEl) templateSelectEl.disabled = dis;
         if (templateCreateBtn) templateCreateBtn.disabled = dis;
-        if (templateDeleteBtn) templateDeleteBtn.disabled = dis || templateIsProtected((templateSelectEl && templateSelectEl.value) || '');
-        if (templateApplyBtn) templateApplyBtn.disabled = dis;
         var presetSelectBusy = document.getElementById('rewrite-preset-select');
         document.querySelectorAll('.rewrite-preset-toggle__btn').forEach(function (b) {
             b.disabled = dis;
@@ -4420,11 +4458,10 @@
         }
         var templatePickerField = document.querySelector('[data-template-picker-field="1"]');
         if (templatePickerField) {
-            var ttb = templatePickerField.querySelector('.rewrite-anim-dropdown__btn');
-            if (ttb) ttb.disabled = dis;
             templatePickerField.querySelectorAll('.rewrite-template-radio').forEach(function (rb) {
                 rb.disabled = dis;
             });
+            if (templateCreateBtn) templateCreateBtn.disabled = dis;
         }
         applyYoutubeToolbar();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
@@ -4735,7 +4772,7 @@
                             alert('Не удалось сохранить');
                         } else {
                             applyPromptLockUI(block);
-                            if (!(await trySyncRewriteTemplateToDisk())) {
+                            if (stageKeySyncsToTemplate(block) && !(await trySyncRewriteTemplateToDisk())) {
                                 alertTemplateSyncFailed();
                             }
                         }
@@ -4780,7 +4817,7 @@
                             applyStylePromptLockUI(block);
                             alert('Не удалось сохранить');
                         } else {
-                            if (!(await trySyncRewriteTemplateToDisk())) {
+                            if (stageKeySyncsToTemplate(block) && !(await trySyncRewriteTemplateToDisk())) {
                                 alertTemplateSyncFailed();
                             }
                         }
@@ -4825,7 +4862,7 @@
                             applyPastPromptLockUI(block);
                             alert('Не удалось сохранить');
                         } else {
-                            if (!(await trySyncRewriteTemplateToDisk())) {
+                            if (stageKeySyncsToTemplate(block) && !(await trySyncRewriteTemplateToDisk())) {
                                 alertTemplateSyncFailed();
                             }
                         }
@@ -6428,54 +6465,17 @@
         });
     })();
 
-    (function initTemplateDropdown() {
+    (function initRewriteTemplatePicker() {
         var field = document.querySelector('[data-template-picker-field="1"]');
         var select = document.getElementById('rewrite-template-select');
         if (!field || !select) return;
-        var btn = field.querySelector('.rewrite-anim-dropdown__btn');
-        var panel = field.querySelector('.rewrite-anim-dropdown__panel');
-        function updateBtnLabel() {
-            var lbl = field.querySelector('[data-template-picker-label]');
-            var checked = field.querySelector('input.rewrite-template-radio:checked');
-            if (!lbl || !checked) return;
-            var lab = checked.closest('label');
-            var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
-            lbl.textContent = title ? String(title.textContent || '').trim() : String(checked.value || '');
-        }
-        function closePanel() {
-            if (panel) panel.hidden = true;
-            if (btn) btn.setAttribute('aria-expanded', 'false');
-        }
-        function closeAllPanelsExcept(except) {
-            document.querySelectorAll('.rewrite-anim-dropdown__panel').forEach(function (p) {
-                if (p === except) return;
-                p.hidden = true;
-                var b = p.parentElement && p.parentElement.querySelector('.rewrite-anim-dropdown__btn');
-                if (b) b.setAttribute('aria-expanded', 'false');
-            });
-        }
-        updateBtnLabel();
-        if (btn && panel) {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var open = !panel.hidden;
-                if (open) {
-                    closePanel();
-                } else {
-                    closeAllPanelsExcept(panel);
-                    panel.hidden = false;
-                    btn.setAttribute('aria-expanded', 'true');
-                }
-            });
-        }
         field.addEventListener('change', function (e) {
             var t = e.target;
             if (!t || !t.classList || !t.classList.contains('rewrite-template-radio')) return;
             var checked = field.querySelector('input.rewrite-template-radio:checked');
             if (checked) select.value = checked.value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
-            updateBtnLabel();
-            closePanel();
+            syncTemplatePickerUIFromSelect();
             scheduleAutosave(0);
         });
     })();
@@ -8577,7 +8577,7 @@
             if (!badge) return;
             var nm = String(name || '');
             var label;
-            if (nm === 'rewrite_system_rules' || nm === 'voiceover_editor_system_rules') {
+            if (nm === 'rewrite_system_rules' || nm.endsWith('_system_rules')) {
                 label = 'System Rules: ';
             } else if (nm.indexOf('system_prompt_') === 0) {
                 label = 'System Promt: ';

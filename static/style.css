@@ -488,6 +488,697 @@ textarea::placeholder {
     overflow-y: auto;
 }
 
+/* Ширина как у .container / карточек этапов на странице проекта */
+.image-template-editor-card.rewrite-template-editor-card {
+    width: min(1100px, calc(100vw - 3rem));
+    max-width: min(1100px, calc(100vw - 3rem));
+    max-height: min(92vh, 920px);
+    display: flex;
+    flex-direction: column;
+}
+
+.rewrite-template-editor-card .rewrite-template-editor-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.15rem;
+}
+
+.rewrite-template-editor-divider {
+    border: none;
+    border-top: 1px solid rgba(128, 128, 128, 0.22);
+    margin: 1.1rem 0;
+}
+
+.rewrite-template-editor-section {
+    margin: 0;
+}
+
+.rewrite-template-editor-meta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.rewrite-template-editor-meta-top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+    flex-shrink: 0;
+    height: auto;
+}
+
+.rewrite-template-editor-logo-wrap {
+    flex-shrink: 0;
+}
+
+.rewrite-template-editor-logo-wrap .rewrite-template-edit-logo-hit {
+    margin: 0;
+}
+
+.rewrite-template-meta-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.rewrite-template-meta-block--name {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: center;
+}
+
+.rewrite-template-meta-name-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    width: 100%;
+    height: 2.5rem;
+    flex-shrink: 0;
+}
+
+.rewrite-template-meta-name-row .rewrite-lock-toggle {
+    flex-shrink: 0;
+}
+
+.rewrite-template-meta-name-row .rewrite-stage-result-badge {
+    flex-shrink: 0;
+}
+
+.rewrite-template-meta-block .rewrite-source-toolbar {
+    margin-bottom: 0;
+}
+
+.rewrite-template-meta-block .rewrite-stage-result-badge {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.rewrite-template-editor-card .rewrite-template-meta-slot {
+    aspect-ratio: unset;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    width: 100%;
+    box-sizing: border-box;
+    border-color: var(--border);
+    overflow: hidden;
+}
+
+.rewrite-template-editor-card .rewrite-template-meta-slot--inline.rewrite-slot-placeholder {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    min-height: 0;
+    height: 2.5rem;
+    max-height: 2.5rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    align-self: center;
+}
+
+.rewrite-template-editor-card .rewrite-template-meta-slot--inline .rewrite-template-meta-input.rewrite-source-textarea {
+    width: 100%;
+    min-height: 0;
+    height: 2.35rem;
+    max-height: 2.35rem;
+    flex: 1 1 auto;
+    margin: 0;
+    padding: 0 0.65rem;
+    line-height: 1.35;
+    font-size: 0.8rem;
+    resize: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+}
+
+.rewrite-template-editor-card .rewrite-template-meta-slot--description.rewrite-slot-placeholder {
+    min-height: 6.5rem;
+}
+
+.rewrite-template-meta-textarea.rewrite-source-textarea {
+    width: 100%;
+    min-height: 6rem;
+    flex: 1 1 auto;
+    margin: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    padding: 0.55rem 0.65rem;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+@media (max-width: 40rem) {
+    .rewrite-template-editor-meta-top {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .rewrite-template-meta-block--name {
+        flex: 1 1 12rem;
+    }
+}
+
+.rewrite-template-editor-section-label {
+    margin: 0 0 0.55rem;
+}
+
+.rewrite-template-editor-hint {
+    margin: 0 0 0.45rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-edit-prompt {
+    margin-top: 0.25rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-edit-prompt--nested {
+    margin-top: 0.85rem;
+}
+
+.rewrite-template-editor-card .confirm-modal__head {
+    flex-shrink: 0;
+}
+
+.rewrite-template-editor-card .image-template-editor-head-actions {
+    align-items: center;
+}
+
+.rewrite-template-editor-card .tts-template-status {
+    max-width: 12rem;
+    text-align: right;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.rewrite-template-editor-card .tts-template-status.tts-template-status--ok {
+    color: #6ad09d;
+}
+
+.rewrite-template-editor-card .tts-template-status.tts-template-status--error {
+    color: #ff8080;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel.scene-card {
+    min-width: 0;
+    margin: 0;
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+    height: auto;
+    align-self: start;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel.rewrite-template-pisanina-panel--body-collapsed.scene-card {
+    padding: 0.55rem 1.25rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__header {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row {
+    display: flex;
+    align-items: center;
+    align-self: center;
+    gap: 0.35rem;
+    min-width: 0;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+    flex: 0 1 auto;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title {
+    margin: 0;
+    padding: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1;
+    align-self: center;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row .rewrite-template-pisanina-panel__title {
+    color: var(--accent);
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row .rewrite-stage-body-collapse-chevron {
+    align-self: center;
+    transform-origin: 50% 50%;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row .rewrite-stage-body-collapse-chevron::before {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel-compact {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    align-self: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    margin-left: auto;
+    flex: 0 1 auto;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    box-sizing: border-box;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel-compact .template-prompt-badge {
+    margin-left: 0;
+    font-size: 0.62rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-compact-stage {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    height: 24px;
+    box-sizing: border-box;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-compact-stage .rewrite-template-prompt-stage-label {
+    flex-shrink: 0;
+}
+
+.rewrite-template-editor-card .rewrite-template-tts-panel-compact {
+    gap: 0.5rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-tts-compact-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: min(14rem, 42vw);
+}
+
+.rewrite-template-editor-card .rewrite-template-tts-compact-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--tts-field-label-warm);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.rewrite-template-editor-card .rewrite-template-tts-compact-voice {
+    font-size: 0.62rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel--collapsible:not(.rewrite-template-pisanina-panel--body-collapsed) .rewrite-template-pisanina-panel-compact {
+    display: none;
+}
+
+/* Свернуто: бейджи справа; развернуто: только «Писанина» — шапка той же высоты, заголовок не прыгает */
+.rewrite-template-editor-card .rewrite-template-pisanina-panel--collapsible.rewrite-template-pisanina-panel--body-collapsed .rewrite-template-pisanina-panel__header,
+.rewrite-template-editor-card .rewrite-template-pisanina-panel--collapsible:not(.rewrite-template-pisanina-panel--body-collapsed) .rewrite-template-pisanina-panel__header {
+    align-items: center;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel--collapsible.rewrite-template-pisanina-panel--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel--collapsible.rewrite-template-pisanina-panel--body-collapsed .rewrite-template-pisanina-panel__body {
+    display: none;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel--collapsible:not(.rewrite-template-pisanina-panel--body-collapsed) .rewrite-template-pisanina-panel__body {
+    margin-top: 0.65rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel .rewrite-template-editor-prompts-stack,
+.rewrite-template-editor-card .rewrite-template-pisanina-panel .rewrite-template-editor-scene-writer-row {
+    border-bottom: none;
+    padding-bottom: 0.15rem;
+}
+
+.rewrite-template-editor-prompts-stack {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem 1rem;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    padding-top: 0.15rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.rewrite-template-editor-prompts-stack .rewrite-stage-prompt-cell {
+    min-width: 0;
+    height: 100%;
+}
+
+@media (max-width: 40rem) {
+    .rewrite-template-editor-prompts-stack {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.rewrite-template-prompt-block {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    gap: 0.35rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-prompt-block .rewrite-stage-prompt-toolbar {
+    flex-shrink: 0;
+    margin-bottom: 0;
+    min-height: 0;
+    align-items: center;
+    align-content: center;
+    gap: 0.45rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-prompt-block .rewrite-stage-compact-header {
+    margin-bottom: 0;
+}
+
+.rewrite-template-prompt-stage-label {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    box-sizing: border-box;
+}
+
+.rewrite-template-editor-card .rewrite-template-prompt-toolbar--stage {
+    gap: 0.15rem;
+}
+
+.rewrite-template-prompt-toolbar--stage .template-prompt-badge {
+    margin-left: 0;
+}
+
+.rewrite-template-editor-prompts-stack .rewrite-template-prompt-block .slot-placeholder.rewrite-slot-placeholder,
+.rewrite-template-editor-scene-writer-row .rewrite-template-prompt-block .slot-placeholder.rewrite-slot-placeholder {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    min-height: 8rem;
+    overflow: visible;
+}
+
+.rewrite-template-editor-prompts-stack .rewrite-template-prompt-block .slot-placeholder .rewrite-source-textarea,
+.rewrite-template-editor-scene-writer-row .rewrite-template-prompt-block .slot-placeholder .rewrite-source-textarea {
+    flex: 1 1 auto;
+    min-height: 8rem;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+.rewrite-template-prompt-block--collapsed .rewrite-slot--prompt-inline {
+    display: none;
+}
+
+.rewrite-template-editor-divider--inner {
+    margin: 0.85rem 0;
+    border-top-color: rgba(128, 128, 128, 0.16);
+}
+
+.rewrite-template-editor-prompts-stack .slot-placeholder.rewrite-slot-placeholder {
+    width: 100%;
+}
+
+.rewrite-template-editor-card .rewrite-template-editor-tts-inner.rewrite-template-editor-section--tts {
+    margin-top: 0;
+}
+
+.rewrite-template-editor-section--tts .tts-row {
+    display: block;
+}
+
+.rewrite-template-editor-section--tts .tts-field.setting-model-dropdown.tts-field-grow {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 100%;
+}
+
+.rewrite-template-editor-section--tts .tts-field-grow.setting-model-dropdown .rewrite-source-subtitle {
+    font-size: 0.85rem;
+    margin: 0;
+    color: var(--tts-field-label-warm);
+}
+
+.rewrite-template-editor-section--tts .tts-field.setting-model-dropdown .rewrite-global-model-field {
+    width: 100%;
+}
+
+#rewrite-template-editor-modal [data-rte-model-field='tts-voice'] .rewrite-anim-dropdown__panel {
+    max-height: min(420px, 55vh);
+}
+
+#rewrite-template-editor-modal .rewrite-anim-option.rewrite-anim-option--voice {
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.35rem;
+    padding: 0.42rem 0.55rem;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+#rewrite-template-editor-modal .rewrite-anim-option--voice .tts-voice-btn-preview {
+    flex: 1;
+    min-width: 0;
+}
+
+#rewrite-template-editor-modal .tts-elevenlabs-dropdown__btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
+    max-height: 2.5rem;
+    padding: 0 0.6rem;
+    box-sizing: border-box;
+    line-height: 1.2;
+    overflow: hidden;
+    width: 100%;
+}
+
+#rewrite-template-editor-modal .tts-elevenlabs-dropdown__btn-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#rewrite-template-editor-modal .tts-voice-dropdown__btn .tts-voice-option-avatar {
+    width: 1.65rem;
+    height: 1.65rem;
+    min-height: 1.65rem;
+    max-height: 1.65rem;
+    font-size: 0.72rem;
+}
+
+.rewrite-template-editor-section--tts .tts-settings-block {
+    margin-top: 0.85rem;
+}
+
+.rewrite-template-editor-section--tts .tts-settings-block__head .rewrite-source-subtitle {
+    font-size: 0.85rem;
+    margin: 0;
+    color: var(--tts-field-label-warm);
+}
+
+.rewrite-template-editor-scene-writer-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem 1rem;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    padding-top: 0.15rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.rewrite-template-editor-scene-writer-row .rewrite-stage-prompt-cell {
+    min-width: 0;
+    height: 100%;
+}
+
+.rewrite-template-editor-scene-writer-row .rewrite-template-prompt-block--collapsed .rewrite-slot--prompt-inline,
+.rewrite-template-editor-scene-writer-row .rewrite-template-prompt-block--collapsed .rewrite-slot--stage-style-prompt,
+.rewrite-template-editor-scene-writer-row .rewrite-template-prompt-block--collapsed .rewrite-slot--stage-past-prompt {
+    display: none;
+}
+
+@media (max-width: 40rem) {
+    .rewrite-template-editor-scene-writer-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.rewrite-template-editor-section--tts .tts-sliders {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 52rem) {
+    .rewrite-template-editor-section--tts .tts-sliders {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.rewrite-template-editor-stages-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.rewrite-template-editor-stage {
+    border: 1px solid rgba(128, 128, 128, 0.22);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem 0.5rem;
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.rewrite-template-editor-stage__summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.rewrite-template-editor-stage-field {
+    margin-top: 0.45rem;
+}
+
+.rewrite-template-editor-stage-field textarea {
+    min-height: 4rem;
+    resize: vertical;
+}
+
+.rewrite-template-edit-logo-hit {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.rewrite-template-edit-logo-preview-wrap {
+    position: relative;
+    display: block;
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    overflow: hidden;
+}
+
+.rewrite-template-edit-logo-preview-wrap--empty {
+    border-style: dashed;
+}
+
+.rewrite-template-edit-logo-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.rewrite-template-edit-logo-placeholder {
+    position: absolute;
+    inset: 0;
+    background: rgba(14, 16, 22, 0.35);
+}
+
+.template-logo-upload-hover {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 10, 14, 0.48);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.template-logo-upload-hover__icon {
+    width: 2rem;
+    height: 2rem;
+    color: #fff;
+}
+
+.rewrite-template-edit-logo-hit:hover .template-logo-upload-hover,
+.rewrite-template-edit-logo-hit:focus-visible .template-logo-upload-hover {
+    opacity: 1;
+}
+
+.rewrite-template-edit-tts-row {
+    margin-bottom: 0.75rem;
+}
+
 .image-template-editor-head-actions {
     display: flex;
     align-items: center;
@@ -512,8 +1203,32 @@ textarea::placeholder {
     opacity: 0.92;
 }
 
-#image-template-delete-modal {
+.rewrite-template-editor-card .rewrite-template-editor-delete-btn:hover,
+.rewrite-template-editor-card .rewrite-template-editor-delete-btn:focus-visible {
+    color: #e57373;
+    border-color: #e57373;
+    background: rgba(229, 115, 115, 0.14);
+}
+
+.rewrite-template-editor-card .rewrite-template-editor-delete-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.rewrite-template-editor-card .rewrite-template-editor-delete-btn:disabled:hover {
+    color: var(--text);
+    border-color: var(--border);
+    background: var(--bg-card);
+}
+
+#image-template-delete-modal,
+#rewrite-template-editor-delete-modal {
     z-index: 1250;
+}
+
+.confirm-modal__card.confirm-modal__card--danger {
+    border: 1px solid rgba(229, 115, 115, 0.72);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(229, 115, 115, 0.18);
 }
 
 .image-template-editor-lead {
@@ -590,29 +1305,8 @@ textarea::placeholder {
     background: rgba(14, 16, 22, 0.35);
 }
 
-.image-template-editor-logo-edit {
-    position: absolute;
-    top: 0.2rem;
-    right: 0.2rem;
-    z-index: 2;
-    width: 1.45rem;
-    height: 1.45rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    background: rgba(8, 10, 14, 0.88);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 0.72rem;
-    line-height: 1;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    pointer-events: none;
-}
-
-.image-template-editor-logo-hit:hover .image-template-editor-logo-edit,
-.image-template-editor-logo-hit:focus-visible .image-template-editor-logo-edit {
+.image-template-editor-logo-hit:hover .template-logo-upload-hover,
+.image-template-editor-logo-hit:focus-visible .template-logo-upload-hover {
     opacity: 1;
 }
 
@@ -1775,6 +2469,190 @@ textarea::placeholder {
     overflow: visible;
     margin: 0;
     line-height: 1.45;
+}
+
+.rewrite-template-section {
+    margin-bottom: 1rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.35rem;
+    border: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.rewrite-template-section__title {
+    margin: 0 0 0.5rem;
+    font-size: 0.82rem;
+    line-height: 1.2;
+}
+
+.rewrite-template-picker.template-picker {
+    --template-option-size: clamp(3.25rem, calc((100% - 0.35rem * 8) / 9), 5.5rem);
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding: 0.15rem 0 0.35rem;
+    margin-bottom: 0.55rem;
+}
+
+.rewrite-template-picker .template-option-frame {
+    border-radius: 50%;
+    padding: 0.12rem;
+}
+
+.rewrite-template-picker .template-option-visual {
+    border-radius: 50%;
+}
+
+.rewrite-template-picker .template-option-visual--letter {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+}
+
+.rewrite-template-picker .template-option-name {
+    font-size: 0.72rem;
+}
+
+.rewrite-template-picker .template-option-visual--base {
+    color: #e6b422;
+}
+
+.rewrite-template-picker .template-option:has(.template-option-input:checked) .template-option-visual--letter {
+    color: var(--accent);
+}
+
+/* Кнопка «+» — тот же размер, что и label.template-option (глобальный #rewrite-template-create был 32×32) */
+.rewrite-template-picker #rewrite-template-create.template-option--add {
+    display: block;
+    flex: 0 0 var(--template-option-size);
+    width: var(--template-option-size);
+    min-width: var(--template-option-size);
+    max-width: var(--template-option-size);
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    box-sizing: border-box;
+}
+
+.rewrite-template-picker .template-option--add .template-option-frame {
+    border: 1px dashed var(--border);
+    border-radius: 50%;
+    background: var(--bg-input);
+}
+
+.rewrite-template-picker .template-option--add:hover .template-option-frame {
+    border-color: var(--accent);
+}
+
+.rewrite-template-picker .template-option--add .template-option-visual--add {
+    font-size: 1.55rem;
+    line-height: 1;
+}
+
+.rewrite-template-section__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.65rem;
+    margin-bottom: 0.35rem;
+}
+
+.rewrite-template-section__hint {
+    margin: 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.rewrite-template-section__hint code {
+    font-size: 0.85em;
+}
+
+.rewrite-template-changed-toast {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1300;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    max-width: min(360px, calc(100vw - 32px));
+    padding: 0.65rem 0.85rem;
+    background: var(--editable-prompt-badge-bg);
+    color: var(--editable-prompt-badge-text);
+    border: 1px solid var(--editable-prompt-badge-border);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    font: 0.85rem/1.35 system-ui, sans-serif;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.rewrite-template-changed-toast--visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.rewrite-template-changed-toast__logo {
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--editable-prompt-badge-border);
+}
+
+.rewrite-template-changed-toast__logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.rewrite-template-changed-toast__logo-letter {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--editable-prompt-badge-text);
+}
+
+.rewrite-template-changed-toast__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.rewrite-template-changed-toast__name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--editable-prompt-badge-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rewrite-template-changed-toast__msg {
+    font-size: 0.78rem;
+    color: var(--editable-prompt-badge-text);
+    opacity: 0.92;
 }
 
 .rewrite-template-bar {
@@ -6367,6 +7245,51 @@ button.job-download-all-link {
     border-radius: 8px;
 }
 
+/* Сворачиваемые блоки редактора шаблона — после .scene-card, чтобы padding 0.55rem не сбивался */
+.rewrite-template-editor-card .rewrite-template-pisanina-panel.scene-card,
+.rewrite-template-editor-card #rte-scene-writer-panel.scene-card,
+.rewrite-template-editor-card #rte-tts-panel.scene-card {
+    padding: 0.55rem 1.25rem 1.25rem;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel.rewrite-template-pisanina-panel--body-collapsed.scene-card,
+.rewrite-template-editor-card #rte-scene-writer-panel.rewrite-template-pisanina-panel--body-collapsed.scene-card,
+.rewrite-template-editor-card #rte-tts-panel.rewrite-template-pisanina-panel--body-collapsed.scene-card {
+    padding: 0.55rem 1.25rem;
+}
+
+.rewrite-template-editor-card #rte-scene-writer-panel.rewrite-template-pisanina-panel.scene-card,
+.rewrite-template-editor-card #rte-tts-panel.rewrite-template-pisanina-panel.scene-card {
+    margin: 0.75rem 0 0;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__header {
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    align-items: center;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row,
+.rewrite-template-editor-card .rewrite-template-pisanina-panel-compact {
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+}
+
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row .scene-id,
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row .rewrite-stage-title-text,
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title-row .rewrite-source-body-title,
+.rewrite-template-editor-card .rewrite-template-pisanina-panel__title {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent);
+    align-self: center;
+}
+
 /* Общий .scene-card задаёт padding:1.25rem позже по каскаду перебивает только
    longhand с равной специфичностью; для сворачиваемых этапов фиксируем верх
    0.55rem всегда (свернуто = развернуто). */
@@ -7405,7 +8328,6 @@ button.job-download-all-link {
     margin: 0.35rem auto 0.2rem;
 }
 
-#rewrite-template-create,
 #rewrite-template-delete {
     width: 32px;
     min-width: 32px;
@@ -7632,6 +8554,12 @@ button.job-download-all-link {
     margin-left: 0.35rem;
     font-weight: 500;
     letter-spacing: 0.01em;
+}
+
+/* Hero / Master: бейдж первый в строке — без сдвига относительно блока с данными */
+.rewrite-source-toolbar > .template-prompt-badge:first-child,
+.slot-header.rewrite-stage-prompt-toolbar > .template-prompt-badge:first-child {
+    margin-left: 0;
 }
 
 .template-prompt-badge--yes {

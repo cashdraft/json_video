@@ -48,8 +48,8 @@
                         type="button"
                         id="rewrite-youtube-proxy-open"
                         class="rewrite-youtube-icon-btn"
-                        title="Прокси для YouTube"
-                        aria-label="Прокси для YouTube"
+                        title="Proxy для YouTube"
+                        aria-label="Proxy для YouTube"
                         {% if not openai_key_set %}disabled{% endif %}
                     >
                         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
@@ -362,42 +362,45 @@
 
             {% set _rw_saved_tpl = (rw.rewrite_template or '')|trim %}
             {% set cur_tpl = _rw_saved_tpl if _rw_saved_tpl else (rewrite_template_names[0] if rewrite_template_names else '') %}
-            {% set ns_tpl_btn = namespace(d='—') %}
-            {% if rewrite_template_names %}
-            {% set ns_tpl_btn.d = rewrite_template_names[0] %}
-            {% endif %}
-            {% if cur_tpl %}
-            {% if cur_tpl in rewrite_template_names %}
-            {% set ns_tpl_btn.d = cur_tpl %}
-            {% else %}
-            {% set ns_tpl_btn.d = cur_tpl + ' (нет на диске)' %}
-            {% endif %}
-            {% endif %}
-            <div class="rewrite-template-bar">
-                <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single rewrite-template-bar__picker" data-template-picker-field="1">
-                    <h3 class="rewrite-source-subtitle rewrite-template-bar__title">Шаблон проекта</h3>
-                    <button type="button" class="rewrite-anim-dropdown__btn rewrite-template-bar__btn" id="rewrite-template-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Выбор шаблона проекта">
-                        <span class="rewrite-anim-dropdown__btn-label" data-template-picker-label>{{ ns_tpl_btn.d }}</span>
-                        <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+            <div class="rewrite-template-section" data-template-picker-field="1">
+                <h3 class="rewrite-source-subtitle rewrite-template-section__title">Шаблон проекта</h3>
+                <div class="rewrite-template-picker template-picker" id="rewrite-template-picker" role="radiogroup" aria-label="Шаблон проекта">
+                    {% for t in rewrite_templates_ui %}
+                    <label class="template-option rewrite-template-option" data-template-name="{{ t.name|e }}" title="Двойной щелчок — редактировать шаблон">
+                        <input type="radio" name="rewrite-template-radio-{{ rw.rewrite_id }}" class="template-option-input rewrite-template-radio" value="{{ t.name }}" {% if cur_tpl == t.name %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                        <span class="template-option-inner">
+                            <span class="template-option-frame">
+                                {% if t.logo_url %}
+                                <span class="template-option-visual">
+                                    <img src="{{ t.logo_url }}" alt="" class="template-logo-preview" loading="lazy">
+                                </span>
+                                {% else %}
+                                <span class="template-option-visual template-option-visual--letter{% if t.name == 'Base Template' %} template-option-visual--base{% endif %}" aria-hidden="true">{% if t.name == 'Base Template' %}Б{% else %}{{ (t.name[:1] or '·')|upper }}{% endif %}</span>
+                                {% endif %}
+                            </span>
+                            <span class="template-option-name">{% if t.name == 'Base Template' %}Базовый{% else %}{{ t.name }}{% endif %}</span>
+                        </span>
+                    </label>
+                    {% endfor %}
+                    {% if cur_tpl and cur_tpl not in rewrite_template_names %}
+                    <label class="template-option rewrite-template-option rewrite-template-option--missing" data-template-name="{{ cur_tpl|e }}">
+                        <input type="radio" name="rewrite-template-radio-{{ rw.rewrite_id }}" class="template-option-input rewrite-template-radio" value="{{ cur_tpl }}" checked {% if not openai_key_set %}disabled{% endif %}>
+                        <span class="template-option-inner">
+                            <span class="template-option-frame">
+                                <span class="template-option-visual template-option-visual--letter" aria-hidden="true">?</span>
+                            </span>
+                            <span class="template-option-name">{{ cur_tpl }}</span>
+                        </span>
+                    </label>
+                    {% endif %}
+                    <button type="button" class="template-option template-option--add" id="rewrite-template-create" {% if not openai_key_set %}disabled{% endif %} title="Создать шаблон" aria-label="Создать шаблон">
+                        <span class="template-option-inner">
+                            <span class="template-option-frame">
+                                <span class="template-option-visual template-option-visual--add" aria-hidden="true">+</span>
+                            </span>
+                            <span class="template-option-name">Новый</span>
+                        </span>
                     </button>
-                    <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-template-picker-panel" hidden role="listbox">
-                        {% for t in rewrite_template_names %}
-                        <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
-                            <input type="radio" name="rewrite-template-radio-{{ rw.rewrite_id }}" class="rewrite-anim-radio rewrite-template-radio visually-hidden-input" value="{{ t }}" {% if cur_tpl == t %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
-                            <span class="rewrite-anim-option__body">
-                                <span class="rewrite-anim-option__title">{{ t }}</span>
-                            </span>
-                        </label>
-                        {% endfor %}
-                        {% if cur_tpl and cur_tpl not in rewrite_template_names %}
-                        <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
-                            <input type="radio" name="rewrite-template-radio-{{ rw.rewrite_id }}" class="rewrite-anim-radio rewrite-template-radio visually-hidden-input" value="{{ cur_tpl }}" checked {% if not openai_key_set %}disabled{% endif %}>
-                            <span class="rewrite-anim-option__body">
-                                <span class="rewrite-anim-option__title">{{ cur_tpl }} (нет на диске)</span>
-                            </span>
-                        </label>
-                        {% endif %}
-                    </div>
                 </div>
                 <select id="rewrite-template-select" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
                     {% for t in rewrite_template_names %}
@@ -407,11 +410,7 @@
                     <option value="{{ cur_tpl }}" selected>{{ cur_tpl }} (нет на диске)</option>
                     {% endif %}
                 </select>
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-create" {% if not openai_key_set %}disabled{% endif %} title="Создать шаблон">＋</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-apply" {% if not openai_key_set %}disabled{% endif %}>Применить</button>
                 <span id="rewrite-template-op-status" class="tts-template-status hidden" aria-live="polite"></span>
-                <span class="rewrite-template-bar__hint">Создайте подпапку в <code>rewrite_templates/</code> (как <code>Base Template</code>) — её имя = шаблон. Внутрь положите <code>.txt</code>: <code>Config</code>, Hero, Master, Analysis … Файлы не в подпапке не подхватываются.</span>
-                <button type="button" class="btn btn-danger btn-sm" id="rewrite-template-delete" {% if not openai_key_set %}disabled{% endif %} title="Удалить выбранный шаблон" aria-label="Удалить выбранный шаблон"><span class="template-trash-icon" aria-hidden="true"></span></button>
             </div>
 
             <div class="scene-card rewrite-source-card">
@@ -905,6 +904,29 @@
                                     </div>
                                 </div>
                             </div>
+                            {% elif stage_key == 'youtube_packaging' %}
+                            {% set _yt_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_youtube_packaging') or {} %}
+                            {% set has_yt_system_prompt = _yt_sys_lp.get('present')|default(false) %}
+                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_youtube_packaging') or {} %}
+                            {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
+                            {% set _up_lock = 'user_prompt_youtube_packaging' %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
+                                <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
+                                    {% if not stage_collapsible %}
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+                                    {% endif %}
+                                </div>
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_yt_system_prompt else 'no' }}" id="locked-prompt-badge-system_prompt_youtube_packaging" data-locked-prompt-badge="system_prompt_youtube_packaging" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_yt_system_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="system_prompt_youtube_packaging" data-locked-prompt-label="YouTube packaging engine — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </div>
+                                <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
+                                    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    </div>
+                                </div>
+                            </div>
                             {% else %}
                             <div class="rewrite-stage-prompt-cell">
                                 <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
@@ -924,14 +946,22 @@
                                 </div>
                             </div>
                             {% endif %}
-                            {% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %}
+                            {% if stage_key == 'scene_writer' %}
                             {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
                             {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
                             {% set _up_lock = 'user_prompt_' ~ stage_key %}
+                            {% set _sw_rsr_lp = (locked_prompts_state|default({}, true)).get('scene_writer_system_rules') or {} %}
+                            {% set has_sw_system_rules = _sw_rsr_lp.get('present')|default(false) %}
                             <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
                                 <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                     <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
                                     <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </div>
+                            </div>
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-scene-writer-system-rules-cell">
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_sw_system_rules else 'no' }}" id="locked-prompt-badge-scene_writer_system_rules" data-locked-prompt-badge="scene_writer_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_sw_system_rules else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="scene_writer_system_rules" data-locked-prompt-label="Scene Writer — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
                                 </div>
                             </div>
                             {% endif %}
@@ -1216,19 +1246,6 @@
             {% endfor %}
             </div>
         </section>
-    <div class="confirm-modal hidden" id="rewrite-template-apply-confirm-modal" aria-hidden="true">
-        <div class="confirm-modal__backdrop" data-template-apply-confirm-close></div>
-        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-apply-confirm-title">
-            <div class="confirm-modal__head">
-                <h3 class="confirm-modal__title" id="rewrite-template-apply-confirm-title">Применить шаблон</h3>
-            </div>
-            <p class="confirm-modal__lead">Подставить шаблон и заблокировать все поля для редактирования?</p>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-apply-confirm-cancel">Отмена</button>
-                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-template-apply-confirm-ok">Да, применить</button>
-            </div>
-        </div>
-    </div>
 
     <div class="confirm-modal hidden" id="rewrite-template-create-modal" aria-hidden="true">
         <div class="confirm-modal__backdrop" data-template-create-close></div>
@@ -1237,7 +1254,7 @@
                 <h3 class="confirm-modal__title" id="rewrite-template-create-title">Создать шаблон</h3>
             </div>
             <p class="confirm-modal__lead">Введите название нового шаблона.</p>
-            <input type="text" id="rewrite-template-create-name" class="project-name-input" placeholder="Например: My Template" autocomplete="off">
+            <input type="text" id="rewrite-template-create-name" class="project-name-input" placeholder="Template" autocomplete="off">
             <div class="confirm-modal__actions">
                 <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-create-cancel">Отмена</button>
                 <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-template-create-ok">Создать</button>
@@ -1245,19 +1262,7 @@
         </div>
     </div>
 
-    <div class="confirm-modal hidden" id="rewrite-template-delete-modal" aria-hidden="true">
-        <div class="confirm-modal__backdrop" data-template-delete-close></div>
-        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-delete-title">
-            <div class="confirm-modal__head">
-                <h3 class="confirm-modal__title" id="rewrite-template-delete-title">Удалить шаблон</h3>
-            </div>
-            <p class="confirm-modal__lead" id="rewrite-template-delete-lead">Точно удалить шаблон? Он будет удалён безвозвратно.</p>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-delete-cancel">Отмена</button>
-                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-template-delete-ok">Да, удалить</button>
-            </div>
-        </div>
-    </div>
+    {% include '_rewrite_template_editor_modal.html' %}
 
     <div class="confirm-modal hidden" id="rewrite-clear-results-confirm-modal" aria-hidden="true">
         <div class="confirm-modal__backdrop" data-clear-results-confirm-close></div>
@@ -1349,7 +1354,7 @@
         <div class="confirm-modal__backdrop" data-youtube-proxy-modal-close></div>
         <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-proxy-modal-title">
             <div class="confirm-modal__head">
-                <h3 class="confirm-modal__title" id="rewrite-youtube-proxy-modal-title">Прокси для YouTube</h3>
+                <h3 class="confirm-modal__title" id="rewrite-youtube-proxy-modal-title">Proxy для YouTube</h3>
                 <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-youtube-proxy-modal-close aria-label="Закрыть">✕</button>
             </div>
             <p class="confirm-modal__lead">Любой формат: <code>user:pass@host:port</code> или полный URL (<code>http://</code>, <code>https://</code>, <code>socks5://</code>). Сохраняется на сервере как <code>data/secrets/yt_dlp_proxy.json</code>. После Enter или клика вне поля — сохранение и проверка YouTube.</p>
@@ -1365,7 +1370,7 @@
                 >
             </div>
             <p class="confirm-modal__lead rewrite-youtube-cookies-modal__msg hidden" id="rewrite-youtube-proxy-msg" aria-live="polite"></p>
-            <p class="rewrite-youtube-proxy-modal__footer{% if not yps.active_configured %} rewrite-youtube-proxy-modal__footer--empty{% endif %}" id="rewrite-youtube-proxy-saved-line" aria-live="polite">{% if yps.active_configured %}{% set _yt_proxy_compact = yps.proxy_active_compact or yps.proxy_file_compact %}{% if _yt_proxy_compact %}<code class="rewrite-youtube-proxy-modal__footer-code" id="rewrite-youtube-proxy-saved-code">{{ _yt_proxy_compact }}</code>{% elif yps.masked_active %}{{ yps.masked_active }}{% endif %}{% if yps.last_test_message %} - <span class="rewrite-youtube-proxy-modal__footer-test{% if yps.last_test_ok is sameas false %} rewrite-youtube-proxy-modal__footer-test--bad{% endif %}">{% if yps.last_test_ok is sameas false %}Проверка не прошла{% else %}Проверка: {{ yps.last_test_message }}{% endif %}</span>{% endif %}{% if yps.env_overrides_file and yps.file_configured and yps.proxy_file_compact and yps.proxy_file_compact != _yt_proxy_compact %}<span class="rewrite-youtube-proxy-modal__footer-hint"> · в файле: {{ yps.proxy_file_compact }}</span>{% endif %}{% else %}Прокси не задан.{% endif %}</p>
+            <p class="rewrite-youtube-proxy-modal__footer{% if not yps.active_configured %} rewrite-youtube-proxy-modal__footer--empty{% endif %}" id="rewrite-youtube-proxy-saved-line" aria-live="polite">{% if yps.active_configured %}{% set _yt_proxy_compact = yps.proxy_active_compact or yps.proxy_file_compact %}{% if _yt_proxy_compact %}<code class="rewrite-youtube-proxy-modal__footer-code" id="rewrite-youtube-proxy-saved-code">{{ _yt_proxy_compact }}</code>{% endif %}{% if yps.last_test_message %} - <span class="rewrite-youtube-proxy-modal__footer-test{% if yps.last_test_ok is sameas false %} rewrite-youtube-proxy-modal__footer-test--bad{% endif %}">{% if yps.last_test_ok is sameas false %}Проверка не прошла{% else %}Проверка: {{ yps.last_test_message }}{% endif %}</span>{% endif %}{% if yps.env_overrides_file and yps.file_configured and yps.proxy_file_compact and yps.proxy_file_compact != _yt_proxy_compact %}<span class="rewrite-youtube-proxy-modal__footer-hint"> · в файле: {{ yps.proxy_file_compact }}</span>{% endif %}{% else %}Прокси не задан.{% endif %}</p>
         </div>
     </div>
 

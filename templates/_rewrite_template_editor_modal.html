@@ -1,0 +1,248 @@
+    <div class="confirm-modal hidden" id="rewrite-template-editor-modal" aria-hidden="true"
+        data-templates-api="{{ url_for('rewrite_api_templates_list') }}"
+        data-elevenlabs-key="{{ '1' if elevenlabs_key_set else '0' }}"
+        data-default-tts-model="{{ (tts_models[0].id if tts_models else '')|e }}">
+        <div class="confirm-modal__backdrop" data-rewrite-template-editor-close></div>
+        <div class="confirm-modal__card image-template-editor-card rewrite-template-editor-card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-editor-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-template-editor-title">Редактировать шаблон</h3>
+                <div class="image-template-editor-head-actions">
+                    <span id="rewrite-template-editor-status" class="tts-template-status hidden" aria-live="polite"></span>
+                    <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn rewrite-template-editor-delete-btn" id="rewrite-template-editor-delete" title="Удалить шаблон" aria-label="Удалить шаблон"><span class="template-trash-icon" aria-hidden="true"></span></button>
+                    <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-rewrite-template-editor-close aria-label="Закрыть">✕</button>
+                </div>
+            </div>
+            <div class="rewrite-template-editor-body">
+                <section class="rewrite-template-editor-section rewrite-template-editor-section--meta">
+                    <div class="rewrite-template-editor-meta-row">
+                        <div class="rewrite-template-editor-meta-top">
+                            <div class="rewrite-template-editor-logo-wrap">
+                                <input type="file" id="rte-logo-file" accept="image/jpeg,image/png,image/webp" hidden>
+                                <button type="button" class="rewrite-template-edit-logo-hit" id="rte-logo-hit" aria-label="Изменить логотип">
+                                    <span class="rewrite-template-edit-logo-preview-wrap rewrite-template-edit-logo-preview-wrap--empty" id="rte-logo-preview-wrap">
+                                        <img id="rte-logo-preview" class="rewrite-template-edit-logo-preview hidden" alt="">
+                                        <span class="rewrite-template-edit-logo-placeholder" id="rte-logo-placeholder" aria-hidden="true"></span>
+                                        <span class="template-logo-upload-hover" aria-hidden="true">
+                                            <svg class="template-logo-upload-hover__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                                <circle cx="12" cy="13" r="4"/>
+                                            </svg>
+                                        </span>
+                                    </span>
+                                </button>
+                            </div>
+                            <div class="rewrite-template-meta-block rewrite-template-meta-block--name" data-rte-meta="name">
+                                <div class="rewrite-template-meta-name-row">
+                                    <span class="slot-badge badge-no rewrite-stage-result-badge" id="rte-name-badge" data-rte-meta-badge>Name</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="rte-name-toggle" title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-template-meta-slot rewrite-template-meta-slot--inline">
+                                        <input type="text" id="rte-name" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-template-meta-input" autocomplete="off" readonly placeholder="Template">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rewrite-template-meta-block" data-rte-meta="description">
+                            <div class="rewrite-source-toolbar slot-header rewrite-stage-compact-header">
+                                <span class="slot-badge badge-no rewrite-stage-result-badge" id="rte-description-badge" data-rte-meta-badge>Description</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="rte-description-toggle" title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-template-meta-slot rewrite-template-meta-slot--description">
+                                <textarea id="rte-description" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea rewrite-template-meta-textarea" rows="4" readonly placeholder="Краткое описание шаблона…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <hr class="rewrite-template-editor-divider" aria-hidden="true">
+
+                <section class="rewrite-template-pisanina-panel scene-card rewrite-template-pisanina-panel--collapsible rewrite-template-pisanina-panel--body-collapsed" id="rte-pisanina-panel" data-rte-fold-panel aria-label="Писанина" aria-expanded="false">
+                    <div class="rewrite-template-pisanina-panel__header" id="rte-pisanina-header">
+                        <div class="rewrite-template-pisanina-panel__title-row rewrite-template-pisanina-panel__toggle" id="rte-pisanina-toggle" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть" aria-controls="rte-pisanina-body">
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <div class="scene-id rewrite-source-body-title rewrite-stage-title-text rewrite-template-pisanina-panel__title">Писанина</div>
+                        </div>
+                        <div class="rewrite-template-pisanina-panel-compact" aria-live="polite">
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="hero">Hero Promt: NO</span>
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="master">Master Promt: NO</span>
+                            <span class="rewrite-template-pisanina-compact-stage">
+                                <span class="rewrite-template-prompt-stage-label">Rewrite -</span>
+                                <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="rewrite">System Promt: NO</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="rewrite-template-pisanina-panel__body" id="rte-pisanina-body" hidden>
+                <div class="rewrite-template-editor-prompts-stack" aria-label="Промты шаблона">
+                    <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="hero">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-badge>Hero Promt: NO</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--hero-prompt rewrite-slot--prompt-inline">
+                            <textarea id="rte-hero" class="rewrite-source-textarea rewrite-source-textarea--locked" rows="5" readonly data-rte-field placeholder="Герой, тон, контекст…"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="master">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-badge>Master Promt: NO</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--master-prompt rewrite-slot--prompt-inline">
+                            <textarea id="rte-master" class="rewrite-source-textarea rewrite-source-textarea--locked" rows="5" readonly data-rte-field placeholder="Общие инструкции для всех этапов…"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="rewrite">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar rewrite-template-prompt-toolbar--stage">
+                            <span class="rewrite-template-prompt-stage-label">Rewrite -</span>
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-badge data-rte-badge-prefix="System Promt">System Promt: NO</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline">
+                            <textarea id="rte-rewrite-prompt" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea" rows="5" readonly data-rte-field placeholder="Системная инструкция Rewrite…"></textarea>
+                        </div>
+                    </div>
+                </div>
+                    </div>
+                </section>
+
+                <section class="rewrite-template-pisanina-panel scene-card rewrite-template-pisanina-panel--collapsible rewrite-template-pisanina-panel--body-collapsed" id="rte-scene-writer-panel" data-rte-fold-panel aria-label="Scene Writer" aria-expanded="false">
+                    <div class="rewrite-template-pisanina-panel__header" id="rte-scene-writer-header">
+                        <div class="rewrite-template-pisanina-panel__title-row rewrite-template-pisanina-panel__toggle" id="rte-scene-writer-toggle" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть" aria-controls="rte-scene-writer-body">
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <div class="scene-id rewrite-source-body-title rewrite-stage-title-text rewrite-template-pisanina-panel__title">Scene Writer</div>
+                        </div>
+                        <div class="rewrite-template-pisanina-panel-compact" aria-live="polite">
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="sw-system">System Promt: NO</span>
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="sw-style">Style Promt: NO</span>
+                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="sw-past">Past in Promt: NO</span>
+                        </div>
+                    </div>
+                    <div class="rewrite-template-pisanina-panel__body" id="rte-scene-writer-body" hidden>
+                    <div class="rewrite-template-editor-scene-writer-row" aria-label="Промты Scene Writer">
+                        <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="sw-system">
+                            <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                <span class="slot-badge template-prompt-badge template-prompt-badge--no rewrite-stage-prompt-badge" data-rte-badge>System Promt: NO</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline">
+                                <textarea id="rte-scene-writer-prompt" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea" rows="5" readonly data-rte-field placeholder="Системная инструкция Scene Writer…"></textarea>
+                            </div>
+                        </div>
+                        <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="sw-style">
+                            <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                <span class="slot-badge template-prompt-badge template-prompt-badge--no rewrite-stage-style-prompt-badge" data-rte-badge>Style Promt: NO</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-style-prompt">
+                                <textarea id="rte-scene-writer-style" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea" rows="5" readonly data-rte-field placeholder="Стиль/тон для всех сцен…"></textarea>
+                            </div>
+                        </div>
+                        <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="sw-past">
+                            <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                <span class="slot-badge template-prompt-badge template-prompt-badge--no rewrite-stage-past-prompt-badge" data-rte-badge>Past in Promt: NO</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-past-prompt">
+                                <textarea id="rte-scene-writer-past" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea" rows="5" readonly data-rte-field placeholder="Past-контекст для Scene Writer…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </section>
+
+                <section class="rewrite-template-pisanina-panel scene-card rewrite-template-pisanina-panel--collapsible rewrite-template-pisanina-panel--body-collapsed" id="rte-tts-panel" data-rte-fold-panel aria-label="Озвучка" aria-expanded="false">
+                    <div class="rewrite-template-pisanina-panel__header" id="rte-tts-header">
+                        <div class="rewrite-template-pisanina-panel__title-row rewrite-template-pisanina-panel__toggle" id="rte-tts-toggle" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть" aria-controls="rte-tts-body">
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <div class="scene-id rewrite-source-body-title rewrite-stage-title-text rewrite-template-pisanina-panel__title">Озвучка</div>
+                        </div>
+                        <div class="rewrite-template-pisanina-panel-compact rewrite-template-tts-panel-compact" aria-live="polite">
+                            <span class="rewrite-template-tts-compact-pair">
+                                <span class="rewrite-template-tts-compact-label">Голос</span>
+                                <span class="rewrite-template-tts-compact-voice" data-rte-tts-compact-voice>—</span>
+                            </span>
+                            <span class="rewrite-template-tts-compact-label">Настройки</span>
+                        </div>
+                    </div>
+                    <div class="rewrite-template-pisanina-panel__body" id="rte-tts-body" hidden>
+                    <div class="rewrite-template-editor-tts-inner rewrite-template-editor-section--tts">
+                    {% if not elevenlabs_key_set %}
+                    <p class="tts-warning">Укажите <code>ELEVENLABS_API_KEY</code> в <code>.env</code>, чтобы выбрать голос.</p>
+                    {% endif %}
+                    <div class="tts-row rewrite-template-edit-tts-row">
+                        <div class="tts-field tts-field-grow setting-model-dropdown">
+                            <h3 class="rewrite-source-subtitle">Голос</h3>
+                            <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single"
+                                data-rte-model-field="tts-voice"
+                                data-rte-model-select="rte-tts-voice"
+                                data-rte-model-radio-name="rte-tts-voice-radio"
+                                data-rte-model-rich="voice">
+                                <button type="button" class="rewrite-anim-dropdown__btn tts-elevenlabs-dropdown__btn tts-voice-dropdown__btn" id="rte-tts-voice-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Голос ElevenLabs" {% if not elevenlabs_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-dropdown__btn-label rewrite-anim-dropdown__btn-label--voice" data-rte-model-label="tts-voice">Загрузка голосов…</span>
+                                    <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                                </button>
+                                <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox"></div>
+                            </div>
+                            <select id="rte-tts-voice" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1" {% if not elevenlabs_key_set %}disabled{% endif %}>
+                                <option value="">Загрузка…</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="tts-settings-block">
+                        <div class="tts-settings-block__head">
+                            <h3 class="rewrite-source-subtitle">Настройки</h3>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="rte-tts-settings-toggle" title="Редактировать" aria-label="Редактировать">
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <hr class="tts-divider tts-settings-block__divider" aria-hidden="true">
+                        <div class="tts-sliders">
+                            <div class="tts-slider-block">
+                                <label class="tts-slider-label" for="rte-tts-speed">Скорость <span class="tts-slider-val" id="rte-tts-speed-val">1.00×</span></label>
+                                <input type="range" id="rte-tts-speed" min="0" max="100" value="20" class="tts-range" disabled>
+                                <div class="tts-slider-ends"><span>0.25×</span><span>4.0×</span></div>
+                            </div>
+                            <div class="tts-slider-block">
+                                <label class="tts-slider-label" for="rte-tts-stability">Стабильность <span class="tts-slider-val" id="rte-tts-stability-val">50</span></label>
+                                <input type="range" id="rte-tts-stability" min="0" max="100" value="50" class="tts-range" disabled>
+                                <div class="tts-slider-ends"><span>Выразительнее</span><span>Стабильнее</span></div>
+                            </div>
+                            <div class="tts-slider-block">
+                                <label class="tts-slider-label" for="rte-tts-similarity">Сходство <span class="tts-slider-val" id="rte-tts-similarity-val">75</span></label>
+                                <input type="range" id="rte-tts-similarity" min="0" max="100" value="75" class="tts-range" disabled>
+                                <div class="tts-slider-ends"><span>Ниже</span><span>Выше</span></div>
+                            </div>
+                            <div class="tts-slider-block">
+                                <label class="tts-slider-label" for="rte-tts-style">Выразительность стиля <span class="tts-slider-val" id="rte-tts-style-val">0</span></label>
+                                <input type="range" id="rte-tts-style" min="0" max="100" value="0" class="tts-range" disabled>
+                                <div class="tts-slider-ends"><span>Нет</span><span>Сильнее</span></div>
+                            </div>
+                        </div>
+                        <label class="tts-check">
+                            <input type="checkbox" id="rte-tts-speaker-boost" checked disabled>
+                            Speaker boost (сильнее похоже на оригинальный голос, чуть выше задержка)
+                        </label>
+                    </div>
+
+                    </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-modal hidden" id="rewrite-template-editor-delete-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-rte-template-delete-close></div>
+        <div class="confirm-modal__card confirm-modal__card--danger" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-editor-delete-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-template-editor-delete-title">Удалить шаблон</h3>
+            </div>
+            <p class="confirm-modal__lead" id="rewrite-template-editor-delete-lead">Вы точно уверены?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" data-rte-template-delete-close>Отмена</button>
+                <button type="button" class="btn btn-danger btn-sm confirm-modal__ok" id="rewrite-template-editor-delete-ok">Да, удалить</button>
+            </div>
+        </div>
+    </div>

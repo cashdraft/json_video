@@ -1527,7 +1527,8 @@ def compose_rewrite_openai_request_body(
             ss_input_text,
         )
     elif stage_key == "scene_writer":
-        prompt = stage_prompt_t.strip()
+        sw_rules = subp(_editor_stage_system_rules_text("scene_writer", cell))
+        prompt = build_voiceover_editor_system_prompt(stage_prompt_t, sw_rules)
         style_prompt = subp(str(cell.get("style_prompt") or "")).strip()
         up = up_txt
         user_text = _join_user_sections(up, style_prompt)

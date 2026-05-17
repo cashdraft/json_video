@@ -1,0 +1,13 @@
+{
+  "description": "ываыва",
+  "tts_defaults": {
+    "voice_id": "hLjwV7lYzk15SWLUmhEH",
+    "voice_name": "Marusya G – Slow Romantic Storytelling",
+    "model_id": "eleven_multilingual_v2",
+    "stability_pct": 50,
+    "similarity_pct": 75,
+    "style_pct": 0,
+    "speed_pct": 20,
+    "use_speaker_boost": true
+  }
+}
