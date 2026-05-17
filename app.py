@@ -83,6 +83,7 @@ from elevenlabs_client import (
     chars_to_words_ms,
     list_voices as elevenlabs_list_voices,
     max_chars_for_model,
+    max_chars_for_tts_with_timestamps,
     normalize_tts_model_id,
     normalize_tts_script_source,
     merge_mp3_files_ffmpeg,
@@ -7175,7 +7176,8 @@ def job_elevenlabs_tts_stream(job_id: str):
                 yield _ev({"type": "error", "error": "Job not found", "elapsed_seconds": elapsed()})
                 return
 
-        max_c = max_chars_for_model()
+        model_max_c = max_chars_for_model(model_id)
+        max_c = max_chars_for_tts_with_timestamps(text, model_id)
         try:
             chunks = split_tts_text_into_chunks(text, max_c)
         except RuntimeError as e:
@@ -7234,11 +7236,21 @@ def job_elevenlabs_tts_stream(job_id: str):
             {
                 "type": "status",
                 "phase": "prepare",
-                "message": f"Подготовлено: {total_chunks} кусков, {_fmt_num_ru(total_chars)} символов (лимит {_fmt_num_ru(max_c)} на запрос).",
+                "message": (
+                    f"Подготовлено: {total_chunks} кусков, {_fmt_num_ru(total_chars)} символов "
+                    f"(≤ {_fmt_num_ru(max_c)} на запрос"
+                    + (
+                        f", лимит модели {_fmt_num_ru(model_max_c)}"
+                        if max_c < model_max_c
+                        else ""
+                    )
+                    + ")."
+                ),
                 "total_chunks": total_chunks,
                 "total_chars": total_chars,
                 "sum_chunk_chars": sum_chunk_chars,
                 "chunk_limit": max_c,
+                "model_chunk_limit": model_max_c,
                 "chunks_fingerprint": chunks_fingerprint,
                 "elapsed_seconds": elapsed(),
             }
@@ -7385,6 +7397,7 @@ def job_elevenlabs_tts_stream(job_id: str):
             "total_chars": len(text),
             "total_chunks": total_chunks,
             "chunk_limit": max_c,
+            "model_chunk_limit": model_max_c,
             "total_words": len(all_words),
             "total_duration_ms": total_duration_ms,
             "words": all_words,
@@ -7426,6 +7439,7 @@ def job_elevenlabs_tts_stream(job_id: str):
             "chars": len(text),
             "tts_chunks": len(chunks),
             "tts_chunk_limit": max_c,
+            "tts_model_chunk_limit": model_max_c,
             "text_preview": text[:120] + ("…" if len(text) > 120 else ""),
             "settings": {
                 "stability_pct": stability_pct,
@@ -8922,6 +8936,7 @@ def job_page(job_id: str):
     whisper_last_words_href: str | None = None
     whisper_last_words_name: str | None = None
     whisper_initial_final_ev: dict[str, Any] | None = None
+    whisper_words_body: str | None = None
     if job_has_audio and audio_dir.is_dir():
         mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
         if mp3s:
@@ -8952,6 +8967,10 @@ def job_page(job_id: str):
                     _words_list = _doc.get("words") if isinstance(_doc.get("words"), list) else []
                     _first_w = _words_list[0] if _words_list else None
                     _last_w = _words_list[-1] if _words_list else None
+                    try:
+                        whisper_words_body = json.dumps(_doc, ensure_ascii=False, indent=2)
+                    except (TypeError, ValueError):
+                        whisper_words_body = None
                     whisper_initial_final_ev = {
                         "type": "final",
                         "phase": "done",
@@ -9018,6 +9037,7 @@ def job_page(job_id: str):
         whisper_last_words_href=whisper_last_words_href,
         whisper_last_words_name=whisper_last_words_name,
         whisper_initial_final_ev=whisper_initial_final_ev,
+        whisper_words_body=whisper_words_body,
         apply_timings_source=(
             # Источник, выбранный пользователем ранее (если до сих пор валиден),
             # иначе — лучший доступный (Whisper при наличии, иначе ElevenLabs).

@@ -22,6 +22,12 @@ ELEVEN_BASE = "https://api.elevenlabs.io"
 TTS_MODEL_ID = "eleven_v3"
 TTS_MAX_CHARS = 5000
 
+# Дробление with-timestamps: на длинных кусках Eleven чаще «схлопывает» alignment.
+# Для текста > MIN — ориентир ~TARGET_CHUNKS запросов (для 2–3 тыс. симв. обычно 2–4 куска).
+TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT = 1500
+TTS_TIMESTAMPS_TARGET_CHUNKS = 3
+TTS_TIMESTAMPS_MIN_CHUNK_CHARS = 400
+
 TTS_MODELS: list[dict[str, Any]] = [
     {
         "id": TTS_MODEL_ID,
@@ -57,6 +63,23 @@ def _api_key() -> str:
 
 def max_chars_for_model(model_id: str | None = None) -> int:
     return TTS_MAX_CHARS
+
+
+def max_chars_for_tts_with_timestamps(text: str, model_id: str | None = None) -> int:
+    """Лимит символов на один запрос with-timestamps (может быть ниже лимита модели).
+
+    Короткий текст — один запрос (до ``max_chars_for_model``).
+    Длиннее ``TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT`` — ориентир ``TTS_TIMESTAMPS_TARGET_CHUNKS``
+    кусков (лимит ≈ ceil(n / target)), чтобы проверить гипотезу качества alignment.
+    """
+    model_max = max_chars_for_model(model_id)
+    n = len((text or "").strip())
+    if n <= TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT:
+        return model_max
+    target = max(2, TTS_TIMESTAMPS_TARGET_CHUNKS)
+    alignment_limit = (n + target - 1) // target
+    alignment_limit = max(TTS_TIMESTAMPS_MIN_CHUNK_CHARS, alignment_limit)
+    return min(model_max, alignment_limit)
 
 
 def sentences_split_by_dot(text: str) -> list[str]:

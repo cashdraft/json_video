@@ -261,10 +261,10 @@
                         <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-result-badge">Result</span>
                         <span class="rewrite-source-counts tts-result-duration hidden" id="tts-result-duration" aria-live="polite"></span>
                     </div>
-                    <div id="tts-result-slot" class="slot-placeholder rewrite-slot-placeholder tts-result-slot" data-status="">
-                        <div class="slot-status-row rewrite-stage-status-row hidden" id="tts-result-status-row">
-                            <span class="slot-status slot-status-with-spinner rewrite-stage-status-text" id="tts-result-status-text"></span>
-                            <button type="button" class="btn-cancel-generation" id="tts-result-cancel-btn">Cancel</button>
+                    <div id="tts-result-slot" class="slot-placeholder rewrite-slot-placeholder tts-result-slot" data-status="{% if tts_last_audio_href %}done{% else %}pending{% endif %}">
+                        <div class="slot-status-row rewrite-stage-status-row{% if tts_last_audio_href %} hidden{% endif %}" id="tts-result-status-row">
+                            <span class="slot-status rewrite-stage-status-text" id="tts-result-status-text">{% if not tts_last_audio_href %}Pending{% endif %}</span>
+                            <button type="button" class="btn-cancel-generation hidden" id="tts-result-cancel-btn">Cancel</button>
                         </div>
                         <div id="tts-player-body" class="tts-player-body{% if not tts_last_audio_href %} tts-player-body--empty{% endif %}">
                             <div class="tts-player-bar{% if not tts_last_audio_href %} tts-player-bar--empty{% endif %}" id="tts-player-bar">
@@ -300,19 +300,24 @@
                     </div>
                 </div>
                 <div class="tts-word-timings-row">
-                    <article id="tts-words-wrap" class="tts-word-timings-panel tts-word-timings-panel--eleven" aria-expanded="false" data-word-timings-source="elevenlabs">
-                        <div class="tts-word-timings-panel__header scene-header" id="tts-words-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть">
-                            <div class="tts-word-timings-panel__title-row">
+                    <article id="tts-words-wrap" class="scene-card tts-word-timings-panel tts-word-timings-panel--eleven tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-word-timings-source="elevenlabs">
+                        <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="tts-words-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть">
+                            <div class="tts-word-timings-panel__title-row rewrite-voiceover-final-title-row">
                                 <span class="rewrite-stage-body-collapse-chevron tts-words-chevron" aria-hidden="true"></span>
-                                <span class="scene-id rewrite-stage-title-text">Тайминги слов Eleven</span>
+                                <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Тайминги Eleven</div>
                             </div>
-                            <span class="rewrite-source-counts tts-word-timings-panel__summary" id="tts-words-summary" aria-live="polite"></span>
+                            <div class="tts-word-timings-panel-compact rewrite-stages-compact rewrite-voiceover-final-card-compact" aria-live="polite">
+                                <span class="rewrite-stages-compact__pair">
+                                    <span class="slot-badge badge-{{ 'yes' if tts_words_available else 'no' }} rewrite-stage-result-badge" id="tts-words-compact-badge">Result</span>
+                                </span>
+                                <span class="rewrite-source-counts tts-word-timings-panel-compact-counts" id="tts-words-compact-counts"></span>
+                            </div>
                         </div>
-                        <div id="tts-words-body" class="tts-word-timings-panel__body" hidden>
+                        <div id="tts-words-body" class="tts-word-timings-panel__body tts-word-timings-panel-collapsible-inner" hidden>
                             <div class="tts-word-timings-result rewrite-stage-row rewrite-stage-row--result">
                                 <div class="slot-header rewrite-stage-result-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if tts_words_available else 'no' }} rewrite-stage-result-badge" id="tts-words-result-badge">Result</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon tts-words-copy-btn" id="tts-words-copy" title="Скопировать JSON" aria-label="Скопировать JSON">
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" id="tts-words-copy" title="Скопировать JSON" aria-label="Скопировать JSON">
                                         <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                                     </button>
                                     <button type="button" class="rewrite-lock-toggle btn-icon tts-words-download-btn" id="tts-words-download" title="Скачать .words.json" aria-label="Скачать JSON">
@@ -322,11 +327,24 @@
                                     <span id="tts-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
                                 </div>
                                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result">
-                                    <pre id="tts-words-json" class="rewrite-source-textarea rewrite-stage-result" aria-label="Тайминги слов ElevenLabs (JSON)"></pre>
+                                    <textarea id="tts-words-json" class="rewrite-source-textarea rewrite-stage-result" rows="10" placeholder="Pending" spellcheck="false" aria-label="Тайминги Eleven (JSON)"></textarea>
                                 </div>
                             </div>
                             <div class="rewrite-scene-writer-check tts-word-timings-check" id="tts-words-check" data-word-timings-check="elevenlabs" aria-live="polite">
-                                <div class="rewrite-scene-writer-check__head"><span>Проверка</span> <span class="rewrite-editor-check-delta--zero">—</span></div>
+                                <div class="tts-word-timings-check__title">Проверка <span class="tts-word-timings-check-scenes-status rewrite-scene-writer-check__wait" id="tts-words-check-scenes-status" aria-live="polite">—</span></div>
+                                <div class="tts-word-timings-check-section tts-word-timings-check-section--scenes tts-word-timings-check-section--first" id="tts-words-check-scenes-section" data-scenes-ok="">
+                                    <div class="tts-word-timings-check-text tts-word-timings-scenes-check-tree tts-word-timings-scenes-check-reasons hidden" id="tts-words-scenes-check-reasons"></div>
+                                </div>
+                                <div class="tts-word-timings-check-text tts-word-timings-check-summary" id="tts-words-check-summary">—</div>
+                                <div class="tts-word-timings-check-section">
+                                    <div class="tts-word-timings-check-section__title">Слова-исключения</div>
+                                    <div class="tts-word-timings-check-hint">Пара <code>&lt;…&gt;</code> / <code>[…]</code>: закрывающую ищем в ±5 словах, в исключения — всё между скобками</div>
+                                    <div class="tts-word-timings-check-text tts-word-timings-check-section__body" id="tts-words-check-exceptions">—</div>
+                                </div>
+                                <div class="tts-word-timings-check-section">
+                                    <div class="tts-word-timings-check-section__title">Слова без исключений</div>
+                                    <div class="tts-word-timings-check-text tts-word-timings-check-section__body" id="tts-words-check-clean">—</div>
+                                </div>
                             </div>
                             <div class="tts-words-source-row" title="Использовать при «Сгенерировать JSON-код сцен с таймингами»">
                                 <label class="tts-words-source-radio">
@@ -336,23 +354,26 @@
                             </div>
                         </div>
                     </article>
-                    <article id="whisper-words-wrap" class="tts-word-timings-panel tts-word-timings-panel--whisper" aria-expanded="false" data-word-timings-source="whisper">
-                        <div class="tts-word-timings-panel__header scene-header" id="whisper-words-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть">
-                            <div class="tts-word-timings-panel__title-row">
+                    <article id="whisper-words-wrap" class="scene-card tts-word-timings-panel tts-word-timings-panel--whisper tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-word-timings-source="whisper">
+                        <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="whisper-words-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть">
+                            <div class="tts-word-timings-panel__title-row rewrite-voiceover-final-title-row">
                                 <span class="rewrite-stage-body-collapse-chevron tts-words-chevron" aria-hidden="true"></span>
-                                <span class="scene-id rewrite-stage-title-text">Тайминги слов Whisper по словам</span>
+                                <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Тайминги Whisper</div>
                             </div>
-                            <span class="rewrite-source-counts tts-word-timings-panel__summary" id="whisper-words-summary" aria-live="polite"></span>
+                            <div class="tts-word-timings-panel-compact rewrite-stages-compact rewrite-voiceover-final-card-compact" aria-live="polite">
+                                <span class="rewrite-stages-compact__pair">
+                                    <span class="slot-badge badge-{{ 'yes' if whisper_words_available else 'no' }} rewrite-stage-result-badge" id="whisper-words-compact-badge">Result</span>
+                                    <button type="button" class="btn-regenerate rewrite-stage-run rewrite-stages-compact__run whisper-words-run" id="whisper-words-run" title="Прогнать локальный Whisper по словам" aria-label="Прогнать локальный Whisper по словам">↻</button>
+                                </span>
+                                <span class="rewrite-source-counts tts-word-timings-panel-compact-counts" id="whisper-words-compact-counts"></span>
+                            </div>
                         </div>
-                        <div id="whisper-words-body" class="tts-word-timings-panel__body" hidden>
-                            <div class="tts-word-timings-whisper-run">
-                                <button type="button" class="btn btn-secondary btn-sm" id="whisper-words-run">Прогнать локальный Whisper по словам</button>
-                                <span id="whisper-words-status" class="tts-template-status" aria-live="polite"></span>
-                            </div>
+                        <div id="whisper-words-body" class="tts-word-timings-panel__body tts-word-timings-panel-collapsible-inner" hidden>
                             <div class="tts-word-timings-result rewrite-stage-row rewrite-stage-row--result">
                                 <div class="slot-header rewrite-stage-result-toolbar">
                                     <span class="slot-badge badge-{{ 'yes' if whisper_words_available else 'no' }} rewrite-stage-result-badge" id="whisper-words-result-badge">Result</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon whisper-words-copy-btn" id="whisper-words-copy" title="Скопировать JSON" aria-label="Скопировать JSON">
+                                    <button type="button" class="btn-regenerate rewrite-stage-run whisper-words-run whisper-words-run--expanded" title="Прогнать локальный Whisper по словам" aria-label="Прогнать локальный Whisper по словам">↻</button>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" id="whisper-words-copy" title="Скопировать JSON" aria-label="Скопировать JSON">
                                         <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                                     </button>
                                     <button type="button" class="rewrite-lock-toggle btn-icon whisper-words-download-btn" id="whisper-words-download" title="Скачать .whisper.words.json" aria-label="Скачать JSON">
@@ -361,12 +382,20 @@
                                     <span class="rewrite-stage-result-counts" id="whisper-words-counts" aria-live="polite"></span>
                                     <span id="whisper-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
                                 </div>
-                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result">
-                                    <pre id="whisper-words-json" class="rewrite-source-textarea rewrite-stage-result{% if not whisper_words_available %} rewrite-stage-result--busy{% endif %}" aria-label="Тайминги слов Whisper (JSON)">{% if not whisper_words_available %}Pending{% endif %}</pre>
+                                <div id="whisper-words-result-slot" class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result whisper-words-result-slot" data-status="{% if whisper_words_available %}done{% else %}pending{% endif %}">
+                                    <div class="slot-status-row rewrite-stage-status-row{% if whisper_words_available %} hidden{% endif %}" id="whisper-words-status-row">
+                                        <span class="slot-status rewrite-stage-status-text" id="whisper-words-status-text">{% if not whisper_words_available %}Pending{% endif %}</span>
+                                        <button type="button" class="btn-cancel-generation hidden" id="whisper-words-cancel-btn">Cancel</button>
+                                    </div>
+                                    <textarea id="whisper-words-json" class="rewrite-source-textarea rewrite-stage-result" rows="10" spellcheck="false" placeholder="" aria-label="Тайминги Whisper (JSON)">{% if whisper_words_body %}{% autoescape false %}{{ whisper_words_body | replace('</textarea>', '</te' ~ 'xtarea>') }}{% endautoescape %}{% endif %}</textarea>
                                 </div>
                             </div>
                             <div class="rewrite-scene-writer-check tts-word-timings-check" id="whisper-words-check" data-word-timings-check="whisper" aria-live="polite">
-                                <div class="rewrite-scene-writer-check__head"><span>Проверка</span> <span class="rewrite-editor-check-delta--zero">—</span></div>
+                                <div class="tts-word-timings-check__title">Проверка <span class="tts-word-timings-check-scenes-status rewrite-scene-writer-check__wait" id="whisper-words-check-scenes-status" aria-live="polite">—</span></div>
+                                <div class="tts-word-timings-check-section tts-word-timings-check-section--scenes tts-word-timings-check-section--first" id="whisper-words-check-scenes-section" data-scenes-ok="">
+                                    <div class="tts-word-timings-check-text tts-word-timings-scenes-check-tree tts-word-timings-scenes-check-reasons hidden" id="whisper-words-scenes-check-reasons"></div>
+                                </div>
+                                <div class="tts-word-timings-check-text tts-word-timings-check-summary" id="whisper-words-check-summary">—</div>
                             </div>
                             <div class="tts-words-source-row" title="Использовать при «Сгенерировать JSON-код сцен с таймингами»">
                                 <label class="tts-words-source-radio">
@@ -3299,12 +3328,13 @@
             }
         };
         if (ttsSectionEl && ttsSectionEl.getAttribute('data-tts-section-collapse') === '1') {
-            applyTtsSectionCollapsed(true);
+            applyTtsSectionCollapsed(loadTtsSectionCollapsed());
             const hdr = ttsSectionEl.querySelector('.tts-section-card-header');
             if (hdr) {
                 hdr.addEventListener('click', function (e) {
                     if (e.target.closest('button, a, input, select, textarea, label')) return;
-                    const next = !ttsSectionEl.classList.contains('tts-section--body-collapsed');
+                    const cur = ttsSectionEl.classList.contains('tts-section--body-collapsed');
+                    const next = !cur;
                     saveTtsSectionCollapsed(next);
                     applyTtsSectionCollapsed(next);
                 });
@@ -3325,12 +3355,19 @@
         const ttsLastAudioFilename = {{ (tts_last_audio_name or '') | tojson }};
         const ttsLastWordsFilename = {{ (tts_last_words_name or '') | tojson }};
         const ttsLastWordsUrl      = {{ (tts_last_words_href or '') | tojson }};
+        const whisperLastWordsFilename = {{ (whisper_last_words_name or '') | tojson }};
+        const whisperLastWordsUrl      = {{ (whisper_last_words_href or '') | tojson }};
+        const whisperInitialMeta       = {{ (whisper_initial_final_ev or none) | tojson }};
         const defaultVoiceId = {{ (tts_defaults.voice_id or '') | tojson }};
         const ttsScriptSourceInitial = {{ (tts_script_source|default('voiceover_editor')) | tojson }};
         let rewriteBlockPresent = {% if rw %}true{% else %}false{% endif %};
         rewriteBlockPresent = rewriteBlockPresent || !!document.querySelector('.rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-result');
         const TTS_MODEL_ID = 'eleven_v3';
         const TTS_MAX_CHARS = 5000;
+        /** Как в elevenlabs_client.max_chars_for_tts_with_timestamps */
+        const TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT = 1500;
+        const TTS_TIMESTAMPS_TARGET_CHUNKS = 3;
+        const TTS_TIMESTAMPS_MIN_CHUNK_CHARS = 400;
         const modelSel = document.getElementById('tts-model');
         const voiceSel = document.getElementById('tts-voice');
         const textEl = document.getElementById('tts-text');
@@ -3422,14 +3459,40 @@
             ttsResultStatusText.textContent = String(message || '');
         };
 
+        const setTtsPendingUi = (isPending) => {
+            if (!ttsResultSlot) return;
+            if (isPending) {
+                ttsResultSlot.setAttribute('data-status', 'pending');
+                ttsResultStatusRow?.classList.remove('hidden');
+                if (ttsResultStatusText) {
+                    ttsResultStatusText.textContent = 'Pending';
+                    ttsResultStatusText.classList.remove('slot-status-with-spinner');
+                }
+                ttsResultCancelBtn?.classList.add('hidden');
+                setTtsPlayerEmptyState(true);
+            } else if (ttsHasAudioSrc()) {
+                ttsResultSlot.setAttribute('data-status', 'done');
+                ttsResultStatusRow?.classList.add('hidden');
+                ttsResultCancelBtn?.classList.add('hidden');
+            }
+        };
+
         const setTtsResultGenerating = (active, message) => {
             if (active) {
                 ttsResultSlot?.setAttribute('data-status', 'generating');
                 ttsResultStatusRow?.classList.remove('hidden');
+                ttsResultCancelBtn?.classList.remove('hidden');
                 setTtsResultStatusMessage(message || 'Запрос к ElevenLabs…');
-            } else {
-                ttsResultSlot?.setAttribute('data-status', '');
-                ttsResultStatusRow?.classList.add('hidden');
+                ttsResultStatusText?.classList.add('slot-status-with-spinner');
+            } else if (ttsResultSlot?.getAttribute('data-status') === 'generating') {
+                ttsResultCancelBtn?.classList.add('hidden');
+                ttsResultStatusText?.classList.remove('slot-status-with-spinner');
+                if (ttsHasAudioSrc()) {
+                    ttsResultSlot?.setAttribute('data-status', 'done');
+                    ttsResultStatusRow?.classList.add('hidden');
+                } else {
+                    setTtsPendingUi(true);
+                }
             }
         };
 
@@ -3460,7 +3523,7 @@
             currentAudioFilename = '';
             setTtsPlayerEmptyState(true);
             setTtsResultGenerating(false);
-            ttsResultSlot?.setAttribute('data-status', '');
+            setTtsPendingUi(true);
             syncTtsResultDuration();
             syncTtsResultBadge();
             syncTtsClearButton();
@@ -3521,11 +3584,22 @@
             return parseInt(max || String(TTS_MAX_CHARS), 10);
         };
 
-        // --- Тайминги слов Eleven / Whisper (два столбца под плеером) ---
+        const getTtsChunkCharsForTimestamps = (text) => {
+            const modelMax = getMaxChars();
+            const n = String(text || '').trim().length;
+            if (n <= TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT) return modelMax;
+            const target = Math.max(2, TTS_TIMESTAMPS_TARGET_CHUNKS);
+            let alignmentLimit = Math.ceil(n / target);
+            alignmentLimit = Math.max(TTS_TIMESTAMPS_MIN_CHUNK_CHARS, alignmentLimit);
+            return Math.min(modelMax, alignmentLimit);
+        };
+
+        // --- Тайминги Eleven / Whisper (два столбца под плеером) ---
         const wordsWrapEl       = document.getElementById('tts-words-wrap');
         const wordsHeaderEl     = document.getElementById('tts-words-header');
         const wordsBodyEl       = document.getElementById('tts-words-body');
-        const wordsSummaryEl    = document.getElementById('tts-words-summary');
+        const wordsCompactBadge = document.getElementById('tts-words-compact-badge');
+        const wordsCompactCounts = document.getElementById('tts-words-compact-counts');
         const wordsJsonEl       = document.getElementById('tts-words-json');
         const wordsResultBadge  = document.getElementById('tts-words-result-badge');
         const wordsCountsEl     = document.getElementById('tts-words-counts');
@@ -3546,6 +3620,630 @@
             const pad = (v, w=2) => String(v).padStart(w, '0');
             return (h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`) + `.${pad(rem, 3)}`;
         };
+
+        const elevenCheckEls = {
+            summary: document.getElementById('tts-words-check-summary'),
+            exceptions: document.getElementById('tts-words-check-exceptions'),
+            clean: document.getElementById('tts-words-check-clean'),
+            scenesSection: document.getElementById('tts-words-check-scenes-section'),
+            scenesStatus: document.getElementById('tts-words-check-scenes-status'),
+            scenesReasons: document.getElementById('tts-words-scenes-check-reasons'),
+            scenesValidation: true,
+        };
+        const whisperCheckEls = {
+            summary: document.getElementById('whisper-words-check-summary'),
+            scenesSection: document.getElementById('whisper-words-check-scenes-section'),
+            scenesStatus: document.getElementById('whisper-words-check-scenes-status'),
+            scenesReasons: document.getElementById('whisper-words-scenes-check-reasons'),
+            scenesValidation: true,
+        };
+
+        /** Окно ±N слов — только чтобы найти пару скобок; в исключения идёт всё между open и close. */
+        const WORD_TIMINGS_SSML_LOOK = 5;
+        const WORD_TIMINGS_SSML_MAX_SPAN = 20;
+
+        function wordTimingsBracketRole(word) {
+            const w = String(word ?? '').trim();
+            if (!w) return null;
+            const hasAngleOpen = w.includes('<');
+            const hasAngleClose = w.includes('/>') || (w.includes('>') && !w.includes('<'));
+            const hasSquareOpen = w.includes('[');
+            const hasSquareClose = w.includes(']');
+            if (hasAngleOpen && hasAngleClose) return 'both';
+            if (hasSquareOpen && hasSquareClose) return 'both';
+            if (hasAngleOpen || (hasSquareOpen && !hasSquareClose)) return 'open';
+            if (hasAngleClose || hasSquareClose) return 'close';
+            return null;
+        }
+
+        /** Индексы слов-исключений (SSML / теги Eleven). */
+        function collectWordTimingsExceptionIndices(words) {
+            const excluded = new Set();
+            const n = words.length;
+            const look = WORD_TIMINGS_SSML_LOOK;
+            const markRange = (from, to) => {
+                const a = Math.max(0, from);
+                const b = Math.min(n - 1, to);
+                for (let k = a; k <= b; k++) excluded.add(k);
+            };
+            for (let i = 0; i < n; i++) {
+                if (excluded.has(i)) continue;
+                const role = wordTimingsBracketRole(words[i]?.word);
+                if (role === 'both') {
+                    markRange(i, i);
+                    continue;
+                }
+                if (role !== 'open') continue;
+                let closeIdx = -1;
+                const searchEnd = Math.min(n - 1, i + WORD_TIMINGS_SSML_MAX_SPAN);
+                for (let j = i + 1; j <= searchEnd; j++) {
+                    const rj = wordTimingsBracketRole(words[j]?.word);
+                    if (rj === 'close' || rj === 'both') {
+                        closeIdx = j;
+                        break;
+                    }
+                }
+                if (closeIdx >= 0) {
+                    markRange(i, closeIdx);
+                } else {
+                    markRange(i, Math.min(n - 1, i + look));
+                }
+            }
+            for (let i = 0; i < n; i++) {
+                if (excluded.has(i)) continue;
+                if (wordTimingsBracketRole(words[i]?.word) !== 'close') continue;
+                let openIdx = -1;
+                for (let j = Math.max(0, i - look); j < i; j++) {
+                    if (excluded.has(j)) continue;
+                    const rj = wordTimingsBracketRole(words[j]?.word);
+                    if (rj === 'open' || rj === 'both') {
+                        openIdx = j;
+                    }
+                }
+                if (openIdx >= 0) markRange(openIdx, i);
+                else markRange(Math.max(0, i - look), i);
+            }
+            return excluded;
+        }
+
+        function splitWordTimingsWords(doc) {
+            const words = Array.isArray(doc?.words) ? doc.words : [];
+            const skip = collectWordTimingsExceptionIndices(words);
+            const excluded = [];
+            const clean = [];
+            words.forEach((item, idx) => {
+                if (!item || typeof item !== 'object') return;
+                if (skip.has(idx)) excluded.push(item);
+                else clean.push(item);
+            });
+            return { excluded, clean, total: words.length };
+        }
+
+        const WORD_TIMINGS_SCENE_THRESH = {
+            TAIL_GAP_FAIL_MS: 5000,
+            TAIL_GAP_WARN_MS: 2000,
+            HEAD_GAP_FAIL_MS: 2000,
+            ZERO_DUR_FAIL_RATIO: 0.05,
+            SAME_START_RATIO_FAIL: 0.15,
+            CLUSTER_FAIL_SIZE: 8,
+            OVERLAP_MIN_MS: 50,
+            OVERLAP_FAIL_COUNT: 1,
+            BACKWARD_END_MS: 200,
+            BACKWARD_END_FAIL_COUNT: 3,
+            WINDOW_MS: 30000,
+            MIN_CLEAN_WORDS: 20,
+            MIN_LAST_END_FOR_LONG_MS: 5000,
+            LONG_AUDIO_MS: 60000,
+        };
+
+        function findMaxSameStartCluster(clean) {
+            let maxLen = 0;
+            let maxStart = 0;
+            let maxIdx = 0;
+            let i = 0;
+            while (i < clean.length) {
+                const st = Number(clean[i].start_ms);
+                let j = i + 1;
+                while (j < clean.length && Number(clean[j].start_ms) === st) j += 1;
+                const len = j - i;
+                if (len > maxLen) {
+                    maxLen = len;
+                    maxStart = st;
+                    maxIdx = i;
+                }
+                i = len > 1 ? j : i + 1;
+            }
+            return { size: maxLen, startMs: maxStart, index: maxIdx };
+        }
+
+        function findDeadCoverageWindows(clean, firstStart, lastEnd, windowMs) {
+            const dead = [];
+            if (!clean.length || lastEnd <= firstStart) return dead;
+            const w = windowMs || WORD_TIMINGS_SCENE_THRESH.WINDOW_MS;
+            for (let t = firstStart; t < lastEnd - 500; t += w) {
+                const tEnd = Math.min(t + w, lastEnd);
+                const hasWord = clean.some((item) => {
+                    const end = Number(item.end_ms);
+                    return Number.isFinite(end) && end > t && end <= tEnd + 50;
+                });
+                if (!hasWord) dead.push({ fromMs: t, toMs: tEnd });
+            }
+            return dead;
+        }
+
+        /** Проверка: можно ли использовать тайминги для JSON сцен (только чистые слова). */
+        function validateWordTimingsForScenes(doc) {
+            const T = WORD_TIMINGS_SCENE_THRESH;
+            const checks = [];
+            const reasons = [];
+            const warns = [];
+            const addCheck = (label, ok, detail, failItems) => {
+                const row = {
+                    label,
+                    ok: !!ok,
+                    detail: ok ? '' : String(detail || '').trim(),
+                    failItems: ok ? [] : (Array.isArray(failItems) ? failItems.filter(Boolean) : []),
+                };
+                checks.push(row);
+                if (!row.ok && row.detail) reasons.push(`${label}: ${row.detail}`);
+            };
+            if (!doc || typeof doc !== 'object') {
+                addCheck('Длина MP3', false, 'нет данных таймингов');
+                addCheck('Нулевая длина', false, '—');
+                addCheck('Схлопывание ms', false, '—');
+                addCheck('Перекрытия', false, '—');
+                addCheck('Пауза более 30 с', false, '—');
+                return { ok: false, status: 'no', reasons, warns, checks, meta: {} };
+            }
+            const mp3Ms = Number(doc.total_duration_ms);
+            const { clean } = splitWordTimingsWords(doc);
+            let lastEnd = 0;
+            let firstStart = Infinity;
+            clean.forEach((w) => {
+                const s = Number(w.start_ms);
+                const e = Number(w.end_ms);
+                if (Number.isFinite(e) && e > lastEnd) lastEnd = e;
+                if (Number.isFinite(s) && s < firstStart) firstStart = s;
+            });
+            if (!Number.isFinite(firstStart)) firstStart = 0;
+
+            const mp3Parts = [];
+            let mp3Ok = true;
+            if (!Number.isFinite(mp3Ms) || mp3Ms <= 0) {
+                mp3Ok = false;
+                mp3Parts.push('нет total_duration_ms');
+            }
+            if (clean.length < T.MIN_CLEAN_WORDS) {
+                mp3Ok = false;
+                mp3Parts.push(`мало чистых слов: ${clean.length}`);
+            }
+            if (Number.isFinite(mp3Ms) && mp3Ms > T.LONG_AUDIO_MS && lastEnd < T.MIN_LAST_END_FOR_LONG_MS) {
+                mp3Ok = false;
+                mp3Parts.push(`шкала слов ${formatTtsMs(lastEnd)} при MP3 ${formatTtsMs(mp3Ms)}`);
+            }
+            if (Number.isFinite(mp3Ms) && mp3Ms > 0 && lastEnd > 0) {
+                const tailGapMs = mp3Ms - lastEnd;
+                if (tailGapMs > T.TAIL_GAP_FAIL_MS) {
+                    mp3Ok = false;
+                    mp3Parts.push(`хвост ${formatTtsMs(tailGapMs)} без слов`);
+                } else if (tailGapMs > T.TAIL_GAP_WARN_MS) {
+                    warns.push(`Разрыв с MP3: ${formatTtsMs(tailGapMs)} после последнего слова.`);
+                }
+                if (firstStart > T.HEAD_GAP_FAIL_MS) {
+                    mp3Ok = false;
+                    mp3Parts.push(`начало @ ${formatTtsMs(firstStart)}`);
+                }
+            } else if (mp3Ok && lastEnd <= 0 && clean.length) {
+                mp3Ok = false;
+                mp3Parts.push('нет end_ms у чистых слов');
+            }
+            addCheck('Длина MP3', mp3Ok, mp3Parts.join('; ') || '—');
+
+            const zeroDur = clean.filter((w) => (Number(w.end_ms) - Number(w.start_ms)) <= 0);
+            let zeroOk = zeroDur.length === 0;
+            let zeroDetail = '';
+            let zeroItems = [];
+            if (!zeroOk) {
+                zeroDetail = `${zeroDur.length} слов`;
+                zeroItems = zeroDur.map((w) => formatWordTimingsTokenLine(w)).filter(Boolean);
+            }
+            addCheck('Нулевая длина', zeroOk, zeroDetail, zeroItems);
+
+            let collapseOk = true;
+            let collapseDetail = '';
+            if (clean.length >= 2) {
+                let sameStartPairs = 0;
+                for (let i = 1; i < clean.length; i++) {
+                    if (Number(clean[i].start_ms) === Number(clean[i - 1].start_ms)) sameStartPairs += 1;
+                }
+                const sameRatio = sameStartPairs / (clean.length - 1);
+                const cluster = findMaxSameStartCluster(clean);
+                if (sameRatio >= T.SAME_START_RATIO_FAIL) {
+                    collapseOk = false;
+                    collapseDetail = `${sameStartPairs} пар с одним start_ms (${Math.round(sameRatio * 100)}%)`;
+                }
+                if (cluster.size >= T.CLUSTER_FAIL_SIZE) {
+                    collapseOk = false;
+                    const extra = `кластер ${cluster.size} слов @ ${cluster.startMs} мс`;
+                    collapseDetail = collapseDetail ? `${collapseDetail}; ${extra}` : extra;
+                }
+            }
+            addCheck('Схлопывание ms', collapseOk, collapseDetail);
+
+            let overlapOk = true;
+            let overlapDetail = '';
+            let overlapItems = [];
+            if (clean.length >= 2) {
+                const overlaps = [];
+                let backwardEndCount = 0;
+                for (let i = 1; i < clean.length; i++) {
+                    const prevEnd = Number(clean[i - 1].end_ms);
+                    const currStart = Number(clean[i].start_ms);
+                    if (currStart < prevEnd - T.OVERLAP_MIN_MS) {
+                        overlaps.push({
+                            prev: clean[i - 1],
+                            curr: clean[i],
+                            ms: prevEnd - currStart,
+                        });
+                    }
+                    if (Number(clean[i].end_ms) < Number(clean[i - 1].end_ms) - T.BACKWARD_END_MS) backwardEndCount += 1;
+                }
+                if (overlaps.length >= T.OVERLAP_FAIL_COUNT) {
+                    overlapOk = false;
+                    overlapDetail = `${overlaps.length} перекрытий >${T.OVERLAP_MIN_MS} мс`;
+                    overlapItems = overlaps.map((o) => {
+                        const pw = String(o.prev.word || '').slice(0, 40);
+                        const cw = String(o.curr.word || '').slice(0, 40);
+                        return `«${pw}»→«${cw}» ${Math.round(o.ms)} мс`;
+                    });
+                }
+                if (backwardEndCount >= T.BACKWARD_END_FAIL_COUNT) {
+                    overlapOk = false;
+                    const extra = `откат end_ms: ${backwardEndCount} раз`;
+                    overlapDetail = overlapDetail ? `${overlapDetail}; ${extra}` : extra;
+                }
+            }
+            addCheck('Перекрытия', overlapOk, overlapDetail, overlapItems);
+
+            const deadWindows = findDeadCoverageWindows(clean, firstStart, lastEnd, T.WINDOW_MS);
+            let coverOk = deadWindows.length === 0;
+            let coverDetail = '';
+            if (!coverOk) {
+                const w0 = deadWindows[0];
+                coverDetail = `окно ${formatTtsMs(w0.fromMs)}–${formatTtsMs(w0.toMs)}`;
+                if (deadWindows.length > 1) coverDetail += ` (+${deadWindows.length - 1})`;
+            }
+            addCheck('Пауза более 30 с', coverOk, coverDetail);
+
+            const ok = checks.every((c) => c.ok);
+            return {
+                ok,
+                status: ok ? 'ok' : 'no',
+                reasons,
+                warns,
+                checks,
+                meta: { mp3Ms, lastEnd, firstStart, cleanCount: clean.length },
+            };
+        }
+
+        const WORD_TIMINGS_SCENES_CHECK_LABEL_W = 18;
+
+        function escWordTimingsScenesCheck(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function buildWordTimingsScenesCheckTreeHtml(v) {
+            const checks = (v && v.checks) || [];
+            if (!checks.length) return '';
+            return checks.map((c, i) => {
+                const branch = i === checks.length - 1 ? '└─' : '├─';
+                const label = String(c.label || '').padEnd(WORD_TIMINGS_SCENES_CHECK_LABEL_W, ' ');
+                const status = c.ok ? 'OK' : 'FAIL';
+                let main = `${branch} ${label} ${status}`;
+                if (!c.ok && c.detail) main += ` — ${c.detail}`;
+                const mainHtml = `<div class="tts-word-timings-scenes-check-row__main">${escWordTimingsScenesCheck(main)}</div>`;
+                let items = '';
+                if (!c.ok && c.failItems && c.failItems.length) {
+                    const rows = c.failItems.map((line) => (
+                        `<div class="tts-word-timings-scenes-check-row__item">${escWordTimingsScenesCheck(line)}</div>`
+                    )).join('');
+                    items = `<div class="tts-word-timings-scenes-check-row__items">${rows}</div>`;
+                }
+                return `<div class="tts-word-timings-scenes-check-row">${mainHtml}${items}</div>`;
+            }).join('');
+        }
+
+        function setWordTimingsScenesCheckStatus(statusEl, text, className) {
+            if (!statusEl) return;
+            statusEl.textContent = text;
+            statusEl.className = 'tts-word-timings-check-scenes-status ' + (className || 'rewrite-scene-writer-check__wait');
+        }
+
+        function renderWordTimingsScenesValidation(els, doc, opts) {
+            const statusEl = els && els.scenesStatus;
+            const treeEl = els && els.scenesReasons;
+            const sectionEl = els && els.scenesSection;
+            if (!statusEl) return null;
+            if (opts && opts.statusMessage) {
+                setWordTimingsScenesCheckStatus(statusEl, '—', 'rewrite-scene-writer-check__wait');
+                if (treeEl) {
+                    treeEl.innerHTML = '';
+                    treeEl.classList.add('hidden');
+                }
+                if (sectionEl) sectionEl.dataset.scenesOk = '';
+                return null;
+            }
+            if (!doc || typeof doc !== 'object') {
+                setWordTimingsScenesCheckStatus(statusEl, '—', 'rewrite-scene-writer-check__wait');
+                if (treeEl) {
+                    treeEl.innerHTML = '';
+                    treeEl.classList.add('hidden');
+                }
+                if (sectionEl) sectionEl.dataset.scenesOk = '';
+                return null;
+            }
+            const v = validateWordTimingsForScenes(doc);
+            setWordTimingsScenesCheckStatus(
+                statusEl,
+                v.ok ? 'OK' : 'NO',
+                v.ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no',
+            );
+            if (treeEl) {
+                const treeHtml = buildWordTimingsScenesCheckTreeHtml(v);
+                let warnHtml = '';
+                if (v.ok && v.warns && v.warns.length) {
+                    warnHtml = '<div class="tts-word-timings-scenes-check-warns">' + v.warns.map((w) => (
+                        '<div class="tts-word-timings-scenes-check-warns__line">• ' + escWordTimingsScenesCheck(w) + '</div>'
+                    )).join('') + '</div>';
+                }
+                treeEl.innerHTML = (treeHtml || '') + warnHtml;
+                treeEl.classList.toggle('hidden', !treeHtml && !warnHtml);
+            }
+            if (sectionEl) sectionEl.dataset.scenesOk = v.ok ? '1' : '0';
+            return v;
+        }
+        function formatWordTimingsTokenLine(item) {
+            const w = String(item?.word ?? '').trim();
+            if (!w) return '';
+            const start = item.start_ms;
+            const end = item.end_ms;
+            if (start != null && end != null) return `«${w}» @ ${start}–${end} мс`;
+            if (start != null) return `«${w}» @ ${start} мс`;
+            return `«${w}»`;
+        }
+
+        /** Длительность для UI — по end_ms последнего слова, не по длине MP3. */
+        function getWordTimingsLastEndMs(meta, wordsOptional) {
+            const words = wordsOptional || (Array.isArray(meta?.words) ? meta.words : []);
+            let maxEnd = 0;
+            words.forEach((w) => {
+                if (!w || typeof w !== 'object') return;
+                const end = Number(w.end_ms);
+                if (Number.isFinite(end) && end > maxEnd) maxEnd = end;
+            });
+            if (maxEnd > 0) return maxEnd;
+            const last = meta?.last_word;
+            if (last && last.end_ms != null) {
+                const end = Number(last.end_ms);
+                if (Number.isFinite(end) && end > 0) return end;
+            }
+            return 0;
+        }
+
+        function buildWordTimingsHeaderParts(meta) {
+            if (!meta || typeof meta !== 'object') return [];
+            const words = Array.isArray(meta.words) ? meta.words : [];
+            const totalWords = Number(meta.total_words || words.length || 0);
+            const durMs = getWordTimingsLastEndMs(meta, words);
+            const first = meta.first_word || words[0];
+            const last = meta.last_word || (words.length ? words[words.length - 1] : null);
+            const parts = [
+                `Слов: ${totalWords}`,
+                `Длительность: ${formatTtsMs(durMs)}`,
+            ];
+            if (first) parts.push(`Первое: «${String(first.word).slice(0, 20)}» @ ${first.start_ms} мс`);
+            if (last) parts.push(`Последнее: «${String(last.word).slice(0, 20)}» @ ${last.end_ms} мс`);
+            return parts;
+        }
+
+        function buildWordTimingsCompactCounts(meta) {
+            if (!meta || typeof meta !== 'object') return '';
+            const words = Array.isArray(meta.words) ? meta.words : [];
+            const n = Number(meta.total_words || words.length || 0);
+            if (!n) return '';
+            const dur = formatTtsMs(getWordTimingsLastEndMs(meta, words));
+            return `${ttsFormatNumRu(n)} сл. · ${dur}`;
+        }
+
+        function syncWordTimingsPanelCompact(compactBadgeEl, compactCountsEl, resultBadgeEl, meta) {
+            const has = !!(meta && (meta.words_url || (Array.isArray(meta.words) && meta.words.length)));
+            if (compactBadgeEl && resultBadgeEl) {
+                compactBadgeEl.classList.toggle('badge-yes', resultBadgeEl.classList.contains('badge-yes'));
+                compactBadgeEl.classList.toggle('badge-no', resultBadgeEl.classList.contains('badge-no'));
+            } else if (compactBadgeEl) {
+                compactBadgeEl.classList.toggle('badge-yes', has);
+                compactBadgeEl.classList.toggle('badge-no', !has);
+            }
+            if (compactCountsEl) {
+                compactCountsEl.textContent = has ? buildWordTimingsCompactCounts(meta) : '';
+            }
+        }
+
+        function buildWordTimingsCheckSummary(meta) {
+            if (!meta || typeof meta !== 'object') return '';
+            const totalWords = Number(meta.total_words || (meta.words && meta.words.length) || 0);
+            const words = Array.isArray(meta.words) ? meta.words : [];
+            const durMs = getWordTimingsLastEndMs(meta, words);
+            const first = meta.first_word || (meta.words && meta.words[0]);
+            const last = meta.last_word || (meta.words && meta.words[meta.words.length - 1]);
+            const lines = [
+                `Слов: ${totalWords}`,
+                `Длительность: ${formatTtsMs(durMs)}`,
+            ];
+            if (meta.model) lines.push(`Модель: ${meta.model}`);
+            if (meta.device) lines.push(`Устройство: ${meta.device}`);
+            if (meta.language) lines.push(`Язык: ${meta.language}`);
+            if (meta.audio_filename) lines.push(`Аудио: ${meta.audio_filename}`);
+            if (meta.voice_name) lines.push(`Голос: ${meta.voice_name}`);
+            if (first) lines.push(`Первое: «${String(first.word).slice(0, 24)}» @ ${first.start_ms} мс`);
+            if (last) lines.push(`Последнее: «${String(last.word).slice(0, 24)}» @ ${last.end_ms} мс`);
+            return lines.join('\n');
+        }
+
+        function buildWordTimingsExceptionsText(excluded) {
+            if (!excluded.length) return 'Нет (0)';
+            const maxShow = 48;
+            const lines = [`Всего: ${excluded.length}`];
+            excluded.slice(0, maxShow).forEach((item) => {
+                const line = formatWordTimingsTokenLine(item);
+                if (line) lines.push(line);
+            });
+            if (excluded.length > maxShow) {
+                lines.push(`… ещё ${excluded.length - maxShow}`);
+            }
+            return lines.join('\n');
+        }
+
+        function buildWordTimingsCleanText(clean, totalAll) {
+            if (!clean.length) return totalAll ? 'Нет (0)' : '—';
+            const first = clean[0];
+            const last = clean[clean.length - 1];
+            const durMs = getWordTimingsLastEndMs(null, clean);
+            const lines = [
+                `Слов: ${clean.length}${totalAll != null ? ` (из ${totalAll})` : ''}`,
+                `Длительность: ${formatTtsMs(durMs)}`,
+            ];
+            if (first) lines.push(`Первое: «${String(first.word).slice(0, 24)}» @ ${first.start_ms} мс`);
+            if (last) lines.push(`Последнее: «${String(last.word).slice(0, 24)}» @ ${last.end_ms} мс`);
+            return lines.join('\n');
+        }
+
+        function renderWordTimingsCheck(els, doc, opts) {
+            const summaryEl = els && els.summary;
+            const exceptionsEl = els && els.exceptions;
+            const cleanEl = els && els.clean;
+            if (opts && opts.statusMessage) {
+                if (summaryEl) summaryEl.textContent = String(opts.statusMessage);
+                if (exceptionsEl) exceptionsEl.textContent = '—';
+                if (cleanEl) cleanEl.textContent = '—';
+                if (els && els.scenesValidation) renderWordTimingsScenesValidation(els, null, opts);
+                return;
+            }
+            if (!doc || typeof doc !== 'object') {
+                if (summaryEl) summaryEl.textContent = '—';
+                if (exceptionsEl) exceptionsEl.textContent = '—';
+                if (cleanEl) cleanEl.textContent = '—';
+                if (els && els.scenesValidation) renderWordTimingsScenesValidation(els, null, opts);
+                return;
+            }
+            const { excluded, clean, total } = splitWordTimingsWords(doc);
+            if (summaryEl) summaryEl.textContent = buildWordTimingsCheckSummary(doc) || '—';
+            if (exceptionsEl) exceptionsEl.textContent = buildWordTimingsExceptionsText(excluded);
+            if (cleanEl) cleanEl.textContent = buildWordTimingsCleanText(clean, total);
+            if (els && els.scenesValidation) renderWordTimingsScenesValidation(els, doc, opts);
+        }
+
+        function clearWordTimingsCheck(els) {
+            renderWordTimingsCheck(els, null);
+        }
+
+        function syncWordTimingsJsonEditable(ta) {
+            if (!ta) return;
+            const raw = (ta.value || '').trim();
+            const locked = !raw
+                || raw === 'Pending'
+                || raw.startsWith('Загрузка')
+                || ta.classList.contains('rewrite-stage-result--busy');
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+        }
+
+        function setWordTimingsJsonField(ta, value, opts) {
+            if (!ta) return;
+            const busy = !!(opts && opts.busy);
+            const err = !!(opts && opts.error);
+            ta.value = value == null ? '' : String(value);
+            ta.classList.toggle('rewrite-stage-result--busy', busy);
+            ta.classList.toggle('rewrite-stage-result--error', err);
+            if (!busy && !err && ta.value.trim()) {
+                ta.classList.remove('rewrite-stage-result--busy', 'rewrite-stage-result--error');
+            }
+            syncWordTimingsJsonEditable(ta);
+        }
+
+        function debounceWordTimingsJson(fn, ms) {
+            let t = null;
+            return function debounced() {
+                if (t) clearTimeout(t);
+                t = setTimeout(fn, ms);
+            };
+        }
+
+        function applyWordTimingsJsonFromTextarea(ta, checkEls, onDoc) {
+            if (!ta) return;
+            const raw = (ta.value || '').trim();
+            if (!raw || raw === 'Pending' || raw.startsWith('Загрузка')) {
+                ta.classList.remove('rewrite-stage-result--error');
+                if (checkEls) clearWordTimingsCheck(checkEls);
+                if (onDoc) onDoc(null);
+                return;
+            }
+            try {
+                const doc = JSON.parse(raw);
+                if (!doc || typeof doc !== 'object') throw new Error('not an object');
+                ta.classList.remove('rewrite-stage-result--error');
+                if (checkEls) renderWordTimingsCheck(checkEls, doc);
+                if (onDoc) onDoc(doc);
+            } catch (_) {
+                ta.classList.add('rewrite-stage-result--error');
+            }
+        }
+
+        function copyWordTimingsJson(ta, countsEl) {
+            if (!ta) return;
+            let raw = (ta.value || '').trim();
+            if (!raw || raw === 'Pending' || raw.startsWith('Загрузка')) return;
+            try {
+                if (raw.startsWith('{') || raw.startsWith('[')) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') raw = JSON.stringify(parsed, null, 2);
+                }
+            } catch (_) { /* as-is */ }
+            const saved = countsEl ? countsEl.textContent : '';
+            function showCopied() {
+                if (countsEl) {
+                    countsEl.setAttribute('data-copy-hold', '1');
+                    countsEl.textContent = 'Скопировано в буфер';
+                    setTimeout(() => {
+                        countsEl.removeAttribute('data-copy-hold');
+                        if (saved) countsEl.textContent = saved;
+                    }, 1600);
+                }
+            }
+            function fallbackExec() {
+                try {
+                    const tmp = document.createElement('textarea');
+                    tmp.value = raw;
+                    tmp.setAttribute('readonly', '');
+                    tmp.style.position = 'fixed';
+                    tmp.style.left = '-9999px';
+                    document.body.appendChild(tmp);
+                    tmp.focus();
+                    tmp.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(tmp);
+                    if (ok) showCopied();
+                } catch (_) { /* no-op */ }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(raw).then(showCopied).catch(fallbackExec);
+            } else {
+                fallbackExec();
+            }
+        }
 
         function setWordTimingsResultBadge(badgeEl, hasData) {
             if (!badgeEl) return;
@@ -3578,10 +4276,11 @@
                     wordsCountsEl.textContent = '';
                 } else {
                     const n = Number(doc.total_words || (doc.words || []).length || 0);
-                    const dur = formatTtsMs(Number(doc.total_duration_ms || 0));
+                    const dur = formatTtsMs(getWordTimingsLastEndMs(doc));
                     wordsCountsEl.textContent = `${n.toLocaleString('ru-RU')} сл. · ${dur}`;
                 }
             }
+            syncWordTimingsPanelCompact(wordsCompactBadge, wordsCompactCounts, wordsResultBadge, doc);
             if (timingsSourceEleven) timingsSourceEleven.disabled = !doc;
         }
 
@@ -3589,11 +4288,10 @@
             if (!wordsWrapEl) return;
             wordsWrapEl.setAttribute('aria-expanded', 'false');
             if (wordsBodyEl) wordsBodyEl.hidden = true;
-            if (wordsSummaryEl) wordsSummaryEl.textContent = '';
-            if (wordsJsonEl) {
-                wordsJsonEl.textContent = '';
-                wordsJsonEl.classList.add('rewrite-stage-result--busy');
-            }
+            if (wordsCompactCounts) wordsCompactCounts.textContent = '';
+            syncWordTimingsPanelCompact(wordsCompactBadge, wordsCompactCounts, wordsResultBadge, null);
+            setWordTimingsJsonField(wordsJsonEl, '', { busy: true });
+            clearWordTimingsCheck(elevenCheckEls);
             syncElevenWordsResultUi(null);
             lastWordsDoc = null;
             lastWordsFilename = '';
@@ -3604,6 +4302,7 @@
             if (!wordsWrapEl || !wordsBodyEl) return;
             wordsWrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             wordsBodyEl.hidden = !!collapsed;
+            wordsWrapEl.classList.toggle('tts-word-timings-panel--body-collapsed', !!collapsed);
         }
 
         async function renderTtsWordsFromUrl(finalData) {
@@ -3616,21 +4315,9 @@
             lastWordsFilename = finalData.words_filename || 'voiceover.words.json';
             lastWordsUrl = url;
 
-            const totalWords = Number(doc.total_words || (doc.words || []).length || 0);
-            const totalDurMs = Number(doc.total_duration_ms || 0);
-            const first = doc.words && doc.words[0];
-            const last  = doc.words && doc.words[doc.words.length - 1];
-            const parts = [
-                `Слов: ${totalWords}`,
-                `Длительность: ${formatTtsMs(totalDurMs)}`,
-            ];
-            if (first) parts.push(`Первое: «${String(first.word).slice(0, 20)}» @ ${first.start_ms} мс`);
-            if (last)  parts.push(`Последнее: «${String(last.word).slice(0, 20)}» @ ${last.end_ms} мс`);
-            if (wordsSummaryEl) wordsSummaryEl.textContent = parts.join(' · ');
-            if (wordsJsonEl) {
-                wordsJsonEl.textContent = JSON.stringify(doc, null, 2);
-                wordsJsonEl.classList.remove('rewrite-stage-result--busy', 'rewrite-stage-result--error');
-            }
+            setWordTimingsJsonField(wordsJsonEl, JSON.stringify(doc, null, 2));
+            lastWordsDoc = doc;
+            renderWordTimingsCheck(elevenCheckEls, doc);
             syncElevenWordsResultUi(doc);
             setTtsWordsCollapsed(true);
         }
@@ -3679,32 +4366,31 @@
             });
         }
         if (wordsCopyBtn) {
-            wordsCopyBtn.addEventListener('click', async () => {
-                if (!lastWordsDoc) return;
-                try {
-                    await navigator.clipboard.writeText(JSON.stringify(lastWordsDoc, null, 2));
-                    if (wordsCopyStatus) {
-                        wordsCopyStatus.textContent = 'JSON скопирован';
-                        wordsCopyStatus.classList.remove('hidden');
-                        setTimeout(() => wordsCopyStatus.classList.add('hidden'), 1800);
-                    }
-                } catch (e) {
-                    if (wordsCopyStatus) {
-                        wordsCopyStatus.textContent = 'Не удалось скопировать';
-                        wordsCopyStatus.classList.remove('hidden');
-                        setTimeout(() => wordsCopyStatus.classList.add('hidden'), 1800);
-                    }
-                }
-            });
+            wordsCopyBtn.addEventListener('click', () => copyWordTimingsJson(wordsJsonEl, wordsCountsEl));
+        }
+        if (wordsJsonEl) {
+            syncWordTimingsJsonEditable(wordsJsonEl);
+            const onElevenJsonEdited = debounceWordTimingsJson(() => {
+                applyWordTimingsJsonFromTextarea(wordsJsonEl, elevenCheckEls, (doc) => {
+                    lastWordsDoc = doc;
+                    syncElevenWordsResultUi(doc);
+                });
+            }, 400);
+            wordsJsonEl.addEventListener('input', onElevenJsonEdited);
+            wordsJsonEl.addEventListener('change', onElevenJsonEdited);
         }
 
         // --- Тайминги слов от локального Whisper (faster-whisper) ---
         const whisperWrapEl       = document.getElementById('whisper-words-wrap');
         const whisperHeaderEl     = document.getElementById('whisper-words-header');
-        const whisperRunBtn       = document.getElementById('whisper-words-run');
-        const whisperStatusEl     = document.getElementById('whisper-words-status');
+        const whisperWordsResultSlot = document.getElementById('whisper-words-result-slot');
+        const whisperWordsStatusRow  = document.getElementById('whisper-words-status-row');
+        const whisperWordsStatusText = document.getElementById('whisper-words-status-text');
+        const whisperWordsCancelBtn  = document.getElementById('whisper-words-cancel-btn');
         const whisperBodyEl       = document.getElementById('whisper-words-body');
-        const whisperSummaryEl    = document.getElementById('whisper-words-summary');
+        const whisperCompactBadge = document.getElementById('whisper-words-compact-badge');
+        const whisperCompactCounts = document.getElementById('whisper-words-compact-counts');
+        const whisperRunBtns = () => document.querySelectorAll('.whisper-words-run');
         const whisperJsonEl       = document.getElementById('whisper-words-json');
         const whisperResultBadge  = document.getElementById('whisper-words-result-badge');
         const whisperCountsEl     = document.getElementById('whisper-words-counts');
@@ -3716,73 +4402,175 @@
         let lastWhisperFilename = '';
         let lastWhisperUrl = '';
         let whisperRunStartedAt = 0;
+        let whisperGenBusy = false;
+        let whisperGenAbort = null;
+
+        function whisperHasResultDoc(doc) {
+            const d = doc || lastWhisperDoc;
+            if (d && Array.isArray(d.words) && d.words.length > 0) return true;
+            if (!whisperJsonEl) return false;
+            const raw = (whisperJsonEl.value || '').trim();
+            if (!raw || !raw.startsWith('{')) return false;
+            try {
+                const parsed = JSON.parse(raw);
+                return !!(parsed && Array.isArray(parsed.words) && parsed.words.length > 0);
+            } catch (_) {
+                return false;
+            }
+        }
+
+        function setWhisperWordsPendingUi(isPending) {
+            if (!whisperWordsResultSlot) return;
+            if (isPending) {
+                clearWhisperWordsError();
+                whisperWordsResultSlot.setAttribute('data-status', 'pending');
+                whisperWordsStatusRow?.classList.remove('hidden');
+                if (whisperWordsStatusText) {
+                    whisperWordsStatusText.textContent = 'Pending';
+                    whisperWordsStatusText.classList.remove('slot-status-with-spinner');
+                }
+                whisperWordsCancelBtn?.classList.add('hidden');
+                if (whisperJsonEl) {
+                    whisperJsonEl.value = '';
+                    whisperJsonEl.classList.remove('rewrite-stage-result--error');
+                }
+                clearWordTimingsCheck(whisperCheckEls);
+            } else if (whisperWordsResultSlot.getAttribute('data-status') === 'pending') {
+                whisperWordsResultSlot.setAttribute('data-status', 'done');
+                whisperWordsStatusRow?.classList.add('hidden');
+            }
+        }
+
+        function setWhisperWordsGenerating(active, message) {
+            if (active) {
+                whisperWordsResultSlot?.setAttribute('data-status', 'generating');
+                whisperWordsStatusRow?.classList.remove('hidden');
+                whisperWordsCancelBtn?.classList.remove('hidden');
+                if (whisperWordsStatusText) {
+                    whisperWordsStatusText.textContent = String(message || 'Локальный Whisper…');
+                    whisperWordsStatusText.classList.add('slot-status-with-spinner');
+                }
+            } else if (whisperWordsResultSlot?.getAttribute('data-status') === 'generating') {
+                const has = whisperHasResultDoc();
+                if (has) {
+                    whisperWordsResultSlot?.setAttribute('data-status', 'done');
+                    whisperWordsStatusRow?.classList.add('hidden');
+                } else {
+                    setWhisperWordsPendingUi(true);
+                }
+            }
+        }
+
+        function setWhisperWordsError(message) {
+            whisperWordsResultSlot?.setAttribute('data-status', 'error');
+            whisperWordsStatusRow?.classList.remove('hidden');
+            whisperWordsCancelBtn?.classList.add('hidden');
+            if (whisperWordsStatusText) {
+                whisperWordsStatusText.textContent = String(message || 'Ошибка Whisper');
+                whisperWordsStatusText.classList.remove('slot-status-with-spinner');
+            }
+        }
+
+        function clearWhisperWordsError() {
+            if (whisperWordsResultSlot?.getAttribute('data-status') === 'error') {
+                whisperWordsResultSlot?.setAttribute('data-status', '');
+                whisperWordsStatusRow?.classList.add('hidden');
+            }
+        }
+
+        function syncWhisperRunBtnUi() {
+            whisperRunBtns().forEach((btn) => {
+                btn.classList.toggle('btn-regenerate--busy', !!whisperGenBusy);
+                btn.disabled = !!whisperGenBusy;
+            });
+        }
 
         function setWhisperWordsCollapsed(collapsed) {
             if (!whisperWrapEl || !whisperBodyEl) return;
             whisperWrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             whisperBodyEl.hidden = !!collapsed;
+            whisperWrapEl.classList.toggle('tts-word-timings-panel--body-collapsed', !!collapsed);
         }
 
         function syncWhisperWordsResultUi(meta, doc) {
-            const hasData = !!(meta && meta.words_url);
+            const hasData = whisperHasResultDoc(doc);
             setWordTimingsResultBadge(whisperResultBadge, hasData);
+            if (!hasData) {
+                setWhisperWordsPendingUi(true);
+            } else if (whisperWordsResultSlot?.getAttribute('data-status') === 'pending') {
+                setWhisperWordsPendingUi(false);
+            }
             if (whisperCountsEl) {
                 if (!hasData) {
                     whisperCountsEl.textContent = '';
                 } else {
-                    const n = Number((doc && doc.total_words) || meta.total_words || 0);
-                    const dur = formatTtsMs(Number((doc && doc.total_duration_ms) || meta.total_duration_ms || 0));
+                    const merged = Object.assign({}, meta || {}, doc || {});
+                    const n = Number(merged.total_words || (merged.words && merged.words.length) || 0);
+                    const dur = formatTtsMs(getWordTimingsLastEndMs(merged));
                     whisperCountsEl.textContent = `${n.toLocaleString('ru-RU')} сл. · ${dur}`;
                 }
             }
+            const merged = hasData ? Object.assign({}, meta || {}, doc || {}) : null;
+            syncWordTimingsPanelCompact(whisperCompactBadge, whisperCompactCounts, whisperResultBadge, merged);
             if (timingsSourceWhisper) timingsSourceWhisper.disabled = !hasData;
+        }
+
+        function applyWhisperWordsDoc(meta, doc) {
+            if (!whisperWrapEl || !doc || typeof doc !== 'object') return;
+            setWhisperWordsPendingUi(false);
+            whisperWordsResultSlot?.setAttribute('data-status', 'done');
+            whisperWordsStatusRow?.classList.add('hidden');
+            lastWhisperDoc = doc;
+            lastWhisperFilename = (meta && meta.words_filename) || whisperLastWordsFilename || 'voiceover.whisper.words.json';
+            lastWhisperUrl = (meta && meta.words_url) || whisperLastWordsUrl || '';
+            if (whisperJsonEl) {
+                setWordTimingsJsonField(whisperJsonEl, JSON.stringify(doc, null, 2));
+            }
+            const merged = Object.assign({}, meta || whisperInitialMeta || {}, doc);
+            renderWordTimingsCheck(whisperCheckEls, merged);
+            syncWhisperWordsResultUi(meta || whisperInitialMeta, doc);
+            setWhisperWordsCollapsed(true);
+        }
+
+        function hydrateWhisperWordsFromTextarea() {
+            if (!whisperJsonEl) return false;
+            const raw = (whisperJsonEl.value || '').trim();
+            if (!raw || raw === 'Pending' || raw.startsWith('Загрузка') || !raw.startsWith('{')) return false;
+            try {
+                const doc = JSON.parse(raw);
+                applyWhisperWordsDoc(whisperInitialMeta, doc);
+                return true;
+            } catch (e) {
+                console.warn('whisper textarea JSON parse failed:', e);
+                return false;
+            }
+        }
+
+        async function loadWhisperWordsFromUrl(meta) {
+            if (!whisperWrapEl) return;
+            const m = meta && typeof meta === 'object' ? meta : {};
+            const url = m.words_url || whisperLastWordsUrl;
+            if (!url) {
+                setWhisperWordsPendingUi(true);
+                return;
+            }
+            clearWhisperWordsError();
+            whisperWordsResultSlot?.setAttribute('data-status', 'done');
+            whisperWordsStatusRow?.classList.add('hidden');
+            if (whisperJsonEl) setWordTimingsJsonField(whisperJsonEl, 'Загрузка JSON…', { busy: true });
+            const r = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+            if (!r.ok) throw new Error(`whisper.words.json HTTP ${r.status}`);
+            const doc = await r.json();
+            applyWhisperWordsDoc(m, doc);
         }
 
         function renderWhisperWordsFromFinal(finalEv) {
             if (!whisperWrapEl) return;
-            lastWhisperDoc = finalEv && typeof finalEv === 'object' ? finalEv : null;
-            lastWhisperFilename = finalEv?.words_filename || 'voiceover.whisper.words.json';
-            lastWhisperUrl = finalEv?.words_url || '';
-
-            const totalWords = Number(finalEv?.total_words || 0);
-            const totalDurMs = Number(finalEv?.total_duration_ms || 0);
-            const first = finalEv?.first_word;
-            const last  = finalEv?.last_word;
-            const parts = [
-                `Слов: ${totalWords}`,
-                `Длительность: ${formatTtsMs(totalDurMs)}`,
-            ];
-            if (finalEv?.model)    parts.push(`Модель: ${finalEv.model}`);
-            if (finalEv?.device)   parts.push(`Устройство: ${finalEv.device}`);
-            if (finalEv?.language) parts.push(`Язык: ${finalEv.language}`);
-            if (first) parts.push(`Первое: «${String(first.word).slice(0, 20)}» @ ${first.start_ms} мс`);
-            if (last)  parts.push(`Последнее: «${String(last.word).slice(0, 20)}» @ ${last.end_ms} мс`);
-            if (whisperSummaryEl) whisperSummaryEl.textContent = parts.join(' · ');
-            syncWhisperWordsResultUi(finalEv, null);
-            if (whisperJsonEl) {
-                whisperJsonEl.textContent = 'Загрузка JSON…';
-                whisperJsonEl.classList.add('rewrite-stage-result--busy');
-                whisperJsonEl.classList.remove('rewrite-stage-result--error');
-                if (lastWhisperUrl) {
-                    fetch(lastWhisperUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' })
-                        .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-                        .then((doc) => {
-                            lastWhisperDoc = doc;
-                            whisperJsonEl.textContent = JSON.stringify(doc, null, 2);
-                            whisperJsonEl.classList.remove('rewrite-stage-result--busy', 'rewrite-stage-result--error');
-                            syncWhisperWordsResultUi(finalEv, doc);
-                        })
-                        .catch((e) => {
-                            whisperJsonEl.textContent = 'Не удалось загрузить JSON: ' + (e?.message || e);
-                            whisperJsonEl.classList.remove('rewrite-stage-result--busy');
-                            whisperJsonEl.classList.add('rewrite-stage-result--error');
-                        });
-                } else {
-                    whisperJsonEl.textContent = '';
-                    whisperJsonEl.classList.add('rewrite-stage-result--busy');
-                }
-            }
-            setWhisperWordsCollapsed(true);
+            loadWhisperWordsFromUrl(finalEv || whisperInitialMeta || {}).catch((e) => {
+                console.warn('whisper words load failed:', e);
+                setWhisperWordsPendingUi(true);
+                syncWhisperWordsResultUi(null, null);
+            });
         }
 
         bindWordTimingsPanel(whisperWrapEl, whisperBodyEl, whisperHeaderEl, setWhisperWordsCollapsed);
@@ -3799,40 +4587,45 @@
             });
         }
         if (whisperCopyBtn) {
-            whisperCopyBtn.addEventListener('click', async () => {
-                if (!lastWhisperDoc) return;
-                try {
-                    await navigator.clipboard.writeText(JSON.stringify(lastWhisperDoc, null, 2));
-                    if (whisperCopyStatus) {
-                        whisperCopyStatus.textContent = 'JSON скопирован';
-                        whisperCopyStatus.classList.remove('hidden');
-                        setTimeout(() => whisperCopyStatus.classList.add('hidden'), 1800);
-                    }
-                } catch (e) {
-                    if (whisperCopyStatus) {
-                        whisperCopyStatus.textContent = 'Не удалось скопировать';
-                        whisperCopyStatus.classList.remove('hidden');
-                        setTimeout(() => whisperCopyStatus.classList.add('hidden'), 1800);
-                    }
-                }
-            });
+            whisperCopyBtn.addEventListener('click', () => copyWordTimingsJson(whisperJsonEl, whisperCountsEl));
+        }
+        if (whisperJsonEl) {
+            syncWordTimingsJsonEditable(whisperJsonEl);
+            const onWhisperJsonEdited = debounceWordTimingsJson(() => {
+                applyWordTimingsJsonFromTextarea(whisperJsonEl, whisperCheckEls, (doc) => {
+                    lastWhisperDoc = doc;
+                    syncWhisperWordsResultUi(whisperInitialMeta, doc);
+                });
+            }, 400);
+            whisperJsonEl.addEventListener('input', onWhisperJsonEdited);
+            whisperJsonEl.addEventListener('change', onWhisperJsonEdited);
         }
 
-        if (whisperRunBtn) {
-            whisperRunBtn.addEventListener('click', async () => {
-                whisperRunBtn.disabled = true;
+        whisperWordsCancelBtn?.addEventListener('click', () => {
+            if (!whisperGenBusy || !whisperGenAbort) return;
+            try { whisperGenAbort.abort(); } catch (_) { /* ignore */ }
+        });
+
+        whisperRunBtns().forEach((btn) => btn.addEventListener('click', async () => {
+                if (whisperGenBusy) return;
+                whisperGenBusy = true;
+                syncWhisperRunBtnUi();
+                whisperGenAbort = new AbortController();
                 whisperRunStartedAt = Date.now();
-                const setStatus = (msg) => {
-                    if (whisperStatusEl) {
-                        whisperStatusEl.textContent = String(msg || '');
-                        whisperStatusEl.classList.remove('hidden');
-                    }
+                clearWhisperWordsError();
+                setWhisperWordsCollapsed(false);
+                const setBusy = (msg) => {
+                    const waitSec = Math.max(0, Math.floor((Date.now() - whisperRunStartedAt) / 1000));
+                    const line = `${String(msg || 'Whisper…')} (${waitSec}с)`;
+                    setWhisperWordsGenerating(true, line);
+                    renderWordTimingsCheck(whisperCheckEls, null, { statusMessage: line });
                 };
-                setStatus('Запуск локального Whisper…');
+                setBusy('Запуск локального Whisper…');
                 try {
                     const resp = await fetch(`/job/{{ job_id }}/whisper/words`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
+                        signal: whisperGenAbort.signal,
                         body: JSON.stringify({}),
                     });
                     if (!resp.ok) {
@@ -3848,12 +4641,15 @@
 
                     const handle = (ev) => {
                         if (!ev || typeof ev !== 'object') return;
-                        const waitSec = Math.max(0, Math.floor((Date.now() - whisperRunStartedAt) / 1000));
                         if (ev.type === 'error') throw new Error(String(ev.error || 'whisper failed'));
-                        if (ev.type === 'final') { finalEv = ev; setStatus(`${ev.message || 'Готово'} (${waitSec}с)`); return; }
+                        if (ev.type === 'final') {
+                            finalEv = ev;
+                            setBusy(ev.message || 'Готово');
+                            return;
+                        }
                         if (ev.type === 'status') {
                             const pct = Number.isFinite(Number(ev.progress_pct)) ? ` · ${ev.progress_pct.toFixed(1)}%` : '';
-                            setStatus(`${ev.message || ev.phase || 'Whisper…'} (${waitSec}с${pct})`);
+                            setBusy(`${ev.message || ev.phase || 'Whisper…'}${pct}`);
                         }
                     };
 
@@ -3878,29 +4674,25 @@
                     if (tail) { try { handle(JSON.parse(tail)); } catch (_) {} }
 
                     if (!finalEv) throw new Error('Whisper не вернул итог');
+                    setWhisperWordsGenerating(false);
                     renderWhisperWordsFromFinal(finalEv);
                 } catch (e) {
-                    setStatus('Ошибка: ' + (e?.message || String(e)));
+                    const aborted = e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1);
+                    if (aborted) {
+                        setWhisperWordsGenerating(false);
+                        renderWordTimingsCheck(whisperCheckEls, null, { statusMessage: 'Прогон Whisper отменён.' });
+                    } else {
+                        setWhisperWordsError(e?.message || String(e));
+                    }
                 } finally {
-                    whisperRunBtn.disabled = false;
+                    whisperGenBusy = false;
+                    whisperGenAbort = null;
+                    syncWhisperRunBtnUi();
+                    if (whisperWordsResultSlot?.getAttribute('data-status') !== 'error') {
+                        setWhisperWordsGenerating(false);
+                    }
                 }
-            });
-        }
-
-        // Авто-восстановление блока Whisper из сохранённого `.whisper.words.json`,
-        // чтобы после рефреша страницы данные не «исчезали»: бэкенд передал нам
-        // snapshot последнего прогона — рендерим его сразу при загрузке.
-        {% if whisper_initial_final_ev %}
-        try {
-            const _initialWhisperEv = {{ whisper_initial_final_ev|tojson }};
-            renderWhisperWordsFromFinal(_initialWhisperEv);
-            // По умолчанию свёрнуто, чтобы не перегружать страницу: блок и так
-            // показывает summary рядом с заголовком.
-            setWhisperWordsCollapsed(true);
-        } catch (_e) {
-            /* no-op: восстановление — best-effort */
-        }
-        {% endif %}
+            }));
 
         /** Как на сервере: elevenlabs_client.sentences_split_by_dot + pack_sentences_into_chunks.
          *  Между предложениями вставляется ведущий пробел — иначе при склейке
@@ -4002,7 +4794,8 @@
             if (charMaxEl) charMaxEl.textContent = String(max);
             const raw = textEl?.value || '';
             const n = raw.length;
-            const nChunks = countTtsChunks(raw, max);
+            const chunkMax = getTtsChunkCharsForTimestamps(raw);
+            const nChunks = countTtsChunks(raw, chunkMax);
             const over = n > max;
             if (ttsTextCountsEl) {
                 ttsTextCountsEl.textContent = ttsFormatNumRu(n) + ' симв. · ' + ttsFormatNumRu(ttsCountWords(raw)) + ' сл.';
@@ -4024,7 +4817,11 @@
             if (splitHintEl) {
                 if (nChunks > 1) {
                     splitHintEl.classList.remove('hidden');
-                    splitHintEl.textContent = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
+                    let hint = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
+                    if (chunkMax < max) {
+                        hint += ' (≤ ' + ttsFormatNumRu(chunkMax) + ' симв. на кусок для таймингов)';
+                    }
+                    splitHintEl.textContent = hint;
                 } else {
                     splitHintEl.classList.add('hidden');
                     splitHintEl.textContent = '';
@@ -4348,8 +5145,10 @@
                 player.pause();
                 syncTtsPlayingUi();
                 setTtsPlayerEmptyState(false);
+                setTtsPendingUi(false);
             } else {
                 setTtsPlayerEmptyState(true);
+                setTtsPendingUi(true);
             }
             setTtsResultGenerating(false);
             syncTtsResultBadge();
@@ -4564,6 +5363,7 @@
                 player.pause();
                 syncTtsPlayingUi();
                 setTtsPlayerEmptyState(false);
+                setTtsPendingUi(false);
                 setTtsResultGenerating(false);
                 syncTtsResultBadge();
 
@@ -4588,7 +5388,12 @@
                 }
                 errEl.classList.remove('hidden');
                 if (aborted) {
-                    ttsResultSlot?.setAttribute('data-status', '');
+                    if (ttsHasAudioSrc()) {
+                        ttsResultSlot?.setAttribute('data-status', 'done');
+                        ttsResultStatusRow?.classList.add('hidden');
+                    } else {
+                        setTtsPendingUi(true);
+                    }
                 } else {
                     ttsResultSlot?.setAttribute('data-status', 'error');
                     if (ttsResultStatusText) {
@@ -4622,6 +5427,31 @@
                     hideTtsWords();
                 }
             })();
+        }
+
+        // Whisper: JSON в textarea с сервера + fetch как запасной путь (как у Eleven).
+        if (whisperLastWordsUrl) {
+            (async () => {
+                try {
+                    if (!hydrateWhisperWordsFromTextarea()) {
+                        await loadWhisperWordsFromUrl(Object.assign({}, whisperInitialMeta || {}, {
+                            words_url: whisperLastWordsUrl,
+                            words_filename: whisperLastWordsFilename,
+                        }));
+                    }
+                    if (!whisperHasResultDoc()) {
+                        setWhisperWordsPendingUi(true);
+                        syncWhisperWordsResultUi(null, null);
+                    }
+                } catch (e) {
+                    console.warn('initial whisper.words.json autoload failed:', e);
+                    setWhisperWordsPendingUi(true);
+                    syncWhisperWordsResultUi(null, null);
+                }
+            })();
+        } else {
+            setWhisperWordsPendingUi(true);
+            syncWhisperWordsResultUi(null, null);
         }
     (function () {
         const modal = document.getElementById('job-delete-confirm-modal');
@@ -4777,6 +5607,40 @@
                 applyBtn.disabled = true;
                 const src = readTimingsSource();
                 const srcLabel = src === 'whisper' ? 'Whisper' : 'ElevenLabs';
+                const scenesGate = src === 'whisper'
+                    ? {
+                        sectionId: 'whisper-words-check-scenes-section',
+                        reasonsId: 'whisper-words-scenes-check-reasons',
+                        label: 'Whisper',
+                        alt: 'Eleven',
+                    }
+                    : {
+                        sectionId: 'tts-words-check-scenes-section',
+                        reasonsId: 'tts-words-scenes-check-reasons',
+                        label: 'Eleven',
+                        alt: 'Whisper',
+                    };
+                const scenesSec = document.getElementById(scenesGate.sectionId);
+                if (scenesSec && scenesSec.dataset.scenesOk === '0') {
+                    const reasonsEl = document.getElementById(scenesGate.reasonsId);
+                    const hint = (reasonsEl && reasonsEl.textContent.trim())
+                        ? '\n' + reasonsEl.textContent.trim().slice(0, 400)
+                        : '';
+                    const proceed = window.confirm(
+                        `Тайминги ${scenesGate.label} не прошли проверку для сцен (NO).`
+                        + ' Сцены могут получить неверные тайминги.'
+                        + hint
+                        + `\n\nВсё равно применить ${scenesGate.label}?`,
+                    );
+                    if (!proceed) {
+                        applyBtn.disabled = false;
+                        setApplyStatus(
+                            `Отменено: сначала исправьте тайминги ${scenesGate.label} или выберите ${scenesGate.alt}.`,
+                            true,
+                        );
+                        return;
+                    }
+                }
                 setApplyStatus(`Сопоставляем тайминги (${srcLabel})…`);
                 try {
                     const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');

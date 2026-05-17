@@ -142,16 +142,37 @@
                 </div>
             </div>
 
-            <div class="scene-card rewrite-source-card rewrite-source-card--body">
-                <div class="rewrite-source-body-header">
-                    <div class="scene-id rewrite-source-body-title">Исходный текст</div>
-                    <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
+            {% set _src_has_text = (rw.source_text or rw.last_text or '')|trim %}
+            {% set _ru_has_text = (rw.source_text_ru or '')|trim %}
+            {% set _sa_result = (rw.semantic_text_analysis or '')|trim %}
+            <div class="scene-card rewrite-source-card rewrite-source-card--body rewrite-source-inbox-card rewrite-source-inbox-card--collapsible rewrite-source-inbox-card--body-collapsed" id="rewrite-source-inbox-card" data-source-inbox-collapse="1" aria-label="Исходный текст" aria-expanded="false">
+                <div class="rewrite-source-inbox-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
+                    <div class="rewrite-source-inbox-title-row">
+                        <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                        <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Исходный текст</div>
+                    </div>
+                    <div class="rewrite-source-inbox-card-compact rewrite-stages-compact" aria-live="polite">
+                        <span class="rewrite-stages-compact__pair">
+                            <span class="slot-badge badge-{{ 'yes' if _src_has_text else 'no' }}" id="rewrite-source-header-compact-source-badge">Source</span>
+                        </span>
+                        <span class="rewrite-stages-compact__pair">
+                            <span class="slot-badge badge-{{ 'yes' if _ru_has_text else 'no' }}" id="rewrite-source-header-compact-ru-badge">Russian</span>
+                            <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-source-header-compact-ru-btn" title="Перевести на русский" aria-label="Перевести на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                        </span>
+                        <span class="rewrite-stages-compact__sep" aria-hidden="true">—</span>
+                        <span class="rewrite-stages-compact__pair">
+                            <span class="slot-badge badge-{{ 'yes' if _sa_result else 'no' }}" id="rewrite-source-header-compact-sa-badge">Semantic</span>
+                            <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-source-header-compact-sa-btn" title="Запустить Semantic" aria-label="Запустить Semantic" {% if not openai_key_set %}disabled{% endif %}>↻</button>
+                        </span>
+                        <span class="rewrite-source-counts rewrite-source-inbox-compact-counts" id="rewrite-source-header-compact-counts" aria-live="polite"></span>
+                    </div>
                 </div>
+                <div class="rewrite-source-inbox-collapsible-inner">
+                <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
                 <div class="rewrite-source-title-field slot-placeholder rewrite-slot-placeholder rewrite-slot--source-title">
                     <input type="text" id="rewrite-source-title" class="rewrite-source-title-input rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
                 </div>
                 <div class="rewrite-source-toolbar slot-header">
-                    {% set _src_has_text = (rw.source_text or rw.last_text or '')|trim %}
                     <span class="slot-badge badge-{{ 'yes' if _src_has_text else 'no' }}" id="rewrite-source-badge" data-text-badge-for="rewrite-source-text">Source</span>
                     <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.source_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-source-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                         <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
@@ -169,8 +190,6 @@
                 <div class="rewrite-source-translate-block">
                     {% set _tr_lp = (locked_prompts_state or {}).get('translate_to_ru') or {} %}
                     {% set _tr_present = _tr_lp.get('present')|default(false) %}
-                    {% set _ru_has_text = (rw.source_text_ru or '')|trim %}
-                    {% set _sa_result = (rw.semantic_text_analysis or '')|trim %}
                     {# Локальный выбор модели — применяется только к Russian (перевод) и Semantic (структура).
                        Дефолт всегда `gpt-4.1` (не зависит от глобальной «Model»). В payload идёт в `russian_semantic_model`.
                        Claude из этого списка исключаем — два этапа гоняем только на GPT-моделях. #}
@@ -324,6 +343,7 @@
                         </div>{# /.rewrite-stages-collapsible__body #}
                     </div>{# /.rewrite-stages-collapsible #}
                 </div>
+                </div>{# /.rewrite-source-inbox-collapsible-inner #}
             </div>
 
             {% set _rw_saved_tpl = (rw.rewrite_template or '')|trim %}

@@ -2852,7 +2852,15 @@
             var text = sourceEl.value;
             var chars = text.length;
             var words = countWords(text);
-            sourceCountsEl.textContent = formatNumRu(chars) + ' симв. · ' + formatNumRu(words) + ' сл.';
+            var countLine = formatNumRu(chars) + ' симв. · ' + formatNumRu(words) + ' сл.';
+            sourceCountsEl.textContent = countLine;
+            var headerCompactCounts = document.getElementById('rewrite-source-header-compact-counts');
+            if (headerCompactCounts) headerCompactCounts.textContent = countLine;
+        }
+        var headerCompactSourceBadge = document.getElementById('rewrite-source-header-compact-source-badge');
+        if (headerCompactSourceBadge && sourceBadgeEl) {
+            headerCompactSourceBadge.classList.toggle('badge-yes', sourceBadgeEl.classList.contains('badge-yes'));
+            headerCompactSourceBadge.classList.toggle('badge-no', sourceBadgeEl.classList.contains('badge-no'));
         }
         if (window.__rewriteSyncTranslateRuRunPrereq) window.__rewriteSyncTranslateRuRunPrereq();
         refreshRewriteStageCheck();
@@ -6399,10 +6407,9 @@
                 var sk = card.getAttribute('data-stage-key') || '';
                 if (REWRITE_ALWAYS_COLLAPSED_UI_KEYS[sk]) applyCardCollapsed(card, true);
             });
+            if (sourceInboxCard) applySourceInboxCardCollapsed(true);
             if (vfFinalCard) applyVoiceoverFinalCardCollapsed(true);
-            if (typeof window.__applyTtsSectionCollapsed === 'function') {
-                try { window.__applyTtsSectionCollapsed(true); } catch (_) { /* ignore */ }
-            }
+            /* Озвучка: не принудительно сворачиваем — иначе ломается раскрытие после клика пользователя. */
             if (typeof window.__applyVideoJsonPanelCollapsed === 'function') {
                 try { window.__applyVideoJsonPanelCollapsed(true); } catch (_) { /* ignore */ }
             }
@@ -6424,13 +6431,43 @@
             });
         }
 
+        var sourceInboxCard = document.getElementById('rewrite-source-inbox-card');
         var vfFinalCard = document.getElementById('rewrite-voiceover-final-card');
+        var SOURCE_INBOX_BLOCK_COLLAPSE_SK = 'source_inbox';
         var VOICEOVER_FINAL_BLOCK_COLLAPSE_SK = 'voiceover_final';
+        function applySourceInboxCardCollapsed(collapsed) {
+            if (!sourceInboxCard) return;
+            sourceInboxCard.classList.toggle('rewrite-source-inbox-card--body-collapsed', !!collapsed);
+            sourceInboxCard.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
         function applyVoiceoverFinalCardCollapsed(collapsed) {
             if (!vfFinalCard) return;
             vfFinalCard.classList.toggle('rewrite-voiceover-final-card--body-collapsed', !!collapsed);
             vfFinalCard.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
+        if (sourceInboxCard && sourceInboxCard.getAttribute('data-source-inbox-collapse') === '1') {
+            applySourceInboxCardCollapsed(true);
+            var srcHdr = sourceInboxCard.querySelector('.rewrite-source-inbox-card-header');
+            if (srcHdr) {
+                srcHdr.addEventListener('click', function (e) {
+                    if (e.target.closest('button, a, input, select, textarea, label')) return;
+                    var cur = sourceInboxCard.classList.contains('rewrite-source-inbox-card--body-collapsed');
+                    var next = !cur;
+                    var srcMap = loadProjectCollapseMap();
+                    srcMap[SOURCE_INBOX_BLOCK_COLLAPSE_SK] = next;
+                    saveProjectCollapseMap(srcMap);
+                    applySourceInboxCardCollapsed(next);
+                });
+                srcHdr.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        srcHdr.click();
+                    }
+                });
+            }
+        }
+        window.__rewriteApplySourceInboxCardCollapsed = applySourceInboxCardCollapsed;
+
         if (vfFinalCard && vfFinalCard.getAttribute('data-voiceover-final-collapse') === '1') {
             applyVoiceoverFinalCardCollapsed(true);
             var vfHdr = vfFinalCard.querySelector('.rewrite-voiceover-final-card-header');
@@ -7843,6 +7880,10 @@
         var compactSaBadge = document.getElementById('rewrite-stages-compact-sa-badge');
         var compactRuBtn = document.getElementById('rewrite-stages-compact-ru-btn');
         var compactSaBtn = document.getElementById('rewrite-stages-compact-sa-btn');
+        var headerCompactRuBadge = document.getElementById('rewrite-source-header-compact-ru-badge');
+        var headerCompactSaBadge = document.getElementById('rewrite-source-header-compact-sa-badge');
+        var headerCompactRuBtn = document.getElementById('rewrite-source-header-compact-ru-btn');
+        var headerCompactSaBtn = document.getElementById('rewrite-source-header-compact-sa-btn');
 
         // Ближайшая «карточка» Source: на ней дублируем флаг сворачивания,
         // чтобы CSS мог управлять её внутренней раскладкой без `:has(...)`.
@@ -7894,27 +7935,33 @@
             if (aria) dst.setAttribute('aria-label', aria);
         }
 
-        function syncAll() {
-            mirrorBadge(ruBadge, compactRuBadge);
-            mirrorBadge(saBadge, compactSaBadge);
-            mirrorButton(ruBtn, compactRuBtn);
-            mirrorButton(saBtn, compactSaBtn);
+        function mirrorBadgeToAll(src, dstList) {
+            (dstList || []).forEach(function (dst) { mirrorBadge(src, dst); });
+        }
+        function mirrorButtonToAll(src, dstList) {
+            (dstList || []).forEach(function (dst) { mirrorButton(src, dst); });
+        }
+        function wireCompactBtn(dst, src) {
+            if (!dst || !src) return;
+            dst.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (dst.disabled) return;
+                src.click();
+            });
         }
 
-        if (compactRuBtn && ruBtn) {
-            compactRuBtn.addEventListener('click', function (ev) {
-                ev.preventDefault();
-                if (compactRuBtn.disabled) return;
-                ruBtn.click();
-            });
+        function syncAll() {
+            mirrorBadgeToAll(ruBadge, [compactRuBadge, headerCompactRuBadge]);
+            mirrorBadgeToAll(saBadge, [compactSaBadge, headerCompactSaBadge]);
+            mirrorButtonToAll(ruBtn, [compactRuBtn, headerCompactRuBtn]);
+            mirrorButtonToAll(saBtn, [compactSaBtn, headerCompactSaBtn]);
         }
-        if (compactSaBtn && saBtn) {
-            compactSaBtn.addEventListener('click', function (ev) {
-                ev.preventDefault();
-                if (compactSaBtn.disabled) return;
-                saBtn.click();
-            });
-        }
+
+        wireCompactBtn(compactRuBtn, ruBtn);
+        wireCompactBtn(compactSaBtn, saBtn);
+        wireCompactBtn(headerCompactRuBtn, ruBtn);
+        wireCompactBtn(headerCompactSaBtn, saBtn);
 
         var btnObsCfg = { attributes: true, attributeFilter: ['class', 'disabled', 'title', 'aria-label'] };
         var badgeObsCfg = { attributes: true, attributeFilter: ['class'] };

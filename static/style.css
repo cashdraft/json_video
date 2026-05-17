@@ -2457,6 +2457,104 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     min-height: calc(5 * 1.45 * 0.85rem + 1.35rem);
 }
 
+/* «Исходный текст» — сворачивание как у «Итоговый текст». */
+.rewrite-source-inbox-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.scene-card.rewrite-source-inbox-card.rewrite-source-inbox-card--collapsible {
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+    height: auto;
+    align-self: start;
+}
+
+.scene-card.rewrite-source-inbox-card.rewrite-source-inbox-card--collapsible.rewrite-source-inbox-card--body-collapsed {
+    padding-bottom: 0.55rem;
+}
+
+.rewrite-source-inbox-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.rewrite-source-inbox-card--collapsible .rewrite-source-inbox-card-header {
+    min-height: 24px;
+}
+
+.rewrite-source-inbox-card-header:hover,
+.rewrite-source-inbox-card-header:focus-visible {
+    background: transparent;
+    outline: none;
+}
+
+.rewrite-source-inbox-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.rewrite-source-inbox-title-row .rewrite-source-body-title,
+.rewrite-source-inbox-title-row .rewrite-stage-title-text,
+.rewrite-source-inbox-title-row .scene-id {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    align-self: center;
+}
+
+.rewrite-source-inbox-card-compact.rewrite-stages-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.rewrite-source-inbox-card-compact .rewrite-source-inbox-compact-counts {
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+}
+
+.rewrite-source-inbox-card--collapsible:not(.rewrite-source-inbox-card--body-collapsed) .rewrite-source-inbox-collapsible-inner {
+    margin-top: 0.65rem;
+}
+
+.rewrite-source-inbox-card--collapsible.rewrite-source-inbox-card--body-collapsed .rewrite-source-inbox-collapsible-inner {
+    display: none;
+}
+
+.rewrite-source-inbox-card--collapsible:not(.rewrite-source-inbox-card--body-collapsed) .rewrite-source-inbox-card-compact {
+    display: none;
+}
+
+.rewrite-source-inbox-card--collapsible.rewrite-source-inbox-card--body-collapsed .rewrite-source-inbox-card-header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+    align-items: center;
+}
+
+.rewrite-source-inbox-card--collapsible.rewrite-source-inbox-card--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
 /* Пустой Result «Итоговый текст» и ожидание Structure Splitter у Scene Writer.
    Оверлей только рисуется поверх (не flex — иначе длинный текст раздувает min-width карточки). */
 .rewrite-voiceover-final-empty-overlay,
@@ -4072,6 +4170,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin: 0;
     cursor: pointer;
     position: relative;
+    z-index: 2;
     box-sizing: border-box;
 }
 
@@ -4770,14 +4869,28 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     min-height: 3.5rem;
 }
 
+.tts-result-slot[data-status="pending"],
+.tts-result-slot[data-status="generating"],
+.tts-result-slot[data-status="error"] {
+    align-items: center;
+    justify-content: center;
+}
+
+.tts-result-slot[data-status="pending"] #tts-player-body,
+.tts-result-slot[data-status="pending"] .tts-player-body,
 .tts-result-slot[data-status="generating"] #tts-player-body,
 .tts-result-slot[data-status="generating"] .tts-player-body {
     display: none !important;
 }
 
+.tts-result-slot[data-status="pending"] #tts-result-status-row,
 .tts-result-slot[data-status="generating"] #tts-result-status-row,
 .tts-result-slot[data-status="error"] #tts-result-status-row {
     display: flex;
+}
+
+.tts-result-slot[data-status="pending"] .slot-status {
+    color: var(--text-muted);
 }
 
 .tts-result-slot[data-status="error"] #tts-player-body,
@@ -4817,27 +4930,39 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     }
 }
 
-.tts-word-timings-panel {
+/* Тайминги слов — свёрнутый вид как «Итоговый текст» */
+.tts-word-timings-panel.scene-card {
     min-width: 0;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.55rem 1.25rem 1.25rem;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.02);
+    height: auto;
+    align-self: start;
+}
+
+.tts-word-timings-panel.tts-word-timings-panel--body-collapsed {
+    padding-bottom: 0.55rem;
 }
 
 .tts-word-timings-panel__header {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 0.5rem 0.75rem;
-    padding: 0.55rem 0.75rem;
-    cursor: pointer;
+    gap: 0.5rem 1rem;
     margin: 0;
-    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+    min-height: 24px;
+    padding: 0;
+    border-radius: 0;
     user-select: none;
 }
 
-.tts-word-timings-panel__header:hover {
-    background: rgba(255, 255, 255, 0.04);
+.tts-word-timings-panel__header:hover,
+.tts-word-timings-panel__header:focus-visible {
+    background: transparent;
+    outline: none;
 }
 
 .tts-word-timings-panel__title-row {
@@ -4845,41 +4970,67 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     align-items: center;
     gap: 0.35rem;
     min-width: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
     flex: 1 1 auto;
 }
 
-.tts-word-timings-panel__title-row .scene-id {
+.tts-word-timings-panel__title-row .scene-id,
+.tts-word-timings-panel__title-row .rewrite-stage-title-text,
+.tts-word-timings-panel__title-row .rewrite-source-body-title {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
     font-size: 0.9rem;
     font-weight: 600;
-    line-height: 1.2;
+    align-self: center;
 }
 
-.tts-word-timings-panel[aria-expanded="false"] .rewrite-stage-body-collapse-chevron {
-    transform: rotate(-90deg);
+.tts-word-timings-panel-compact.rewrite-stages-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 24px;
+    box-sizing: border-box;
 }
 
-.tts-word-timings-panel__summary {
-    flex-shrink: 1;
-    min-width: 0;
-    max-width: 52%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.tts-word-timings-panel-compact .tts-word-timings-panel-compact-counts {
+    flex-shrink: 0;
+    margin-left: 0.15rem;
     font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.55);
 }
 
-.tts-word-timings-panel__body {
-    padding: 0 0.75rem 0.75rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+.tts-word-timings-panel--collapsible:not(.tts-word-timings-panel--body-collapsed) .tts-word-timings-panel-compact {
+    display: none;
 }
 
-.tts-word-timings-whisper-run {
-    display: flex;
+.tts-word-timings-panel--collapsible.tts-word-timings-panel--body-collapsed .tts-word-timings-panel__header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    padding: 0.65rem 0 0.45rem;
+}
+
+.tts-word-timings-panel--collapsible.tts-word-timings-panel--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.tts-word-timings-panel--collapsible.tts-word-timings-panel--body-collapsed .tts-word-timings-panel-collapsible-inner {
+    display: none;
+}
+
+.tts-word-timings-panel--collapsible:not(.tts-word-timings-panel--body-collapsed) .tts-word-timings-panel-collapsible-inner {
+    margin-top: 0.65rem;
+    padding-top: 0;
+    border-top: none;
+}
+
+.tts-word-timings-panel__body.tts-word-timings-panel-collapsible-inner {
+    padding: 0;
 }
 
 .tts-word-timings-result.rewrite-stage-row--result {
@@ -4895,43 +5046,171 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     gap: 0.35rem;
 }
 
-/* Result JSON — те же фон, пунктир, шрифт и отступы, что у textarea этапов */
-.tts-word-timings-panel .rewrite-slot--stage-result pre.rewrite-stage-result.rewrite-source-textarea {
+/* Result JSON — readonly textarea как у этапов: 10 строк, resize, dblclick-разворот */
+.whisper-words-result-slot {
+    aspect-ratio: auto;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    min-height: calc(10 * 1.45em + 1.35rem);
+}
+
+.whisper-words-result-slot .slot-status-row {
+    margin: 0;
+    flex: 1 1 auto;
+    min-height: calc(10 * 1.45em + 1.1rem);
+}
+
+.whisper-words-result-slot[data-status="pending"],
+.whisper-words-result-slot[data-status="generating"],
+.whisper-words-result-slot[data-status="error"] {
+    align-items: center;
+    justify-content: center;
+}
+
+.whisper-words-result-slot[data-status="pending"] #whisper-words-json,
+.whisper-words-result-slot[data-status="generating"] #whisper-words-json,
+.whisper-words-result-slot[data-status="error"] #whisper-words-json {
+    display: none !important;
+}
+
+.whisper-words-result-slot[data-status="pending"] #whisper-words-status-row,
+.whisper-words-result-slot[data-status="generating"] #whisper-words-status-row,
+.whisper-words-result-slot[data-status="error"] #whisper-words-status-row {
+    display: flex;
+}
+
+.whisper-words-result-slot[data-status="pending"] .slot-status {
+    color: var(--text-muted);
+}
+
+.tts-word-timings-panel .rewrite-slot--stage-result textarea.rewrite-stage-result.rewrite-source-textarea,
+.whisper-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea {
     --rewrite-result-visible-lines: 10;
     flex: 0 0 auto;
-    width: 100%;
     min-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
-    max-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
-    height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
-    margin: 0;
-    overflow-x: auto;
-    overflow-y: auto;
+    max-height: none;
+    height: auto;
     resize: vertical;
-    cursor: default;
+    overflow-y: auto;
+    cursor: text;
     white-space: pre;
-    font-family: inherit;
-    font-size: 0.8rem;
-    line-height: 1.45;
-    color: var(--text);
-    background: transparent;
-    border: none;
-    border-radius: 3px;
-    padding: 0.55rem 0.65rem;
+}
+
+.tts-word-timings-panel .rewrite-slot--stage-result textarea.rewrite-stage-result.rewrite-source-textarea--locked,
+.whisper-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea--locked {
+    cursor: default;
+}
+
+.whisper-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea {
+    width: 100%;
     box-sizing: border-box;
 }
 
-.tts-word-timings-panel .rewrite-slot--stage-result pre.rewrite-stage-result.rewrite-source-textarea:empty::before {
-    content: 'Pending';
-    color: var(--text-muted);
-}
-
-.tts-word-timings-panel .rewrite-slot--stage-result pre.rewrite-stage-result.rewrite-source-textarea.rewrite-stage-result--busy {
-    color: var(--text-muted);
-    filter: saturate(0.85);
-}
-
 .tts-word-timings-check {
+    margin: 0.5rem 0 0;
+    padding-bottom: 0.15rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tts-word-timings-check__title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.35rem;
+}
+
+.tts-word-timings-check-scenes-status {
+    margin-left: 0.35rem;
+    font-weight: 600;
+}
+
+.tts-word-timings-panel__body > .tts-word-timings-result + .tts-word-timings-check {
     margin-top: 0.5rem;
+}
+
+.tts-word-timings-check-section--first {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.tts-word-timings-check-text {
+    margin: 0;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.tts-word-timings-check-summary {
+    margin-bottom: 0.15rem;
+}
+
+.tts-word-timings-check-section--first + .tts-word-timings-check-summary {
+    margin-top: 0.45rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed var(--border);
+}
+
+.tts-word-timings-check-section {
+    margin-top: 0.45rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed var(--border);
+}
+
+.tts-word-timings-check-section__title {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+}
+
+.tts-word-timings-check-hint {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.tts-word-timings-check-hint code {
+    font-size: 0.68rem;
+    color: var(--accent);
+}
+
+.tts-word-timings-scenes-check-tree,
+.tts-word-timings-scenes-check-reasons {
+    margin-top: 0.15rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    color: var(--text-muted);
+}
+
+.tts-word-timings-scenes-check-row + .tts-word-timings-scenes-check-row {
+    margin-top: 0.12rem;
+}
+
+.tts-word-timings-scenes-check-row__main {
+    color: var(--text-muted);
+}
+
+.tts-word-timings-scenes-check-row__item {
+    color: var(--text-muted);
+    padding-left: 1.35rem;
+}
+
+.tts-word-timings-scenes-check-warns {
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+}
+
+.tts-word-timings-scenes-check-warns__line + .tts-word-timings-scenes-check-warns__line {
+    margin-top: 0.1rem;
 }
 
 .tts-words-source-row {

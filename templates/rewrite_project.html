@@ -5714,9 +5714,7 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
                 var sk = card.getAttribute('data-stage-key') || '';
                 if (REWRITE_ALWAYS_COLLAPSED_UI_KEYS[sk]) applyCardCollapsed(card, true);
             });
-            if (typeof window.__applyTtsSectionCollapsed === 'function') {
-                try { window.__applyTtsSectionCollapsed(true); } catch (_) { /* ignore */ }
-            }
+            /* Озвучка: не принудительно сворачиваем после загрузки ReWrite. */
             if (typeof window.__applyVideoJsonPanelCollapsed === 'function') {
                 try { window.__applyVideoJsonPanelCollapsed(true); } catch (_) { /* ignore */ }
             }
