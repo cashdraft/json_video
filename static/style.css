@@ -9,6 +9,18 @@
     --text-muted: #909098;
     --accent: #4a9eff;
     --accent-hover: #6bb0ff;
+    /* Подписи полей ElevenLabs: Модель / Источник текста */
+    --tts-field-label: #b8aef2;
+    /* Голос / Настройки — как предупреждение о лимите */
+    --tts-field-label-warm: #e8b44f;
+    /* Редактируемые промты (Hero / Master / System–User–Style–Past) — тот же тон */
+    --editable-prompt-accent: var(--tts-field-label-warm);
+    --editable-prompt-border: rgba(232, 180, 79, 0.38);
+    --editable-prompt-border-focus: rgba(232, 180, 79, 0.58);
+    --editable-prompt-badge-bg: rgba(232, 180, 79, 0.16);
+    --editable-prompt-badge-border: rgba(232, 180, 79, 0.22);
+    --editable-prompt-badge-text: #f0c978;
+    --editable-prompt-focus-ring: rgba(232, 180, 79, 0.12);
     --success: #34c759;
     --error: #ff4d4f;
     --badge-yes: #2d8a4e;
@@ -1336,29 +1348,26 @@ textarea::placeholder {
 
 .rewrite-youtube-icon-led {
     position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 10px;
-    height: 10px;
+    top: -2px;
+    right: -2px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    background: var(--text-muted, #909098);
-    border: 2px solid var(--bg-card, #252529);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+    background: #ff8080;
+    border: none;
+    box-shadow: none;
 }
 
 .rewrite-youtube-icon-led--ok {
     background: var(--success, #34c759);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 
 .rewrite-youtube-icon-led--bad {
-    background: var(--error, #ff4d4f);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+    background: #ff8080;
 }
 
 .rewrite-youtube-icon-led--env {
     background: #e6b422;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 
 .rewrite-youtube-proxy-input {
@@ -1370,32 +1379,113 @@ textarea::placeholder {
     color: var(--text, #e8e8ec);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.82rem;
+    outline: none;
+    box-shadow: none;
 }
 
-.rewrite-youtube-cookies-modal__age {
-    margin-top: 0.35rem;
-    color: var(--text-muted);
-    font-size: 0.78rem;
-    line-height: 1.35;
+.rewrite-youtube-proxy-input:focus,
+.rewrite-youtube-proxy-input:focus-visible {
+    outline: none;
+    box-shadow: none;
+    border-color: var(--border);
+}
+
+.rewrite-youtube-cookies-modal__age,
+.rewrite-youtube-cookies-modal__current-file {
+    margin: 0.65rem 0 0;
+    padding: 0 0.25rem;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 400;
+    line-height: 1.45;
     word-break: break-word;
+    color: var(--text-muted, #9aa0a6);
+}
+
+.rewrite-youtube-cookies-modal__current-file--empty {
+    font-size: 0.82rem;
 }
 
 .rewrite-youtube-cookies-modal__file-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
 }
 
 .rewrite-youtube-cookies-file-label {
     font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-muted);
 }
 
 .rewrite-youtube-cookies-file-input {
-    max-width: 100%;
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
 }
 
-.rewrite-youtube-cookies-modal__msg--error {
-    color: var(--danger, #f87171);
+.rewrite-youtube-cookies-dropzone.image-template-editor-dropzone {
+    margin: 0;
+}
+
+.confirm-modal__lead.rewrite-youtube-cookies-modal__msg--error {
+    color: #ff8080;
+    font-weight: 400;
+}
+
+.confirm-modal__lead.rewrite-youtube-proxy-modal__msg--ok {
+    color: var(--text-muted, #9aa0a6);
+    font-weight: 400;
+}
+
+.rewrite-youtube-proxy-msg__http-ok {
+    color: #6ad09d;
+    font-weight: 600;
+}
+
+.rewrite-youtube-proxy-msg__http-bad {
+    color: #ff8080;
+    font-weight: 600;
+}
+
+.rewrite-youtube-proxy-modal__footer {
+    margin: 0.65rem 0 0;
+    padding: 0 0.25rem;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 400;
+    line-height: 1.45;
+    word-break: break-word;
+    color: var(--text-muted, #9aa0a6);
+}
+
+.rewrite-youtube-proxy-modal__footer--empty {
+    font-size: 0.82rem;
+}
+
+.rewrite-youtube-proxy-modal__footer-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    color: var(--text, #e8e8ec);
+    user-select: all;
+    cursor: text;
+}
+
+.rewrite-youtube-proxy-modal__footer-test {
+    color: var(--text-muted, #9aa0a6);
+}
+
+.rewrite-youtube-proxy-modal__footer-test--bad {
+    color: #ff8080;
+    font-weight: 400;
+}
+
+.rewrite-youtube-proxy-modal__footer-hint {
+    color: var(--text-muted, #9aa0a6);
+    font-size: 0.78rem;
 }
 
 .rewrite-youtube-card--locked .rewrite-youtube-url,
@@ -1486,6 +1576,11 @@ textarea::placeholder {
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
+.rewrite-youtube-channel__avatar-link--inactive {
+    pointer-events: none;
+    cursor: default;
+}
+
 .rewrite-youtube-info-left__meta {
     display: flex;
     flex-direction: column;
@@ -1498,10 +1593,33 @@ textarea::placeholder {
     color: inherit;
     text-decoration: none;
     min-width: 0;
+    display: block;
+}
+
+.rewrite-youtube-channel__name-link--inactive {
+    pointer-events: none;
+    cursor: default;
 }
 
 .rewrite-youtube-channel__name-link:hover .rewrite-youtube-channel__name {
     text-decoration: underline;
+}
+
+.rewrite-youtube-video__title-link {
+    color: inherit;
+    text-decoration: none;
+    min-width: 0;
+    display: block;
+}
+
+.rewrite-youtube-video__title-link:hover .rewrite-youtube-info-left__title {
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
+.rewrite-youtube-video__title-link--inactive {
+    pointer-events: none;
+    cursor: default;
 }
 
 /* Старый layout `rewrite_project.html`: аватар и имя в одной строке внутри одной ссылки. */
@@ -1529,18 +1647,16 @@ textarea::placeholder {
 }
 
 .rewrite-youtube-info-left__avatar-col .rewrite-youtube-channel__avatar {
-    /* Две строки текста как у `.rewrite-youtube-channel__name` (0.85rem × 1.45). */
-    width: calc(0.85rem * 1.45 * 2);
-    height: calc(0.85rem * 1.45 * 2);
+    width: 45px;
+    height: 45px;
     display: block;
 }
 
-/* Аватар-заглушка: SVG задан атрибутом src, поэтому никаких background-картинок
-   тут не нужно. Дополнительно даём очень слабый ободок, чтобы кружок чётче
-   читался на фоне карточки. */
+/* Аватар-заглушка: youtube_channel_placeholder.png до ответа API. */
 .rewrite-youtube-channel__avatar--placeholder {
-    background-color: rgba(255, 255, 255, 0.04);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    object-fit: cover;
+    background-color: transparent;
+    box-shadow: none;
 }
 
 /* Имя канала и заголовок ролика рендерим тем же шрифтом, что и body-текст
@@ -1590,28 +1706,25 @@ textarea::placeholder {
 
 .rewrite-youtube-progress-stage {
     aspect-ratio: unset;
-    /* Стабильная минимальная высота; длинные строки yt-dlp / ошибки — в скролле
-       у `.slot-status`, чтобы плашка не «прыгала» на каждом обновлении прогресса. */
-    min-height: 9rem;
-    padding: 0.75rem;
-    align-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 5rem;
+    height: 5rem;
+    padding: 0.38rem 0.55rem;
+    align-self: start;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .rewrite-youtube-progress-stage .slot-status-row {
     flex: 1 1 auto;
-    min-height: 7rem;
-    max-height: none;
+    min-height: 0;
+    margin: 0;
     justify-content: center;
-    overflow: visible;
-}
-
-.rewrite-youtube-progress-stage .slot-status-row .slot-status {
-    max-height: 6.25rem;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
 }
 
 .rewrite-youtube-progress-stage.hidden {
@@ -1638,13 +1751,14 @@ textarea::placeholder {
     display: none;
 }
 
-.rewrite-youtube-progress-stage[data-status="done"] {
-    border-color: var(--border);
+/* «Готово» — как бейдж Source (.badge-yes): текст #7dd99a, рамка как фон бейджа. */
+.rewrite-youtube-progress-stage.slot-placeholder[data-status="done"] {
+    border-style: dashed;
+    border-color: rgba(52, 199, 89, 0.2);
+    background: var(--bg-input);
 }
 
-/* Цвет «done»-статуса — тот же приглушённый зелёный, что у бейджа `Source`
-   (.badge-yes), чтобы не выбиваться на фоне карточки. */
-.rewrite-youtube-progress-stage[data-status="done"] .slot-status {
+.rewrite-youtube-progress-stage.slot-placeholder[data-status="done"] .slot-status {
     color: #7dd99a;
 }
 
@@ -1961,14 +2075,14 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules {
-    border-color: rgba(80, 200, 200, 0.38);
+    border-color: var(--editable-prompt-border);
 }
 
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt:focus-within,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt:focus-within,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt:focus-within,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules:focus-within {
-    border-color: rgba(80, 200, 200, 0.58);
+    border-color: var(--editable-prompt-border-focus);
 }
 
 .rewrite-source-duration {
@@ -2331,12 +2445,53 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     grid-column: 1 / -1;
     /* В сетке этапов зазор только через grid-gap (как между Scene Writer и YouTube). */
     margin-bottom: 0;
+    overflow: visible;
 }
 
 /* Оверлей «ожидаем Voiceover» позиционируется на всю карточку */
 .rewrite-voiceover-final-card {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+}
+
+.rewrite-voiceover-final-collapsible-inner,
+#rewrite-voiceover-final-stages-collapsible {
+    overflow: visible;
+}
+
+/* «Подробнее» + модель — поверх оверлея ожидания (z-index 50). */
+#rewrite-voiceover-final-stages-collapsible .rewrite-stages-collapsible__header {
+    position: relative;
+    z-index: 51;
+    pointer-events: auto;
+    overflow: visible;
+}
+
+/* Модель внизу карточки — панель вверх, иначе обрезается краем блока */
+/* Селектор модели в правой колонке «Подробнее»: панель шире кнопки — якорь
+   справа, иначе min-width уезжает за край карточки / grid (overflow-x: clip). */
+.rewrite-stages-collapsible__right .rewrite-stages-lang-model__panel {
+    left: auto;
+    right: 0;
+    width: max(100%, 11.25rem);
+}
+
+#rewrite-voiceover-final-card [data-lang-model-field="voiceover-final"] .rewrite-stages-lang-model__panel {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+    z-index: 120;
+}
+
+.rewrite-stages-lang-model__panel.rewrite-stages-lang-model__panel--viewport {
+    position: fixed !important;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    margin: 0 !important;
+    z-index: 200;
 }
 
 /* Как Scene Writer / YouTube / Озвучка: верх 0.55rem (не прыгает при раскрытии), снизу 1.25rem. */
@@ -2432,18 +2587,19 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     transform: rotate(-90deg);
 }
 
-/* Ожидание Voiceover: затемнение на всю карточку (включая заголовок), клики по шапке проходят */
-.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-empty-overlay {
-    pointer-events: none;
+/* Итоговый текст: ожидание Voiceover — затемнение оверлеем (не pointer-events на
+   всей карточке: иначе «Подробнее» и селектор модели перестают кликаться). */
+.rewrite-voiceover-final-card--waiting {
+    overflow: hidden;
 }
 
-.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-card-header {
-    z-index: 1;
+.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-empty-overlay {
     pointer-events: auto;
+    display: flex;
 }
 
 .rewrite-voiceover-final-card--collapsible.rewrite-voiceover-final-card--body-collapsed.rewrite-voiceover-final-card--waiting .rewrite-voiceover-final-empty-overlay {
-    display: block;
+    display: flex;
 }
 
 .rewrite-voiceover-final-card .rewrite-stage-subtitle {
@@ -2460,7 +2616,12 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 /* «Исходный текст» — сворачивание как у «Итоговый текст». */
 .rewrite-source-inbox-card {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+}
+
+.rewrite-source-inbox-collapsible-inner,
+#rewrite-stages-collapsible {
+    overflow: visible;
 }
 
 .scene-card.rewrite-source-inbox-card.rewrite-source-inbox-card--collapsible {
@@ -2555,8 +2716,7 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     transform: rotate(-90deg);
 }
 
-/* Пустой Result «Итоговый текст» и ожидание Structure Splitter у Scene Writer.
-   Оверлей только рисуется поверх (не flex — иначе длинный текст раздувает min-width карточки). */
+/* Пустой Result / ожидание этапа — затемнение как у YouTube Transcriber (клики не проходят). */
 .rewrite-voiceover-final-empty-overlay,
 .rewrite-scene-writer-wait-overlay,
 .rewrite-youtube-packaging-wait-overlay,
@@ -2568,11 +2728,14 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     padding: 0;
     border-radius: inherit;
     background: rgba(12, 14, 20, 0.66);
-    display: block;
-    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
     pointer-events: auto;
     overflow: hidden;
     contain: strict;
+    cursor: default;
 }
 
 .rewrite-voiceover-final-empty-overlay.hidden,
@@ -2597,17 +2760,17 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     align-items: center;
 }
 
-.rewrite-stage-card.rewrite-scene-writer-module--waiting .rewrite-scene-writer-wait-overlay {
+.rewrite-stage-card.rewrite-scene-writer-module--waiting {
     pointer-events: none;
 }
 
-.rewrite-stage-card.rewrite-scene-writer-module--waiting .scene-header {
-    z-index: 1;
+.rewrite-stage-card.rewrite-scene-writer-module--waiting .rewrite-scene-writer-wait-overlay {
     pointer-events: auto;
+    display: flex;
 }
 
 .rewrite-stage-card.rewrite-scene-writer-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed.rewrite-scene-writer-module--waiting .rewrite-scene-writer-wait-overlay {
-    display: block;
+    display: flex;
 }
 
 /* YouTube packaging: оверлей ожидания Title Strategist (как Scene Writer) */
@@ -2620,17 +2783,17 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     align-items: center;
 }
 
-.rewrite-stage-card.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-wait-overlay {
+.rewrite-stage-card.rewrite-youtube-packaging-module--waiting {
     pointer-events: none;
 }
 
-.rewrite-stage-card.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-card-header {
-    z-index: 1;
+.rewrite-stage-card.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-wait-overlay {
     pointer-events: auto;
+    display: flex;
 }
 
 .rewrite-stage-card.rewrite-youtube-packaging-module.rewrite-stage-card--collapsible.rewrite-stage-card--body-collapsed.rewrite-youtube-packaging-module--waiting .rewrite-youtube-packaging-wait-overlay {
-    display: block;
+    display: flex;
 }
 
 /* Текст оверлея: только поверх карточки (absolute), без margin/padding, влияющих на высоту блока */
@@ -3682,7 +3845,8 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .rewrite-stage-status-row,
 .tts-result-status-row,
-.whisper-words-status-row {
+.whisper-words-status-row,
+.tts-words-status-row {
     box-sizing: border-box;
     margin: 0.35rem 0 0.15rem;
     width: 100%;
@@ -3691,7 +3855,8 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .rewrite-stage-status-row .rewrite-stage-status-text,
 .tts-result-status-row .tts-result-status-text,
-.whisper-words-status-row .whisper-words-status-text {
+.whisper-words-status-row .whisper-words-status-text,
+.tts-words-status-row .tts-words-status-text {
     display: flex;
     width: 100%;
     max-width: none;
@@ -4016,17 +4181,17 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     border-radius: 8px;
 }
 
-.video-json-panel--waiting .video-json-panel-wait-overlay {
+.video-json-panel--waiting {
     pointer-events: none;
 }
 
-.video-json-panel--waiting .video-json-panel-card-header {
-    z-index: 26;
+.video-json-panel--waiting .video-json-panel-wait-overlay {
     pointer-events: auto;
+    display: flex;
 }
 
 .video-json-panel--collapsible.video-json-panel--body-collapsed.video-json-panel--waiting .video-json-panel-wait-overlay {
-    display: block;
+    display: flex;
 }
 
 .video-json-panel--collapsible.video-json-panel--body-collapsed.video-json-panel--waiting .video-json-panel-card-header {
@@ -4144,17 +4309,17 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     border-radius: 8px;
 }
 
-.tts-section--waiting .tts-section-wait-overlay {
+.tts-section--waiting {
     pointer-events: none;
 }
 
-.tts-section--waiting .tts-section-card-header {
-    z-index: 1;
+.tts-section--waiting .tts-section-wait-overlay {
     pointer-events: auto;
+    display: flex;
 }
 
 .tts-section--collapsible.tts-section--body-collapsed.tts-section--waiting .tts-section-wait-overlay {
-    display: block;
+    display: flex;
 }
 
 .tts-section--collapsible.tts-section--body-collapsed.tts-section--waiting .tts-section-card-header {
@@ -4242,9 +4407,45 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     box-sizing: border-box;
 }
 
-.tts-section-card-compact .tts-section-compact-counts {
+.tts-section-card-compact--summary {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+}
+
+.tts-section-compact-elevenlabs-badge {
     flex-shrink: 0;
-    margin-left: 0.15rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.tts-section-compact-sep {
+    color: rgba(255, 255, 255, 0.22);
+    font-size: 0.82rem;
+    font-weight: 300;
+    line-height: 1;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.tts-section-compact-timings {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.tts-section-compact-timings-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.tts-section-compact-timings-status {
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
 }
 
 .tts-section--collapsible.tts-section--body-collapsed .tts-section-collapsible-inner {
@@ -4258,6 +4459,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .tts-section--collapsible.tts-section--body-collapsed .tts-section-card-header {
     gap: 0.5rem 0.75rem;
     flex-wrap: nowrap;
+    align-items: center;
     margin-bottom: 0;
 }
 
@@ -4403,16 +4605,24 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin-bottom: 0.5rem;
 }
 
-#elevenlabs-tts .slot-placeholder.rewrite-slot-placeholder.tts-text-slot {
+#elevenlabs-tts .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--source.tts-text-slot {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
     overflow: visible;
     min-height: calc(7 * 1.45 * 0.85rem + 1.35rem);
+    height: auto;
 }
 
 #elevenlabs-tts .tts-text-slot .rewrite-source-textarea {
-    min-height: calc(7 * 1.45em + 1.1rem);
+    --rewrite-result-visible-lines: 7;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    max-height: none;
+    height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    resize: vertical;
+    overflow-y: auto;
 }
 
 .tts-char-row {
@@ -4448,8 +4658,14 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .tts-split-hint {
+    flex: 1 1 100%;
     color: var(--text-muted);
     font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.tts-split-hint:not(.hidden) {
+    margin-top: 0.15rem;
 }
 
 .tts-row {
@@ -4474,9 +4690,17 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     min-width: 0;
 }
 
-#elevenlabs-tts .tts-field.setting-model-dropdown .rewrite-source-subtitle {
+#elevenlabs-tts .tts-field.setting-model-dropdown:not(.tts-field-grow) .rewrite-source-subtitle {
     font-size: 0.85rem;
     margin: 0;
+    color: var(--tts-field-label);
+}
+
+#elevenlabs-tts .tts-field-grow.setting-model-dropdown .rewrite-source-subtitle,
+#elevenlabs-tts .tts-settings-block__head .rewrite-source-subtitle {
+    font-size: 0.85rem;
+    margin: 0;
+    color: var(--tts-field-label-warm);
 }
 
 #elevenlabs-tts .tts-field.setting-model-dropdown .rewrite-global-model-field {
@@ -4495,9 +4719,10 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     pointer-events: none;
 }
 
-.tts-script-source-block .rewrite-source-subtitle {
+#elevenlabs-tts .tts-script-source-block .rewrite-source-subtitle {
     font-size: 0.85rem;
     margin: 0;
+    color: var(--tts-field-label);
 }
 
 .tts-script-source-options {
@@ -4773,6 +4998,36 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     font-size: 0.88rem;
 }
 
+#elevenlabs-tts .tts-settings-block {
+    margin-top: 0.85rem;
+}
+
+.tts-settings-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.tts-settings-block__head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+
+.tts-settings-block .tts-settings-block__divider {
+    margin: 0 0 0.75rem;
+}
+
+.tts-settings-block .tts-sliders {
+    margin-top: 0;
+}
+
+.tts-settings-block .tts-check {
+    margin-top: 0.1rem;
+}
+
 .tts-sliders {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -4820,9 +5075,16 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin-top: 0.2rem;
 }
 
+.tts-divider {
+    margin: 0.85rem 0 0.75rem;
+    border: none;
+    border-top: 1px solid var(--border);
+}
+
 .tts-actions {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.75rem;
     flex-wrap: wrap;
 }
@@ -4842,7 +5104,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .tts-player-wrap {
-    margin-top: 0.75rem;
+    margin-top: 0;
     width: 100%;
 }
 
@@ -4912,8 +5174,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .tts-player-bar--empty .tts-play-btn,
 .tts-player-bar--empty .tts-seek,
-.tts-player-bar--empty .tts-download-btn,
-.tts-player-bar--empty .tts-clear-btn {
+.tts-player-bar--empty .tts-download-btn {
     opacity: 0.38;
     pointer-events: none;
 }
@@ -5008,6 +5269,127 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     color: rgba(255, 255, 255, 0.55);
 }
 
+.tts-word-timings-panel-compact-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+}
+
+.tts-word-timings-panel--eleven .tts-word-timings-panel-compact-duration.rewrite-source-counts,
+.tts-word-timings-panel--whisper .tts-word-timings-panel-compact-duration.rewrite-source-counts {
+    margin-left: 0;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
+.tts-word-timings-panel-compact-scenes-status {
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+
+.tts-word-timings-compact-source-dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.32);
+    box-sizing: border-box;
+    position: relative;
+    vertical-align: middle;
+}
+
+.tts-word-timings-compact-source-dot-wrap--checked .tts-word-timings-compact-source-dot,
+.tts-word-timings-compact-source-dot--checked {
+    border-color: var(--accent, #7eb8ff);
+}
+
+.tts-word-timings-compact-source-dot-wrap--checked .tts-word-timings-compact-source-dot::after,
+.tts-word-timings-compact-source-dot--checked::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background: var(--accent, #7eb8ff);
+}
+
+.tts-word-timings-compact-source-dot--disabled {
+    opacity: 0.45;
+}
+
+.tts-word-timings-source-input--sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.tts-word-timings-panel__toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+    cursor: pointer;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tts-word-timings-panel__toggle:hover,
+.tts-word-timings-panel__toggle:focus,
+.tts-word-timings-panel__toggle:focus-visible,
+.tts-word-timings-panel__toggle:active {
+    outline: none;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.tts-word-timings-compact-source-dot-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.tts-word-timings-compact-source-dot-wrap:focus-visible {
+    outline: 2px solid var(--accent, #7eb8ff);
+    outline-offset: 2px;
+}
+
+.tts-word-timings-compact-source-dot-wrap--disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.tts-word-timings-panel--eleven .tts-word-timings-expanded-duration.rewrite-stage-result-counts,
+.tts-word-timings-panel--whisper .tts-word-timings-expanded-duration.rewrite-stage-result-counts {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
 .tts-word-timings-panel--collapsible:not(.tts-word-timings-panel--body-collapsed) .tts-word-timings-panel-compact {
     display: none;
 }
@@ -5051,6 +5433,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 /* Result JSON — readonly textarea как у этапов: 10 строк, resize, dblclick-разворот */
+.tts-words-result-slot,
 .whisper-words-result-slot {
     aspect-ratio: auto;
     flex-direction: column;
@@ -5060,12 +5443,16 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     min-height: calc(10 * 1.45em + 1.35rem);
 }
 
+.tts-words-result-slot .slot-status-row,
 .whisper-words-result-slot .slot-status-row {
     margin: 0;
     flex: 1 1 auto;
     min-height: calc(10 * 1.45em + 1.1rem);
 }
 
+.tts-words-result-slot[data-status="pending"],
+.tts-words-result-slot[data-status="generating"],
+.tts-words-result-slot[data-status="error"],
 .whisper-words-result-slot[data-status="pending"],
 .whisper-words-result-slot[data-status="generating"],
 .whisper-words-result-slot[data-status="error"] {
@@ -5073,23 +5460,37 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     justify-content: center;
 }
 
+#tts-words-json,
+#whisper-words-json {
+    resize: none;
+    cursor: default;
+}
+
+.tts-words-result-slot[data-status="pending"] #tts-words-json,
+.tts-words-result-slot[data-status="generating"] #tts-words-json,
+.tts-words-result-slot[data-status="error"] #tts-words-json,
 .whisper-words-result-slot[data-status="pending"] #whisper-words-json,
 .whisper-words-result-slot[data-status="generating"] #whisper-words-json,
 .whisper-words-result-slot[data-status="error"] #whisper-words-json {
     display: none !important;
 }
 
+.tts-words-result-slot[data-status="pending"] #tts-words-status-row,
+.tts-words-result-slot[data-status="generating"] #tts-words-status-row,
+.tts-words-result-slot[data-status="error"] #tts-words-status-row,
 .whisper-words-result-slot[data-status="pending"] #whisper-words-status-row,
 .whisper-words-result-slot[data-status="generating"] #whisper-words-status-row,
 .whisper-words-result-slot[data-status="error"] #whisper-words-status-row {
     display: flex;
 }
 
+.tts-words-result-slot[data-status="pending"] .slot-status,
 .whisper-words-result-slot[data-status="pending"] .slot-status {
     color: var(--text-muted);
 }
 
 .tts-word-timings-panel .rewrite-slot--stage-result textarea.rewrite-stage-result.rewrite-source-textarea,
+.tts-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea,
 .whisper-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea {
     --rewrite-result-visible-lines: 10;
     flex: 0 0 auto;
@@ -5103,10 +5504,12 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .tts-word-timings-panel .rewrite-slot--stage-result textarea.rewrite-stage-result.rewrite-source-textarea--locked,
+.tts-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea--locked,
 .whisper-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea--locked {
     cursor: default;
 }
 
+.tts-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea,
 .whisper-words-result-slot textarea.rewrite-stage-result.rewrite-source-textarea {
     width: 100%;
     box-sizing: border-box;
@@ -5348,8 +5751,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .tts-play-btn:focus-visible,
-.tts-download-btn:focus-visible,
-.tts-clear-btn:focus-visible {
+.tts-download-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
@@ -5452,33 +5854,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     background: rgba(74, 158, 255, 0.12);
     border-color: var(--accent);
     color: var(--accent-hover);
-}
-
-.tts-clear-btn {
-    flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg-card);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.tts-clear-btn:hover:not(:disabled) {
-    background: rgba(255, 77, 79, 0.12);
-    border-color: var(--error, #ff4d4f);
-    color: #ffb0b2;
-}
-
-.tts-clear-btn:disabled {
-    opacity: 0.38;
-    cursor: default;
-    pointer-events: none;
 }
 
 .job-settings,
@@ -6425,7 +6800,8 @@ button.job-download-all-link {
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--prompt,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--rewrite-system-rules,
 .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--hero-prompt,
-.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt {
+.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--master-prompt,
+.slot-placeholder.rewrite-slot-placeholder.rewrite-voiceover-final-slot {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
@@ -6469,8 +6845,13 @@ button.job-download-all-link {
 .slot-status-row .slot-status {
     text-align: center;
     max-width: 100%;
-    line-height: 1.35;
+    line-height: 1.3;
     word-break: break-word;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .slot-status-row .slot-status-with-spinner {
@@ -6479,6 +6860,19 @@ button.job-download-all-link {
     justify-content: center;
     align-items: center;
     gap: 0.25rem;
+}
+
+/* YouTube Transcriber: фиксированный размер плашки статуса (загрузка / ошибка / готово). */
+.slot-placeholder.rewrite-slot-placeholder.rewrite-youtube-progress-stage {
+    aspect-ratio: unset;
+    min-height: 5rem;
+    height: 5rem;
+    width: 100%;
+    padding: 0.38rem 0.55rem;
+    align-self: start;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
 }
 
 .btn-cancel-generation {
@@ -6884,15 +7278,14 @@ button.job-download-all-link {
 }
 
 /* ReWrite этап: редактируемые промты (System / User / Style / Past) — YES как
-   Hero / .template-prompt-badge--yes (бирюза); NO без смены фона и текста,
-   только обводка как у Hero YES. */
+   Hero / .template-prompt-badge--yes (тёплый золотой, как Голос / Настройки). */
 .rewrite-stage-prompt-badge.badge-yes,
 .rewrite-stage-user-prompt-badge.badge-yes,
 .rewrite-stage-style-prompt-badge.badge-yes,
 .rewrite-stage-past-prompt-badge.badge-yes {
-    background: rgba(80, 200, 200, 0.16);
-    color: #7fcacb;
-    border: 1px solid rgba(80, 200, 200, 0.22);
+    background: var(--editable-prompt-badge-bg);
+    color: var(--editable-prompt-badge-text);
+    border: 1px solid var(--editable-prompt-badge-border);
     font-weight: 500;
     letter-spacing: 0.01em;
 }
@@ -6901,7 +7294,7 @@ button.job-download-all-link {
 .rewrite-stage-user-prompt-badge.badge-no,
 .rewrite-stage-style-prompt-badge.badge-no,
 .rewrite-stage-past-prompt-badge.badge-no {
-    border: 1px solid rgba(80, 200, 200, 0.22);
+    border: 1px solid var(--editable-prompt-badge-border);
 }
 
 /* Projects list */
@@ -7234,10 +7627,7 @@ button.job-download-all-link {
 }
 
 /* ===== Template prompts (правятся БЕЗ кода — из шаблона) =====
-   Смысловая пара к фиолетовому .locked-prompt-badge--yes: тот же приглушённый
-   тон/насыщенность, но другой цвет — приглушённая бирюза. Фиолетовый = «под
-   кодом, под пин-кодом», бирюза = «можно поменять в шаблоне без кода».
-   YES — есть текст; NO — пусто (фон/текст как у locked NO, рамка — бирюзовая). */
+   Фиолетовый .locked-prompt-badge = под пин-кодом; золотой = шаблон без кода. */
 .template-prompt-badge {
     margin-left: 0.35rem;
     font-weight: 500;
@@ -7245,15 +7635,15 @@ button.job-download-all-link {
 }
 
 .template-prompt-badge--yes {
-    background: rgba(80, 200, 200, 0.16);
-    color: #7fcacb;
-    border: 1px solid rgba(80, 200, 200, 0.22);
+    background: var(--editable-prompt-badge-bg);
+    color: var(--editable-prompt-badge-text);
+    border: 1px solid var(--editable-prompt-badge-border);
 }
 
 .template-prompt-badge--no {
     background: rgba(255, 255, 255, 0.015);
     color: #55555c;
-    border: 1px solid rgba(80, 200, 200, 0.22);
+    border: 1px solid var(--editable-prompt-badge-border);
 }
 
 /* Карандашик «защищённого» промта реюзит стиль .rewrite-lock-toggle.btn-icon,
@@ -7299,14 +7689,14 @@ button.job-download-all-link {
     padding: 0.6rem 0.7rem;
     background: var(--bg-elev-1, #1b1b22);
     color: var(--text);
-    border: 1px dashed rgba(80, 200, 200, 0.38);
+    border: 1px dashed var(--editable-prompt-border);
     border-radius: 6px;
     outline: none;
 }
 
 .locked-prompt-modal__textarea:focus {
-    border-color: rgba(80, 200, 200, 0.58);
-    box-shadow: 0 0 0 2px rgba(80, 200, 200, 0.12);
+    border-color: var(--editable-prompt-border-focus);
+    box-shadow: 0 0 0 2px var(--editable-prompt-focus-ring);
 }
 
 .locked-prompt-modal__msg {
@@ -7410,9 +7800,9 @@ button.job-download-all-link {
 
 /* ===== Semantic Text Analyzer =====
    Шапка как у «Russian»: badge + ✎ + копия + System/User Promt + ↻.
-   Блок вывода — 1:1 в стиле «Проверка Analysis» (dashed-рамка
-   .rewrite-scene-writer-check). На время работы textarea-обёртка скрывается,
-   вместо неё показывается синий dashed-плейсхолдер с статусом и Cancel. */
+   Блок вывода — 1:1 в стиле «Проверка …» (.rewrite-scene-writer-check).
+   На время работы textarea-обёртка скрывается, вместо неё — плейсхолдер
+   со статусом и Cancel. */
 .semantic-analyzer-block {
     margin-top: 0.7rem;
 }
@@ -7431,25 +7821,22 @@ button.job-download-all-link {
 }
 
 /* Обёртка наследует базу `.rewrite-scene-writer-check` (dashed, радиус, фон).
-   Padding обнуляем — его даёт textarea; рамка в тон Hero / редактируемым промтам. */
+   Padding обнуляем — его даёт textarea / внутреннее превью. */
 .semantic-analyzer-textarea-wrap.rewrite-scene-writer-check {
     padding: 0;
     box-sizing: border-box;
-    border-color: rgba(80, 200, 200, 0.38);
 }
 
 .semantic-analyzer-textarea-wrap.rewrite-scene-writer-check:focus-within {
-    border-color: rgba(80, 200, 200, 0.58);
+    border-color: var(--border);
 }
 
-.semantic-analyzer-textarea-wrap.hidden {
-    display: none;
+.semantic-analyzer-textarea-wrap.hidden,
+.semantic-analyzer-preview.hidden {
+    display: none !important;
 }
 
-/* Textarea внутри — прозрачна; шрифт/цвет наследуются от обёртки, поэтому
-   совпадают с «Проверка Analysis» 1:1. Padding повторяет .rewrite-scene-writer-check.
-   Размер шрифта явно прибиваем к 0.85rem — как у `.rewrite-source-textarea`
-   (Source / Russian), чтобы Semantic визуально не «жирнел». */
+/* Textarea внутри — прозрачна; шрифт/цвет наследуются от обёртки-проверки. */
 .semantic-analyzer-result-textarea {
     display: block;
     width: 100%;
@@ -7471,8 +7858,6 @@ button.job-download-all-link {
     outline: none;
 }
 
-/* В locked-режиме не гасим цвет/яркость дополнительно — чтобы текст
-   совпадал по цвету с «Проверка Analysis» (--text-muted без затемнения). */
 .semantic-analyzer-result-textarea.rewrite-source-textarea--locked {
     opacity: 1;
     filter: none;
@@ -7480,25 +7865,21 @@ button.job-download-all-link {
 }
 
 /* ===== Красивый рендер Semantic JSON =====
-   Контейнер унаследовал базовый стиль `.rewrite-scene-writer-check`
-   (фон + dashed-рамка), нам нужно лишь добавить внутреннюю типографику.
-   Серые подписи — приглушённый текст, белые — основной. Чипы тем — небольшая
-   обводка с фоном-подсветкой. Разделитель между блоками — тонкая линия. */
-.semantic-analyzer-preview {
+   Контейнер унаследовал `.rewrite-scene-writer-check` (фон + dashed-рамка);
+   ниже — внутренняя типографика превью. */
+.semantic-analyzer-preview.rewrite-scene-writer-check {
     display: block;
-    padding: 0.75rem 0.85rem;
+    padding: 0.55rem 0.65rem;
     line-height: 1.5;
     font-size: 0.85rem;
     color: var(--text-muted);
     box-sizing: border-box;
-    height: calc(5 * 1.45em + 1.1rem);
     min-height: calc(5 * 1.45em + 1.1rem);
+    max-height: none;
+    height: auto;
+    overflow-x: hidden;
     overflow-y: auto;
     resize: vertical;
-}
-
-.semantic-analyzer-preview.hidden {
-    display: none;
 }
 
 .semantic-analyzer-preview__head {
@@ -7610,8 +7991,11 @@ button.job-download-all-link {
 }
 
 /* Шапка «Подробнее» — фон/рамка как у блока «Пресет», и в свёрнутом,
-   и в развёрнутом состоянии (одинаковый внешний вид). */
+   и в развёрнутом состоянии (одинаковый внешний вид). Поверх fixed-панели модели. */
 .rewrite-stages-collapsible__header {
+    position: relative;
+    z-index: 51;
+    pointer-events: auto;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -7621,6 +8005,7 @@ button.job-download-all-link {
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 0.45rem 0.75rem;
+    overflow: visible;
 }
 
 /* «Подробнее» / «Отобразить» — светло-серый контур и текст (без синего акцента). */

@@ -13,17 +13,19 @@
            по-прежнему доступен по клику на оверлей. #}
         {% set rw_source_trim = (rw.source_text or rw.last_text or '')|trim %}
         {% set rw_yt_lock_active = rw_yt_transcript_trim or rw_source_trim %}
+        {% set yps = youtube_proxy_status|default({
+            'env_overrides_file': false,
+            'last_test_ok': none,
+            'last_test_message': '',
+            'file_configured': false,
+            'active_configured': false,
+            'masked_file': '',
+            'masked_active': '',
+            'proxy_file_compact': '',
+            'proxy_active_compact': '',
+        }) %}
         <section class="scenes-section rewrite-pipeline">
             <div class="scene-card rewrite-youtube-card{% if rw_yt_lock_active %} rewrite-youtube-card--locked{% endif %}" id="rewrite-youtube-card" data-youtube-locked="{{ '1' if rw_yt_lock_active else '0' }}">
-                {% set yps = youtube_proxy_status|default({
-                    'env_overrides_file': false,
-                    'last_test_ok': none,
-                    'last_test_message': '',
-                    'file_configured': false,
-                    'active_configured': false,
-                    'masked_file': '',
-                    'masked_active': '',
-                }) %}
                 <div class="rewrite-youtube-iconbar" role="group" aria-label="Cookies и прокси для yt-dlp">
                     <button
                         type="button"
@@ -46,8 +48,8 @@
                         type="button"
                         id="rewrite-youtube-proxy-open"
                         class="rewrite-youtube-icon-btn"
-                        title="Прокси для yt-dlp"
-                        aria-label="Прокси для yt-dlp"
+                        title="Прокси для YouTube"
+                        aria-label="Прокси для YouTube"
                         {% if not openai_key_set %}disabled{% endif %}
                     >
                         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
@@ -91,47 +93,58 @@
                     {# Прогресс-блок: слева — превью канала (логотип, имя канала, заголовок видео),
                        справа — dashed-плашка со статусом и Cancel в стиле Semantic. Видим, пока
                        идёт задача или пока есть сохранённое превью на диске. #}
-                    {% set _yt_ch_name = (rw.youtube_channel or '')|trim %}
-                    {% set _yt_ch_avatar = (rw.youtube_channel_avatar or '')|trim %}
-                    {% set _yt_ch_url = (rw.youtube_channel_url or '')|trim %}
-                    {% set _yt_video_title = (rw.youtube_title or '')|trim %}
-                    {% set _yt_progress_visible = _yt_ch_name or _yt_video_title %}
+                    {% set _yt_phase = (rw.youtube_phase or '')|trim|lower %}
+                    {% set _yt_status = (rw.youtube_status or '')|trim %}
+                    {% set _yt_final = _yt_phase == 'transcribe_done' %}
+                    {% set _yt_error = _yt_phase == 'error' or _yt_phase.endswith('_error') or (_yt_status and (_yt_status.startswith('Ошибка') or _yt_status.startswith('Не удалось'))) %}
+                    {% set _yt_ch_name = (rw.youtube_channel or '')|trim if _yt_final else '' %}
+                    {% set _yt_ch_avatar = (rw.youtube_channel_avatar or '')|trim if _yt_final else '' %}
+                    {% set _yt_ch_url = (rw.youtube_channel_url or '')|trim if _yt_final else '' %}
+                    {% set _yt_video_title = (rw.youtube_title or '')|trim if _yt_final else '' %}
+                    {% set _yt_video_url = (rw.youtube_url or '')|trim if _yt_final else '' %}
+                    {% set _yt_progress_visible = (_yt_final and (_yt_ch_name or _yt_video_title)) or (_yt_error and _yt_status) %}
                     <div class="rewrite-youtube-block__progress{% if not _yt_progress_visible %} hidden{% endif %}" id="rewrite-youtube-progress-wrap" aria-hidden="{{ 'false' if _yt_progress_visible else 'true' }}">
-                        <div class="rewrite-youtube-info-left" id="rewrite-youtube-info-left">
+                        <div class="rewrite-youtube-info-left{% if _yt_error and not _yt_final %} hidden{% endif %}" id="rewrite-youtube-info-left">
                             <div class="rewrite-youtube-info-left__avatar-col" id="rewrite-youtube-channel">
-                                {% if _yt_ch_url %}
-                                <a id="rewrite-youtube-channel-link" class="rewrite-youtube-channel__avatar-link" href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube">
-                                {% endif %}
+                                <a
+                                    id="rewrite-youtube-channel-link"
+                                    class="rewrite-youtube-channel__avatar-link{% if not _yt_ch_url %} rewrite-youtube-channel__avatar-link--inactive{% endif %}"
+                                    {% if _yt_ch_url %}href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube"{% endif %}
+                                >
                                 <img
                                     id="rewrite-youtube-channel-avatar"
                                     class="rewrite-youtube-channel__avatar{% if not _yt_ch_avatar %} rewrite-youtube-channel__avatar--placeholder{% endif %}"
-                                    src="{{ _yt_ch_avatar or url_for('static', filename='img/youtube_channel_placeholder.svg') }}"
-                                    data-placeholder-src="{{ url_for('static', filename='img/youtube_channel_placeholder.svg') }}"
+                                    src="{{ _yt_ch_avatar or url_for('static', filename='img/youtube_channel_placeholder.png') }}"
+                                    data-placeholder-src="{{ url_for('static', filename='img/youtube_channel_placeholder.png') }}"
                                     alt=""
                                     referrerpolicy="no-referrer"
                                     decoding="async"
                                     loading="lazy"
-                                    width="40"
-                                    height="40"
+                                    width="45"
+                                    height="45"
                                 >
-                                {% if _yt_ch_url %}
                                 </a>
-                                {% endif %}
                             </div>
                             <div class="rewrite-youtube-info-left__meta">
-                                {% if _yt_ch_url %}
-                                <a id="rewrite-youtube-channel-name-link" class="rewrite-youtube-channel__name-link" href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube">
+                                <a
+                                    id="rewrite-youtube-channel-name-link"
+                                    class="rewrite-youtube-channel__name-link{% if not _yt_ch_url %} rewrite-youtube-channel__name-link--inactive{% endif %}"
+                                    {% if _yt_ch_url %}href="{{ _yt_ch_url }}" target="_blank" rel="noopener noreferrer" title="Открыть канал на YouTube"{% endif %}
+                                >
                                     <span class="rewrite-youtube-channel__name" id="rewrite-youtube-channel-name">{{ _yt_ch_name }}</span>
                                 </a>
-                                {% else %}
-                                <span class="rewrite-youtube-channel__name" id="rewrite-youtube-channel-name">{{ _yt_ch_name }}</span>
-                                {% endif %}
-                                <div class="rewrite-youtube-info-left__title" id="rewrite-youtube-video-title">{{ _yt_video_title }}</div>
+                                <a
+                                    id="rewrite-youtube-video-title-link"
+                                    class="rewrite-youtube-video__title-link{% if not _yt_video_url %} rewrite-youtube-video__title-link--inactive{% endif %}"
+                                    {% if _yt_video_url %}href="{{ _yt_video_url }}" target="_blank" rel="noopener noreferrer" title="Открыть ролик на YouTube"{% endif %}
+                                >
+                                    <span class="rewrite-youtube-info-left__title" id="rewrite-youtube-video-title">{{ _yt_video_title }}</span>
+                                </a>
                             </div>
                         </div>
-                        <div class="rewrite-youtube-progress-stage slot-placeholder rewrite-slot-placeholder hidden" id="rewrite-youtube-progress-stage" aria-hidden="true">
+                        <div class="rewrite-youtube-progress-stage slot-placeholder rewrite-slot-placeholder{% if not (_yt_final or (_yt_error and _yt_status)) %} hidden{% endif %}" id="rewrite-youtube-progress-stage" aria-hidden="{{ 'false' if (_yt_final or (_yt_error and _yt_status)) else 'true' }}"{% if _yt_error %} data-status="error"{% elif _yt_final %} data-status="done"{% endif %}>
                             <div class="slot-status-row">
-                                <span class="slot-status slot-status-with-spinner" id="rewrite-youtube-status" aria-live="polite"></span>
+                                <span class="slot-status slot-status-with-spinner" id="rewrite-youtube-status" aria-live="polite">{% if _yt_error or _yt_final %}{{ _yt_status }}{% endif %}</span>
                                 <button type="button" class="btn-cancel-generation" id="rewrite-youtube-cancel-inline" disabled>Cancel</button>
                             </div>
                         </div>
@@ -155,6 +168,7 @@
                         <span class="rewrite-stages-compact__pair">
                             <span class="slot-badge badge-{{ 'yes' if _src_has_text else 'no' }}" id="rewrite-source-header-compact-source-badge">Source</span>
                         </span>
+                        <span class="tts-section-compact-sep" aria-hidden="true">|</span>
                         <span class="rewrite-stages-compact__pair">
                             <span class="slot-badge badge-{{ 'yes' if _ru_has_text else 'no' }}" id="rewrite-source-header-compact-ru-badge">Russian</span>
                             <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-source-header-compact-ru-btn" title="Перевести на русский" aria-label="Перевести на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>
@@ -168,7 +182,7 @@
                     </div>
                 </div>
                 <div class="rewrite-source-inbox-collapsible-inner">
-                <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
+                <p class="scene-text rewrite-source-lead">Исходный текст представляет собой транскрибацию YouTube-ролика и используется исключительно как аналитическая и референсная база для дальнейшего создания оригинального контента.</p>
                 <div class="rewrite-source-title-field slot-placeholder rewrite-slot-placeholder rewrite-slot--source-title">
                     <input type="text" id="rewrite-source-title" class="rewrite-source-title-input rewrite-source-textarea{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
                 </div>
@@ -232,7 +246,7 @@
                                 </span>
                             </div>
                             <div class="rewrite-stages-collapsible__right">
-                                <span class="rewrite-stages-compact__hint">При изменении «Исходный текст» перевод и структура запустятся автоматически.</span>
+                                <span class="rewrite-stages-compact__hint">Russian и Semantic — после ✓ на Source или смены модели результаты сбрасываются.</span>
                                 <div class="rewrite-anim-field rewrite-anim-field--single rewrite-stages-lang-model" data-lang-model-field="1" title="Модель для Russian и Semantic (не влияет на остальные этапы)">
                                     <button type="button" class="rewrite-anim-dropdown__btn rewrite-stages-lang-model__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Модель для Russian и Semantic">
                                         <span class="rewrite-stages-lang-model__sizer">
@@ -1306,18 +1320,28 @@
         <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-cookies-modal-title">
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="rewrite-youtube-cookies-modal-title">Cookies для YouTube</h3>
+                <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-youtube-cookies-modal-close aria-label="Закрыть">✕</button>
             </div>
-            <p class="confirm-modal__lead">Файл в формате Netscape (как «Get cookies.txt LOCALLY» / экспорт для yt-dlp). Сохраняется на сервере как <code>data/secrets/yt_cookies.txt</code> и подставляется в yt-dlp при проверке ссылки и скачивании аудио.</p>
-            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__file-wrap">
-                <label for="rewrite-youtube-cookies-file" class="rewrite-youtube-cookies-file-label">Файл</label>
-                <input type="file" id="rewrite-youtube-cookies-file" class="rewrite-youtube-cookies-file-input" accept=".txt,text/plain">
-            </p>
+            <p class="confirm-modal__lead">Файл в формате Netscape (как «Get cookies.txt LOCALLY»). Сохраняется на сервере как <code>data/secrets/yt_cookies.txt</code> и подставляется в yt-dlp при проверке ссылки и скачивании аудио.</p>
+            <div class="rewrite-youtube-cookies-modal__file-wrap">
+                <div class="image-template-editor-dropzone rewrite-youtube-cookies-dropzone" id="rewrite-youtube-cookies-dropzone" role="button" tabindex="0" aria-labelledby="rewrite-youtube-cookies-dropzone-title">
+                    <div class="image-template-editor-dropzone-loading hidden" id="rewrite-youtube-cookies-dropzone-loading" aria-live="polite" aria-hidden="true">
+                        <span class="image-template-editor-dropzone-loading-text" id="rewrite-youtube-cookies-dropzone-loading-text"></span>
+                    </div>
+                    <div class="image-template-editor-dropzone-inner">
+                        <span class="image-template-editor-dropzone-icon" aria-hidden="true">
+                            <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M14 32h20a8 8 0 0 0 1.4-15.9A10 10 0 0 0 16.2 18 7 7 0 0 0 14 32z" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M24 22v12M20 26l4-4 4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <p class="image-template-editor-dropzone-title" id="rewrite-youtube-cookies-dropzone-title">Перетащите сюда cookies.txt</p>
+                    </div>
+                    <input type="file" id="rewrite-youtube-cookies-file" class="rewrite-youtube-cookies-file-input" accept=".txt,text/plain" hidden>
+                </div>
+            </div>
             <p class="confirm-modal__lead rewrite-youtube-cookies-modal__msg hidden" id="rewrite-youtube-cookies-msg" aria-live="polite"></p>
-            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__age" id="rewrite-youtube-cookies-age" aria-live="polite">{% if youtube_cookies_status.present %}Текущий файл: {{ youtube_cookies_status.age_human }}, {{ youtube_cookies_status.size_bytes }} байт.{% else %}Файл ещё не загружен.{% endif %}</p>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-cookies-modal-cancel">Отмена</button>
-                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-cookies-modal-save">Сохранить</button>
-            </div>
+            <p class="rewrite-youtube-cookies-modal__current-file{% if not youtube_cookies_status.present %} rewrite-youtube-cookies-modal__current-file--empty{% endif %}" id="rewrite-youtube-cookies-age" aria-live="polite">{% if youtube_cookies_status.present %}Текущий файл - {{ youtube_cookies_status.filename or 'yt_cookies.txt' }} - Загружен {{ youtube_cookies_status.age_human }} назад - {{ youtube_cookies_status.size_bytes }} байт.{% else %}Файл ещё не загружен.{% endif %}</p>
         </div>
     </div>
 
@@ -1325,11 +1349,11 @@
         <div class="confirm-modal__backdrop" data-youtube-proxy-modal-close></div>
         <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-proxy-modal-title">
             <div class="confirm-modal__head">
-                <h3 class="confirm-modal__title" id="rewrite-youtube-proxy-modal-title">Прокси для yt-dlp</h3>
+                <h3 class="confirm-modal__title" id="rewrite-youtube-proxy-modal-title">Прокси для YouTube</h3>
+                <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-youtube-proxy-modal-close aria-label="Закрыть">✕</button>
             </div>
-            <p class="confirm-modal__lead">Любой формат: <code>user:pass@host:port</code> или полный URL (<code>http://</code>, <code>https://</code>, <code>socks5://</code>). Сохраняется на сервере как <code>data/secrets/yt_dlp_proxy.json</code> и подставляется во все запросы yt-dlp. После «OK» делаем проверочный запрос к YouTube — если ок, кружок на значке станет зелёным.</p>
-            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__file-wrap">
-                <label for="rewrite-youtube-proxy-input" class="rewrite-youtube-cookies-file-label">Прокси</label>
+            <p class="confirm-modal__lead">Любой формат: <code>user:pass@host:port</code> или полный URL (<code>http://</code>, <code>https://</code>, <code>socks5://</code>). Сохраняется на сервере как <code>data/secrets/yt_dlp_proxy.json</code>. После Enter или клика вне поля — сохранение и проверка YouTube.</p>
+            <div class="rewrite-youtube-cookies-modal__file-wrap">
                 <input
                     type="text"
                     id="rewrite-youtube-proxy-input"
@@ -1337,15 +1361,11 @@
                     placeholder="user:пароль@185.198.233.243:4588"
                     autocomplete="off"
                     spellcheck="false"
+                    aria-label="Прокси"
                 >
-            </p>
-            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__msg hidden" id="rewrite-youtube-proxy-msg" aria-live="polite"></p>
-            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__age" id="rewrite-youtube-proxy-hint" aria-live="polite">{% if yps.env_overrides_file %}Сейчас действует YT_DLP_PROXY из .env (приоритет над полем).{% elif yps.masked_file %}Сохранено: {{ yps.masked_file }}.{% endif %}</p>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-proxy-clear" title="Удалить сохранённый прокси (использовать прямое соединение или YT_DLP_PROXY из .env, если задан)">Очистить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-proxy-modal-cancel">Отмена</button>
-                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-proxy-save">OK</button>
             </div>
+            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__msg hidden" id="rewrite-youtube-proxy-msg" aria-live="polite"></p>
+            <p class="rewrite-youtube-proxy-modal__footer{% if not yps.active_configured %} rewrite-youtube-proxy-modal__footer--empty{% endif %}" id="rewrite-youtube-proxy-saved-line" aria-live="polite">{% if yps.active_configured %}{% set _yt_proxy_compact = yps.proxy_active_compact or yps.proxy_file_compact %}{% if _yt_proxy_compact %}<code class="rewrite-youtube-proxy-modal__footer-code" id="rewrite-youtube-proxy-saved-code">{{ _yt_proxy_compact }}</code>{% elif yps.masked_active %}{{ yps.masked_active }}{% endif %}{% if yps.last_test_message %} - <span class="rewrite-youtube-proxy-modal__footer-test{% if yps.last_test_ok is sameas false %} rewrite-youtube-proxy-modal__footer-test--bad{% endif %}">{% if yps.last_test_ok is sameas false %}Проверка не прошла{% else %}Проверка: {{ yps.last_test_message }}{% endif %}</span>{% endif %}{% if yps.env_overrides_file and yps.file_configured and yps.proxy_file_compact and yps.proxy_file_compact != _yt_proxy_compact %}<span class="rewrite-youtube-proxy-modal__footer-hint"> · в файле: {{ yps.proxy_file_compact }}</span>{% endif %}{% else %}Прокси не задан.{% endif %}</p>
         </div>
     </div>
 

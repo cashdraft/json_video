@@ -102,7 +102,7 @@
         {% set _tts_el_raw = (rw.stages.elevenlabs_editor.last_result or '')|trim %}
         {% set _tts_has_prereq = (_tts_el_raw|length > 0) or (_tts_vo_raw|length > 0) %}
         {% endif %}
-        {% set _tts_compact_has = (tts_last_text or '')|trim %}
+        {% set _tts_has_text = ((tts_last_text or '')|trim)|length > 0 %}
         <section class="tts-section tts-section--collapsible tts-section--body-collapsed video-panel{% if rw and not _tts_has_prereq %} tts-section--waiting{% endif %}" id="elevenlabs-tts" data-tts-section-collapse="1" aria-label="Озвучка" aria-expanded="false">
             <div class="tts-section-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
                 <div class="tts-section-title-row">
@@ -117,11 +117,28 @@
                     >
                     <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Озвучка</div>
                 </div>
-                <div class="tts-section-card-compact rewrite-stages-compact" aria-live="polite">
+                <div class="tts-section-card-compact tts-section-card-compact--summary rewrite-stages-compact" aria-live="polite">
+                    <span class="slot-badge badge-{{ 'yes' if _tts_has_text else 'no' }} tts-section-compact-elevenlabs-badge" id="tts-section-compact-elevenlabs-badge">ElevenLabs</span>
+                    <span class="tts-section-compact-sep" aria-hidden="true">|</span>
                     <span class="rewrite-stages-compact__pair">
-                        <span class="slot-badge badge-{{ 'yes' if _tts_compact_has else 'no' }}" id="tts-section-compact-badge">ElevenLabs</span>
+                        <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-section-compact-result-badge">Result</span>
                     </span>
-                    <span class="rewrite-source-counts tts-section-compact-counts" id="tts-section-compact-counts"></span>
+                    <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                    <span class="tts-section-compact-timings tts-section-compact-timings--eleven">
+                        <span class="tts-section-compact-timings-name">Eleven</span>
+                        <span class="tts-section-compact-timings-status tts-word-timings-panel-compact-scenes-status rewrite-scene-writer-check__wait" id="tts-section-compact-eleven-check" aria-live="polite">—</span>
+                        <button type="button" class="tts-word-timings-compact-source-dot-wrap" id="tts-section-compact-eleven-source-btn" title="Источник для JSON сцен: Eleven" aria-label="Источник для JSON сцен: Eleven" aria-pressed="false" hidden>
+                            <span class="tts-word-timings-compact-source-dot" id="tts-section-compact-eleven-source-dot" aria-hidden="true"></span>
+                        </button>
+                    </span>
+                    <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                    <span class="tts-section-compact-timings tts-section-compact-timings--whisper">
+                        <span class="tts-section-compact-timings-name">Whisper</span>
+                        <span class="tts-section-compact-timings-status tts-word-timings-panel-compact-scenes-status rewrite-scene-writer-check__wait" id="tts-section-compact-whisper-check" aria-live="polite">—</span>
+                        <button type="button" class="tts-word-timings-compact-source-dot-wrap" id="tts-section-compact-whisper-source-btn" title="Источник для JSON сцен: Whisper" aria-label="Источник для JSON сцен: Whisper" aria-pressed="false" hidden>
+                            <span class="tts-word-timings-compact-source-dot" id="tts-section-compact-whisper-source-dot" aria-hidden="true"></span>
+                        </button>
+                    </span>
                 </div>
             </div>
             <div class="tts-section-collapsible-inner">
@@ -131,9 +148,7 @@
             </p>
             {% else %}
             <p class="scene-text rewrite-pipeline-runner__lead">
-                Модель <strong>Eleven v3</strong> — до <strong>~5 000</strong> символов на один запрос. Если текст длиннее, он автоматически делится по символу <strong>точки</strong> на предложения,
-                пакуется в куски ≤ лимита, для каждого куска уходит отдельный запрос, затем фрагменты <strong>склеиваются в один MP3</strong> (на сервере нужен <code>ffmpeg</code>).
-                С баланса списываются все символы. Точки в «Dr.» и числах 3.14 тоже режут текст — при необходимости временно замените их.
+                Модель <strong>Eleven v3</strong> — до <strong>~5 000</strong> символов на один запрос. Текст автоматически делится по символу точки на предложения, пакуется в куски ≤ лимита, для каждого куска уходит отдельный запрос, затем фрагменты склеиваются в один MP3.
             </p>
             <div class="tts-form">
                 {% set _tts_src = tts_script_source|default('voiceover_editor') %}
@@ -157,7 +172,6 @@
                     </div>
                     <p class="tts-script-source-hint" id="tts-script-source-hint" aria-live="polite">{% if not rw %}Сначала загрузите блок ReWrite выше — тогда сюда подставится Result выбранного этапа.{% endif %}</p>
                 </div>
-                {% set _tts_has_text = (tts_last_text or '')|trim %}
                 <div class="tts-text-block">
                     <div class="rewrite-source-toolbar slot-header">
                         <span class="slot-badge badge-{{ 'yes' if _tts_has_text else 'no' }}" id="tts-text-badge" data-text-badge-for="tts-text">ElevenLabs</span>
@@ -174,14 +188,13 @@
                         <textarea id="tts-text" class="rewrite-source-textarea rewrite-source-textarea--locked" rows="7" placeholder="Вставьте текст для озвучки…" readonly>{{ tts_last_text|e }}</textarea>
                     </div>
                     <div class="tts-char-row tts-char-row--meta">
-                        <span class="tts-char-row__limit">Лимит <strong>одного</strong> запроса: <span id="tts-char-max">5000</span> символов</span>
-                        <span id="tts-char-count" class="tts-char-count-warn hidden" aria-live="polite"></span>
+                        <span class="tts-char-row__limit">Лимит <strong>одного</strong> запроса: <span id="tts-char-max">{{ (tts_models[0].max_chars if tts_models else 5000)|fmt_num_ru }}</span> символов</span>
                         <span id="tts-split-hint" class="tts-split-hint hidden"></span>
                     </div>
                 </div>
                 <div class="tts-row">
                     <div class="tts-field setting-model-dropdown">
-                        {% set ns_tts_ml = namespace(d='Eleven v3 — ~5 000 символов') %}
+                        {% set ns_tts_ml = namespace(d=(tts_models[0].label if tts_models else 'Eleven v3')) %}
                         <h3 class="rewrite-source-subtitle">Модель</h3>
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single"
                             data-job-model-field="tts-model"
@@ -196,7 +209,7 @@
                                 <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
                                     <input type="radio" name="job-tts-model-radio" class="rewrite-anim-radio visually-hidden-input" value="{{ m.id }}" data-max="{{ m.max_chars }}" checked>
                                     <span class="rewrite-anim-option__body">
-                                        <span class="rewrite-anim-option__title">{{ m.label }} — {{ m.hint }}</span>
+                                        <span class="rewrite-anim-option__title">{{ m.label }}</span>
                                     </span>
                                 </label>
                                 {% endfor %}
@@ -204,7 +217,7 @@
                         </div>
                         <select id="tts-model" class="rewrite-global-model-select-hidden" aria-hidden="true" tabindex="-1">
                             {% for m in tts_models %}
-                            <option value="{{ m.id }}" data-max="{{ m.max_chars }}" selected>{{ m.label }} — {{ m.hint }}</option>
+                            <option value="{{ m.id }}" data-max="{{ m.max_chars }}" selected>{{ m.label }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -226,36 +239,46 @@
                         </select>
                     </div>
                 </div>
-                <div class="tts-sliders">
+                <div class="tts-settings-block">
+                    <div class="tts-settings-block__head">
+                        <h3 class="rewrite-source-subtitle">Настройки</h3>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="tts-settings-toggle" title="Редактировать" aria-label="Редактировать">
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                    </div>
+                    <hr class="tts-divider tts-settings-block__divider" aria-hidden="true">
+                    <div class="tts-sliders">
                     <div class="tts-slider-block">
                         <label class="tts-slider-label" for="tts-speed">Скорость <span class="tts-slider-val" id="tts-speed-val">1.00×</span></label>
-                        <input type="range" id="tts-speed" min="0" max="100" value="{{ tts_defaults.speed_pct | default(20) | int }}" class="tts-range">
+                        <input type="range" id="tts-speed" min="0" max="100" value="{{ tts_defaults.speed_pct | default(20) | int }}" class="tts-range" disabled>
                         <div class="tts-slider-ends"><span>0.25×</span><span>4.0×</span></div>
                     </div>
                     <div class="tts-slider-block">
                         <label class="tts-slider-label" for="tts-stability">Стабильность <span class="tts-slider-val" id="tts-stability-val">{{ tts_defaults.stability_pct | default(50) | int }}</span></label>
-                        <input type="range" id="tts-stability" min="0" max="100" value="{{ tts_defaults.stability_pct | default(50) | int }}" class="tts-range">
+                        <input type="range" id="tts-stability" min="0" max="100" value="{{ tts_defaults.stability_pct | default(50) | int }}" class="tts-range" disabled>
                         <div class="tts-slider-ends"><span>Выразительнее</span><span>Стабильнее</span></div>
                     </div>
                     <div class="tts-slider-block">
                         <label class="tts-slider-label" for="tts-similarity">Сходство <span class="tts-slider-val" id="tts-similarity-val">{{ tts_defaults.similarity_pct | default(75) | int }}</span></label>
-                        <input type="range" id="tts-similarity" min="0" max="100" value="{{ tts_defaults.similarity_pct | default(75) | int }}" class="tts-range">
+                        <input type="range" id="tts-similarity" min="0" max="100" value="{{ tts_defaults.similarity_pct | default(75) | int }}" class="tts-range" disabled>
                         <div class="tts-slider-ends"><span>Ниже</span><span>Выше</span></div>
                     </div>
                     <div class="tts-slider-block">
                         <label class="tts-slider-label" for="tts-style">Выразительность стиля <span class="tts-slider-val" id="tts-style-val">{{ tts_defaults.style_pct | default(0) | int }}</span></label>
-                        <input type="range" id="tts-style" min="0" max="100" value="{{ tts_defaults.style_pct | default(0) | int }}" class="tts-range">
+                        <input type="range" id="tts-style" min="0" max="100" value="{{ tts_defaults.style_pct | default(0) | int }}" class="tts-range" disabled>
                         <div class="tts-slider-ends"><span>Нет</span><span>Сильнее</span></div>
                     </div>
+                    </div>
+                    <label class="tts-check">
+                        <input type="checkbox" id="tts-speaker-boost" {% if tts_defaults.get('use_speaker_boost', True) %}checked{% endif %} disabled>
+                        Speaker boost (сильнее похоже на оригинальный голос, чуть выше задержка)
+                    </label>
                 </div>
-                <label class="tts-check">
-                    <input type="checkbox" id="tts-speaker-boost" {% if tts_defaults.get('use_speaker_boost', True) %}checked{% endif %}>
-                    Speaker boost (сильнее похоже на оригинальный голос, чуть выше задержка)
-                </label>
+                <hr class="tts-divider" aria-hidden="true">
                 <div class="tts-actions">
                     <button type="button" class="btn btn-primary btn-sm" id="tts-generate"{% if not _tts_has_text %} disabled title="Сначала вставьте или подставьте текст для озвучки"{% endif %}>Сгенерировать озвучку</button>
                 </div>
-                <p id="tts-error" class="tts-error hidden" role="alert"></p>
                 <div id="tts-player-wrap" class="tts-player-wrap tts-result-block">
                     <div class="rewrite-source-toolbar slot-header tts-result-toolbar">
                         <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-result-badge">Result</span>
@@ -290,19 +313,14 @@
                                 <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                             </svg>
                         </button>
-                        <button type="button" class="tts-clear-btn" id="tts-clear-btn" title="Удалить озвучку" aria-label="Удалить озвучку">
-                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-1 0v14H9V6"/>
-                            </svg>
-                        </button>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="tts-word-timings-row">
                     <article id="tts-words-wrap" class="scene-card tts-word-timings-panel tts-word-timings-panel--eleven tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-word-timings-source="elevenlabs">
-                        <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="tts-words-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть">
-                            <div class="tts-word-timings-panel__title-row rewrite-voiceover-final-title-row">
+                        <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="tts-words-header">
+                            <div class="tts-word-timings-panel__title-row tts-word-timings-panel__toggle rewrite-voiceover-final-title-row" id="tts-words-toggle" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть" aria-controls="tts-words-body">
                                 <span class="rewrite-stage-body-collapse-chevron tts-words-chevron" aria-hidden="true"></span>
                                 <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Тайминги Eleven</div>
                             </div>
@@ -310,7 +328,14 @@
                                 <span class="rewrite-stages-compact__pair">
                                     <span class="slot-badge badge-{{ 'yes' if tts_words_available else 'no' }} rewrite-stage-result-badge" id="tts-words-compact-badge">Result</span>
                                 </span>
-                                <span class="rewrite-source-counts tts-word-timings-panel-compact-counts" id="tts-words-compact-counts"></span>
+                                <span class="tts-word-timings-panel-compact-meta" id="tts-words-compact-meta">
+                                    <input type="radio" name="timings-source" value="elevenlabs" id="timings-source-elevenlabs" class="tts-word-timings-source-input--sr" {% if apply_timings_source == 'elevenlabs' %}checked{% endif %} {% if not tts_words_available %}disabled{% endif %} tabindex="-1" aria-hidden="true">
+                                    <span class="rewrite-source-counts tts-word-timings-panel-compact-duration" id="tts-words-compact-duration"></span>
+                                    <span class="tts-word-timings-panel-compact-scenes-status rewrite-scene-writer-check__wait" id="tts-words-compact-check" aria-live="polite">—</span>
+                                    <button type="button" class="tts-word-timings-compact-source-dot-wrap" id="tts-words-compact-source-btn" title="Источник для JSON сцен (Eleven)" aria-label="Источник для JSON сцен: Eleven" aria-pressed="false" hidden>
+                                        <span class="tts-word-timings-compact-source-dot" id="tts-words-compact-source-dot" aria-hidden="true"></span>
+                                    </button>
+                                </span>
                             </div>
                         </div>
                         <div id="tts-words-body" class="tts-word-timings-panel__body tts-word-timings-panel-collapsible-inner" hidden>
@@ -323,11 +348,14 @@
                                     <button type="button" class="rewrite-lock-toggle btn-icon tts-words-download-btn" id="tts-words-download" title="Скачать .words.json" aria-label="Скачать JSON">
                                         <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                                     </button>
-                                    <span class="rewrite-stage-result-counts" id="tts-words-counts" aria-live="polite"></span>
+                                    <span class="rewrite-source-counts rewrite-stage-result-counts tts-word-timings-expanded-duration" id="tts-words-counts" aria-live="polite"></span>
                                     <span id="tts-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
                                 </div>
-                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result">
-                                    <textarea id="tts-words-json" class="rewrite-source-textarea rewrite-stage-result" rows="10" placeholder="Pending" spellcheck="false" aria-label="Тайминги Eleven (JSON)"></textarea>
+                                <div id="tts-words-result-slot" class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result tts-words-result-slot" data-status="{% if tts_words_available %}done{% else %}pending{% endif %}">
+                                    <div class="slot-status-row tts-words-status-row whisper-words-status-row{% if tts_words_available %} hidden{% endif %}" id="tts-words-status-row">
+                                        <span class="slot-status tts-words-status-text whisper-words-status-text" id="tts-words-status-text">{% if not tts_words_available %}Pending{% endif %}</span>
+                                    </div>
+                                    <textarea id="tts-words-json" class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="10" spellcheck="false" placeholder="" aria-label="Тайминги Eleven (JSON)" readonly></textarea>
                                 </div>
                             </div>
                             <div class="rewrite-scene-writer-check tts-word-timings-check" id="tts-words-check" data-word-timings-check="elevenlabs" aria-live="polite">
@@ -347,17 +375,11 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="tts-words-source-row" title="Использовать при «Сгенерировать JSON-код сцен с таймингами»">
-                                <label class="tts-words-source-radio">
-                                    <input type="radio" name="timings-source" value="elevenlabs" id="timings-source-elevenlabs" {% if apply_timings_source == 'elevenlabs' %}checked{% endif %} {% if not tts_words_available %}disabled{% endif %}>
-                                    <span>Источник для JSON сцен</span>
-                                </label>
-                            </div>
                         </div>
                     </article>
                     <article id="whisper-words-wrap" class="scene-card tts-word-timings-panel tts-word-timings-panel--whisper tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-word-timings-source="whisper">
-                        <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="whisper-words-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть">
-                            <div class="tts-word-timings-panel__title-row rewrite-voiceover-final-title-row">
+                        <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="whisper-words-header">
+                            <div class="tts-word-timings-panel__title-row tts-word-timings-panel__toggle rewrite-voiceover-final-title-row" id="whisper-words-toggle" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть" aria-controls="whisper-words-body">
                                 <span class="rewrite-stage-body-collapse-chevron tts-words-chevron" aria-hidden="true"></span>
                                 <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Тайминги Whisper</div>
                             </div>
@@ -367,7 +389,14 @@
                                     <button type="button" class="btn-regenerate rewrite-stage-run rewrite-stages-compact__run whisper-words-run" id="whisper-words-run" title="Прогнать локальный Whisper по словам" aria-label="Прогнать локальный Whisper по словам" {% if not tts_last_audio_href %}hidden{% endif %}>↻</button>
                                     <span class="rewrite-stage-run-blocked rewrite-stage-compact-run-blocked whisper-words-run-blocked" role="img" aria-label="Озвучка не готова" title="Сначала сгенерируйте озвучку" {% if tts_last_audio_href %}hidden{% endif %}>✕</span>
                                 </span>
-                                <span class="rewrite-source-counts tts-word-timings-panel-compact-counts" id="whisper-words-compact-counts"></span>
+                                <span class="tts-word-timings-panel-compact-meta" id="whisper-words-compact-meta">
+                                    <input type="radio" name="timings-source" value="whisper" id="timings-source-whisper" class="tts-word-timings-source-input--sr" {% if apply_timings_source == 'whisper' %}checked{% endif %} {% if not whisper_words_available %}disabled{% endif %} tabindex="-1" aria-hidden="true">
+                                    <span class="rewrite-source-counts tts-word-timings-panel-compact-duration" id="whisper-words-compact-duration"></span>
+                                    <span class="tts-word-timings-panel-compact-scenes-status rewrite-scene-writer-check__wait" id="whisper-words-compact-check" aria-live="polite">—</span>
+                                    <button type="button" class="tts-word-timings-compact-source-dot-wrap" id="whisper-words-compact-source-btn" title="Источник для JSON сцен (Whisper)" aria-label="Источник для JSON сцен: Whisper" aria-pressed="false" hidden>
+                                        <span class="tts-word-timings-compact-source-dot" id="whisper-words-compact-source-dot" aria-hidden="true"></span>
+                                    </button>
+                                </span>
                             </div>
                         </div>
                         <div id="whisper-words-body" class="tts-word-timings-panel__body tts-word-timings-panel-collapsible-inner" hidden>
@@ -382,7 +411,7 @@
                                     <button type="button" class="rewrite-lock-toggle btn-icon whisper-words-download-btn" id="whisper-words-download" title="Скачать .whisper.words.json" aria-label="Скачать JSON">
                                         <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                                     </button>
-                                    <span class="rewrite-stage-result-counts" id="whisper-words-counts" aria-live="polite"></span>
+                                    <span class="rewrite-source-counts rewrite-stage-result-counts tts-word-timings-expanded-duration" id="whisper-words-counts" aria-live="polite"></span>
                                     <span id="whisper-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
                                 </div>
                                 <div id="whisper-words-result-slot" class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result whisper-words-result-slot" data-status="{% if whisper_words_available %}done{% else %}pending{% endif %}">
@@ -390,7 +419,7 @@
                                         <span class="slot-status whisper-words-status-text" id="whisper-words-status-text">{% if not whisper_words_available %}Pending{% endif %}</span>
                                         <button type="button" class="btn-cancel-generation hidden" id="whisper-words-cancel-btn">Cancel</button>
                                     </div>
-                                    <textarea id="whisper-words-json" class="rewrite-source-textarea rewrite-stage-result" rows="10" spellcheck="false" placeholder="" aria-label="Тайминги Whisper (JSON)">{% if whisper_words_body %}{% autoescape false %}{{ whisper_words_body | replace('</textarea>', '</te' ~ 'xtarea>') }}{% endautoescape %}{% endif %}</textarea>
+                                    <textarea id="whisper-words-json" class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="10" spellcheck="false" placeholder="" aria-label="Тайминги Whisper (JSON)" readonly>{% if whisper_words_body %}{% autoescape false %}{{ whisper_words_body | replace('</textarea>', '</te' ~ 'xtarea>') }}{% endautoescape %}{% endif %}</textarea>
                                 </div>
                             </div>
                             <div class="rewrite-scene-writer-check tts-word-timings-check" id="whisper-words-check" data-word-timings-check="whisper" aria-live="polite">
@@ -399,12 +428,6 @@
                                     <div class="tts-word-timings-check-text tts-word-timings-scenes-check-tree tts-word-timings-scenes-check-reasons hidden" id="whisper-words-scenes-check-reasons"></div>
                                 </div>
                                 <div class="tts-word-timings-check-text tts-word-timings-check-summary" id="whisper-words-check-summary">—</div>
-                            </div>
-                            <div class="tts-words-source-row" title="Использовать при «Сгенерировать JSON-код сцен с таймингами»">
-                                <label class="tts-words-source-radio">
-                                    <input type="radio" name="timings-source" value="whisper" id="timings-source-whisper" {% if apply_timings_source == 'whisper' %}checked{% endif %} {% if not whisper_words_available %}disabled{% endif %}>
-                                    <span>Источник для JSON сцен</span>
-                                </label>
                             </div>
                         </div>
                     </article>
@@ -3305,37 +3328,12 @@
             if (!ttsSectionEl) return;
             ttsSectionEl.classList.toggle('tts-section--body-collapsed', !!collapsed);
             ttsSectionEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            try { window.__syncTtsSectionCompactCounts(); } catch (e) {}
         }
         window.__applyTtsSectionCollapsed = applyTtsSectionCollapsed;
         window.__syncTtsSectionCompactCounts = function () {
-            const mainBadge = document.getElementById('tts-text-badge');
-            const mainCounts = document.getElementById('tts-text-counts');
-            const compactBadge = document.getElementById('tts-section-compact-badge');
-            const compactCounts = document.getElementById('tts-section-compact-counts');
-            const textEl = document.getElementById('tts-text');
-            if (compactCounts) {
-                if (mainCounts && mainCounts.textContent) {
-                    compactCounts.textContent = mainCounts.textContent;
-                } else if (textEl) {
-                    const raw = textEl.value || '';
-                    const fmt = (typeof formatNumRu === 'function')
-                        ? formatNumRu
-                        : (n) => String(Math.trunc(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202F');
-                    const cw = (typeof countWords === 'function')
-                        ? countWords
-                        : (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
-                    compactCounts.textContent = fmt(raw.length) + ' симв. · ' + fmt(cw(raw)) + ' сл.';
-                }
-            }
-            if (compactBadge) {
-                if (mainBadge) {
-                    compactBadge.classList.toggle('badge-yes', mainBadge.classList.contains('badge-yes'));
-                    compactBadge.classList.toggle('badge-no', mainBadge.classList.contains('badge-no'));
-                } else if (textEl) {
-                    const has = !!String(textEl.value || '').trim();
-                    compactBadge.classList.toggle('badge-yes', has);
-                    compactBadge.classList.toggle('badge-no', !has);
-                }
+            if (typeof window.__syncTtsSectionCompactSummary === 'function') {
+                try { window.__syncTtsSectionCompactSummary(); } catch (_) {}
             }
         };
         if (ttsSectionEl && ttsSectionEl.getAttribute('data-tts-section-collapse') === '1') {
@@ -3362,12 +3360,12 @@
     {% if elevenlabs_key_set %}
     (function elevenlabsTTS() {
         const jobId = {{ job_id | tojson }};
-        const ttsLastAudioUrl = {{ (tts_last_audio_href or '') | tojson }};
+        let ttsLastAudioUrl = {{ (tts_last_audio_href or '') | tojson }};
         const ttsLastAudioFilename = {{ (tts_last_audio_name or '') | tojson }};
         const ttsLastWordsFilename = {{ (tts_last_words_name or '') | tojson }};
-        const ttsLastWordsUrl      = {{ (tts_last_words_href or '') | tojson }};
+        let ttsLastWordsUrl      = {{ (tts_last_words_href or '') | tojson }};
         const whisperLastWordsFilename = {{ (whisper_last_words_name or '') | tojson }};
-        const whisperLastWordsUrl      = {{ (whisper_last_words_href or '') | tojson }};
+        let whisperLastWordsUrl      = {{ (whisper_last_words_href or '') | tojson }};
         const whisperInitialMeta       = {{ (whisper_initial_final_ev or none) | tojson }};
         const defaultVoiceId = {{ (tts_defaults.voice_id or '') | tojson }};
         const ttsScriptSourceInitial = {{ (tts_script_source|default('voiceover_editor')) | tojson }};
@@ -3386,14 +3384,17 @@
         const ttsTextCountsEl = document.getElementById('tts-text-counts');
         const ttsTextToggleBtn = document.getElementById('tts-text-toggle');
         const ttsTextCopyBtn = document.getElementById('tts-text-copy-btn');
-        const charCountEl = document.getElementById('tts-char-count');
         const charMaxEl = document.getElementById('tts-char-max');
         const splitHintEl = document.getElementById('tts-split-hint');
         let ttsTextLocked = true;
+        let ttsSettingsLocked = true;
+        const ttsSettingsToggleBtn = document.getElementById('tts-settings-toggle');
+        const ttsSpeakerBoostEl = document.getElementById('tts-speaker-boost');
+        const ttsSettingsRangeIds = ['tts-speed', 'tts-stability', 'tts-similarity', 'tts-style'];
         let ttsGenBusy = false;
         let ttsGenAbort = null;
+        let ttsGenSession = 0;
         const btnGen = document.getElementById('tts-generate');
-        const errEl = document.getElementById('tts-error');
         const playerWrap = document.getElementById('tts-player-wrap');
         const ttsResultSlot = document.getElementById('tts-result-slot');
         const ttsResultStatusRow = document.getElementById('tts-result-status-row');
@@ -3409,7 +3410,6 @@
         const timeCurrent = document.getElementById('tts-time-current');
         const timeTotal = document.getElementById('tts-time-total');
         const downloadBtn = document.getElementById('tts-download-btn');
-        const ttsClearBtn = document.getElementById('tts-clear-btn');
         let ttsDownloadFilename = 'tts.mp3';
         let currentAudioFilename = ttsLastAudioFilename || '';
         if (!modelSel || !voiceSel) return;
@@ -3457,8 +3457,10 @@
             const has = ttsHasAudioSrc();
             ttsResultBadge.classList.toggle('badge-yes', has);
             ttsResultBadge.classList.toggle('badge-no', !has);
-            syncTtsClearButton();
             if (typeof syncWhisperRunPrereq === 'function') syncWhisperRunPrereq();
+            if (typeof window.__syncTtsSectionCompactSummary === 'function') {
+                window.__syncTtsSectionCompactSummary();
+            }
         };
 
         const setTtsPlayerEmptyState = (empty) => {
@@ -3469,6 +3471,19 @@
         const setTtsResultStatusMessage = (message) => {
             if (!ttsResultStatusText) return;
             ttsResultStatusText.textContent = String(message || '');
+        };
+
+        const showTtsError = (message) => {
+            const msg = String(message || '').trim() || 'Ошибка';
+            ttsResultSlot?.setAttribute('data-status', 'error');
+            ttsResultStatusRow?.classList.remove('hidden');
+            ttsResultCancelBtn?.classList.add('hidden');
+            if (ttsResultStatusText) {
+                ttsResultStatusText.textContent = msg;
+                ttsResultStatusText.classList.remove('slot-status-with-spinner');
+            }
+            setTtsPlayerEmptyState(true);
+            syncTtsResultBadge();
         };
 
         const setTtsPendingUi = (isPending) => {
@@ -3530,15 +3545,9 @@
             }
             syncTtsResultDuration();
             syncTtsResultBadge();
-            syncTtsClearButton();
             resetElevenWordsResultUi();
+            resetWhisperWordsResultUi();
             clearSceneAudioTimingBadges();
-        };
-
-        const syncTtsClearButton = () => {
-            if (!ttsClearBtn) return;
-            const has = ttsHasAudioSrc();
-            ttsClearBtn.disabled = ttsGenBusy || !has;
         };
 
         const clearSceneAudioTimingBadges = () => {
@@ -3565,8 +3574,8 @@
             setTtsPendingUi(true);
             syncTtsResultDuration();
             syncTtsResultBadge();
-            syncTtsClearButton();
             resetElevenWordsResultUi();
+            resetWhisperWordsResultUi();
             clearSceneAudioTimingBadges();
         };
 
@@ -3636,16 +3645,24 @@
         // --- Тайминги Eleven / Whisper (два столбца под плеером) ---
         const wordsWrapEl       = document.getElementById('tts-words-wrap');
         const wordsHeaderEl     = document.getElementById('tts-words-header');
+        const wordsToggleEl     = document.getElementById('tts-words-toggle');
         const wordsBodyEl       = document.getElementById('tts-words-body');
         const wordsCompactBadge = document.getElementById('tts-words-compact-badge');
-        const wordsCompactCounts = document.getElementById('tts-words-compact-counts');
+        const wordsCompactDuration = document.getElementById('tts-words-compact-duration');
+        const wordsCompactCheck = document.getElementById('tts-words-compact-check');
+        const wordsCompactSourceDot = document.getElementById('tts-words-compact-source-dot');
+        const wordsCompactSourceBtn = document.getElementById('tts-words-compact-source-btn');
         const wordsJsonEl       = document.getElementById('tts-words-json');
+        const wordsResultSlot   = document.getElementById('tts-words-result-slot');
+        const wordsStatusRow    = document.getElementById('tts-words-status-row');
+        const wordsStatusText   = document.getElementById('tts-words-status-text');
         const wordsResultBadge  = document.getElementById('tts-words-result-badge');
         const wordsCountsEl     = document.getElementById('tts-words-counts');
         const wordsDownloadBtn  = document.getElementById('tts-words-download');
         const wordsCopyBtn      = document.getElementById('tts-words-copy');
         const wordsCopyStatus   = document.getElementById('tts-words-copy-status');
         const timingsSourceEleven = document.getElementById('timings-source-elevenlabs');
+        const timingsSourceWhisper = document.getElementById('timings-source-whisper');
         let lastWordsDoc = null;
         let lastWordsFilename = '';
         let lastWordsUrl = '';
@@ -3660,12 +3677,21 @@
             return (h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`) + `.${pad(rem, 3)}`;
         };
 
+        const sectionCompactResultBadge = document.getElementById('tts-section-compact-result-badge');
+        const sectionCompactElevenCheck = document.getElementById('tts-section-compact-eleven-check');
+        const sectionCompactWhisperCheck = document.getElementById('tts-section-compact-whisper-check');
+        const sectionCompactElevenSourceBtn = document.getElementById('tts-section-compact-eleven-source-btn');
+        const sectionCompactElevenSourceDot = document.getElementById('tts-section-compact-eleven-source-dot');
+        const sectionCompactWhisperSourceBtn = document.getElementById('tts-section-compact-whisper-source-btn');
+        const sectionCompactWhisperSourceDot = document.getElementById('tts-section-compact-whisper-source-dot');
         const elevenCheckEls = {
             summary: document.getElementById('tts-words-check-summary'),
             exceptions: document.getElementById('tts-words-check-exceptions'),
             scenesSection: document.getElementById('tts-words-check-scenes-section'),
             scenesStatus: document.getElementById('tts-words-check-scenes-status'),
             scenesReasons: document.getElementById('tts-words-scenes-check-reasons'),
+            compactCheck: wordsCompactCheck,
+            sectionCompactCheck: sectionCompactElevenCheck,
             scenesValidation: true,
         };
         const whisperCheckEls = {
@@ -3673,7 +3699,9 @@
             scenesSection: document.getElementById('whisper-words-check-scenes-section'),
             scenesStatus: document.getElementById('whisper-words-check-scenes-status'),
             scenesReasons: document.getElementById('whisper-words-scenes-check-reasons'),
+            sectionCompactCheck: sectionCompactWhisperCheck,
             scenesValidation: true,
+            skipExclusionStats: true,
         };
 
         /** Окно ±N слов — только чтобы найти пару скобок; в исключения идёт всё между open и close. */
@@ -4011,10 +4039,28 @@
             }).join('');
         }
 
-        function setWordTimingsScenesCheckStatus(statusEl, text, className) {
-            if (!statusEl) return;
-            statusEl.textContent = text;
-            statusEl.className = 'tts-word-timings-check-scenes-status ' + (className || 'rewrite-scene-writer-check__wait');
+        function timingsCompactCheckMirrors(els) {
+            const mirrors = [];
+            if (els && els.compactCheck) mirrors.push(els.compactCheck);
+            if (els && els.sectionCompactCheck) mirrors.push(els.sectionCompactCheck);
+            return mirrors;
+        }
+
+        function setWordTimingsScenesCheckStatus(statusEl, text, className, mirrorEls) {
+            const targets = [];
+            if (statusEl) targets.push(statusEl);
+            (mirrorEls || []).forEach((el) => { if (el) targets.push(el); });
+            const cls = className || 'rewrite-scene-writer-check__wait';
+            targets.forEach((el) => {
+                el.textContent = text;
+                if (el === statusEl) {
+                    el.className = 'tts-word-timings-check-scenes-status ' + cls;
+                } else if (el.classList && el.classList.contains('tts-section-compact-timings-status')) {
+                    el.className = 'tts-section-compact-timings-status tts-word-timings-panel-compact-scenes-status ' + cls;
+                } else {
+                    el.className = 'tts-word-timings-panel-compact-scenes-status ' + cls;
+                }
+            });
         }
 
         function renderWordTimingsScenesValidation(els, doc, opts) {
@@ -4022,8 +4068,9 @@
             const treeEl = els && els.scenesReasons;
             const sectionEl = els && els.scenesSection;
             if (!statusEl) return null;
+            const compactMirror = timingsCompactCheckMirrors(els);
             if (opts && opts.statusMessage) {
-                setWordTimingsScenesCheckStatus(statusEl, '—', 'rewrite-scene-writer-check__wait');
+                setWordTimingsScenesCheckStatus(statusEl, '—', 'rewrite-scene-writer-check__wait', compactMirror);
                 if (treeEl) {
                     treeEl.innerHTML = '';
                     treeEl.classList.add('hidden');
@@ -4032,7 +4079,7 @@
                 return null;
             }
             if (!doc || typeof doc !== 'object') {
-                setWordTimingsScenesCheckStatus(statusEl, '—', 'rewrite-scene-writer-check__wait');
+                setWordTimingsScenesCheckStatus(statusEl, '—', 'rewrite-scene-writer-check__wait', compactMirror);
                 if (treeEl) {
                     treeEl.innerHTML = '';
                     treeEl.classList.add('hidden');
@@ -4045,6 +4092,7 @@
                 statusEl,
                 v.ok ? 'OK' : 'NO',
                 v.ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no',
+                compactMirror,
             );
             if (treeEl) {
                 const treeHtml = buildWordTimingsScenesCheckTreeHtml(v);
@@ -4113,7 +4161,174 @@
             return `${ttsFormatNumRu(n)} сл. · ${dur}`;
         }
 
-        function syncWordTimingsPanelCompact(compactBadgeEl, compactCountsEl, resultBadgeEl, meta) {
+        function buildWordTimingsCompactDuration(meta) {
+            if (!meta || typeof meta !== 'object') return '';
+            const words = Array.isArray(meta.words) ? meta.words : [];
+            const n = Number(meta.total_words || words.length || 0);
+            if (!n) return '';
+            return formatTtsMs(getWordTimingsLastEndMs(meta, words));
+        }
+
+        function syncTimingsSourceCompactDot(radioEl, btnEl, dotEl) {
+            if (!radioEl) return;
+            const has = !radioEl.disabled;
+            const checked = has && radioEl.checked;
+            if (btnEl) {
+                btnEl.hidden = !has;
+                btnEl.setAttribute('aria-pressed', checked ? 'true' : 'false');
+                btnEl.classList.toggle(
+                    'tts-word-timings-compact-source-dot-wrap--disabled',
+                    radioEl.disabled,
+                );
+                btnEl.classList.toggle('tts-word-timings-compact-source-dot-wrap--checked', checked);
+            }
+            if (dotEl) {
+                dotEl.classList.toggle('tts-word-timings-compact-source-dot--checked', checked);
+                dotEl.classList.toggle(
+                    'tts-word-timings-compact-source-dot--disabled',
+                    radioEl.disabled,
+                );
+            }
+        }
+
+        function getEnabledTimingsSourceRadios() {
+            return Array.from(document.querySelectorAll('input[name="timings-source"]')).filter((r) => !r.disabled);
+        }
+
+        function syncAllTimingsSourceDots() {
+            syncElevenCompactSourceDot();
+            syncWhisperCompactSourceDot();
+            syncTimingsSourceCompactDot(timingsSourceEleven, sectionCompactElevenSourceBtn, sectionCompactElevenSourceDot);
+            syncTimingsSourceCompactDot(timingsSourceWhisper, sectionCompactWhisperSourceBtn, sectionCompactWhisperSourceDot);
+        }
+
+        function syncTtsSectionCompactSummary() {
+            const compactTextBadge = document.getElementById('tts-section-compact-elevenlabs-badge');
+            if (compactTextBadge && ttsTextBadgeEl) {
+                compactTextBadge.classList.toggle('badge-yes', ttsTextBadgeEl.classList.contains('badge-yes'));
+                compactTextBadge.classList.toggle('badge-no', ttsTextBadgeEl.classList.contains('badge-no'));
+            } else if (compactTextBadge && textEl) {
+                const hasText = !!String(textEl.value || '').trim();
+                compactTextBadge.classList.toggle('badge-yes', hasText);
+                compactTextBadge.classList.toggle('badge-no', !hasText);
+            }
+            if (sectionCompactResultBadge && ttsResultBadge) {
+                sectionCompactResultBadge.classList.toggle('badge-yes', ttsResultBadge.classList.contains('badge-yes'));
+                sectionCompactResultBadge.classList.toggle('badge-no', ttsResultBadge.classList.contains('badge-no'));
+            } else if (sectionCompactResultBadge) {
+                const hasAudio = ttsHasAudioSrc();
+                sectionCompactResultBadge.classList.toggle('badge-yes', hasAudio);
+                sectionCompactResultBadge.classList.toggle('badge-no', !hasAudio);
+            }
+            syncAllTimingsSourceDots();
+        }
+        window.__syncTtsSectionCompactSummary = syncTtsSectionCompactSummary;
+
+        /** Всегда ровно один включённый источник (если есть хотя бы один доступный). */
+        function ensureTimingsSourceSelected(preferredIfNone) {
+            const enabled = getEnabledTimingsSourceRadios();
+            if (!enabled.length) {
+                syncAllTimingsSourceDots();
+                return null;
+            }
+            const alreadyChecked = enabled.filter((r) => r.checked);
+            let target = alreadyChecked.length === 1 ? alreadyChecked[0] : null;
+            if (alreadyChecked.length > 1) {
+                target = preferredIfNone && !preferredIfNone.disabled ? preferredIfNone : alreadyChecked[0];
+            }
+            if (!target) {
+                if (preferredIfNone && !preferredIfNone.disabled) {
+                    target = preferredIfNone;
+                } else {
+                    const eleven = enabled.find((r) => String(r.value).toLowerCase() === 'elevenlabs');
+                    const whisper = enabled.find((r) => String(r.value).toLowerCase() === 'whisper');
+                    target = eleven || whisper || enabled[0];
+                }
+            }
+            enabled.forEach((r) => {
+                r.checked = (r === target);
+            });
+            if (target) target.checked = true;
+            syncAllTimingsSourceDots();
+            return target;
+        }
+
+        let persistTimingsSourceTimer = null;
+        function persistTimingsSourcePreference(sourceValue) {
+            const src = String(sourceValue || '').toLowerCase() === 'whisper' ? 'whisper' : 'elevenlabs';
+            if (persistTimingsSourceTimer) clearTimeout(persistTimingsSourceTimer);
+            persistTimingsSourceTimer = setTimeout(async () => {
+                try {
+                    const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+                    await fetch(`${ROOT}/job/${jobId}/timings-source`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ source: src }),
+                    });
+                } catch (e) {
+                    console.warn('timings-source save failed:', e);
+                }
+            }, 200);
+        }
+
+        function selectTimingsSource(radioEl) {
+            if (!radioEl || radioEl.disabled) {
+                ensureTimingsSourceSelected();
+                return;
+            }
+            getEnabledTimingsSourceRadios().forEach((r) => {
+                r.checked = (r === radioEl);
+            });
+            radioEl.checked = true;
+            syncAllTimingsSourceDots();
+            persistTimingsSourcePreference(radioEl.value);
+            if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
+                window.__updateApplyTimingsBtnTitle();
+            }
+        }
+
+        function bindTimingsSourceDotClicks(root) {
+            if (!root || root.dataset.timingsSourceClickBound === '1') return;
+            root.dataset.timingsSourceClickBound = '1';
+            root.addEventListener('click', (e) => {
+                const btn = e.target.closest('.tts-word-timings-compact-source-dot-wrap');
+                if (!btn || btn.hidden || btn.classList.contains('tts-word-timings-compact-source-dot-wrap--disabled')) {
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                const radio = btn.id && btn.id.includes('whisper')
+                    ? timingsSourceWhisper
+                    : timingsSourceEleven;
+                selectTimingsSource(radio);
+            });
+        }
+
+        function initTimingsSourceUi() {
+            const row = document.querySelector('.tts-word-timings-row');
+            bindTimingsSourceDotClicks(row);
+            bindTimingsSourceDotClicks(document.querySelector('.tts-section-card-compact--summary'));
+            document.querySelectorAll('input[name="timings-source"]').forEach((r) => {
+                if (r.dataset.timingsSourceChangeBound === '1') return;
+                r.dataset.timingsSourceChangeBound = '1';
+                r.addEventListener('change', () => {
+                    const picked = ensureTimingsSourceSelected();
+                    if (picked) persistTimingsSourcePreference(picked.value);
+                    if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
+                        window.__updateApplyTimingsBtnTitle();
+                    }
+                });
+            });
+            ensureTimingsSourceSelected();
+            syncTtsSectionCompactSummary();
+        }
+
+        function syncElevenCompactSourceDot() {
+            syncTimingsSourceCompactDot(timingsSourceEleven, wordsCompactSourceBtn, wordsCompactSourceDot);
+        }
+
+        function syncWordTimingsPanelCompact(compactBadgeEl, compactCountsEl, resultBadgeEl, meta, opts) {
             const has = !!(meta && (meta.words_url || (Array.isArray(meta.words) && meta.words.length)));
             if (compactBadgeEl && resultBadgeEl) {
                 compactBadgeEl.classList.toggle('badge-yes', resultBadgeEl.classList.contains('badge-yes'));
@@ -4123,31 +4338,49 @@
                 compactBadgeEl.classList.toggle('badge-no', !has);
             }
             if (compactCountsEl) {
-                compactCountsEl.textContent = has ? buildWordTimingsCompactCounts(meta) : '';
+                if (opts && opts.durationOnly) {
+                    compactCountsEl.textContent = has ? buildWordTimingsCompactDuration(meta) : '';
+                } else {
+                    compactCountsEl.textContent = has ? buildWordTimingsCompactCounts(meta) : '';
+                }
             }
         }
 
-        function buildWordTimingsCheckSummary(meta) {
+        function buildWordTimingsCheckSummary(meta, options) {
             if (!meta || typeof meta !== 'object') return '';
-            const { excluded, clean, total } = splitWordTimingsWords(meta);
-            const totalWords = Number(meta.total_words || (meta.words && meta.words.length) || total || 0);
-            const excludedCount = excluded.length;
-            const cleanCount = clean.length;
+            const skipExclusionStats = !!(options && options.skipExclusionStats);
             const words = Array.isArray(meta.words) ? meta.words : [];
+            const totalWords = Number(meta.total_words || words.length || 0);
             const durMs = getWordTimingsLastEndMs(meta, words);
             const first = meta.first_word || (meta.words && meta.words[0]);
             const last = meta.last_word || (meta.words && meta.words[meta.words.length - 1]);
-            const lines = [
-                `Слов: ${totalWords}`,
-                `Слов исключений: ${excludedCount}`,
-                `Слов без исключений: ${cleanCount}${totalWords ? ` (из ${totalWords})` : ''}`,
-                `Длительность: ${formatTtsMs(durMs)}`,
-            ];
-            if (meta.model) lines.push(`Модель: ${meta.model}`);
-            if (meta.device) lines.push(`Устройство: ${meta.device}`);
-            if (meta.language) lines.push(`Язык: ${meta.language}`);
-            if (meta.audio_filename) lines.push(`Аудио: ${meta.audio_filename}`);
-            if (meta.voice_name) lines.push(`Голос: ${meta.voice_name}`);
+            const lines = [`Слов: ${totalWords}`];
+            if (!skipExclusionStats) {
+                const { excluded, clean, total } = splitWordTimingsWords(meta);
+                const excludedCount = excluded.length;
+                const cleanCount = clean.length;
+                const totalAll = Number(meta.total_words || (meta.words && meta.words.length) || total || 0);
+                lines.push(`Слов исключений: ${excludedCount}`);
+                lines.push(`Слов без исключений: ${cleanCount}${totalAll ? ` (из ${totalAll})` : ''}`);
+            }
+            lines.push(`Длительность: ${formatTtsMs(durMs)}`);
+            if (skipExclusionStats) {
+                const audioName = String(
+                    meta.audio_filename
+                    || (options && options.audioFilenameFallback)
+                    || ''
+                ).trim();
+                if (audioName) lines.push(`Аудио: ${audioName}`);
+                if (meta.model) lines.push(`Модель: ${meta.model}`);
+                if (meta.device) lines.push(`Устройство: ${meta.device}`);
+                if (meta.language) lines.push(`Язык: ${meta.language}`);
+            } else {
+                if (meta.model) lines.push(`Модель: ${meta.model}`);
+                if (meta.device) lines.push(`Устройство: ${meta.device}`);
+                if (meta.language) lines.push(`Язык: ${meta.language}`);
+                if (meta.audio_filename) lines.push(`Аудио: ${meta.audio_filename}`);
+                if (meta.voice_name) lines.push(`Голос: ${meta.voice_name}`);
+            }
             if (first) lines.push(`Первое: «${String(first.word).slice(0, 24)}» @ ${first.start_ms} мс`);
             if (last) lines.push(`Последнее: «${String(last.word).slice(0, 24)}» @ ${last.end_ms} мс`);
             return lines.join('\n');
@@ -4183,7 +4416,13 @@
                 return;
             }
             const { excluded } = splitWordTimingsWords(doc);
-            if (summaryEl) summaryEl.textContent = buildWordTimingsCheckSummary(doc) || '—';
+            const summaryOpts = els && els.skipExclusionStats
+                ? {
+                    skipExclusionStats: true,
+                    audioFilenameFallback: currentAudioFilename || ttsLastAudioFilename || '',
+                }
+                : null;
+            if (summaryEl) summaryEl.textContent = buildWordTimingsCheckSummary(doc, summaryOpts) || '—';
             if (exceptionsEl) exceptionsEl.textContent = buildWordTimingsExceptionsText(excluded);
             if (els && els.scenesValidation) renderWordTimingsScenesValidation(els, doc, opts);
         }
@@ -4194,13 +4433,8 @@
 
         function syncWordTimingsJsonEditable(ta) {
             if (!ta) return;
-            const raw = (ta.value || '').trim();
-            const locked = !raw
-                || raw === 'Pending'
-                || raw.startsWith('Загрузка')
-                || ta.classList.contains('rewrite-stage-result--busy');
-            ta.readOnly = locked;
-            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+            ta.readOnly = true;
+            ta.classList.add('rewrite-source-textarea--locked');
         }
 
         function setWordTimingsJsonField(ta, value, opts) {
@@ -4317,13 +4551,32 @@
                 if (!doc) {
                     wordsCountsEl.textContent = '';
                 } else {
-                    const n = Number(doc.total_words || (doc.words || []).length || 0);
-                    const dur = formatTtsMs(getWordTimingsLastEndMs(doc));
-                    wordsCountsEl.textContent = `${n.toLocaleString('ru-RU')} сл. · ${dur}`;
+                    wordsCountsEl.textContent = buildWordTimingsCompactDuration(doc);
                 }
             }
-            syncWordTimingsPanelCompact(wordsCompactBadge, wordsCompactCounts, wordsResultBadge, doc);
+            syncWordTimingsPanelCompact(wordsCompactBadge, wordsCompactDuration, wordsResultBadge, doc, { durationOnly: true });
             if (timingsSourceEleven) timingsSourceEleven.disabled = !doc;
+            ensureTimingsSourceSelected(doc ? timingsSourceEleven : null);
+        }
+
+        function setElevenWordsPendingUi(isPending) {
+            if (!wordsResultSlot) return;
+            if (isPending) {
+                wordsResultSlot.setAttribute('data-status', 'pending');
+                wordsStatusRow?.classList.remove('hidden');
+                if (wordsStatusText) {
+                    wordsStatusText.textContent = 'Pending';
+                    wordsStatusText.classList.remove('slot-status-with-spinner');
+                }
+                if (wordsJsonEl) {
+                    wordsJsonEl.value = '';
+                    wordsJsonEl.classList.remove('rewrite-stage-result--error', 'rewrite-stage-result--busy');
+                }
+                clearWordTimingsCheck(elevenCheckEls);
+            } else if (wordsResultSlot.getAttribute('data-status') === 'pending') {
+                wordsResultSlot.setAttribute('data-status', 'done');
+                wordsStatusRow?.classList.add('hidden');
+            }
         }
 
         function resetElevenWordsResultUi() {
@@ -4334,8 +4587,12 @@
             setWordTimingsResultBadge(wordsResultBadge, false);
             setWordTimingsResultBadge(wordsCompactBadge, false);
             if (wordsCountsEl) wordsCountsEl.textContent = '';
-            if (wordsCompactCounts) wordsCompactCounts.textContent = '';
-            setWordTimingsJsonField(wordsJsonEl, '', { busy: false });
+            if (wordsCompactDuration) wordsCompactDuration.textContent = '';
+            if (wordsCompactCheck) {
+                setWordTimingsScenesCheckStatus(wordsCompactCheck, '—', 'rewrite-scene-writer-check__wait');
+            }
+            if (wordsCompactSourceBtn) wordsCompactSourceBtn.hidden = true;
+            setElevenWordsPendingUi(true);
             clearWordTimingsCheck(elevenCheckEls);
             if (timingsSourceEleven) timingsSourceEleven.disabled = true;
             wordsWrapEl.setAttribute('aria-expanded', 'false');
@@ -4364,8 +4621,10 @@
             lastWordsFilename = finalData.words_filename || 'voiceover.words.json';
             lastWordsUrl = url;
 
+            setElevenWordsPendingUi(false);
             setWordTimingsJsonField(wordsJsonEl, JSON.stringify(doc, null, 2));
             lastWordsDoc = doc;
+            wordsResultSlot?.setAttribute('data-status', 'done');
             renderWordTimingsCheck(elevenCheckEls, doc);
             syncElevenWordsResultUi(doc);
             setTtsWordsCollapsed(true);
@@ -4401,7 +4660,7 @@
             }
         }
 
-        bindWordTimingsPanel(wordsWrapEl, wordsBodyEl, wordsHeaderEl, setTtsWordsCollapsed);
+        bindWordTimingsPanel(wordsWrapEl, wordsBodyEl, wordsToggleEl || wordsHeaderEl, setTtsWordsCollapsed);
         (function bindWordTimingsExceptionsCollapse() {
             const section = document.getElementById('tts-words-check-exceptions-section');
             const toggle = document.getElementById('tts-words-check-exceptions-toggle');
@@ -4435,26 +4694,23 @@
         }
         if (wordsJsonEl) {
             syncWordTimingsJsonEditable(wordsJsonEl);
-            const onElevenJsonEdited = debounceWordTimingsJson(() => {
-                applyWordTimingsJsonFromTextarea(wordsJsonEl, elevenCheckEls, (doc) => {
-                    lastWordsDoc = doc;
-                    syncElevenWordsResultUi(doc);
-                });
-            }, 400);
-            wordsJsonEl.addEventListener('input', onElevenJsonEdited);
-            wordsJsonEl.addEventListener('change', onElevenJsonEdited);
         }
 
         // --- Тайминги слов от локального Whisper (faster-whisper) ---
         const whisperWrapEl       = document.getElementById('whisper-words-wrap');
         const whisperHeaderEl     = document.getElementById('whisper-words-header');
+        const whisperToggleEl     = document.getElementById('whisper-words-toggle');
         const whisperWordsResultSlot = document.getElementById('whisper-words-result-slot');
         const whisperWordsStatusRow  = document.getElementById('whisper-words-status-row');
         const whisperWordsStatusText = document.getElementById('whisper-words-status-text');
         const whisperWordsCancelBtn  = document.getElementById('whisper-words-cancel-btn');
         const whisperBodyEl       = document.getElementById('whisper-words-body');
         const whisperCompactBadge = document.getElementById('whisper-words-compact-badge');
-        const whisperCompactCounts = document.getElementById('whisper-words-compact-counts');
+        const whisperCompactDuration = document.getElementById('whisper-words-compact-duration');
+        const whisperCompactCheck = document.getElementById('whisper-words-compact-check');
+        const whisperCompactSourceDot = document.getElementById('whisper-words-compact-source-dot');
+        const whisperCompactSourceBtn = document.getElementById('whisper-words-compact-source-btn');
+        whisperCheckEls.compactCheck = whisperCompactCheck;
         const whisperRunBtns = () => document.querySelectorAll('.whisper-words-run');
         const whisperJsonEl       = document.getElementById('whisper-words-json');
         const whisperResultBadge  = document.getElementById('whisper-words-result-badge');
@@ -4462,13 +4718,17 @@
         const whisperDownloadBtn  = document.getElementById('whisper-words-download');
         const whisperCopyBtn      = document.getElementById('whisper-words-copy');
         const whisperCopyStatus   = document.getElementById('whisper-words-copy-status');
-        const timingsSourceWhisper = document.getElementById('timings-source-whisper');
         let lastWhisperDoc = null;
         let lastWhisperFilename = '';
         let lastWhisperUrl = '';
         let whisperRunStartedAt = 0;
         let whisperGenBusy = false;
         let whisperGenAbort = null;
+
+        const abortActiveWhisperRun = () => {
+            if (!whisperGenBusy || !whisperGenAbort) return;
+            try { whisperGenAbort.abort(); } catch (_) { /* ignore */ }
+        };
 
         function whisperHasResultDoc(doc) {
             const d = doc || lastWhisperDoc;
@@ -4589,27 +4849,36 @@
             whisperWrapEl.classList.toggle('tts-word-timings-panel--body-collapsed', !!collapsed);
         }
 
+        function syncWhisperCompactSourceDot() {
+            syncTimingsSourceCompactDot(timingsSourceWhisper, whisperCompactSourceBtn, whisperCompactSourceDot);
+        }
+
         function syncWhisperWordsResultUi(meta, doc) {
             const hasData = whisperHasResultDoc(doc);
             setWordTimingsResultBadge(whisperResultBadge, hasData);
             if (!hasData) {
                 setWhisperWordsPendingUi(true);
+                if (whisperCompactDuration) whisperCompactDuration.textContent = '';
+                if (whisperCompactCheck) {
+                    setWordTimingsScenesCheckStatus(whisperCompactCheck, '—', 'rewrite-scene-writer-check__wait');
+                }
+                if (whisperCompactSourceBtn) whisperCompactSourceBtn.hidden = true;
             } else if (whisperWordsResultSlot?.getAttribute('data-status') === 'pending') {
                 setWhisperWordsPendingUi(false);
             }
-            if (whisperCountsEl) {
-                if (!hasData) {
-                    whisperCountsEl.textContent = '';
-                } else {
-                    const merged = Object.assign({}, meta || {}, doc || {});
-                    const n = Number(merged.total_words || (merged.words && merged.words.length) || 0);
-                    const dur = formatTtsMs(getWordTimingsLastEndMs(merged));
-                    whisperCountsEl.textContent = `${n.toLocaleString('ru-RU')} сл. · ${dur}`;
-                }
-            }
             const merged = hasData ? Object.assign({}, meta || {}, doc || {}) : null;
-            syncWordTimingsPanelCompact(whisperCompactBadge, whisperCompactCounts, whisperResultBadge, merged);
+            if (whisperCountsEl) {
+                whisperCountsEl.textContent = merged ? buildWordTimingsCompactDuration(merged) : '';
+            }
+            syncWordTimingsPanelCompact(
+                whisperCompactBadge,
+                whisperCompactDuration,
+                whisperResultBadge,
+                merged,
+                { durationOnly: true },
+            );
             if (timingsSourceWhisper) timingsSourceWhisper.disabled = !hasData;
+            ensureTimingsSourceSelected(hasData ? timingsSourceWhisper : null);
         }
 
         function applyWhisperWordsDoc(meta, doc) {
@@ -4670,7 +4939,8 @@
             });
         }
 
-        bindWordTimingsPanel(whisperWrapEl, whisperBodyEl, whisperHeaderEl, setWhisperWordsCollapsed);
+        bindWordTimingsPanel(whisperWrapEl, whisperBodyEl, whisperToggleEl || whisperHeaderEl, setWhisperWordsCollapsed);
+        initTimingsSourceUi();
         if (whisperDownloadBtn) {
             whisperDownloadBtn.addEventListener('click', () => {
                 if (!lastWhisperUrl) return;
@@ -4688,14 +4958,6 @@
         }
         if (whisperJsonEl) {
             syncWordTimingsJsonEditable(whisperJsonEl);
-            const onWhisperJsonEdited = debounceWordTimingsJson(() => {
-                applyWordTimingsJsonFromTextarea(whisperJsonEl, whisperCheckEls, (doc) => {
-                    lastWhisperDoc = doc;
-                    syncWhisperWordsResultUi(whisperInitialMeta, doc);
-                });
-            }, 400);
-            whisperJsonEl.addEventListener('input', onWhisperJsonEdited);
-            whisperJsonEl.addEventListener('change', onWhisperJsonEdited);
         }
 
         whisperWordsCancelBtn?.addEventListener('click', () => {
@@ -4865,36 +5127,81 @@
                 if (!t) return 0;
                 return t.split(/\s+/).filter(Boolean).length;
             };
-        const styleTtsTextToggleBtn = (locked) => {
-            if (!ttsTextToggleBtn) return;
-            ttsTextToggleBtn.classList.toggle('rewrite-lock-toggle--locked', locked);
-            ttsTextToggleBtn.setAttribute('aria-label', locked ? 'Редактировать' : 'Сохранить');
-            ttsTextToggleBtn.title = locked ? 'Редактировать' : 'Сохранить';
+        const styleTtsLockToggleBtn = (btn, locked) => {
+            if (!btn) return;
+            btn.classList.toggle('rewrite-lock-toggle--locked', locked);
+            btn.setAttribute('aria-label', locked ? 'Редактировать' : 'Сохранить');
+            btn.title = locked ? 'Редактировать' : 'Сохранить';
+        };
+        const styleTtsTextToggleBtn = (locked) => styleTtsLockToggleBtn(ttsTextToggleBtn, locked);
+        const styleTtsSettingsToggleBtn = (locked) => styleTtsLockToggleBtn(ttsSettingsToggleBtn, locked);
+        const applyTtsSettingsLockUi = () => {
+            const locked = ttsSettingsLocked;
+            ttsSettingsRangeIds.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = locked;
+            });
+            if (ttsSpeakerBoostEl) ttsSpeakerBoostEl.disabled = locked;
+            styleTtsSettingsToggleBtn(locked);
+            syncTtsGenerateButton();
+        };
+        const buildTtsSplitHint = (raw) => {
+            const text = String(raw || '');
+            if (!text.trim()) return '';
+            const max = getMaxChars();
+            const chunkMax = getTtsChunkCharsForTimestamps(text);
+            const nChunks = Math.max(
+                countTtsChunks(text, max),
+                countTtsChunks(text, chunkMax)
+            );
+            if (nChunks <= 1) return '';
+            let hint = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
+            hint += ' (≤ ' + ttsFormatNumRu(chunkMax) + ' символов на кусок для таймингов)';
+            return hint;
+        };
+        const syncTtsSplitHint = (raw) => {
+            if (!splitHintEl) return;
+            const hint = buildTtsSplitHint(raw);
+            if (hint) {
+                splitHintEl.textContent = hint;
+                splitHintEl.classList.remove('hidden');
+            } else {
+                splitHintEl.textContent = '';
+                splitHintEl.classList.add('hidden');
+            }
         };
         const applyTtsTextLockUi = () => {
             if (!textEl) return;
             textEl.readOnly = ttsTextLocked;
             textEl.classList.toggle('rewrite-source-textarea--locked', ttsTextLocked);
             styleTtsTextToggleBtn(ttsTextLocked);
+            syncTtsGenerateButton();
+            syncTtsSplitHint(textEl.value);
         };
         const syncTtsGenerateButton = () => {
             if (!btnGen) return;
             const hasText = !!String(textEl?.value || '').trim();
-            btnGen.disabled = ttsGenBusy || !hasText;
+            const editingText = !ttsTextLocked;
+            const editingSettings = !ttsSettingsLocked;
+            btnGen.disabled = ttsGenBusy || !hasText || editingText || editingSettings;
             if (!ttsGenBusy) {
-                if (hasText) btnGen.removeAttribute('title');
-                else btnGen.setAttribute('title', 'Сначала вставьте или подставьте текст для озвучки');
+                if (editingText) {
+                    btnGen.setAttribute('title', 'Сначала сохраните текст (нажмите ✓)');
+                } else if (editingSettings) {
+                    btnGen.setAttribute('title', 'Сначала сохраните настройки (нажмите ✓)');
+                } else if (hasText) {
+                    btnGen.removeAttribute('title');
+                } else {
+                    btnGen.setAttribute('title', 'Сначала вставьте или подставьте текст для озвучки');
+                }
             }
         };
         const updateCharUi = () => {
             const max = getMaxChars();
-            if (charMaxEl) charMaxEl.textContent = String(max);
+            if (charMaxEl) charMaxEl.textContent = ttsFormatNumRu(max);
             const raw = textEl?.value || '';
             const n = raw.length;
-            const chunkMax = getTtsChunkCharsForTimestamps(raw);
-            const nChunks = countTtsChunks(raw, chunkMax);
-            const over = n > max;
-            if (ttsTextCountsEl) {
+            if (ttsTextCountsEl && ttsTextCountsEl.getAttribute('data-copy-hold') !== '1') {
                 ttsTextCountsEl.textContent = ttsFormatNumRu(n) + ' симв. · ' + ttsFormatNumRu(ttsCountWords(raw)) + ' сл.';
             }
             if (ttsTextBadgeEl) {
@@ -4902,32 +5209,14 @@
                 ttsTextBadgeEl.classList.toggle('badge-yes', has);
                 ttsTextBadgeEl.classList.toggle('badge-no', !has);
             }
-            if (charCountEl) {
-                if (over) {
-                    charCountEl.classList.remove('hidden');
-                    charCountEl.textContent = 'Превышен лимит одного запроса: ' + ttsFormatNumRu(n) + ' > ' + ttsFormatNumRu(max);
-                } else {
-                    charCountEl.classList.add('hidden');
-                    charCountEl.textContent = '';
-                }
-            }
-            if (splitHintEl) {
-                if (nChunks > 1) {
-                    splitHintEl.classList.remove('hidden');
-                    let hint = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
-                    if (chunkMax < max) {
-                        hint += ' (≤ ' + ttsFormatNumRu(chunkMax) + ' симв. на кусок для таймингов)';
-                    }
-                    splitHintEl.textContent = hint;
-                } else {
-                    splitHintEl.classList.add('hidden');
-                    splitHintEl.textContent = '';
-                }
-            }
+            syncTtsSplitHint(raw);
             if (typeof window.__syncTtsSectionCompactCounts === 'function') {
                 try { window.__syncTtsSectionCompactCounts(); } catch (e) {}
             }
             syncTtsGenerateButton();
+            if (typeof syncTtsSectionCompactSummary === 'function') {
+                syncTtsSectionCompactSummary();
+            }
         };
 
         const collectCurrentTtsSettings = () => {
@@ -4998,35 +5287,76 @@
             ttsTextToggleBtn.addEventListener('click', () => {
                 ttsTextLocked = !ttsTextLocked;
                 applyTtsTextLockUi();
+                updateCharUi();
                 if (!ttsTextLocked) textEl.focus();
             });
         }
+        if (ttsSettingsToggleBtn) {
+            ttsSettingsToggleBtn.addEventListener('click', () => {
+                ttsSettingsLocked = !ttsSettingsLocked;
+                applyTtsSettingsLockUi();
+                if (!ttsSettingsLocked) {
+                    const first = document.getElementById(ttsSettingsRangeIds[0]);
+                    if (first) first.focus();
+                } else {
+                    schedulePersistTtsDefaults();
+                }
+            });
+        }
+        const copyTtsText = () => {
+            if (!textEl || !ttsTextCopyBtn) return;
+            const raw = textEl.value || '';
+            const prevTitle = ttsTextCopyBtn.getAttribute('title') || 'Копировать текст озвучки';
+            const flashTitle = (t) => {
+                ttsTextCopyBtn.setAttribute('title', t);
+                setTimeout(() => ttsTextCopyBtn.setAttribute('title', prevTitle), 2200);
+            };
+            if (!raw.trim()) { flashTitle('Нет текста для копирования'); return; }
+            const savedCounts = ttsTextCountsEl ? ttsTextCountsEl.textContent : '';
+            const showCopied = () => {
+                if (ttsTextCountsEl) {
+                    ttsTextCountsEl.setAttribute('data-copy-hold', '1');
+                    ttsTextCountsEl.textContent = 'Скопировано в буфер';
+                    setTimeout(() => {
+                        ttsTextCountsEl.removeAttribute('data-copy-hold');
+                        if (savedCounts) ttsTextCountsEl.textContent = savedCounts;
+                        else updateCharUi();
+                    }, 1600);
+                }
+            };
+            const fallbackExec = () => {
+                try {
+                    const tmp = document.createElement('textarea');
+                    tmp.value = raw;
+                    tmp.setAttribute('readonly', '');
+                    tmp.style.position = 'fixed';
+                    tmp.style.left = '-9999px';
+                    tmp.style.top = '0';
+                    document.body.appendChild(tmp);
+                    tmp.focus();
+                    tmp.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(tmp);
+                    if (ok) showCopied();
+                    else flashTitle('Не удалось скопировать');
+                } catch (_) {
+                    flashTitle('Не удалось скопировать');
+                }
+            };
+            if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(raw).then(showCopied).catch(fallbackExec);
+            } else {
+                fallbackExec();
+            }
+        };
         if (ttsTextCopyBtn && textEl) {
-            ttsTextCopyBtn.addEventListener('click', () => {
-                const raw = textEl.value || '';
-                const prevTitle = ttsTextCopyBtn.getAttribute('title') || 'Копировать текст озвучки';
-                const flashTitle = (t) => {
-                    ttsTextCopyBtn.setAttribute('title', t);
-                    setTimeout(() => ttsTextCopyBtn.setAttribute('title', prevTitle), 1500);
-                };
-                if (!raw.trim()) { flashTitle('Нет текста для копирования'); return; }
-                const fallback = () => {
-                    try {
-                        textEl.removeAttribute('readonly');
-                        const wasLocked = ttsTextLocked;
-                        textEl.focus();
-                        textEl.select();
-                        document.execCommand('copy');
-                        if (wasLocked) textEl.setAttribute('readonly', '');
-                        flashTitle('Скопировано');
-                    } catch (_) { flashTitle('Не удалось скопировать'); }
-                };
-                if (navigator.clipboard?.writeText) {
-                    navigator.clipboard.writeText(raw).then(() => flashTitle('Скопировано')).catch(fallback);
-                } else { fallback(); }
+            ttsTextCopyBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                copyTtsText();
             });
         }
         applyTtsTextLockUi();
+        applyTtsSettingsLockUi();
         updateCharUi();
 
         const ttsScriptSourceHint = document.getElementById('tts-script-source-hint');
@@ -5118,7 +5448,7 @@
                 ttsScriptSourceHint.textContent = 'Result в «' + label + '» пуст — заполните этап ReWrite или переключите источник.';
                 return;
             }
-            ttsScriptSourceHint.textContent = 'Подставлен Result из «' + label + '» (' + text.length + ' симв.).';
+            ttsScriptSourceHint.textContent = 'Подставлен Result из «' + label + '» (' + ttsFormatNumRu(text.length) + ' символов).';
         };
         let ttsScriptApplyingFromSource = false;
         let ttsScriptLinkedSource = null;
@@ -5135,7 +5465,42 @@
             });
             ttsScriptLinkedSource = null;
             updateTtsScriptSourceHint('manual', textEl ? textEl.value : '');
+            syncTtsSplitHint(textEl ? textEl.value : '');
             if (!(opts && opts.skipPersist)) schedulePersistTtsDefaults();
+        };
+        window.__clearJobElevenlabsOnRewritePipelineReset = async function (opts) {
+            opts = opts || {};
+            if (!textEl) return;
+            const hadText = !!String(textEl.value || '').trim();
+            const hadAudio = ttsHasAudioSrc();
+            const hadServerAudio = !!(ttsLastAudioUrl && String(ttsLastAudioUrl).trim());
+            textEl.value = '';
+            clearTtsScriptSourceSelection({ skipPersist: true });
+            resetTtsResultUi();
+            updateCharUi();
+            syncTtsPrereqWaitOverlay();
+            updateTtsScriptSourceBadges();
+            if (typeof window.__syncTtsSectionCompactSummary === 'function') {
+                try { window.__syncTtsSectionCompactSummary(); } catch (_) {}
+            }
+            if (opts.persist && (hadText || hadAudio || hadServerAudio)) {
+                try {
+                    const resp = await fetch(`/job/${jobId}/elevenlabs/tts/clear`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok || !data.ok) {
+                        console.warn('elevenlabs tts/clear:', data.error || resp.status);
+                    } else {
+                        ttsLastAudioUrl = '';
+                        ttsLastWordsUrl = '';
+                        whisperLastWordsUrl = '';
+                    }
+                } catch (e) {
+                    console.warn('elevenlabs tts/clear failed', e);
+                }
+            }
         };
         const applyTtsScriptFromSource = (source, opts) => {
             if (!rewriteBlockPresent || !textEl) return;
@@ -5155,17 +5520,29 @@
             }
         };
         const onTtsTextMaybeManualEdit = () => {
-            if (ttsScriptApplyingFromSource || !getCheckedTtsScriptSource()) return;
+            if (ttsScriptApplyingFromSource) return;
+            if (!getCheckedTtsScriptSource()) {
+                syncTtsSplitHint(textEl ? textEl.value : '');
+                return;
+            }
             clearTtsScriptSourceSelection({ skipPersist: false });
+            syncTtsSplitHint(textEl ? textEl.value : '');
         };
-        textEl?.addEventListener('input', () => {
-            updateCharUi();
-            onTtsTextMaybeManualEdit();
+        let ttsCharUiRaf = 0;
+        const scheduleUpdateCharUi = () => {
+            if (ttsCharUiRaf) cancelAnimationFrame(ttsCharUiRaf);
+            ttsCharUiRaf = requestAnimationFrame(() => {
+                ttsCharUiRaf = 0;
+                updateCharUi();
+                onTtsTextMaybeManualEdit();
+            });
+        };
+        textEl?.addEventListener('input', scheduleUpdateCharUi);
+        textEl?.addEventListener('change', scheduleUpdateCharUi);
+        textEl?.addEventListener('paste', () => {
+            setTimeout(scheduleUpdateCharUi, 0);
         });
-        textEl?.addEventListener('change', () => {
-            updateCharUi();
-            onTtsTextMaybeManualEdit();
-        });
+        textEl?.addEventListener('compositionend', scheduleUpdateCharUi);
         const scheduleTtsScriptSync = (source) => {
             if (ttsScriptSyncTimer) clearTimeout(ttsScriptSyncTimer);
             ttsScriptSyncTimer = setTimeout(() => applyTtsScriptFromSource(source), 200);
@@ -5227,6 +5604,7 @@
             } else if (existingText && !initialSrc) {
                 clearTtsScriptSourceSelection({ skipPersist: true });
             }
+            updateCharUi();
         }
 
         const initLastTtsPlayer = () => {
@@ -5251,34 +5629,13 @@
             syncTtsResultBadge();
         };
         initLastTtsPlayer();
+        if (typeof syncTtsSectionCompactSummary === 'function') {
+            syncTtsSectionCompactSummary();
+        }
 
         ttsResultCancelBtn?.addEventListener('click', () => {
             if (!ttsGenBusy || !ttsGenAbort) return;
             try { ttsGenAbort.abort(); } catch (_) { /* ignore */ }
-        });
-
-        ttsClearBtn?.addEventListener('click', async () => {
-            if (ttsGenBusy || !ttsHasAudioSrc()) return;
-            try {
-                const resp = await fetch(`/job/${jobId}/elevenlabs/tts/clear`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                });
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok || !data.ok) {
-                    throw new Error(data.error || `HTTP ${resp.status}`);
-                }
-                resetTtsResultUi();
-                if (errEl) {
-                    errEl.classList.add('hidden');
-                    errEl.textContent = '';
-                }
-            } catch (e) {
-                if (errEl) {
-                    errEl.textContent = e.message || String(e);
-                    errEl.classList.remove('hidden');
-                }
-            }
         });
 
         const fmtHms = (v) => {
@@ -5336,22 +5693,22 @@
             });
 
         btnGen?.addEventListener('click', async () => {
-            errEl.classList.add('hidden');
-            errEl.textContent = '';
             const text = (textEl?.value || '').trim();
             const voice_id = voiceSel.value;
-            const max = getMaxChars();
             if (!text) {
-                errEl.textContent = 'Введите текст.';
-                errEl.classList.remove('hidden');
+                showTtsError('Введите текст.');
                 return;
             }
             if (!voice_id) {
-                errEl.textContent = 'Выберите голос.';
-                errEl.classList.remove('hidden');
+                showTtsError('Выберите голос.');
                 return;
             }
             const voice_name = voiceSel.options[voiceSel.selectedIndex]?.textContent || '';
+            const mySession = ++ttsGenSession;
+            if (ttsGenBusy && ttsGenAbort) {
+                try { ttsGenAbort.abort(); } catch (_) { /* ignore */ }
+            }
+            abortActiveWhisperRun();
             resetTtsResultUi();
             ttsGenBusy = true;
             syncTtsGenerateButton();
@@ -5478,25 +5835,18 @@
                 }
                 applySceneAudioTimings(finalData.scene_audio_timings || []);
             } catch (e) {
+                if (mySession !== ttsGenSession) return;
                 const aborted = e && (e.name === 'AbortError' || String(e).indexOf('aborted') !== -1);
                 if (aborted) {
-                    errEl.textContent = '';
-                    errEl.classList.add('hidden');
                     setTtsCancelledUi();
                 } else {
-                    errEl.textContent = e.message || String(e);
-                    errEl.classList.remove('hidden');
-                    ttsResultSlot?.setAttribute('data-status', 'error');
-                    if (ttsResultStatusText) {
-                        ttsResultStatusText.textContent = errEl.textContent;
-                        ttsResultStatusRow?.classList.remove('hidden');
-                    }
+                    showTtsError(e.message || String(e));
                 }
             } finally {
+                if (mySession !== ttsGenSession) return;
                 ttsGenBusy = false;
                 ttsGenAbort = null;
                 syncTtsGenerateButton();
-                syncTtsClearButton();
                 if (ttsResultSlot?.getAttribute('data-status') !== 'error') {
                     setTtsResultGenerating(false);
                 }
@@ -5681,6 +6031,7 @@
             const val = checked ? String(checked.value || '').toLowerCase() : '';
             return val === 'whisper' ? 'whisper' : 'elevenlabs';
         };
+        window.__readTimingsSource = readTimingsSource;
         const updateApplyBtnTitle = () => {
             if (!applyBtn || applyBtn.disabled) return;
             const src = readTimingsSource();
@@ -5688,9 +6039,7 @@
                 ? 'Применить тайминги от локального Whisper (.whisper.words.json) к существующим сценам.'
                 : 'Применить тайминги от ElevenLabs (.words.json) к существующим сценам.';
         };
-        document.querySelectorAll('input[name="timings-source"]').forEach((r) => {
-            r.addEventListener('change', updateApplyBtnTitle);
-        });
+        window.__updateApplyTimingsBtnTitle = updateApplyBtnTitle;
         updateApplyBtnTitle();
         if (applyBtn) {
             applyBtn.addEventListener('click', async () => {

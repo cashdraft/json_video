@@ -130,7 +130,7 @@
             <div class="scene-card rewrite-source-card rewrite-source-card--body">
                 <div class="rewrite-source-body-header">
                     <div class="scene-id rewrite-source-body-title">Исходный текст</div>
-                    <p class="scene-text rewrite-source-lead">Один раз для всего конвейера. В каждый этап уходит исходник и сохранённые ответы всех предыдущих шагов.</p>
+                    <p class="scene-text rewrite-source-lead">Исходный текст представляет собой транскрибацию YouTube-ролика и используется исключительно как аналитическая и референсная база для дальнейшего создания оригинального контента.</p>
                 </div>
                 <div class="rewrite-source-title-field">
                     <input type="text" id="rewrite-source-title" class="rewrite-source-title-input{% if rw.source_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" autocomplete="off" aria-label="Исходное название" placeholder="Название ролика или проекта…" value="{{ (rw.source_title or '')|e }}" {% if not openai_key_set %}disabled{% elif rw.source_locked|default(false) %}readonly{% endif %} />
@@ -782,17 +782,28 @@
         <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-youtube-cookies-modal-title">
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="rewrite-youtube-cookies-modal-title">Cookies для YouTube</h3>
+                <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-youtube-cookies-modal-close aria-label="Закрыть">✕</button>
             </div>
-            <p class="confirm-modal__lead">Файл в формате Netscape (как «Get cookies.txt LOCALLY» / экспорт для yt-dlp). Сохраняется на сервере как <code>data/secrets/yt_cookies.txt</code> и подставляется в yt-dlp при проверке ссылки и скачивании аудио.</p>
-            <p class="confirm-modal__lead rewrite-youtube-cookies-modal__file-wrap">
-                <label for="rewrite-youtube-cookies-file" class="rewrite-youtube-cookies-file-label">Файл</label>
-                <input type="file" id="rewrite-youtube-cookies-file" class="rewrite-youtube-cookies-file-input" accept=".txt,text/plain">
-            </p>
+            <p class="confirm-modal__lead">Файл в формате Netscape (как «Get cookies.txt LOCALLY»). Сохраняется на сервере как <code>data/secrets/yt_cookies.txt</code> и подставляется в yt-dlp при проверке ссылки и скачивании аудио.</p>
+            <div class="rewrite-youtube-cookies-modal__file-wrap">
+                <div class="image-template-editor-dropzone rewrite-youtube-cookies-dropzone" id="rewrite-youtube-cookies-dropzone" role="button" tabindex="0" aria-labelledby="rewrite-youtube-cookies-dropzone-title">
+                    <div class="image-template-editor-dropzone-loading hidden" id="rewrite-youtube-cookies-dropzone-loading" aria-live="polite" aria-hidden="true">
+                        <span class="image-template-editor-dropzone-loading-text" id="rewrite-youtube-cookies-dropzone-loading-text"></span>
+                    </div>
+                    <div class="image-template-editor-dropzone-inner">
+                        <span class="image-template-editor-dropzone-icon" aria-hidden="true">
+                            <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M14 32h20a8 8 0 0 0 1.4-15.9A10 10 0 0 0 16.2 18 7 7 0 0 0 14 32z" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M24 22v12M20 26l4-4 4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <p class="image-template-editor-dropzone-title" id="rewrite-youtube-cookies-dropzone-title">Перетащите сюда cookies.txt</p>
+                    </div>
+                    <input type="file" id="rewrite-youtube-cookies-file" class="rewrite-youtube-cookies-file-input" accept=".txt,text/plain" hidden>
+                </div>
+            </div>
             <p class="confirm-modal__lead rewrite-youtube-cookies-modal__msg hidden" id="rewrite-youtube-cookies-msg" aria-live="polite"></p>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-youtube-cookies-modal-cancel">Отмена</button>
-                <button type="button" class="btn btn-secondary btn-sm confirm-modal__ok" id="rewrite-youtube-cookies-modal-save">Сохранить</button>
-            </div>
+            <p class="rewrite-youtube-cookies-modal__current-file{% if not youtube_cookies_status.present %} rewrite-youtube-cookies-modal__current-file--empty{% endif %}" id="rewrite-youtube-cookies-modal-current" aria-live="polite">{% if youtube_cookies_status.present %}Текущий файл - {{ youtube_cookies_status.filename or 'yt_cookies.txt' }} - Загружен {{ youtube_cookies_status.age_human }} назад - {{ youtube_cookies_status.size_bytes }} байт.{% else %}Файл ещё не загружен.{% endif %}</p>
         </div>
     </div>
     <div class="confirm-modal hidden" id="rewrite-delete-confirm-modal" aria-hidden="true">
@@ -918,12 +929,17 @@
     const ytInsertConfirmCancelBtn = document.getElementById('rewrite-youtube-insert-confirm-cancel');
     const ytInsertConfirmOkBtn = document.getElementById('rewrite-youtube-insert-confirm-ok');
     const ytCookiesAgeEl = document.getElementById('rewrite-youtube-cookies-age');
+    const ytCookiesModalCurrentEl = document.getElementById('rewrite-youtube-cookies-modal-current');
     const ytCookiesOpenBtn = document.getElementById('rewrite-youtube-cookies-open');
     const ytCookiesModal = document.getElementById('rewrite-youtube-cookies-modal');
     const ytCookiesFileEl = document.getElementById('rewrite-youtube-cookies-file');
+    const ytCookiesDropzone = document.getElementById('rewrite-youtube-cookies-dropzone');
+    const ytCookiesDropzoneTitle = document.getElementById('rewrite-youtube-cookies-dropzone-title');
+    const ytCookiesDropzoneLoading = document.getElementById('rewrite-youtube-cookies-dropzone-loading');
+    const ytCookiesDropzoneLoadingText = document.getElementById('rewrite-youtube-cookies-dropzone-loading-text');
+    const YT_COOKIES_DROPZONE_DEFAULT = 'Перетащите сюда cookies.txt';
     const ytCookiesMsgEl = document.getElementById('rewrite-youtube-cookies-msg');
-    const ytCookiesModalCancelBtn = document.getElementById('rewrite-youtube-cookies-modal-cancel');
-    const ytCookiesModalSaveBtn = document.getElementById('rewrite-youtube-cookies-modal-save');
+    var ytCookiesUploading = false;
     const templateApplyConfirmModal = document.getElementById('rewrite-template-apply-confirm-modal');
     const templateApplyConfirmCancelBtn = document.getElementById('rewrite-template-apply-confirm-cancel');
     const templateApplyConfirmOkBtn = document.getElementById('rewrite-template-apply-confirm-ok');
@@ -1074,11 +1090,34 @@
         if (ytVideoLineEl) ytVideoLineEl.classList.toggle('rewrite-youtube-video-line--empty', !_ytLineHasContent());
     }
 
-    function formatYtCookiesStatusLine(d) {
+    function formatYtCookiesBarLine(d) {
         if (!d || !d.present) return 'нет файла (опционально)';
         var age = d.age_human != null ? String(d.age_human) : '—';
         var sz = d.size_bytes != null ? formatNumRu(d.size_bytes) : '—';
         return 'файл · ' + age + ' · ' + sz + ' байт';
+    }
+
+    function formatYtCookiesStatusLine(d) {
+        if (!d || !d.present) return 'Файл ещё не загружен.';
+        var fname = (d.filename && String(d.filename).trim()) || 'yt_cookies.txt';
+        var age = d.age_human != null ? String(d.age_human).trim() : '';
+        var sz = d.size_bytes != null ? formatNumRu(d.size_bytes) : '—';
+        var parts = ['Текущий файл', fname];
+        if (age) parts.push('Загружен ' + age + ' назад');
+        parts.push(sz + ' байт');
+        return parts.join(' - ') + '.';
+    }
+
+    function renderYtCookiesCurrentFileEl(el, d) {
+        if (!el) return;
+        var present = !!(d && d.present);
+        el.classList.toggle('rewrite-youtube-cookies-modal__current-file--empty', !present);
+        el.textContent = formatYtCookiesStatusLine(d);
+    }
+
+    function applyYtCookiesStatusUi(d) {
+        if (ytCookiesAgeEl) ytCookiesAgeEl.textContent = formatYtCookiesBarLine(d);
+        renderYtCookiesCurrentFileEl(ytCookiesModalCurrentEl, d);
     }
 
     function setYtCookiesMsg(text, isError) {
@@ -1089,10 +1128,58 @@
         ytCookiesMsgEl.classList.toggle('rewrite-youtube-cookies-modal__msg--error', !!isError && !!s);
     }
 
+    function resetYtCookiesDropzoneUi() {
+        if (ytCookiesFileEl) ytCookiesFileEl.value = '';
+        if (ytCookiesDropzoneTitle) ytCookiesDropzoneTitle.textContent = YT_COOKIES_DROPZONE_DEFAULT;
+        if (ytCookiesDropzone) ytCookiesDropzone.classList.remove('image-template-editor-dropzone--over');
+    }
+
+    function assignYtCookiesFile(file) {
+        if (!file || !ytCookiesFileEl) return;
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            ytCookiesFileEl.files = dt.files;
+        } catch (_e) {
+            /* старые браузеры — только через input */
+        }
+    }
+
+    function setYtCookiesDropzoneLoading(on, text) {
+        if (!ytCookiesDropzone || !ytCookiesDropzoneLoading) return;
+        if (on) {
+            if (ytCookiesDropzoneLoadingText) ytCookiesDropzoneLoadingText.textContent = text || 'Загрузка…';
+            ytCookiesDropzoneLoading.classList.remove('hidden');
+            ytCookiesDropzoneLoading.setAttribute('aria-hidden', 'false');
+            ytCookiesDropzone.classList.add('image-template-editor-dropzone--loading');
+            ytCookiesDropzone.setAttribute('aria-busy', 'true');
+        } else {
+            ytCookiesDropzoneLoading.classList.add('hidden');
+            ytCookiesDropzoneLoading.setAttribute('aria-hidden', 'true');
+            if (ytCookiesDropzoneLoadingText) ytCookiesDropzoneLoadingText.textContent = '';
+            ytCookiesDropzone.classList.remove('image-template-editor-dropzone--loading');
+            ytCookiesDropzone.removeAttribute('aria-busy');
+        }
+    }
+
+    function acceptYtCookiesFile(file) {
+        if (!file || ytCookiesUploading) return false;
+        var name = String(file.name || '').toLowerCase();
+        if (name && !name.endsWith('.txt') && file.type && file.type !== 'text/plain') {
+            setYtCookiesMsg('Нужен файл .txt (Netscape cookies).', true);
+            return false;
+        }
+        assignYtCookiesFile(file);
+        setYtCookiesMsg('', false);
+        submitYtCookiesUpload(file);
+        return true;
+    }
+
     function openYtCookiesModal() {
         if (!ytCookiesModal) return;
-        if (ytCookiesFileEl) ytCookiesFileEl.value = '';
+        resetYtCookiesDropzoneUi();
         setYtCookiesMsg('', false);
+        refreshYtCookiesStatusFromServer();
         ytCookiesModal.classList.remove('hidden');
         ytCookiesModal.setAttribute('aria-hidden', 'false');
     }
@@ -1104,42 +1191,41 @@
     }
 
     async function refreshYtCookiesStatusFromServer() {
-        if (!ytCookiesAgeEl) return;
         try {
             var r = await fetch(ytCookiesStatusUrl, { method: 'GET', credentials: 'same-origin' });
             var d = await r.json();
-            if (d && d.ok) {
-                ytCookiesAgeEl.textContent = formatYtCookiesStatusLine(d);
-            }
+            if (d && d.ok) applyYtCookiesStatusUi(d);
         } catch (e) {
             /* ignore */
         }
     }
 
-    async function submitYtCookiesUpload() {
-        if (!ytCookiesFileEl || !ytCookiesModalSaveBtn) return;
-        var f = ytCookiesFileEl.files && ytCookiesFileEl.files[0];
+    async function submitYtCookiesUpload(fileOverride) {
+        if (ytCookiesUploading) return;
+        var f = fileOverride || (ytCookiesFileEl && ytCookiesFileEl.files && ytCookiesFileEl.files[0]);
         if (!f) {
             setYtCookiesMsg('Выберите файл cookies.txt.', true);
             return;
         }
-        setYtCookiesMsg('Загрузка…', false);
-        ytCookiesModalSaveBtn.disabled = true;
+        ytCookiesUploading = true;
+        setYtCookiesDropzoneLoading(true, 'Загрузка…');
+        setYtCookiesMsg('', false);
         try {
             var fd = new FormData();
             fd.append('file', f, f.name || 'cookies.txt');
             var r = await fetch(ytCookiesUploadUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
             var d = await r.json().catch(function () { return {}; });
             if (d && d.ok) {
-                setYtCookiesMsg('Сохранено.', false);
-                if (ytCookiesAgeEl) ytCookiesAgeEl.textContent = formatYtCookiesStatusLine(d);
+                applyYtCookiesStatusUi(d);
+                resetYtCookiesDropzoneUi();
             } else {
                 setYtCookiesMsg((d && d.message) ? d.message : 'Ошибка сохранения.', true);
             }
         } catch (e) {
             setYtCookiesMsg(String(e && e.message ? e.message : e), true);
         } finally {
-            ytCookiesModalSaveBtn.disabled = false;
+            ytCookiesUploading = false;
+            setYtCookiesDropzoneLoading(false);
         }
     }
 
@@ -2718,30 +2804,43 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
     if (sourceCopyBtn && sourceEl) {
         sourceCopyBtn.addEventListener('click', function () {
             var raw = sourceEl.value || '';
-            var prevTitle = sourceCopyBtn.getAttribute('title') || 'Копировать исходный текст в буфер обмена';
-            function flashTitle(t) {
-                sourceCopyBtn.setAttribute('title', t);
-                setTimeout(function () { sourceCopyBtn.setAttribute('title', prevTitle); }, 1500);
+            if (!raw.trim()) {
+                var prevT = sourceCopyBtn.getAttribute('title') || '';
+                sourceCopyBtn.setAttribute('title', 'Нет текста для копирования');
+                setTimeout(function () { sourceCopyBtn.setAttribute('title', prevT || 'Копировать исходный текст в буфер обмена'); }, 2200);
+                return;
             }
-            if (!raw) { flashTitle('Нет текста для копирования'); return; }
-            function fallback() {
+            function showCopied() {
+                if (sourceCountsEl) {
+                    sourceCountsEl.setAttribute('data-copy-hold', '1');
+                    sourceCountsEl.textContent = 'Скопировано в буфер';
+                    setTimeout(function () {
+                        sourceCountsEl.removeAttribute('data-copy-hold');
+                        updateSourceCounts();
+                    }, 1600);
+                }
+            }
+            function fallbackExec() {
                 try {
-                    sourceEl.removeAttribute('readonly');
-                    var prevDisabled = sourceEl.disabled;
-                    sourceEl.disabled = false;
-                    sourceEl.focus();
-                    sourceEl.select();
-                    document.execCommand('copy');
-                    sourceEl.disabled = prevDisabled;
-                    if (sourceLocked) sourceEl.setAttribute('readonly', '');
-                    flashTitle('Скопировано');
-                } catch (e) { flashTitle('Не удалось скопировать'); }
+                    var tmp = document.createElement('textarea');
+                    tmp.value = raw;
+                    tmp.setAttribute('readonly', '');
+                    tmp.style.position = 'fixed';
+                    tmp.style.left = '-9999px';
+                    tmp.style.top = '0';
+                    document.body.appendChild(tmp);
+                    tmp.focus();
+                    tmp.select();
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(tmp);
+                    if (ok) showCopied();
+                } catch (e) { void e; }
             }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(raw)
-                    .then(function () { flashTitle('Скопировано'); })
-                    .catch(fallback);
-            } else { fallback(); }
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(raw).then(showCopied).catch(fallbackExec);
+            } else {
+                fallbackExec();
+            }
         });
     }
 
@@ -2749,30 +2848,43 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
     if (sourceRuCopyBtn && sourceRuEl) {
         sourceRuCopyBtn.addEventListener('click', function () {
             var raw = sourceRuEl.value || '';
-            var prevTitle = sourceRuCopyBtn.getAttribute('title') || 'Копировать перевод в буфер обмена';
-            function flashTitle(t) {
-                sourceRuCopyBtn.setAttribute('title', t);
-                setTimeout(function () { sourceRuCopyBtn.setAttribute('title', prevTitle); }, 1500);
+            if (!raw.trim()) {
+                var prevTr = sourceRuCopyBtn.getAttribute('title') || '';
+                sourceRuCopyBtn.setAttribute('title', 'Нет текста для копирования');
+                setTimeout(function () { sourceRuCopyBtn.setAttribute('title', prevTr || 'Копировать перевод в буфер обмена'); }, 2200);
+                return;
             }
-            if (!raw) { flashTitle('Нет текста для копирования'); return; }
-            function fallback() {
+            function showCopiedRu() {
+                if (sourceRuCountsEl) {
+                    sourceRuCountsEl.setAttribute('data-copy-hold', '1');
+                    sourceRuCountsEl.textContent = 'Скопировано в буфер';
+                    setTimeout(function () {
+                        sourceRuCountsEl.removeAttribute('data-copy-hold');
+                        updateSourceRuCounts();
+                    }, 1600);
+                }
+            }
+            function fallbackExecRu() {
                 try {
-                    sourceRuEl.removeAttribute('readonly');
-                    var prevDisabled = sourceRuEl.disabled;
-                    sourceRuEl.disabled = false;
-                    sourceRuEl.focus();
-                    sourceRuEl.select();
-                    document.execCommand('copy');
-                    sourceRuEl.disabled = prevDisabled;
-                    if (sourceRuLocked) sourceRuEl.setAttribute('readonly', '');
-                    flashTitle('Скопировано');
-                } catch (e) { flashTitle('Не удалось скопировать'); }
+                    var tmp = document.createElement('textarea');
+                    tmp.value = raw;
+                    tmp.setAttribute('readonly', '');
+                    tmp.style.position = 'fixed';
+                    tmp.style.left = '-9999px';
+                    tmp.style.top = '0';
+                    document.body.appendChild(tmp);
+                    tmp.focus();
+                    tmp.select();
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(tmp);
+                    if (ok) showCopiedRu();
+                } catch (e) { void e; }
             }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(raw)
-                    .then(function () { flashTitle('Скопировано'); })
-                    .catch(fallback);
-            } else { fallback(); }
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(raw).then(showCopiedRu).catch(fallbackExecRu);
+            } else {
+                fallbackExecRu();
+            }
         });
     }
     if (sourceTitleEl) {
@@ -3282,6 +3394,9 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
         ytTranscriptReady = false;
         ytAbortController = new AbortController();
         var signal = ytAbortController.signal;
+        setYtStatus('', false);
+        setYtChannelMeta({});
+        setYtVideoTitle('');
         applyYoutubeToolbar();
         try {
             setYtStatus('Проверяем ссылку…', false);
@@ -4999,9 +5114,38 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
         });
     }
     if (ytInsertBtn) ytInsertBtn.addEventListener('click', ytInsertToSource);
+    if (ytCookiesDropzone && ytCookiesFileEl) {
+        ytCookiesDropzone.addEventListener('click', function () {
+            if (ytCookiesUploading) return;
+            ytCookiesFileEl.click();
+        });
+        ytCookiesDropzone.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                ytCookiesFileEl.click();
+            }
+        });
+        ytCookiesDropzone.addEventListener('dragover', function (ev) {
+            ev.preventDefault();
+            ytCookiesDropzone.classList.add('image-template-editor-dropzone--over');
+        });
+        ytCookiesDropzone.addEventListener('dragleave', function (ev) {
+            if (ytCookiesDropzone.contains(ev.relatedTarget)) return;
+            ytCookiesDropzone.classList.remove('image-template-editor-dropzone--over');
+        });
+        ytCookiesDropzone.addEventListener('drop', function (ev) {
+            ev.preventDefault();
+            ytCookiesDropzone.classList.remove('image-template-editor-dropzone--over');
+            var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+            if (f) acceptYtCookiesFile(f);
+        });
+        ytCookiesFileEl.addEventListener('change', function () {
+            var f = ytCookiesFileEl.files && ytCookiesFileEl.files[0];
+            if (f) acceptYtCookiesFile(f);
+            else resetYtCookiesDropzoneUi();
+        });
+    }
     if (ytCookiesOpenBtn) ytCookiesOpenBtn.addEventListener('click', function () { openYtCookiesModal(); });
-    if (ytCookiesModalCancelBtn) ytCookiesModalCancelBtn.addEventListener('click', function () { closeYtCookiesModal(); });
-    if (ytCookiesModalSaveBtn) ytCookiesModalSaveBtn.addEventListener('click', function () { submitYtCookiesUpload(); });
     if (ytCookiesModal) {
         ytCookiesModal.addEventListener('click', function (e) {
             if (e.target && e.target.hasAttribute('data-youtube-cookies-modal-close')) closeYtCookiesModal();

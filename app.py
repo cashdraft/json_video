@@ -1993,6 +1993,19 @@ def _youtube_proxy_normalize(raw: str) -> str:
     return urlunparse((scheme, netloc, "", "", "", ""))
 
 
+def _youtube_proxy_compact(proxy_url: str) -> str:
+    """Формат для копирования: ``user:pass@host:port`` (без схемы)."""
+    s = (proxy_url or "").strip()
+    if not s:
+        return ""
+    if "://" not in s:
+        return s
+    try:
+        return urlparse(s).netloc or ""
+    except Exception:
+        return ""
+
+
 def _youtube_proxy_mask(proxy_url: str) -> str:
     """Маскирует логин/пароль для отображения в UI и API."""
     if not (proxy_url or "").strip():
@@ -2067,12 +2080,16 @@ def youtube_proxy_status_dict() -> dict[str, Any]:
     last_ok = cfg.get("last_test_ok")
     if last_ok is not None:
         last_ok = bool(last_ok)
+    file_compact = _youtube_proxy_compact(file_url)
+    active_compact = _youtube_proxy_compact(active)
     return {
         "env_overrides_file": env_overrides,
         "file_configured": bool(file_url),
         "active_configured": bool(active),
         "masked_active": masked_active,
         "masked_file": masked_file,
+        "proxy_file_compact": file_compact,
+        "proxy_active_compact": active_compact,
         "last_test_ok": last_ok,
         "last_test_at": cfg.get("last_test_at"),
         "last_test_message": str(cfg.get("last_test_message") or "")[:500],
@@ -2163,6 +2180,7 @@ def youtube_cookies_status_dict() -> dict[str, Any]:
         rel_hint = p.name
     out: dict[str, Any] = {
         "present": False,
+        "filename": p.name,
         "mtime_iso": None,
         "age_seconds": None,
         "age_human": None,
@@ -5199,19 +5217,28 @@ def rewrite_youtube_state_save(rewrite_id: str):
     """Сохранить серверно-видимый статус YouTube-блока. Используется клиентом,
     когда «Остановлено» (или другое финальное сообщение) формируется на стороне
     браузера после AbortController.abort() — чтобы после F5 пользователь увидел
-    то же самое сообщение, а не последнюю запись из фонового потока."""
+    то же самое сообщение, а не последнюю запись из фонового потока.
+
+    ``clear_preview``: сбросить превью канала/названия (новый запуск «Расшифровать»)."""
     rw = load_rewrite_job(rewrite_id)
     if rw is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     body = request.get_json(silent=True) or {}
-    status = str(body.get("youtube_status") or "").strip()
-    phase = str(body.get("youtube_phase") or "").strip()
-    _rewrite_youtube_set_runtime_state(
-        rewrite_id,
-        processing=False,
-        phase=phase,
-        status=status,
-    )
+    if body.get("clear_preview"):
+        rw["youtube_channel"] = ""
+        rw["youtube_channel_id"] = ""
+        rw["youtube_channel_url"] = ""
+        rw["youtube_channel_avatar"] = ""
+        rw["youtube_title"] = ""
+    if "youtube_processing" in body:
+        rw["youtube_processing"] = bool(body.get("youtube_processing"))
+    elif "youtube_status" in body or "youtube_phase" in body:
+        rw["youtube_processing"] = False
+    if "youtube_status" in body:
+        rw["youtube_status"] = str(body.get("youtube_status") or "").strip()
+    if "youtube_phase" in body:
+        rw["youtube_phase"] = str(body.get("youtube_phase") or "").strip()
+    save_rewrite_job(rewrite_id, rw)
     return jsonify({"ok": True})
 
 
@@ -6191,6 +6218,20 @@ def parse_for_job(job_id: str):
         flash_ok += " Тайминги сопоставлены с последней озвучкой (.words.json)."
     flash(flash_ok, "success")
     return redirect(url_for("job_page", job_id=job_id))
+
+
+@app.route("/job/<job_id>/timings-source", methods=["POST"])
+def job_timings_source_save(job_id: str):
+    """Сохранить выбор источника пословных таймингов для JSON сцен (Eleven / Whisper)."""
+    body = request.get_json(silent=True) or {}
+    source = _timings_source_normalize(body.get("source") if isinstance(body, dict) else None)
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+        job["apply_timings_source"] = source
+        save_job(job_id, job)
+    return jsonify({"ok": True, "source": source})
 
 
 @app.route("/job/<job_id>/scenes/apply-tts-timings", methods=["POST"])

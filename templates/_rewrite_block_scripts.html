@@ -78,7 +78,8 @@
        выполняться в контексте, где атрибут ещё не учитывается, или HTML закэширован.
        Источник истины — тот же флаг, что в шаблоне для disabled у полей. */
     const openaiOk = {{ openai_key_set|tojson }};
-    /** Заглушки до IIFE автоцепочки итога (refresh после F5 и т.п.). */
+    /** Заглушки до IIFE Russian/Semantic (очистка без авто-запуска). */
+    window.__rewriteStagesRestartChain = function () {};
     window.__rewriteScheduleVoiceoverFinalAutoChain = function () {};
     window.__rewriteVoiceoverFinalStagesRestartChain = function () {};
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
@@ -165,6 +166,7 @@
     const ytProgressStage = document.getElementById('rewrite-youtube-progress-stage');
     const ytInlineCancelBtn = document.getElementById('rewrite-youtube-cancel-inline');
     const ytVideoTitleTextEl = document.getElementById('rewrite-youtube-video-title');
+    const ytVideoTitleLinkEl = document.getElementById('rewrite-youtube-video-title-link');
     const ytChannelAvatarEl = document.getElementById('rewrite-youtube-channel-avatar');
     const ytChannelNameEl = document.getElementById('rewrite-youtube-channel-name');
     const ytChannelLinkEl = document.getElementById('rewrite-youtube-channel-link');
@@ -183,20 +185,23 @@
     const ytCookiesLedEl = document.getElementById('rewrite-youtube-cookies-led');
     const ytCookiesModal = document.getElementById('rewrite-youtube-cookies-modal');
     const ytCookiesFileEl = document.getElementById('rewrite-youtube-cookies-file');
+    const ytCookiesDropzone = document.getElementById('rewrite-youtube-cookies-dropzone');
+    const ytCookiesDropzoneTitle = document.getElementById('rewrite-youtube-cookies-dropzone-title');
+    const ytCookiesDropzoneLoading = document.getElementById('rewrite-youtube-cookies-dropzone-loading');
+    const ytCookiesDropzoneLoadingText = document.getElementById('rewrite-youtube-cookies-dropzone-loading-text');
+    const YT_COOKIES_DROPZONE_DEFAULT = 'Перетащите сюда cookies.txt';
     const ytCookiesMsgEl = document.getElementById('rewrite-youtube-cookies-msg');
-    const ytCookiesModalCancelBtn = document.getElementById('rewrite-youtube-cookies-modal-cancel');
-    const ytCookiesModalSaveBtn = document.getElementById('rewrite-youtube-cookies-modal-save');
+    var ytCookiesUploading = false;
     const ytProxyStatusUrl = {{ url_for('rewrite_youtube_proxy_status', rewrite_id=rw.rewrite_id) | tojson }};
     const ytProxySaveUrl = {{ url_for('rewrite_youtube_proxy_save', rewrite_id=rw.rewrite_id) | tojson }};
     const ytProxyOpenBtn = document.getElementById('rewrite-youtube-proxy-open');
     const ytProxyLedEl = document.getElementById('rewrite-youtube-proxy-led');
     const ytProxyModal = document.getElementById('rewrite-youtube-proxy-modal');
-    const ytProxyModalCancelBtn = document.getElementById('rewrite-youtube-proxy-modal-cancel');
     const ytProxyInputEl = document.getElementById('rewrite-youtube-proxy-input');
     const ytProxyMsgEl = document.getElementById('rewrite-youtube-proxy-msg');
-    const ytProxySaveBtn = document.getElementById('rewrite-youtube-proxy-save');
-    const ytProxyClearBtn = document.getElementById('rewrite-youtube-proxy-clear');
-    const ytProxyHintEl = document.getElementById('rewrite-youtube-proxy-hint');
+    const ytProxySavedLineEl = document.getElementById('rewrite-youtube-proxy-saved-line');
+    var ytProxySaving = false;
+    var ytProxyInputDirty = false;
     const clearResultsConfirmModal = document.getElementById('rewrite-clear-results-confirm-modal');
     const clearResultsConfirmCancelBtn = document.getElementById('rewrite-clear-results-confirm-cancel');
     const clearResultsConfirmOkBtn = document.getElementById('rewrite-clear-results-confirm-ok');
@@ -322,6 +327,52 @@
     }
 
     var ytLastStatusIsError = false;
+
+    function ytIsFinalSavedState(phase, status) {
+        var ph = String(phase || '').toLowerCase();
+        var st = String(status || '').trim();
+        return ph === 'transcribe_done' || /^Готово\s*[-\u2013]/.test(st);
+    }
+
+    function ytIsErrorSavedState(phase, status) {
+        var ph = String(phase || '').toLowerCase();
+        if (ph === 'error' || /_error$/.test(ph)) return true;
+        var st = String(status || '').trim();
+        if (!st) return false;
+        return /^Ошибка/i.test(st) || /^Не удалось/i.test(st);
+    }
+
+    function ytPersistErrorToServer(message) {
+        if (!ytStateSaveUrl) return Promise.resolve();
+        return fetch(ytStateSaveUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                youtube_status: String(message || ''),
+                youtube_phase: 'error',
+                youtube_processing: false,
+            }),
+        }).catch(function () {});
+    }
+
+    function ytPersistPreviewClearToServer(opts) {
+        if (!ytStateSaveUrl) return Promise.resolve();
+        var o = opts || {};
+        var body = {
+            clear_preview: true,
+            youtube_status: '',
+            youtube_phase: '',
+            youtube_processing: !!o.processing,
+        };
+        return fetch(ytStateSaveUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body),
+        }).catch(function () {});
+    }
+
     function setYtStatus(msg, isError) {
         if (!ytStatusEl) return;
         ytStatusEl.textContent = msg || '';
@@ -356,15 +407,12 @@
         var hasChan = !!(ytChannelNameEl && (ytChannelNameEl.textContent || '').trim());
         var hasTitle = !!(ytVideoTitleTextEl && (ytVideoTitleTextEl.textContent || '').trim());
         var hasStatus = !!(ytStatusEl && (ytStatusEl.textContent || '').trim());
-        // Ошибка/«Остановлено» должны оставаться видимыми даже если метаданные
-        // канала ещё не пришли — иначе плашка моргает или пропадает вместе с текстом.
-        var show = ytWorking || hasChan || hasTitle || (hasStatus && ytLastStatusIsError);
+        var show = ytWorking || hasChan || hasTitle || hasStatus;
         ytProgressWrap.classList.toggle('hidden', !show);
         ytProgressWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
         if (ytProgressStage) {
-            // Пока идёт работа — всегда показываем стадию. В покое — если есть
-            // что показать слева ИЛИ есть статус (в т.ч. только ошибка).
-            var showStage = ytWorking || (show && hasStatus);
+            // Пока идёт работа — всегда показываем стадию. В покое — при любом статусе (в т.ч. только ошибка).
+            var showStage = ytWorking || hasStatus;
             ytProgressStage.classList.toggle('hidden', !showStage);
             ytProgressStage.setAttribute('aria-hidden', showStage ? 'false' : 'true');
         }
@@ -375,20 +423,61 @@
         var s = (t == null || t === undefined) ? '' : String(t);
         s = s.trim();
         if (ytVideoTitleTextEl) ytVideoTitleTextEl.textContent = s;
+        var videoUrl = ytUrlEl ? String(ytUrlEl.value || '').trim() : '';
+        applyYtVideoUrlToLink(videoUrl, s);
         syncYtProgressVisibility();
     }
 
+    function applyYtVideoUrlToLink(videoUrl, videoTitle) {
+        if (!ytVideoTitleLinkEl) return;
+        var u = String(videoUrl || '').trim();
+        var title = String(videoTitle || '').trim();
+        var tip = title ? ('Открыть ролик «' + title + '» на YouTube') : 'Открыть ролик на YouTube';
+        ytVideoTitleLinkEl.classList.toggle('rewrite-youtube-video__title-link--inactive', !u);
+        if (u) {
+            ytVideoTitleLinkEl.href = u;
+            ytVideoTitleLinkEl.title = tip;
+            ytVideoTitleLinkEl.target = '_blank';
+            ytVideoTitleLinkEl.rel = 'noopener noreferrer';
+        } else {
+            ytVideoTitleLinkEl.removeAttribute('href');
+            ytVideoTitleLinkEl.removeAttribute('title');
+            ytVideoTitleLinkEl.removeAttribute('target');
+            ytVideoTitleLinkEl.removeAttribute('rel');
+        }
+    }
+
     function applyYtChannelUrlToLinks(channelUrl, channelName) {
+        var u = String(channelUrl || '').trim();
         var t = channelName ? ('Открыть канал «' + channelName + '» на YouTube') : 'Открыть канал на YouTube';
-        [ytChannelLinkEl, ytChannelNameLinkEl].forEach(function (el) {
-            if (!el) return;
-            if (channelUrl) {
-                el.href = channelUrl;
-                el.title = t;
+        if (ytChannelNameLinkEl) {
+            ytChannelNameLinkEl.classList.toggle('rewrite-youtube-channel__name-link--inactive', !u);
+            if (u) {
+                ytChannelNameLinkEl.href = u;
+                ytChannelNameLinkEl.title = t;
+                ytChannelNameLinkEl.target = '_blank';
+                ytChannelNameLinkEl.rel = 'noopener noreferrer';
             } else {
-                el.removeAttribute('href');
+                ytChannelNameLinkEl.removeAttribute('href');
+                ytChannelNameLinkEl.removeAttribute('title');
+                ytChannelNameLinkEl.removeAttribute('target');
+                ytChannelNameLinkEl.removeAttribute('rel');
             }
-        });
+        }
+        if (ytChannelLinkEl) {
+            ytChannelLinkEl.classList.toggle('rewrite-youtube-channel__avatar-link--inactive', !u);
+            if (u) {
+                ytChannelLinkEl.href = u;
+                ytChannelLinkEl.title = t;
+                ytChannelLinkEl.target = '_blank';
+                ytChannelLinkEl.rel = 'noopener noreferrer';
+            } else {
+                ytChannelLinkEl.removeAttribute('href');
+                ytChannelLinkEl.removeAttribute('title');
+                ytChannelLinkEl.removeAttribute('target');
+                ytChannelLinkEl.removeAttribute('rel');
+            }
+        }
     }
 
     function setYtChannelMeta(meta) {
@@ -418,13 +507,24 @@
 
     function formatYtCookiesStatusLine(d) {
         if (!d || !d.present) return 'Файл ещё не загружен.';
-        var age = d.age_human != null ? String(d.age_human) : '—';
+        var fname = (d.filename && String(d.filename).trim()) || 'yt_cookies.txt';
+        var age = d.age_human != null ? String(d.age_human).trim() : '';
         var sz = d.size_bytes != null ? formatNumRu(d.size_bytes) : '—';
-        return 'Текущий файл: ' + age + ', ' + sz + ' байт.';
+        var parts = ['Текущий файл', fname];
+        if (age) parts.push('Загружен ' + age + ' назад');
+        parts.push(sz + ' байт');
+        return parts.join(' - ') + '.';
+    }
+
+    function renderYtCookiesCurrentFileEl(el, d) {
+        if (!el) return;
+        var present = !!(d && d.present);
+        el.classList.toggle('rewrite-youtube-cookies-modal__current-file--empty', !present);
+        el.textContent = formatYtCookiesStatusLine(d);
     }
 
     function applyYtCookiesStatusUi(d) {
-        if (ytCookiesAgeEl) ytCookiesAgeEl.textContent = formatYtCookiesStatusLine(d);
+        renderYtCookiesCurrentFileEl(ytCookiesAgeEl, d);
         var present = !!(d && d.present);
         if (ytCookiesLedEl) ytCookiesLedEl.classList.toggle('rewrite-youtube-icon-led--ok', present);
         if (ytCookiesOpenBtn) {
@@ -442,10 +542,58 @@
         ytCookiesMsgEl.classList.toggle('rewrite-youtube-cookies-modal__msg--error', !!isError && !!s);
     }
 
+    function resetYtCookiesDropzoneUi() {
+        if (ytCookiesFileEl) ytCookiesFileEl.value = '';
+        if (ytCookiesDropzoneTitle) ytCookiesDropzoneTitle.textContent = YT_COOKIES_DROPZONE_DEFAULT;
+        if (ytCookiesDropzone) ytCookiesDropzone.classList.remove('image-template-editor-dropzone--over');
+    }
+
+    function assignYtCookiesFile(file) {
+        if (!file || !ytCookiesFileEl) return;
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            ytCookiesFileEl.files = dt.files;
+        } catch (_e) {
+            /* старые браузеры — только через input */
+        }
+    }
+
+    function setYtCookiesDropzoneLoading(on, text) {
+        if (!ytCookiesDropzone || !ytCookiesDropzoneLoading) return;
+        if (on) {
+            if (ytCookiesDropzoneLoadingText) ytCookiesDropzoneLoadingText.textContent = text || 'Загрузка…';
+            ytCookiesDropzoneLoading.classList.remove('hidden');
+            ytCookiesDropzoneLoading.setAttribute('aria-hidden', 'false');
+            ytCookiesDropzone.classList.add('image-template-editor-dropzone--loading');
+            ytCookiesDropzone.setAttribute('aria-busy', 'true');
+        } else {
+            ytCookiesDropzoneLoading.classList.add('hidden');
+            ytCookiesDropzoneLoading.setAttribute('aria-hidden', 'true');
+            if (ytCookiesDropzoneLoadingText) ytCookiesDropzoneLoadingText.textContent = '';
+            ytCookiesDropzone.classList.remove('image-template-editor-dropzone--loading');
+            ytCookiesDropzone.removeAttribute('aria-busy');
+        }
+    }
+
+    function acceptYtCookiesFile(file) {
+        if (!file || ytCookiesUploading) return false;
+        var name = String(file.name || '').toLowerCase();
+        if (name && !name.endsWith('.txt') && file.type && file.type !== 'text/plain') {
+            setYtCookiesMsg('Нужен файл .txt (Netscape cookies).', true);
+            return false;
+        }
+        assignYtCookiesFile(file);
+        setYtCookiesMsg('', false);
+        submitYtCookiesUpload(file);
+        return true;
+    }
+
     function openYtCookiesModal() {
         if (!ytCookiesModal) return;
-        if (ytCookiesFileEl) ytCookiesFileEl.value = '';
+        resetYtCookiesDropzoneUi();
         setYtCookiesMsg('', false);
+        refreshYtCookiesStatusFromServer();
         ytCookiesModal.classList.remove('hidden');
         ytCookiesModal.setAttribute('aria-hidden', 'false');
     }
@@ -466,35 +614,76 @@
         }
     }
 
-    async function submitYtCookiesUpload() {
-        if (!ytCookiesFileEl || !ytCookiesModalSaveBtn) return;
-        var f = ytCookiesFileEl.files && ytCookiesFileEl.files[0];
+    async function submitYtCookiesUpload(fileOverride) {
+        if (ytCookiesUploading) return;
+        var f = fileOverride || (ytCookiesFileEl && ytCookiesFileEl.files && ytCookiesFileEl.files[0]);
         if (!f) {
             setYtCookiesMsg('Выберите файл cookies.txt.', true);
             return;
         }
-        setYtCookiesMsg('Загрузка…', false);
-        ytCookiesModalSaveBtn.disabled = true;
+        ytCookiesUploading = true;
+        setYtCookiesDropzoneLoading(true, 'Загрузка…');
+        setYtCookiesMsg('', false);
         try {
             var fd = new FormData();
             fd.append('file', f, f.name || 'cookies.txt');
             var r = await fetch(ytCookiesUploadUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
             var d = await r.json().catch(function () { return {}; });
             if (d && d.ok) {
-                setYtCookiesMsg('Сохранено.', false);
                 applyYtCookiesStatusUi(d);
-                setTimeout(function () { closeYtCookiesModal(); }, 600);
+                resetYtCookiesDropzoneUi();
             } else {
                 setYtCookiesMsg((d && d.message) ? d.message : 'Ошибка сохранения.', true);
             }
         } catch (e) {
             setYtCookiesMsg(String(e && e.message ? e.message : e), true);
         } finally {
-            ytCookiesModalSaveBtn.disabled = false;
+            ytCookiesUploading = false;
+            setYtCookiesDropzoneLoading(false);
         }
     }
 
+    function formatYtProxyFooterHtml(d) {
+        if (!d || !d.active_configured) return '';
+        var active = String(d.proxy_active_compact || d.proxy_file_compact || '').trim();
+        var fileOnly = String(d.proxy_file_compact || '').trim();
+        var html = '';
+        if (active) {
+            html += '<code class="rewrite-youtube-proxy-modal__footer-code" id="rewrite-youtube-proxy-saved-code">'
+                + ytProxyMsgEscapeHtml(active) + '</code>';
+        } else if (d.masked_active) {
+            html += ytProxyMsgEscapeHtml(String(d.masked_active));
+        }
+        var testMsg = (d.last_test_message != null) ? String(d.last_test_message).trim() : '';
+        if (d.last_test_ok === false) {
+            if (html) html += ' - ';
+            html += '<span class="rewrite-youtube-proxy-modal__footer-test rewrite-youtube-proxy-modal__footer-test--bad">Проверка не прошла</span>';
+        } else if (testMsg) {
+            if (html) html += ' - ';
+            html += '<span class="rewrite-youtube-proxy-modal__footer-test">Проверка: '
+                + ytProxyMsgFormatHtml(testMsg, false) + '</span>';
+        }
+        if (d.env_overrides_file && fileOnly && fileOnly !== active) {
+            html += '<span class="rewrite-youtube-proxy-modal__footer-hint"> · в файле: '
+                + ytProxyMsgEscapeHtml(fileOnly) + '</span>';
+        }
+        return html;
+    }
+
+    function renderYtProxyFooterLine(d) {
+        if (!ytProxySavedLineEl) return;
+        var configured = !!(d && d.active_configured);
+        ytProxySavedLineEl.classList.toggle('rewrite-youtube-proxy-modal__footer--empty', !configured);
+        if (!configured) {
+            ytProxySavedLineEl.textContent = 'Прокси не задан.';
+            return;
+        }
+        var html = formatYtProxyFooterHtml(d);
+        ytProxySavedLineEl.innerHTML = html || 'Прокси задан.';
+    }
+
     function applyYtProxyStatusUi(d) {
+        renderYtProxyFooterLine(d);
         var ledMod = 'idle';
         var msg = (d && d.last_test_message) ? String(d.last_test_message) : '';
         var tooltip;
@@ -527,19 +716,26 @@
             if (ledMod !== 'idle') ytProxyLedEl.classList.add('rewrite-youtube-icon-led--' + ledMod);
         }
         if (ytProxyOpenBtn) ytProxyOpenBtn.title = tooltip;
-        if (ytProxyHintEl) {
-            var parts = [];
-            if (d && d.env_overrides_file) {
-                parts.push('Сейчас действует YT_DLP_PROXY из .env (приоритет над полем).');
-            }
-            if (d && d.masked_file) {
-                parts.push('В файле: ' + String(d.masked_file));
-            }
-            if (d && d.active_configured && d.masked_active && !d.env_overrides_file) {
-                parts.push('Активно: ' + String(d.masked_active));
-            }
-            ytProxyHintEl.textContent = parts.join(' ');
-        }
+    }
+
+    function ytProxyMsgEscapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function ytProxyMsgFormatHtml(text, isError) {
+        var s = ytProxyMsgEscapeHtml(text);
+        if (isError) return s;
+        return s.replace(/\bHTTP\s+(\d{3})\b/g, function (_m, code) {
+            var n = parseInt(code, 10);
+            var cls = (n >= 200 && n < 300) ? 'rewrite-youtube-proxy-msg__http-ok'
+                : (n >= 400) ? 'rewrite-youtube-proxy-msg__http-bad' : '';
+            if (!cls) return 'HTTP ' + code;
+            return 'HTTP <span class="' + cls + '">' + code + '</span>';
+        });
     }
 
     async function refreshYtProxyStatusFromServer() {
@@ -555,14 +751,16 @@
     function setYtProxyMsg(text, isError) {
         if (!ytProxyMsgEl) return;
         var s = (text == null) ? '' : String(text);
-        ytProxyMsgEl.textContent = s;
+        ytProxyMsgEl.innerHTML = s ? ytProxyMsgFormatHtml(s, !!isError) : '';
         ytProxyMsgEl.classList.toggle('hidden', !s);
         ytProxyMsgEl.classList.toggle('rewrite-youtube-cookies-modal__msg--error', !!isError && !!s);
+        ytProxyMsgEl.classList.toggle('rewrite-youtube-proxy-modal__msg--ok', !isError && !!s);
     }
 
     function openYtProxyModal() {
         if (!ytProxyModal) return;
         setYtProxyMsg('', false);
+        ytProxyInputDirty = false;
         if (ytProxyInputEl) ytProxyInputEl.value = '';
         ytProxyModal.classList.remove('hidden');
         ytProxyModal.setAttribute('aria-hidden', 'false');
@@ -577,10 +775,9 @@
     }
 
     async function submitYtProxySave() {
-        if (!ytProxySaveBtn) return;
+        if (ytProxySaving) return;
         var raw = ytProxyInputEl ? String(ytProxyInputEl.value || '').trim() : '';
-        ytProxySaveBtn.disabled = true;
-        if (ytProxyClearBtn) ytProxyClearBtn.disabled = true;
+        ytProxySaving = true;
         setYtProxyMsg('Сохраняем и проверяем…', false);
         try {
             var r = await fetch(ytProxySaveUrl, {
@@ -595,28 +792,20 @@
                 return;
             }
             applyYtProxyStatusUi(d);
+            ytProxyInputDirty = false;
             if (d.test_ok === true) {
                 setYtProxyMsg('Проверка прошла: ' + String(d.test_message || 'OK') + '.', false);
                 if (ytProxyInputEl) ytProxyInputEl.value = '';
-                setTimeout(function () { closeYtProxyModal(); }, 700);
             } else if (d.test_ok === false) {
-                setYtProxyMsg('Проверка не прошла: ' + String(d.test_message || 'ошибка') + '.', true);
+                setYtProxyMsg('Проверка не прошла', true);
             } else if (d.cleared) {
                 setYtProxyMsg('Прокси очищен.', false);
-                setTimeout(function () { closeYtProxyModal(); }, 500);
             }
         } catch (e) {
             setYtProxyMsg(String(e && e.message ? e.message : e), true);
         } finally {
-            ytProxySaveBtn.disabled = false;
-            if (ytProxyClearBtn) ytProxyClearBtn.disabled = false;
+            ytProxySaving = false;
         }
-    }
-
-    async function submitYtProxyClear() {
-        if (!ytProxyInputEl) return;
-        ytProxyInputEl.value = '';
-        await submitYtProxySave();
     }
 
     function setYoutubeLocked(locked) {
@@ -2725,6 +2914,9 @@
         if (typeof window.__rewriteSyncVoiceoverFinalSemanticRunPrereq === 'function') {
             try { window.__rewriteSyncVoiceoverFinalSemanticRunPrereq(); } catch (_e2) {}
         }
+        if (typeof window.__clearJobElevenlabsOnRewritePipelineReset === 'function') {
+            try { await window.__clearJobElevenlabsOnRewritePipelineReset({ persist: true }); } catch (_eTts) {}
+        }
         try {
             var okSave = await saveToServer();
             if (!okSave) {
@@ -2897,30 +3089,45 @@
     if (sourceCopyBtn && sourceEl) {
         sourceCopyBtn.addEventListener('click', function () {
             var raw = sourceEl.value || '';
-            var prevTitle = sourceCopyBtn.getAttribute('title') || 'Копировать исходный текст в буфер обмена';
-            function flashTitle(t) {
-                sourceCopyBtn.setAttribute('title', t);
-                setTimeout(function () { sourceCopyBtn.setAttribute('title', prevTitle); }, 1500);
+            if (!raw.trim()) {
+                var prevT = sourceCopyBtn.getAttribute('title') || '';
+                sourceCopyBtn.setAttribute('title', 'Нет текста для копирования');
+                setTimeout(function () { sourceCopyBtn.setAttribute('title', prevT || 'Копировать исходный текст в буфер обмена'); }, 2200);
+                return;
             }
-            if (!raw) { flashTitle('Нет текста для копирования'); return; }
-            function fallback() {
+            function showCopied() {
+                if (sourceCountsEl) {
+                    sourceCountsEl.setAttribute('data-copy-hold', '1');
+                    sourceCountsEl.textContent = 'Скопировано в буфер';
+                    var headerCompactCounts = document.getElementById('rewrite-source-header-compact-counts');
+                    if (headerCompactCounts) headerCompactCounts.textContent = 'Скопировано в буфер';
+                    setTimeout(function () {
+                        sourceCountsEl.removeAttribute('data-copy-hold');
+                        updateSourceCounts();
+                    }, 1600);
+                }
+            }
+            function fallbackExec() {
                 try {
-                    sourceEl.removeAttribute('readonly');
-                    var prevDisabled = sourceEl.disabled;
-                    sourceEl.disabled = false;
-                    sourceEl.focus();
-                    sourceEl.select();
-                    document.execCommand('copy');
-                    sourceEl.disabled = prevDisabled;
-                    if (sourceLocked) sourceEl.setAttribute('readonly', '');
-                    flashTitle('Скопировано');
-                } catch (e) { flashTitle('Не удалось скопировать'); }
+                    var tmp = document.createElement('textarea');
+                    tmp.value = raw;
+                    tmp.setAttribute('readonly', '');
+                    tmp.style.position = 'fixed';
+                    tmp.style.left = '-9999px';
+                    tmp.style.top = '0';
+                    document.body.appendChild(tmp);
+                    tmp.focus();
+                    tmp.select();
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(tmp);
+                    if (ok) showCopied();
+                } catch (e) { void e; }
             }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(raw)
-                    .then(function () { flashTitle('Скопировано'); })
-                    .catch(fallback);
-            } else { fallback(); }
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(raw).then(showCopied).catch(fallbackExec);
+            } else {
+                fallbackExec();
+            }
         });
     }
 
@@ -2928,30 +3135,43 @@
     if (sourceRuCopyBtn && sourceRuEl) {
         sourceRuCopyBtn.addEventListener('click', function () {
             var raw = sourceRuEl.value || '';
-            var prevTitle = sourceRuCopyBtn.getAttribute('title') || 'Копировать перевод в буфер обмена';
-            function flashTitle(t) {
-                sourceRuCopyBtn.setAttribute('title', t);
-                setTimeout(function () { sourceRuCopyBtn.setAttribute('title', prevTitle); }, 1500);
+            if (!raw.trim()) {
+                var prevTr = sourceRuCopyBtn.getAttribute('title') || '';
+                sourceRuCopyBtn.setAttribute('title', 'Нет текста для копирования');
+                setTimeout(function () { sourceRuCopyBtn.setAttribute('title', prevTr || 'Копировать перевод в буфер обмена'); }, 2200);
+                return;
             }
-            if (!raw) { flashTitle('Нет текста для копирования'); return; }
-            function fallback() {
+            function showCopiedRu() {
+                if (sourceRuCountsEl) {
+                    sourceRuCountsEl.setAttribute('data-copy-hold', '1');
+                    sourceRuCountsEl.textContent = 'Скопировано в буфер';
+                    setTimeout(function () {
+                        sourceRuCountsEl.removeAttribute('data-copy-hold');
+                        updateSourceRuCounts();
+                    }, 1600);
+                }
+            }
+            function fallbackExecRu() {
                 try {
-                    sourceRuEl.removeAttribute('readonly');
-                    var prevDisabled = sourceRuEl.disabled;
-                    sourceRuEl.disabled = false;
-                    sourceRuEl.focus();
-                    sourceRuEl.select();
-                    document.execCommand('copy');
-                    sourceRuEl.disabled = prevDisabled;
-                    if (sourceRuLocked) sourceRuEl.setAttribute('readonly', '');
-                    flashTitle('Скопировано');
-                } catch (e) { flashTitle('Не удалось скопировать'); }
+                    var tmp = document.createElement('textarea');
+                    tmp.value = raw;
+                    tmp.setAttribute('readonly', '');
+                    tmp.style.position = 'fixed';
+                    tmp.style.left = '-9999px';
+                    tmp.style.top = '0';
+                    document.body.appendChild(tmp);
+                    tmp.focus();
+                    tmp.select();
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(tmp);
+                    if (ok) showCopiedRu();
+                } catch (e) { void e; }
             }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(raw)
-                    .then(function () { flashTitle('Скопировано'); })
-                    .catch(fallback);
-            } else { fallback(); }
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(raw).then(showCopiedRu).catch(fallbackExecRu);
+            } else {
+                fallbackExecRu();
+            }
         });
     }
     if (sourceTitleEl) {
@@ -3119,6 +3339,10 @@
             }
             if (gotResult && sourceRuEl) {
                 sourceRuEl.value = translatedText;
+                if (sourceRuWrap && String(translatedText || '').trim()) {
+                    sourceRuWrap.classList.remove('hidden');
+                    sourceRuWrap.setAttribute('aria-hidden', 'false');
+                }
                 sourceRuLocked = true;
                 applySourceRuLockUI();
                 updateSourceRuCounts();
@@ -3155,6 +3379,9 @@
             // syncTranslateRuRunButtonPrereq, когда Source пуст. Сюда
             // мы попасть не должны, но на всякий случай тихо выходим.
             if (!raw.trim()) return false;
+            if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                try { window.__rewriteClearRuAndSemanticDom({ ru: true, semantic: false, cancelTasks: false }); } catch (_clrRu) {}
+            }
             setTranslateRuBusy(true);
             setTranslateRuStatus('Запуск фоновой задачи перевода…');
             translateRuTaskId = null;
@@ -3194,8 +3421,12 @@
             } finally {
                 translateRuTaskId = null;
                 translateRuAbort = null;
-                if (hadError || wasAborted) {
-                    // Сохраняем последнее сообщение и показываем «красную» плашку.
+                if (wasAborted) {
+                    if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                        try { window.__rewriteClearRuAndSemanticDom({ ru: true, semantic: false, cancelTasks: false }); } catch (_clrRu2) {}
+                    }
+                    setTranslateRuBusy(false);
+                } else if (hadError) {
                     var lastMsg = translateRuStatusEl ? String(translateRuStatusEl.textContent || '') : '';
                     setTranslateRuError(lastMsg || 'Ошибка');
                 } else {
@@ -3233,7 +3464,12 @@
             } finally {
                 translateRuTaskId = null;
                 translateRuAbort = null;
-                if (hadError || wasAborted) {
+                if (wasAborted) {
+                    if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                        try { window.__rewriteClearRuAndSemanticDom({ ru: true, semantic: false, cancelTasks: false }); } catch (_clrRu3) {}
+                    }
+                    setTranslateRuBusy(false);
+                } else if (hadError) {
                     var lastMsg = translateRuStatusEl ? String(translateRuStatusEl.textContent || '') : '';
                     setTranslateRuError(lastMsg || 'Ошибка');
                 } else {
@@ -3374,7 +3610,7 @@
             if (!txt) return;
             // Не перетираем активный прогон «Расшифровать» и не затираем ошибку,
             // если fetch завершился с задержкой посередине decode.
-            if (ytWorking) return;
+            if (ytWorking || ytLastStatusIsError) return;
             ytTranscriptReady = true;
             setYoutubeLocked(true);
             setYtStatus('Готово - ' + formatNumRu(txt.length) + ' символов · ' + formatNumRu(countWords(txt)) + ' слов', false);
@@ -3603,11 +3839,13 @@
         ytTranscriptReady = false;
         ytAbortController = new AbortController();
         var signal = ytAbortController.signal;
-        // Мгновенно показываем превью-заглушку + статусную плашку Semantic-стиля.
-        // Метаданные канала появятся, как только вернётся `verify`.
+        ytLastStatusIsError = false;
+        setYtStatus('', false);
         setYtChannelMeta({});
         setYtVideoTitle('');
+        syncYtProgressVisibility();
         applyYoutubeToolbar();
+        await ytPersistPreviewClearToServer({ processing: true });
         try {
             setYtStatus('Проверяем ссылку…', false);
             const r1 = await fetch(ytVerifyUrl, {
@@ -3618,7 +3856,10 @@
             });
             const d1 = await r1.json().catch(function () { return {}; });
             if (!r1.ok || !d1.ok) {
-                setYtStatus(d1.message || 'Не удалось проверить ссылку.', true);
+                var verifyErr = d1.message || 'Не удалось проверить ссылку.';
+                setYtStatus(verifyErr, true);
+                syncYtProgressVisibility();
+                await ytPersistErrorToServer(verifyErr);
                 return;
             }
             if (d1.youtube_title) {
@@ -3640,29 +3881,21 @@
             // Не затемняем сразу после конвейера: удобно вставить текст, сменить ссылку.
             // После F5 с сохранённой расшифровкой сервер снова отдаёт locked (как защита).
         } catch (e) {
-            var finalMsg;
-            var finalPhase;
-            if (e && e.name === 'AbortError') {
-                finalMsg = 'Остановлено';
-                finalPhase = 'cancelled';
-            } else {
-                finalMsg = String(e);
-                finalPhase = 'error';
-            }
-            setYtStatus(finalMsg, true);
             ytTranscriptReady = false;
-            // Сохраняем финальный статус на сервере, чтобы после F5 он остался
-            // виден в правой плашке Semantic-стиля рядом с карточкой канала.
-            try {
-                if (ytStateSaveUrl) {
-                    fetch(ytStateSaveUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ youtube_status: finalMsg, youtube_phase: finalPhase }),
-                        keepalive: true
-                    }).catch(function () {});
-                }
-            } catch (_e) { /* ignore */ }
+            if (e && e.name === 'AbortError') {
+                ytLastStatusIsError = false;
+                setYtStatus('', false);
+                setYtChannelMeta({});
+                setYtVideoTitle('');
+                syncYtProgressVisibility();
+                await ytPersistPreviewClearToServer({ processing: false });
+            } else {
+                ytLastStatusIsError = true;
+                var errMsg = String(e && e.message ? e.message : e);
+                setYtStatus(errMsg, true);
+                syncYtProgressVisibility();
+                await ytPersistErrorToServer(errMsg);
+            }
         } finally {
             ytAbortController = null;
             ytWorking = false;
@@ -3704,13 +3937,9 @@
                 try { sourceTitleEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e3) {}
                 try { sourceTitleEl.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e4) {}
             }
-            // Принудительно запускаем цепочку без debounce ожидания: текст
-            // только что подставлен — ждать ещё 1.5 с нет смысла.
-            try {
-                if (typeof window.__rewriteStagesRestartChain === 'function') {
-                    window.__rewriteStagesRestartChain();
-                }
-            } catch (_e5) { /* ignore */ }
+            if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                try { window.__rewriteClearRuAndSemanticDom({ scheduleAutosave: false }); } catch (_e5) { /* ignore */ }
+            }
             var ok = await saveToServer();
             if (!ok) {
                 setYtStatus('Текст вставлен, но не удалось сохранить.', true);
@@ -3916,8 +4145,8 @@
         apply: applySourceLockUI,
         focusEl: sourceEl,
         afterLockCommit: function () {
-            if (typeof window.__rewriteStagesRestartChain === 'function') {
-                try { window.__rewriteStagesRestartChain(); } catch (_e) {}
+            if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                try { window.__rewriteClearRuAndSemanticDom(); } catch (_e) {}
             }
         }
     });
@@ -4696,9 +4925,6 @@
                             if (typeof window.__rewriteRefreshVoiceoverFinal === 'function') {
                                 try { window.__rewriteRefreshVoiceoverFinal(); } catch (_e) {}
                             }
-                            if (typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                                try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (_e2) {}
-                            }
                         }
                     } catch (e2) {
                         block.setAttribute('data-result-locked', '0');
@@ -4749,10 +4975,6 @@
                             block.setAttribute('data-changes-locked', '0');
                             applyChangesLockUI(block);
                             alert('Не удалось сохранить');
-                        } else if ((block.getAttribute('data-stage-key') || '') === 'voiceover_editor') {
-                            if (typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                                try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (_e) {}
-                            }
                         }
                     } catch (chErr2) {
                         block.setAttribute('data-changes-locked', '0');
@@ -5269,29 +5491,60 @@
         });
     }
     if (ytInsertBtn) ytInsertBtn.addEventListener('click', ytInsertToSource);
+    if (ytCookiesDropzone && ytCookiesFileEl) {
+        ytCookiesDropzone.addEventListener('click', function () {
+            if (ytCookiesUploading) return;
+            ytCookiesFileEl.click();
+        });
+        ytCookiesDropzone.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                ytCookiesFileEl.click();
+            }
+        });
+        ytCookiesDropzone.addEventListener('dragover', function (ev) {
+            ev.preventDefault();
+            ytCookiesDropzone.classList.add('image-template-editor-dropzone--over');
+        });
+        ytCookiesDropzone.addEventListener('dragleave', function (ev) {
+            if (ytCookiesDropzone.contains(ev.relatedTarget)) return;
+            ytCookiesDropzone.classList.remove('image-template-editor-dropzone--over');
+        });
+        ytCookiesDropzone.addEventListener('drop', function (ev) {
+            ev.preventDefault();
+            ytCookiesDropzone.classList.remove('image-template-editor-dropzone--over');
+            var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+            if (f) acceptYtCookiesFile(f);
+        });
+        ytCookiesFileEl.addEventListener('change', function () {
+            var f = ytCookiesFileEl.files && ytCookiesFileEl.files[0];
+            if (f) acceptYtCookiesFile(f);
+            else resetYtCookiesDropzoneUi();
+        });
+    }
     if (ytCookiesOpenBtn) ytCookiesOpenBtn.addEventListener('click', function () { openYtCookiesModal(); });
-    if (ytCookiesModalCancelBtn) ytCookiesModalCancelBtn.addEventListener('click', function () { closeYtCookiesModal(); });
-    if (ytCookiesModalSaveBtn) ytCookiesModalSaveBtn.addEventListener('click', function () { submitYtCookiesUpload(); });
     if (ytCookiesModal) {
         ytCookiesModal.addEventListener('click', function (e) {
             if (e.target && e.target.hasAttribute('data-youtube-cookies-modal-close')) closeYtCookiesModal();
         });
     }
     if (ytProxyOpenBtn) ytProxyOpenBtn.addEventListener('click', function () { openYtProxyModal(); });
-    if (ytProxyModalCancelBtn) ytProxyModalCancelBtn.addEventListener('click', function () { closeYtProxyModal(); });
-    if (ytProxySaveBtn) ytProxySaveBtn.addEventListener('click', function () { submitYtProxySave(); });
-    if (ytProxyClearBtn) ytProxyClearBtn.addEventListener('click', function () { submitYtProxyClear(); });
     if (ytProxyModal) {
         ytProxyModal.addEventListener('click', function (e) {
             if (e.target && e.target.hasAttribute('data-youtube-proxy-modal-close')) closeYtProxyModal();
         });
     }
     if (ytProxyInputEl) {
+        ytProxyInputEl.addEventListener('input', function () { ytProxyInputDirty = true; });
         ytProxyInputEl.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                submitYtProxySave();
+                if (ytProxyInputDirty) submitYtProxySave();
             }
+        });
+        ytProxyInputEl.addEventListener('blur', function () {
+            if (!ytProxyModal || ytProxyModal.classList.contains('hidden')) return;
+            if (ytProxyInputDirty) submitYtProxySave();
         });
     }
     if (ytUrlEl) {
@@ -5299,6 +5552,7 @@
             ytTranscriptReady = false;
             setYtVideoTitle('');
             setYtChannelMeta({});
+            applyYtVideoUrlToLink('', '');
             applyYoutubeToolbar();
             var t = (ytUrlEl.value || '').trim();
             if (t) {
@@ -5485,6 +5739,9 @@
                 emptyOverlay.classList.toggle('hidden', has);
                 emptyOverlay.setAttribute('aria-hidden', has ? 'true' : 'false');
             }
+            if (typeof window.__rewriteCloseLangModelDropdownPanels === 'function') {
+                try { window.__rewriteCloseLangModelDropdownPanels(); } catch (_) {}
+            }
             var v = ta.value || '';
             var countLine = formatNumRu(v.length) + ' симв. · ' + formatNumRu(countWords(v)) + ' сл.';
             if (counts) counts.textContent = countLine;
@@ -5544,7 +5801,11 @@
                 try {
                     ta.value = fresh;
                     updateCounts();
-                    resetRussianTranslation();
+                    if (typeof window.__rewriteClearVoiceoverFinalRuSemanticDom === 'function') {
+                        window.__rewriteClearVoiceoverFinalRuSemanticDom({ scheduleAutosave: false });
+                    } else {
+                        resetRussianTranslation();
+                    }
                     scheduleAutosave(500);
                 } finally {
                     syncingFromVo = false;
@@ -5558,9 +5819,6 @@
             if (typeof window.__rewriteSyncVoiceoverFinalSemanticRunPrereq === 'function') {
                 try { window.__rewriteSyncVoiceoverFinalSemanticRunPrereq(); } catch (e) {}
             }
-            if (changed && typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (e) {}
-            }
         }
         function pushFinalToVoiceoverEditor() {
             if (!voEditorTa || syncingFromVo) return;
@@ -5573,7 +5831,6 @@
             try { updateResultCounts(voBlock); } catch (_) {}
             try { renderEditorCheck(voBlock); } catch (_) {}
             try { updateVoiceoverChangesBadge(voBlock); } catch (_) {}
-            resetRussianTranslation();
             try {
                 voEditorTa.dispatchEvent(new Event('input', { bubbles: true }));
                 voEditorTa.dispatchEvent(new Event('change', { bubbles: true }));
@@ -5617,12 +5874,13 @@
                 apply: applyVfLockUI,
                 focusEl: ta,
                 afterLockCommit: function () {
-                    if (typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                        try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (_e) {}
+                    if (typeof window.__rewriteClearVoiceoverFinalRuSemanticDom === 'function') {
+                        try { window.__rewriteClearVoiceoverFinalRuSemanticDom(); } catch (_e) {}
                     }
                 }
             });
         }
+        window.__rewriteApplyVoiceoverFinalRuLockUi = applyVfLockUI;
         if (copyBtn) {
             copyBtn.addEventListener('click', async function () {
                 try {
@@ -5791,6 +6049,11 @@
                     }
                     if (hadError && !translatedText) return false;
                     if (ruTa) ruTa.value = translatedText;
+                    var ruOuterWrap = document.getElementById('rewrite-voiceover-final-text-ru-wrap');
+                    if (ruOuterWrap && String(translatedText || '').trim()) {
+                        ruOuterWrap.classList.remove('hidden');
+                        ruOuterWrap.setAttribute('aria-hidden', 'false');
+                    }
                     voiceoverFinalTextRuLocked = true;
                     applyVfrLockUI();
                     updateVfrCounts();
@@ -6000,14 +6263,60 @@
         var fields = document.querySelectorAll('[data-lang-model-field]');
             if (!fields.length) return;
 
+        function resetLangModelPanelPosition(panel) {
+            if (!panel) return;
+            panel.classList.remove('rewrite-stages-lang-model__panel--viewport');
+            panel.style.position = '';
+            panel.style.top = '';
+            panel.style.bottom = '';
+            panel.style.left = '';
+            panel.style.right = '';
+            panel.style.width = '';
+            panel.style.margin = '';
+            panel.style.zIndex = '';
+        }
+
+        function positionLangModelPanelInViewport(btn, panel) {
+            if (!btn || !panel) return;
+            var gap = 6;
+            var minW = 180;
+            var rect = btn.getBoundingClientRect();
+            var w = Math.max(rect.width, minW);
+            var left = rect.right - w;
+            left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+            panel.classList.add('rewrite-stages-lang-model__panel--viewport');
+            panel.style.position = 'fixed';
+            panel.style.width = w + 'px';
+            panel.style.left = left + 'px';
+            panel.style.right = 'auto';
+            panel.style.margin = '0';
+            panel.style.zIndex = '200';
+            var ph = panel.offsetHeight || 0;
+            var spaceAbove = rect.top;
+            var spaceBelow = window.innerHeight - rect.bottom;
+            if (spaceAbove >= ph + gap && spaceAbove >= spaceBelow) {
+                panel.style.top = Math.max(8, rect.top - ph - gap) + 'px';
+                panel.style.bottom = 'auto';
+            } else {
+                panel.style.top = (rect.bottom + gap) + 'px';
+                panel.style.bottom = 'auto';
+            }
+        }
+
         function closeAllPanelsExcept(except) {
             document.querySelectorAll('.rewrite-anim-dropdown__panel').forEach(function (p) {
                 if (p === except) return;
                 p.hidden = true;
+                resetLangModelPanelPosition(p);
                 var b = p.parentElement && p.parentElement.querySelector('.rewrite-anim-dropdown__btn');
                 if (b) b.setAttribute('aria-expanded', 'false');
             });
         }
+
+        function closeAllLangModelPanels() {
+            closeAllPanelsExcept(null);
+        }
+        window.__rewriteCloseLangModelDropdownPanels = closeAllLangModelPanels;
 
         function updateFieldBtnLabel(field) {
             var lbl = field.querySelector('[data-lang-model-label]');
@@ -6034,8 +6343,13 @@
         function bindOneField(field) {
             var btn = field.querySelector('.rewrite-stages-lang-model__btn');
             var panel = field.querySelector('.rewrite-stages-lang-model__panel');
+            var useViewportPanel = field.getAttribute('data-lang-model-field') === 'voiceover-final'
+                || !!field.closest('.rewrite-stages-collapsible__right');
             function closePanel() {
-                if (panel) panel.hidden = true;
+                if (panel) {
+                    panel.hidden = true;
+                    resetLangModelPanelPosition(panel);
+                }
                 if (btn) btn.setAttribute('aria-expanded', 'false');
             }
             if (btn && panel) {
@@ -6048,21 +6362,31 @@
                         closeAllPanelsExcept(panel);
                         panel.hidden = false;
                         btn.setAttribute('aria-expanded', 'true');
+                        if (useViewportPanel) {
+                            positionLangModelPanelInViewport(btn, panel);
+                        }
                     }
                 });
             }
             field.querySelectorAll('input.rewrite-stages-lang-model-radio, input.rewrite-vf-lang-model-radio').forEach(function (rb) {
                 rb.addEventListener('change', function () {
                     applySyncedModel(rb.value);
-                    if (panel) panel.hidden = true;
+                    if (panel) {
+                        panel.hidden = true;
+                        resetLangModelPanelPosition(panel);
+                    }
                     if (btn) btn.setAttribute('aria-expanded', 'false');
                     scheduleAutosave(0);
                     if (rb.classList.contains('rewrite-stages-lang-model-radio') || rb.classList.contains('rewrite-vf-lang-model-radio')) {
-                        if (typeof window.__rewriteStagesRestartChain === 'function') {
-                            try { window.__rewriteStagesRestartChain(); } catch (_e) {}
+                        if (rb.classList.contains('rewrite-stages-lang-model-radio')) {
+                            if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                                try { window.__rewriteClearRuAndSemanticDom(); } catch (_e) {}
+                            }
                         }
-                        if (typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                            try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (_e2) {}
+                        if (rb.classList.contains('rewrite-vf-lang-model-radio')) {
+                            if (typeof window.__rewriteClearVoiceoverFinalRuSemanticDom === 'function') {
+                                try { window.__rewriteClearVoiceoverFinalRuSemanticDom(); } catch (_e2) {}
+                            }
                         }
                     }
                 });
@@ -6074,11 +6398,8 @@
             primarySel.addEventListener('change', function () {
                 applySyncedModel(primarySel.value);
                 scheduleAutosave(0);
-                if (typeof window.__rewriteStagesRestartChain === 'function') {
-                    try { window.__rewriteStagesRestartChain(); } catch (_e) {}
-                }
-                if (typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                    try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (_e2) {}
+                if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                    try { window.__rewriteClearRuAndSemanticDom(); } catch (_e) {}
                 }
             });
         }
@@ -6086,16 +6407,25 @@
             vfSel.addEventListener('change', function () {
                 applySyncedModel(vfSel.value);
                 scheduleAutosave(0);
-                if (typeof window.__rewriteStagesRestartChain === 'function') {
-                    try { window.__rewriteStagesRestartChain(); } catch (_e) {}
-                }
-                if (typeof window.__rewriteVoiceoverFinalStagesRestartChain === 'function') {
-                    try { window.__rewriteVoiceoverFinalStagesRestartChain(); } catch (_e2) {}
+                if (typeof window.__rewriteClearVoiceoverFinalRuSemanticDom === 'function') {
+                    try { window.__rewriteClearVoiceoverFinalRuSemanticDom(); } catch (_e) {}
                 }
             });
         }
         var initV = (primarySel && primarySel.value) ? primarySel.value : (vfSel ? vfSel.value : '');
         applySyncedModel(initV);
+
+        document.addEventListener('click', function (ev) {
+            if (ev.target.closest && ev.target.closest('[data-lang-model-field]')) return;
+            closeAllLangModelPanels();
+        });
+        window.addEventListener('resize', function () {
+            document.querySelectorAll('.rewrite-stages-lang-model__panel--viewport:not([hidden])').forEach(function (panel) {
+                var field = panel.closest('[data-lang-model-field]');
+                var btn = field && field.querySelector('.rewrite-stages-lang-model__btn');
+                if (btn) positionLangModelPanelInViewport(btn, panel);
+            });
+        });
     })();
 
     (function initTemplateDropdown() {
@@ -6172,27 +6502,103 @@
         }
     }
 
-    /** Очистка полей Russian / Semantic на DOM (без сетевых вызовов). */
-    function clearRewriteRuSemanticTextareasDom() {
+    /** Очистка Russian / Semantic «Исходный текст» (DOM + бейджи). opts.ru / opts.semantic — что чистить (по умолчанию оба). */
+    function clearRewriteRuSemanticTextareasDom(opts) {
+        opts = opts || {};
+        var clearRu = opts.hasOwnProperty('ru') ? !!opts.ru : true;
+        var clearSa = opts.hasOwnProperty('semantic') ? !!opts.semantic : true;
+        if (opts.cancelTasks !== false) {
+            if (clearSa) { try { if (window.__rewriteCancelSemantic) window.__rewriteCancelSemantic(); } catch (_e) {} }
+            if (clearRu) { try { if (window.__rewriteCancelTranslateRu) window.__rewriteCancelTranslateRu(); } catch (_e0) {} }
+        }
         var ruEl = document.getElementById('rewrite-source-text-ru');
         var saEl = document.getElementById('semantic-analyzer-result');
-        if (ruEl) {
+        var ruWrap = document.getElementById('rewrite-source-text-ru-wrap');
+        var ruCounts = document.getElementById('rewrite-source-ru-counts');
+        var ruBadge = document.getElementById('rewrite-source-ru-badge');
+        var saBadge = document.getElementById('semantic-analyzer-badge');
+        var trStatusWrap = document.getElementById('rewrite-source-translate-ru-status-wrap');
+        var semStatusWrap = document.getElementById('semantic-analyzer-status-wrap');
+        if (clearRu && ruEl) {
             ruEl.value = '';
             try { ruEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
             try { ruEl.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+            sourceRuLocked = false;
         }
-        if (saEl) {
+        if (clearSa && saEl) {
             saEl.value = '';
             try { saEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
             try { saEl.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+            semanticAnalysisLocked = true;
         }
+        /* Russian + Semantic внутри одного wrap — не скрываем его, иначе «Подробнее»
+           раскрывается пустым до перезагрузки страницы. */
+        if (ruWrap) {
+            ruWrap.classList.remove('hidden');
+            ruWrap.setAttribute('aria-hidden', 'false');
+        }
+        if (clearRu && ruCounts) ruCounts.textContent = '';
+        if (clearRu && ruBadge && ruEl) applyTextBadgeState(ruBadge, ruEl);
+        if (clearSa && saBadge && saEl) applyTextBadgeState(saBadge, saEl);
+        if (clearRu || clearSa) {
+            [
+                clearRu ? 'rewrite-stages-compact-ru-badge' : null,
+                clearRu ? 'rewrite-source-header-compact-ru-badge' : null,
+                clearSa ? 'rewrite-stages-compact-sa-badge' : null,
+                clearSa ? 'rewrite-source-header-compact-sa-badge' : null,
+            ].forEach(function (id) {
+                if (!id) return;
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.classList.remove('badge-yes');
+                el.classList.add('badge-no');
+            });
+        }
+        if (clearRu && trStatusWrap) {
+            trStatusWrap.classList.add('hidden');
+            trStatusWrap.setAttribute('aria-hidden', 'true');
+            trStatusWrap.removeAttribute('data-status');
+        }
+        if (clearSa && semStatusWrap) {
+            semStatusWrap.classList.add('hidden');
+            semStatusWrap.setAttribute('aria-hidden', 'true');
+            semStatusWrap.removeAttribute('data-status');
+        }
+        if (clearRu && typeof applySourceRuLockUI === 'function') {
+            try { applySourceRuLockUI(); } catch (_e2) {}
+        }
+        if (clearSa && typeof applySemanticResultLockUI === 'function') {
+            try { applySemanticResultLockUI(); } catch (_e3) {}
+        }
+        if (clearSa && typeof window.__rewriteSemanticRefreshPreview === 'function') {
+            try { window.__rewriteSemanticRefreshPreview(); } catch (_e4) {}
+        }
+        if (typeof window.__rewriteSyncSemanticRunPrereq === 'function') {
+            try { window.__rewriteSyncSemanticRunPrereq(); } catch (_e5) {}
+        }
+        if (typeof window.__rewriteSyncTranslateRuRunPrereq === 'function') {
+            try { window.__rewriteSyncTranslateRuRunPrereq(); } catch (_e6) {}
+        }
+        if (typeof window.__rewriteCloseLangModelDropdownPanels === 'function') {
+            try { window.__rewriteCloseLangModelDropdownPanels(); } catch (_e7) {}
+        }
+        if (opts.scheduleAutosave !== false) scheduleAutosave(0);
     }
     window.__rewriteClearRuAndSemanticDom = clearRewriteRuSemanticTextareasDom;
 
-    /** Очистка Russian / Semantic итога (DOM, без сети) — перед авто-пересчётом. */
-    function clearVoiceoverFinalRuSemanticDom() {
+    /** Полная очистка Russian / Semantic «Итоговый текст» (DOM + бейджи, без авто-запуска). */
+    function clearVoiceoverFinalRuSemanticDom(opts) {
+        opts = opts || {};
+        try { if (window.__rewriteCancelSemanticVoiceoverFinal) window.__rewriteCancelSemanticVoiceoverFinal(); } catch (_e) {}
+        try { if (window.__rewriteCancelTranslateVoiceoverFinalRu) window.__rewriteCancelTranslateVoiceoverFinalRu(); } catch (_e) {}
         var ru = document.getElementById('rewrite-voiceover-final-text-ru');
         var sa = document.getElementById('rewrite-voiceover-final-semantic-result');
+        var ruWrap = document.getElementById('rewrite-voiceover-final-text-ru-wrap');
+        var ruCounts = document.getElementById('rewrite-voiceover-final-ru-counts');
+        var ruBadge = document.getElementById('rewrite-voiceover-final-ru-badge');
+        var saBadge = document.getElementById('rewrite-voiceover-final-semantic-badge');
+        var trStatusWrap = document.getElementById('rewrite-voiceover-final-translate-ru-status-wrap');
+        var semStatusWrap = document.getElementById('rewrite-voiceover-final-semantic-status-wrap');
         if (ru) {
             ru.value = '';
             try { ru.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
@@ -6203,31 +6609,114 @@
             try { sa.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
             try { sa.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
         }
+        voiceoverFinalTextRuLocked = false;
+        voiceoverFinalSemanticLocked = true;
+        if (ruWrap) {
+            ruWrap.classList.remove('hidden');
+            ruWrap.setAttribute('aria-hidden', 'false');
+        }
+        if (ruCounts) ruCounts.textContent = '';
+        if (ruBadge && ru) applyTextBadgeState(ruBadge, ru);
+        if (saBadge && sa) applyTextBadgeState(saBadge, sa);
+        [
+            'rewrite-voiceover-final-stages-compact-ru-badge',
+            'rewrite-voiceover-final-header-compact-ru-badge',
+            'rewrite-voiceover-final-stages-compact-sa-badge',
+            'rewrite-voiceover-final-header-compact-sa-badge',
+        ].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('badge-yes');
+            el.classList.add('badge-no');
+        });
+        if (trStatusWrap) {
+            trStatusWrap.classList.add('hidden');
+            trStatusWrap.setAttribute('aria-hidden', 'true');
+            trStatusWrap.removeAttribute('data-status');
+        }
+        if (semStatusWrap) {
+            semStatusWrap.classList.add('hidden');
+            semStatusWrap.setAttribute('aria-hidden', 'true');
+            semStatusWrap.removeAttribute('data-status');
+        }
+        if (typeof applyVoiceoverFinalSemanticResultLockUI === 'function') {
+            try { applyVoiceoverFinalSemanticResultLockUI(); } catch (_e2) {}
+        }
+        if (typeof window.__rewriteApplyVoiceoverFinalRuLockUi === 'function') {
+            try { window.__rewriteApplyVoiceoverFinalRuLockUi(); } catch (_e3) {}
+        }
+        if (typeof window.__rewriteSemanticVoiceoverFinalRefreshPreview === 'function') {
+            try { window.__rewriteSemanticVoiceoverFinalRefreshPreview(); } catch (_e4) {}
+        }
+        if (typeof window.__rewriteSyncVoiceoverFinalSemanticRunPrereq === 'function') {
+            try { window.__rewriteSyncVoiceoverFinalSemanticRunPrereq(); } catch (_e5) {}
+        }
+        if (typeof window.__rewriteSyncVoiceoverFinalResultPrereq === 'function') {
+            try { window.__rewriteSyncVoiceoverFinalResultPrereq(); } catch (_e6) {}
+        }
+        if (typeof window.__rewriteCloseLangModelDropdownPanels === 'function') {
+            try { window.__rewriteCloseLangModelDropdownPanels(); } catch (_e7) {}
+        }
+        if (opts.scheduleAutosave !== false) scheduleAutosave(0);
     }
     window.__rewriteClearVoiceoverFinalRuSemanticDom = clearVoiceoverFinalRuSemanticDom;
+
+    var REWRITE_DOWNSTREAM_CONSUMER_STAGES = ['scene_writer', 'youtube_packaging'];
+
+    function clearRewriteStageCardDom(block) {
+        if (!block) return;
+        var sk = block.getAttribute('data-stage-key') || '';
+        var resTa = block.querySelector('.rewrite-stage-result');
+        if (resTa) resTa.value = '';
+        var changesTa = block.querySelector('.rewrite-stage-changes');
+        if (changesTa) changesTa.value = '';
+        block.removeAttribute('data-scene-writer-check-json');
+        block.removeAttribute('data-scene-media-check-json');
+        block.removeAttribute('data-structure-splitter-check-json');
+        block.removeAttribute('data-elevenlabs-editor-check-json');
+        block.removeAttribute('data-block-writer-check-json');
+        updateResultCounts(block);
+        syncStageErrorBorder(block);
+        if (REWRITE_JSON_SPLIT_STAGES[sk]) updateEditorChangesBadge(block);
+        refreshStageCheckUI(block);
+    }
+
+    function syncRewriteDownstreamConsumersUi() {
+        syncSceneWriterStructureSplitterWaitOverlay();
+        if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
+            try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) {}
+        }
+        if (typeof window.__syncTtsPrereqWaitOverlay === 'function') {
+            try { window.__syncTtsPrereqWaitOverlay(); } catch (_) {}
+        }
+        if (typeof window.__updateTtsScriptSourceBadges === 'function') {
+            try { window.__updateTtsScriptSourceBadges(); } catch (_) {}
+        }
+    }
+
+    /** Scene Writer / YouTube packaging / Озвучка на job — не в пресете, но зависят от цепочки. */
+    function clearRewriteDownstreamConsumerStagesDom() {
+        REWRITE_DOWNSTREAM_CONSUMER_STAGES.forEach(function (sk) {
+            clearRewriteStageCardDom(document.querySelector('.rewrite-stage-card[data-stage-key="' + sk + '"]'));
+        });
+        refreshRewriteStageCheck();
+        syncRewriteDownstreamConsumersUi();
+    }
 
     /** Сброс Result / Changes / проверок у всех карточек этапов, кроме Inbox (без confirm / save). */
     function performClearRewritePipelineDomExceptInbox() {
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             var sk = block.getAttribute('data-stage-key') || '';
             if (sk === 'inbox') return;
-            var resTa = block.querySelector('.rewrite-stage-result');
-            if (resTa) resTa.value = '';
-            var changesTa = block.querySelector('.rewrite-stage-changes');
-            if (changesTa) changesTa.value = '';
-            block.removeAttribute('data-scene-writer-check-json');
-            block.removeAttribute('data-scene-media-check-json');
-            block.removeAttribute('data-structure-splitter-check-json');
-            block.removeAttribute('data-elevenlabs-editor-check-json');
-            block.removeAttribute('data-block-writer-check-json');
-            updateResultCounts(block);
-            syncStageErrorBorder(block);
-            if (REWRITE_JSON_SPLIT_STAGES[sk]) updateEditorChangesBadge(block);
-            refreshStageCheckUI(block);
+            clearRewriteStageCardDom(block);
         });
         refreshRewriteStageCheck();
         if (typeof window.__rewriteRefreshVoiceoverFinal === 'function') {
             try { window.__rewriteRefreshVoiceoverFinal(); } catch (_) {}
+        }
+        syncRewriteDownstreamConsumersUi();
+        if (typeof window.__clearJobElevenlabsOnRewritePipelineReset === 'function') {
+            try { window.__clearJobElevenlabsOnRewritePipelineReset(); } catch (_) {}
         }
     }
 
@@ -6245,31 +6734,20 @@
 
     /**
      * Очистка только карточек этапов, которые входят хотя бы в один пресет
-     * (без confirm / save). Scene Writer и YouTube packaging не в списках пресетов.
+     * (без confirm / save).
      */
     function performClearRewritePresetSwitchableStagesDom() {
         var union = rewritePresetStageKeysUnionSet();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             var sk = block.getAttribute('data-stage-key') || '';
             if (!union[sk]) return;
-            var resTa = block.querySelector('.rewrite-stage-result');
-            if (resTa) resTa.value = '';
-            var changesTa = block.querySelector('.rewrite-stage-changes');
-            if (changesTa) changesTa.value = '';
-            block.removeAttribute('data-scene-writer-check-json');
-            block.removeAttribute('data-scene-media-check-json');
-            block.removeAttribute('data-structure-splitter-check-json');
-            block.removeAttribute('data-elevenlabs-editor-check-json');
-            block.removeAttribute('data-block-writer-check-json');
-            updateResultCounts(block);
-            syncStageErrorBorder(block);
-            if (REWRITE_JSON_SPLIT_STAGES[sk]) updateEditorChangesBadge(block);
-            refreshStageCheckUI(block);
+            clearRewriteStageCardDom(block);
         });
         refreshRewriteStageCheck();
         if (typeof window.__rewriteRefreshVoiceoverFinal === 'function') {
             try { window.__rewriteRefreshVoiceoverFinal(); } catch (_) {}
         }
+        clearRewriteDownstreamConsumerStagesDom();
     }
 
     /**
@@ -6289,24 +6767,13 @@
             var sk = block.getAttribute('data-stage-key') || '';
             if (!set[sk]) return;
             if (skipSk && sk === skipSk) return;
-            var resTa = block.querySelector('.rewrite-stage-result');
-            if (resTa) resTa.value = '';
-            var changesTa = block.querySelector('.rewrite-stage-changes');
-            if (changesTa) changesTa.value = '';
-            block.removeAttribute('data-scene-writer-check-json');
-            block.removeAttribute('data-scene-media-check-json');
-            block.removeAttribute('data-structure-splitter-check-json');
-            block.removeAttribute('data-elevenlabs-editor-check-json');
-            block.removeAttribute('data-block-writer-check-json');
-            updateResultCounts(block);
-            syncStageErrorBorder(block);
-            if (REWRITE_JSON_SPLIT_STAGES[sk]) updateEditorChangesBadge(block);
-            refreshStageCheckUI(block);
+            clearRewriteStageCardDom(block);
         });
         refreshRewriteStageCheck();
         if (typeof window.__rewriteRefreshVoiceoverFinal === 'function') {
             try { window.__rewriteRefreshVoiceoverFinal(); } catch (_) {}
         }
+        clearRewriteDownstreamConsumerStagesDom();
     }
 
     async function clearAllAgentResultsExceptInbox() {
@@ -6517,24 +6984,28 @@
         collapseAlwaysCollapsedUiSections();
     })();
 
-    // --- Восстановление статус-блока YouTube из сохранённого состояния -------
-    // youtube_status / youtube_phase сохраняются в project.json при каждом
-    // переходе фоновой задачи (см. _rewrite_youtube_set_runtime_state). После
-    // перезагрузки страницы спиннер уже не нужен (задача давно неактивна), но
-    // сама плашка со статусом должна остаться видимой — например, чтобы после
-    // F5 пользователь видел финальный «Остановлено» / «Готово - …» рядом с
-    // карточкой канала, а не пустоту.
+    // --- Восстановление YouTube: успех (transcribe_done) или сохранённая ошибка ---
     (function initYoutubeStatusFromServer() {
         var initialYtStatus = {{ ((rw.youtube_status or '') | trim) | tojson }};
         var initialYtPhase = {{ ((rw.youtube_phase or '') | trim) | tojson }};
-        if (!initialYtStatus) return;
-        var phase = String(initialYtPhase || '').toLowerCase();
-        var isError = (
-            phase.indexOf('_error') >= 0 ||
-            /^(ошибка|остановлено)/i.test(initialYtStatus)
-        );
-        setYtStatus(initialYtStatus, isError);
+        if (ytIsFinalSavedState(initialYtPhase, initialYtStatus)) {
+            setYtStatus(initialYtStatus, false);
+            syncYtProgressVisibility();
+            return;
+        }
+        if (ytIsErrorSavedState(initialYtPhase, initialYtStatus) && initialYtStatus) {
+            ytLastStatusIsError = true;
+            setYtStatus(initialYtStatus, true);
+            syncYtProgressVisibility();
+            return;
+        }
+        setYtChannelMeta({});
+        setYtVideoTitle('');
+        setYtStatus('', false);
         syncYtProgressVisibility();
+        if ((initialYtStatus || initialYtPhase) && ytStateSaveUrl) {
+            ytPersistPreviewClearToServer({ processing: false });
+        }
     })();
 
     // --- Browser-independent task reattach ----------------------------------
@@ -7148,6 +7619,9 @@
             // Аналогично Russian: кнопка ↻ становится ✕ и блокируется через
             // syncSemanticRunPrereq, если в Russian пусто. Подстраховка.
             if (!src.trim()) return false;
+            if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                try { window.__rewriteClearRuAndSemanticDom({ ru: false, semantic: true, cancelTasks: false }); } catch (_clrSa) {}
+            }
             setSemanticBusy(true);
             setSemanticStatus('Запуск фоновой задачи Semantic…', null);
             semanticTaskId = null;
@@ -7187,7 +7661,12 @@
             } finally {
                 semanticTaskId = null;
                 semanticAbort = null;
-                if (hadError || wasAborted) {
+                if (wasAborted) {
+                    if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                        try { window.__rewriteClearRuAndSemanticDom({ ru: false, semantic: true, cancelTasks: false }); } catch (_clrSa2) {}
+                    }
+                    setSemanticBusy(false);
+                } else if (hadError) {
                     var lastMsg = statusEl ? String(statusEl.textContent || '') : '';
                     setSemanticError(lastMsg || 'Ошибка');
                 } else {
@@ -7225,7 +7704,12 @@
             } finally {
                 semanticTaskId = null;
                 semanticAbort = null;
-                if (hadError || wasAborted) {
+                if (wasAborted) {
+                    if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                        try { window.__rewriteClearRuAndSemanticDom({ ru: false, semantic: true, cancelTasks: false }); } catch (_clrSa3) {}
+                    }
+                    setSemanticBusy(false);
+                } else if (hadError) {
                     var lastMsg = statusEl ? String(statusEl.textContent || '') : '';
                     setSemanticError(lastMsg || 'Ошибка');
                 } else {
@@ -7772,97 +8256,14 @@
         refreshVfSemanticPreview();
     })();
 
-    // ===== Авто-запуск Russian + Semantic итога =====
-    // Триггеры: ✓ на «Итоговый текст», новый текст из Voiceover Editor (refresh),
-    // ✓ на Result в Voiceover Editor, __rewriteVoiceoverFinalStagesRestartChain (модель).
-    // Не по каждому input в поле итога.
-    (function setupAutoVoiceoverFinalPipeline() {
-        var vfTa = document.getElementById('rewrite-voiceover-final-textarea');
-        if (!vfTa || !openaiOk) return;
-        if (typeof window.__rewriteRunTranslateVoiceoverFinalRu !== 'function') return;
-        var lastTrigger = String(vfTa.value || '').trim();
-        var debounceTimer = null;
-        var chainPending = false;
-        var currentChainToken = 0;
-
-        function isVfChainRunning() {
-            return (window.__rewriteVoiceoverFinalTranslateIsRunning && window.__rewriteVoiceoverFinalTranslateIsRunning())
-                || (window.__rewriteSemanticVoiceoverFinalIsRunning && window.__rewriteSemanticVoiceoverFinalIsRunning());
-        }
-
-        async function waitVfNotRunning(maxMs) {
-            var deadline = Date.now() + (maxMs || 5000);
-            while (isVfChainRunning() && Date.now() < deadline) {
-                await new Promise(function (r) { setTimeout(r, 120); });
-            }
-        }
-
-        async function cancelVfOngoing() {
-            try { if (window.__rewriteCancelSemanticVoiceoverFinal) window.__rewriteCancelSemanticVoiceoverFinal(); } catch (e) {}
-            try { if (window.__rewriteCancelTranslateVoiceoverFinalRu) window.__rewriteCancelTranslateVoiceoverFinalRu(); } catch (e) {}
-            await waitVfNotRunning(5000);
-        }
-
-        async function triggerAuto() {
-            var fp = String(vfTa.value || '').trim();
-            if (!fp) return;
-            if (fp === lastTrigger && !chainPending) return;
-            if (chainPending) {
-                currentChainToken += 1;
-                try { await cancelVfOngoing(); } catch (_e) {}
-                var spin = 0;
-                while (chainPending && spin < 50) {
-                    await new Promise(function (r) { setTimeout(r, 60); });
-                    spin += 1;
-                }
-            }
-            var myToken = ++currentChainToken;
-            lastTrigger = fp;
-            chainPending = true;
-            try {
-                if (isVfChainRunning()) await cancelVfOngoing();
-                if (myToken !== currentChainToken) return;
-                var fpAfter = String(vfTa.value || '').trim();
-                if (fpAfter !== fp) { lastTrigger = fpAfter ? '__pending__' : ''; return; }
-                if (typeof window.__rewriteClearVoiceoverFinalRuSemanticDom === 'function') {
-                    try { window.__rewriteClearVoiceoverFinalRuSemanticDom(); } catch (_e) {}
-                }
-                if (myToken !== currentChainToken) return;
-                if (typeof window.__rewriteRunTranslateVoiceoverFinalRu !== 'function') return;
-                var okRu = false;
-                try { okRu = !!(await window.__rewriteRunTranslateVoiceoverFinalRu()); } catch (e) { okRu = false; }
-                if (myToken !== currentChainToken) return;
-                if (!okRu) return;
-                var fpFinal = String(vfTa.value || '').trim();
-                if (fpFinal !== fp) { lastTrigger = ''; return; }
-                if (typeof window.__rewriteRunSemanticVoiceoverFinal !== 'function') return;
-                try { await window.__rewriteRunSemanticVoiceoverFinal(); } catch (e) {}
-            } finally {
-                if (myToken === currentChainToken) {
-                    chainPending = false;
-                    var fpNow = String(vfTa.value || '').trim();
-                    if (fpNow && fpNow !== lastTrigger) {
-                        clearTimeout(debounceTimer);
-                        debounceTimer = setTimeout(triggerAuto, 600);
-                    }
-                }
-            }
-        }
-
-        function scheduleAuto() {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(triggerAuto, 1500);
-        }
-
-        // scheduleAuto — дебаунс 1.5 с; снаружи чаще зовут __rewriteVoiceoverFinalStagesRestartChain (~50 ms).
-        window.__rewriteScheduleVoiceoverFinalAutoChain = scheduleAuto;
-
+    // ===== «Итоговый текст»: Russian / Semantic только вручную (↻) =====
+    // При ✓ на Result и смене модели итога — полная очистка, без авто-запуска.
+    (function setupVoiceoverFinalRuSemanticManualOnly() {
+        window.__rewriteScheduleVoiceoverFinalAutoChain = function () {};
         window.__rewriteVoiceoverFinalStagesRestartChain = function () {
-            var fpNow = String(vfTa.value || '').trim();
-            if (!fpNow) return;
-            lastTrigger = '__force__';
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(triggerAuto, 50);
+            if (typeof window.__rewriteClearVoiceoverFinalRuSemanticDom === 'function') {
+                try { window.__rewriteClearVoiceoverFinalRuSemanticDom(); } catch (_e) {}
+            }
         };
     })();
 
@@ -7903,7 +8304,11 @@
         // Стартовая синхронизация под текущее значение data-collapsed.
         applyHostCardCollapsed(wrap.getAttribute('data-collapsed') !== 'false');
         if (toggleBtn) {
-            toggleBtn.addEventListener('click', function () {
+            toggleBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (typeof window.__rewriteCloseLangModelDropdownPanels === 'function') {
+                    try { window.__rewriteCloseLangModelDropdownPanels(); } catch (_) {}
+                }
                 var collapsed = wrap.getAttribute('data-collapsed') !== 'false';
                 setExpanded(collapsed);
             });
@@ -8009,7 +8414,11 @@
         }
         applyHostCardCollapsed(wrap.getAttribute('data-collapsed') !== 'false');
         if (toggleBtn) {
-            toggleBtn.addEventListener('click', function () {
+            toggleBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (typeof window.__rewriteCloseLangModelDropdownPanels === 'function') {
+                    try { window.__rewriteCloseLangModelDropdownPanels(); } catch (_) {}
+                }
                 var collapsed = wrap.getAttribute('data-collapsed') !== 'false';
                 setExpanded(collapsed);
             });
@@ -8082,112 +8491,13 @@
         syncAll();
     })();
 
-    // ===== Авто-запуск Russian + Semantic для «Исходный текст» =====
-    // Запуск по ✓ (закрыли карандаш / заблокировали поле), по вставке из YouTube
-    // и по __rewriteStagesRestartChain (смена модели и т.п.). Не по каждому input.
-    // Цепочка: translate → semantic.
-    (function setupAutoStagePipeline() {
-        var src = document.getElementById('rewrite-source-text');
-        if (!src || !openaiOk) return;
-        var lastTrigger = String(src.value || '').trim(); // не триггерим стартовое состояние
-        var debounceTimer = null;
-        var chainPending = false;
-        // Каждой цепочке выдаём свой токен. Если приходит новый ввод во время
-        // выполнения, токен меняется — старая цепочка распознаёт это и
-        // корректно завершается без запуска следующего шага.
-        var currentChainToken = 0;
-
-        function isRunning() {
-            return (window.__rewriteTranslateRuIsRunning && window.__rewriteTranslateRuIsRunning())
-                || (window.__rewriteSemanticIsRunning && window.__rewriteSemanticIsRunning());
-        }
-
-        async function waitNotRunning(maxMs) {
-            var deadline = Date.now() + (maxMs || 5000);
-            while (isRunning() && Date.now() < deadline) {
-                await new Promise(function (r) { setTimeout(r, 120); });
-            }
-        }
-
-        async function cancelOngoing() {
-            try { if (window.__rewriteCancelSemantic) window.__rewriteCancelSemantic(); } catch (e) {}
-            try { if (window.__rewriteCancelTranslateRu) window.__rewriteCancelTranslateRu(); } catch (e) {}
-            await waitNotRunning(5000);
-        }
-
-        // Полностью очищаем результаты Russian и Semantic — value, lock-state,
-        // бейджи, счётчики. Это нужно перед авто-запуском, чтобы старый
-        // перевод/структура не висели на экране, пока считаются новые.
-        function clearStageResults() {
-            clearRewriteRuSemanticTextareasDom();
-        }
-
-        async function triggerAuto() {
-            var fp = String(src.value || '').trim();
-            if (!fp) return;
-            if (fp === lastTrigger && !chainPending) return;
-            // Новый ввод во время уже идущей цепочки: отменяем активные задачи
-            // и помечаем токен, чтобы старая цепочка вышла без следующего шага.
-            if (chainPending) {
-                currentChainToken += 1;
-                try { await cancelOngoing(); } catch (_e) {}
-                // Дожидаемся, пока предыдущий finally не отпустит chainPending,
-                // чтобы не плодить параллельные цепочки.
-                var spin = 0;
-                while (chainPending && spin < 50) {
-                    await new Promise(function (r) { setTimeout(r, 60); });
-                    spin += 1;
-                }
-            }
-            var myToken = ++currentChainToken;
-            lastTrigger = fp;
-            chainPending = true;
-            try {
-                if (isRunning()) await cancelOngoing();
-                if (myToken !== currentChainToken) return;
-                // Между cancel и start значение могло опять измениться —
-                // тогда дождёмся следующего debounce и не запускаем сейчас.
-                var fpAfter = String(src.value || '').trim();
-                if (fpAfter !== fp) { lastTrigger = fpAfter ? '__pending__' : ''; return; }
-                // Очищаем прошлые результаты ДО запуска новых задач — чтобы
-                // на UI не висел старый перевод/структура.
-                clearStageResults();
-                if (myToken !== currentChainToken) return;
-                if (typeof window.__rewriteRunTranslateRu !== 'function') return;
-                var okRu = false;
-                try { okRu = !!(await window.__rewriteRunTranslateRu()); } catch (e) { okRu = false; }
-                if (myToken !== currentChainToken) return;
-                if (!okRu) return;
-                var fpFinal = String(src.value || '').trim();
-                if (fpFinal !== fp) { lastTrigger = ''; return; }
-                if (typeof window.__rewriteRunSemantic === 'function') {
-                    try { await window.__rewriteRunSemantic(); } catch (e) {}
-                }
-            } finally {
-                if (myToken === currentChainToken) {
-                    chainPending = false;
-                    var fpNow = String(src.value || '').trim();
-                    if (fpNow && fpNow !== lastTrigger) {
-                        clearTimeout(debounceTimer);
-                        debounceTimer = setTimeout(triggerAuto, 600);
-                    }
-                }
-            }
-        }
-
-        function scheduleAuto() {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(triggerAuto, 1500);
-        }
-
-        // Принудительный перезапуск цепочки — после ✓ у Source, смены модели,
-        // вставки из YouTube и т.п. (не по каждому input в поле).
+    // ===== «Исходный текст»: Russian / Semantic только вручную (↻) =====
+    // При ✓ на Source и смене модели — полная очистка, без авто-запуска.
+    (function setupSourceRuSemanticManualOnly() {
         window.__rewriteStagesRestartChain = function () {
-            var fpNow = String(src.value || '').trim();
-            if (!fpNow) return; // нечего пересчитывать
-            lastTrigger = '__force__';
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(triggerAuto, 50);
+            if (typeof window.__rewriteClearRuAndSemanticDom === 'function') {
+                try { window.__rewriteClearRuAndSemanticDom(); } catch (_e) {}
+            }
         };
     })();
 
