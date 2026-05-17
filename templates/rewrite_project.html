@@ -946,6 +946,9 @@
     var ytAbortController = null;
     var ytStatePollTimer = null;
     var rewriteStageBusy = false;
+    function rewriteStageHasActiveStatusRow() {
+        return !!document.querySelector('.rewrite-stage-card .rewrite-stage-status-row:not(.hidden)');
+    }
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
     const pipelineLanguageEl = document.getElementById('rewrite-pipeline-language');
@@ -2560,7 +2563,7 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
         });
         const anyRunning = !!rewriteStageBusy
             || cards.some(function (c) { return c.classList.contains('rewrite-stage-card--running'); })
-            || !!document.querySelector('.rewrite-stage-status-row:not(.hidden)');
+            || !!rewriteStageHasActiveStatusRow();
         // Цепочка предусловий строится в пределах текущего пресета: иначе для
         // «Глубокого» этапы после draft1 видят пустых соседей из чужих пресетов и
         // считают предков невыполненными → ставят крестик, даже если все
@@ -4954,14 +4957,14 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
         const runBtn = block.querySelector('.rewrite-stage-run');
         if (runBtn && key) {
             runBtn.addEventListener('click', function () {
-                if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) return;
+                if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) return;
                 runStage(key, block);
             });
         }
         const compactRun = block.querySelector('.rewrite-stage-compact-run');
         if (compactRun && key && runBtn) {
             compactRun.addEventListener('click', function () {
-                if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) return;
+                if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) return;
                 if (compactRun.disabled) return;
                 runBtn.click();
             });

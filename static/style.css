@@ -3680,14 +3680,18 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     filter: none !important;
 }
 
-.rewrite-stage-status-row {
+.rewrite-stage-status-row,
+.tts-result-status-row,
+.whisper-words-status-row {
     box-sizing: border-box;
     margin: 0.35rem 0 0.15rem;
     width: 100%;
     max-width: 100%;
 }
 
-.rewrite-stage-status-row .rewrite-stage-status-text {
+.rewrite-stage-status-row .rewrite-stage-status-text,
+.tts-result-status-row .tts-result-status-text,
+.whisper-words-status-row .whisper-words-status-text {
     display: flex;
     width: 100%;
     max-width: none;
@@ -4895,7 +4899,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .tts-result-slot[data-status="error"] #tts-player-body,
 .tts-result-slot[data-status="error"] .tts-player-body {
-    display: block;
+    display: none !important;
 }
 
 .tts-result-slot .tts-player-body {
@@ -5169,6 +5173,39 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin-bottom: 0.2rem;
 }
 
+.tts-word-timings-check-section--collapsible .tts-word-timings-check-section__toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    width: 100%;
+    margin: 0 0 0.2rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.tts-word-timings-check-section--collapsible .tts-word-timings-check-chevron {
+    margin-right: 0.05rem;
+}
+
+.tts-word-timings-check-section--collapsible.tts-word-timings-check-section--body-collapsed .tts-word-timings-check-chevron {
+    transform: rotate(-90deg);
+}
+
+.tts-word-timings-check-section--collapsible.tts-word-timings-check-section--body-collapsed .tts-word-timings-check-section__collapsible-inner {
+    display: none;
+}
+
+.tts-word-timings-check-section--collapsible:not(.tts-word-timings-check-section--body-collapsed) .tts-word-timings-check-section__collapsible-inner {
+    display: block;
+}
+
 .tts-word-timings-check-hint {
     font-size: 0.68rem;
     line-height: 1.35;
@@ -5199,9 +5236,30 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     color: var(--text-muted);
 }
 
+.tts-word-timings-scenes-check-row__main--fail {
+    color: rgba(255, 150, 150, 0.88);
+    background: rgba(255, 100, 100, 0.1);
+    border-radius: 3px;
+    padding: 0.02rem 0.2rem;
+    margin-left: -0.2rem;
+}
+
 .tts-word-timings-scenes-check-row__item {
+    position: relative;
     color: var(--text-muted);
-    padding-left: 1.35rem;
+    padding-left: 1.65rem;
+}
+
+.tts-word-timings-scenes-check-row__item::before {
+    content: '';
+    position: absolute;
+    left: 1.15rem;
+    top: 0.58em;
+    width: 0.3rem;
+    height: 0.3rem;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.5;
 }
 
 .tts-word-timings-scenes-check-warns {

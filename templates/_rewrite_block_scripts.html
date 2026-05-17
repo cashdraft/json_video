@@ -233,6 +233,9 @@
     var ytAbortController = null;
     var ytStatePollTimer = null;
     var rewriteStageBusy = false;
+    function rewriteStageHasActiveStatusRow() {
+        return !!document.querySelector('.rewrite-stage-card .rewrite-stage-status-row:not(.hidden)');
+    }
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
     const globalModelEl = document.getElementById('rewrite-global-model');
     const pipelineLanguageEl = document.getElementById('rewrite-pipeline-language');
@@ -2562,7 +2565,7 @@
         });
         const anyRunning = !!rewriteStageBusy
             || cards.some(function (c) { return c.classList.contains('rewrite-stage-card--running'); })
-            || !!document.querySelector('.rewrite-stage-status-row:not(.hidden)');
+            || !!rewriteStageHasActiveStatusRow();
         var runningKey = null;
         cards.forEach(function (c) {
             if (c.classList.contains('rewrite-stage-card--running')) {
@@ -2570,7 +2573,7 @@
             }
         });
         if (!runningKey && anyRunning) {
-            var activeStatusRow = document.querySelector('.rewrite-stage-status-row:not(.hidden)');
+            var activeStatusRow = document.querySelector('.rewrite-stage-card .rewrite-stage-status-row:not(.hidden)');
             var activeCard = activeStatusRow ? activeStatusRow.closest('.rewrite-stage-card') : null;
             if (activeCard) runningKey = activeCard.getAttribute('data-stage-key') || null;
         }
@@ -2659,7 +2662,7 @@
             || Array.from(document.querySelectorAll('.rewrite-stage-card')).some(function (c) {
                 return c.classList.contains('rewrite-stage-card--running');
             })
-            || !!document.querySelector('.rewrite-stage-status-row:not(.hidden)');
+            || !!rewriteStageHasActiveStatusRow();
         if (busy) {
             btn.disabled = true;
             btn.setAttribute('title', 'Дождитесь завершения запущенного этапа');
@@ -2701,7 +2704,7 @@
     }
 
     async function runPresetPipelineFromScratch() {
-        if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) {
+        if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) {
             alert('Дождитесь завершения запущенного этапа.');
             return;
         }
@@ -5176,14 +5179,14 @@
         const runBtn = block.querySelector('.rewrite-stage-run');
         if (runBtn && key) {
             runBtn.addEventListener('click', function () {
-                if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) return;
+                if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) return;
                 runStage(key, block);
             });
         }
         const compactRun = block.querySelector('.rewrite-stage-compact-run');
         if (compactRun && key && runBtn) {
             compactRun.addEventListener('click', function () {
-                if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) return;
+                if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) return;
                 if (compactRun.disabled) return;
                 runBtn.click();
             });
@@ -6309,7 +6312,7 @@
     async function clearAllAgentResultsExceptInbox() {
         var okClear = await openClearResultsConfirm();
         if (!okClear) return;
-        if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) {
+        if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) {
             alert('Дождитесь завершения запущенного этапа.');
             return;
         }
@@ -6732,7 +6735,7 @@
                 syncPresetToggleButtonsUI(currentRewritePreset);
                 return;
             }
-            if (rewriteStageBusy || document.querySelector('.rewrite-stage-status-row:not(.hidden)')) {
+            if (rewriteStageBusy || rewriteStageHasActiveStatusRow()) {
                 alert('Дождитесь завершения запущенного этапа.');
                 syncPresetToggleButtonsUI(currentRewritePreset);
                 return;
