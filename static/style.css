@@ -5183,27 +5183,50 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin-bottom: 0.5rem;
 }
 
-.video-parse-panel #json_input {
+.video-json-panel .tts-text-block.video-json-text-block {
+    margin-bottom: 0.35rem;
+}
+
+.video-json-panel .video-json-text-block .rewrite-source-toolbar {
+    margin-bottom: 0.5rem;
+}
+
+.video-json-panel .rewrite-source-counts.video-json-scene-counts {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.video-json-panel .slot-placeholder.rewrite-slot-placeholder.rewrite-slot--source.video-json-text-slot {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: visible;
+    min-height: calc(7 * 1.45 * 0.85rem + 1.35rem);
+    height: auto;
+}
+
+.video-json-panel .video-json-text-slot .rewrite-source-textarea {
+    --rewrite-result-visible-lines: 7;
+    flex: 0 0 auto;
+    width: 100%;
     font-family: inherit;
     font-size: 0.85rem;
     font-weight: 400;
     line-height: 1.45;
-    padding: 0.55rem 0.65rem;
-    border-radius: 4px;
-    border: 1px dashed var(--border);
-    background: var(--bg-input);
-    min-height: 0;
-}
-
-.video-parse-panel .video-json-stats-row {
-    margin-top: 0.1rem;
+    min-height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    max-height: none;
+    height: calc(var(--rewrite-result-visible-lines) * 1.45em + 1.1rem);
+    resize: vertical;
+    overflow-y: auto;
+    border: none;
+    background: transparent;
 }
 
 .video-parse-panel .settings-section {
     padding: 0;
 }
 
-.video-parse-panel .setting label {
+.video-parse-panel .setting > label:not(.rewrite-source-subtitle) {
     font-size: 0.82rem;
     margin-bottom: 0.25rem;
 }
@@ -5232,7 +5255,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 }
 
 .video-parse-panel--locked .video-json-panel-collapsible-inner,
-.video-parse-panel--locked #json_input,
+.video-parse-panel--locked .video-json-text-block,
 .video-parse-panel--locked .settings-section,
 .video-parse-panel--locked .buttons-section,
 .video-parse-panel--locked .input-actions {
@@ -5243,6 +5266,122 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     position: relative;
     z-index: 6;
     pointer-events: auto;
+}
+
+/* JSON-код сцен — источник данных (как «Источник текста» в Озвучке) */
+.video-json-panel .tts-script-source-block {
+    margin-bottom: 0.65rem;
+}
+
+.video-json-panel .tts-script-source-block .rewrite-source-subtitle {
+    font-size: 0.85rem;
+    margin: 0;
+    color: var(--tts-field-label);
+}
+
+.video-json-panel .tts-script-source-options--single {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 22rem;
+}
+
+/* JSON-код сцен — настройки: 4 колонки в ряд, подписи и контролы одной высоты */
+.video-json-panel .settings-section {
+    --vj-setting-control-h: calc(0.42rem * 2 + 1.2 * 0.9rem + 2px);
+    margin-top: 1.5rem;
+}
+
+.video-json-panel .settings-section .settings-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.75rem 1rem;
+}
+
+@media (max-width: 52rem) {
+    .video-json-panel .settings-section .settings-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 28rem) {
+    .video-json-panel .settings-section .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.video-json-panel .settings-section .setting:not(.setting-wide),
+.video-json-panel .settings-section .setting.setting-model-dropdown:not(.setting-wide) {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 0;
+}
+
+.video-json-panel .settings-section .setting:not(.setting-wide) .rewrite-source-subtitle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--tts-field-label);
+    line-height: 1.25;
+    min-height: 1.25em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 0 0 auto;
+}
+
+.video-json-panel .settings-section .setting:not(.setting-wide) > .rewrite-global-model-field {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.video-json-panel .settings-section .setting:not(.setting-wide) > .resolution-toggle {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    align-items: stretch;
+    align-self: flex-start;
+}
+
+.video-json-panel .settings-section .resolution-toggle label {
+    padding: 0.42rem 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    min-width: 0;
+    height: var(--vj-setting-control-h);
+    min-height: var(--vj-setting-control-h);
+    max-height: var(--vj-setting-control-h);
+}
+
+.video-json-panel .settings-section .setting:not(.setting-wide) .rewrite-anim-dropdown__btn {
+    flex: 0 0 auto;
+    width: 100%;
+    height: var(--vj-setting-control-h);
+    min-height: var(--vj-setting-control-h);
+    max-height: var(--vj-setting-control-h);
+    padding: 0.42rem 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+
+.video-json-panel .settings-section .setting:not(.setting-wide) .rewrite-anim-dropdown__btn-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 /* JSON-код сцен — сворачиваемая шапка как у Озвучка / YouTube packaging */

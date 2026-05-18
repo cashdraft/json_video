@@ -1096,6 +1096,7 @@
                             <span class="rewrite-stages-compact__pair">
                                 <span class="slot-badge badge-{{ 'yes' if _vf_res else 'no' }} rewrite-voiceover-final-compact-result-badge" id="rewrite-voiceover-final-compact-result-badge">Result</span>
                             </span>
+                            <span class="tts-section-compact-sep" aria-hidden="true">|</span>
                             <span class="rewrite-stages-compact__pair">
                                 <span class="slot-badge badge-{{ 'yes' if _vf_ru_has else 'no' }}" id="rewrite-voiceover-final-header-compact-ru-badge">Russian</span>
                                 <button type="button" class="btn-regenerate rewrite-stages-compact__run rewrite-stage-compact-run" id="rewrite-voiceover-final-header-compact-ru-btn" title="Перевести итог на русский" aria-label="Перевести итог на русский" {% if not openai_key_set %}disabled{% endif %}>↻</button>

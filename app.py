@@ -6325,6 +6325,14 @@ def parse_for_job(job_id: str):
     return redirect(url_for("job_page", job_id=job_id))
 
 
+def normalize_json_script_source(value: str | None) -> str:
+    """Источник JSON-кода сцен: scene_writer или manual (ручной ввод)."""
+    raw = str(value or "").strip().lower()
+    if raw in ("manual", "none", "off", ""):
+        return "manual"
+    return "scene_writer"
+
+
 @app.route("/job/<job_id>/timings-source", methods=["POST"])
 def job_timings_source_save(job_id: str):
     """Сохранить выбор источника пословных таймингов для JSON сцен (Eleven / Whisper)."""
@@ -6337,6 +6345,22 @@ def job_timings_source_save(job_id: str):
         job["apply_timings_source"] = source
         save_job(job_id, job)
     return jsonify({"ok": True, "source": source})
+
+
+@app.route("/job/<job_id>/video-json/source", methods=["POST"])
+def job_video_json_source_save(job_id: str):
+    """Сохранить выбор источника данных для блока «JSON-код сцен»."""
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        body = {}
+    with _job_file_lock(job_id):
+        job = load_job(job_id)
+        if job is None:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+        if "json_script_source" in body:
+            job["json_script_source"] = normalize_json_script_source(body.get("json_script_source"))
+        save_job(job_id, job)
+    return jsonify({"ok": True, "json_script_source": normalize_json_script_source(job.get("json_script_source"))})
 
 
 @app.route("/job/<job_id>/scenes/apply-tts-timings", methods=["POST"])
@@ -9210,6 +9234,7 @@ def job_page(job_id: str):
         openai_key_set=openai_key_set,
         tts_defaults=job.get("tts_defaults") or {},
         tts_script_source=normalize_tts_script_source(job.get("tts_script_source")),
+        json_script_source=normalize_json_script_source(job.get("json_script_source")),
         rewrite_block_present=bool(rewrite_ctx.get("rw")),
         montage_zoom_scale=montage_zoom_scale,
         montage_zoom_mode=montage_zoom_mode,

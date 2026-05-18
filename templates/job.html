@@ -471,17 +471,43 @@
             </div>
             <div class="video-json-panel-collapsible-inner">
             <section class="input-section">
-                <textarea
-                    id="json_input"
-                    name="json_input"
-                    rows="7"
-                    placeholder="Вставьте JSON-сценарий..."
-                >{{ job.raw_input or '' }}</textarea>
-                <div class="tts-char-row video-json-stats-row" id="json-stats-row">
-                    Всего сцен: <strong id="json-scenes-total">0</strong>
-                    · Start prompt: <strong id="json-scenes-start">0</strong>
-                    · End prompt: <strong id="json-scenes-end">0</strong>
-                    · Video prompt: <strong id="json-scenes-video">0</strong>
+                {% set _json_src = json_script_source|default('scene_writer') %}
+                <div class="tts-script-source-block{% if not rw %} tts-script-source-block--disabled{% endif %}" id="video-json-script-source-block">
+                    <h3 class="rewrite-source-subtitle">Источник текста</h3>
+                    <div class="tts-script-source-options tts-script-source-options--single" role="radiogroup" aria-label="Источник JSON-кода сцен">
+                        <label class="tts-script-source-option" for="json-src-scene-writer" data-json-stage="scene_writer">
+                            <input type="radio" class="tts-script-source-option__radio" id="json-src-scene-writer" name="json_script_source" value="scene_writer" {{ 'checked' if _json_src == 'scene_writer' else '' }}{% if not rw %} disabled{% endif %}>
+                            <span class="tts-script-source-option__main">
+                                <span class="tts-script-source-option__name">Scene Writer</span>
+                                <span class="slot-badge badge-no rewrite-stage-result-badge tts-script-source-result-badge" id="json-src-badge-scene-writer" data-json-stage="scene_writer">Result</span>
+                            </span>
+                        </label>
+                    </div>
+                    <p class="tts-script-source-hint" id="video-json-script-source-hint" aria-live="polite">{% if not rw %}Сначала загрузите блок ReWrite выше — тогда сюда подставится Result Scene Writer.{% endif %}</p>
+                </div>
+                {% set _json_has_input = (job.raw_input or '')|trim %}
+                <div class="tts-text-block video-json-text-block">
+                    <div class="rewrite-source-toolbar slot-header">
+                        <span class="slot-badge badge-{{ 'yes' if _json_has_input else 'no' }}" id="json-scene-text-badge" data-text-badge-for="json_input">Scenes</span>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="json-scene-text-toggle" title="Редактировать" aria-label="Редактировать">
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon json-scene-text-copy-btn" id="json-scene-text-copy-btn" title="Копировать JSON-код сцен" aria-label="Копировать JSON-код сцен">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-source-counts video-json-scene-counts" id="json-scene-text-counts" aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source video-json-text-slot">
+                        <textarea
+                            id="json_input"
+                            name="json_input"
+                            class="rewrite-source-textarea rewrite-source-textarea--locked"
+                            rows="7"
+                            placeholder="Вставьте JSON-сценарий…"
+                            readonly
+                        >{{ job.raw_input or '' }}</textarea>
+                    </div>
                 </div>
             </section>
 
@@ -515,7 +541,7 @@
                         </select>
                     </div>
                     <div class="setting">
-                        <label>Resolution</label>
+                        <h3 class="rewrite-source-subtitle">Resolution</h3>
                         {% set _res = job.job_meta.resolution or '2K' %}
                         <div class="resolution-toggle">
                             <input type="radio" id="res_1k" name="resolution" value="1K" {{ 'checked' if _res == '1K' else '' }}>
@@ -1630,12 +1656,11 @@
         }
     });
 
-    const jsonStats = {
-        total: document.getElementById('json-scenes-total'),
-        start: document.getElementById('json-scenes-start'),
-        end: document.getElementById('json-scenes-end'),
-        video: document.getElementById('json-scenes-video'),
-    };
+    const jsonSceneTextBadgeEl = document.getElementById('json-scene-text-badge');
+    const jsonSceneTextCountsEl = document.getElementById('json-scene-text-counts');
+    const jsonSceneTextToggleBtn = document.getElementById('json-scene-text-toggle');
+    const jsonSceneTextCopyBtn = document.getElementById('json-scene-text-copy-btn');
+    let jsonSceneTextLocked = true;
 
     let bulkConfirmResolver = null;
     let bulkRunActive = false;
@@ -1935,14 +1960,40 @@
         return { total, start, end, video };
     };
 
+    const styleJsonSceneLockToggleBtn = (locked) => {
+        if (!jsonSceneTextToggleBtn) return;
+        jsonSceneTextToggleBtn.classList.toggle('rewrite-lock-toggle--locked', locked);
+        jsonSceneTextToggleBtn.setAttribute('aria-label', locked ? 'Редактировать' : 'Сохранить');
+        jsonSceneTextToggleBtn.title = locked ? 'Редактировать' : 'Сохранить';
+    };
+    const applyJsonSceneTextLockUi = () => {
+        if (!jsonInputEl) return;
+        const parseLocked = jsonParseForm && jsonParseForm.dataset.parseLocked === '1';
+        const locked = parseLocked || jsonSceneTextLocked;
+        jsonInputEl.readOnly = locked;
+        jsonInputEl.classList.toggle('rewrite-source-textarea--locked', locked);
+        styleJsonSceneLockToggleBtn(jsonSceneTextLocked);
+        if (jsonSceneTextToggleBtn) jsonSceneTextToggleBtn.disabled = !!parseLocked;
+        if (jsonSceneTextCopyBtn) jsonSceneTextCopyBtn.disabled = false;
+    };
+    const formatJsonSceneCounts = (s) => (
+        'Всего сцен: ' + s.total
+        + ' · Start prompt: ' + s.start
+        + ' · End prompt: ' + s.end
+        + ' · Video prompt: ' + s.video
+    );
     const updateJsonStats = () => {
         if (!jsonInputEl) return;
         const raw = jsonInputEl.value || '';
         const s = computeJsonPromptStats(raw);
-        if (jsonStats.total) jsonStats.total.textContent = String(s.total);
-        if (jsonStats.start) jsonStats.start.textContent = String(s.start);
-        if (jsonStats.end) jsonStats.end.textContent = String(s.end);
-        if (jsonStats.video) jsonStats.video.textContent = String(s.video);
+        if (jsonSceneTextCountsEl) {
+            jsonSceneTextCountsEl.textContent = formatJsonSceneCounts(s);
+        }
+        if (jsonSceneTextBadgeEl) {
+            const has = !!String(raw).trim();
+            jsonSceneTextBadgeEl.classList.toggle('badge-yes', has);
+            jsonSceneTextBadgeEl.classList.toggle('badge-no', !has);
+        }
         if (typeof window.__syncVideoJsonPanelCompactCounts === 'function') {
             try { window.__syncVideoJsonPanelCompactCounts(); } catch (e) {}
         }
@@ -1950,7 +2001,230 @@
     if (jsonInputEl) {
         jsonInputEl.addEventListener('input', updateJsonStats);
     }
+    if (jsonSceneTextToggleBtn && jsonInputEl) {
+        jsonSceneTextToggleBtn.addEventListener('click', () => {
+            if (jsonParseForm && jsonParseForm.dataset.parseLocked === '1') return;
+            jsonSceneTextLocked = !jsonSceneTextLocked;
+            applyJsonSceneTextLockUi();
+            if (!jsonSceneTextLocked) jsonInputEl.focus();
+        });
+    }
+    if (jsonSceneTextCopyBtn && jsonInputEl) {
+        jsonSceneTextCopyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const raw = jsonInputEl.value || '';
+            const prevTitle = jsonSceneTextCopyBtn.getAttribute('title') || 'Копировать JSON-код сцен';
+            const flashTitle = (t) => {
+                jsonSceneTextCopyBtn.setAttribute('title', t);
+                setTimeout(() => jsonSceneTextCopyBtn.setAttribute('title', prevTitle), 1200);
+            };
+            const showCopied = () => flashTitle('Скопировано');
+            const fallbackExec = () => {
+                try {
+                    jsonInputEl.focus();
+                    jsonInputEl.select();
+                    const ok = document.execCommand('copy');
+                    if (ok) showCopied();
+                    else flashTitle('Не удалось скопировать');
+                } catch (_) {
+                    flashTitle('Не удалось скопировать');
+                }
+            };
+            if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(raw).then(showCopied).catch(fallbackExec);
+            } else {
+                fallbackExec();
+            }
+        });
+    }
+    applyJsonSceneTextLockUi();
     updateJsonStats();
+
+    (function setupJsonScriptSource() {
+        const jobId = {{ job_id | tojson }};
+        const jsonScriptSourceInitial = {{ (json_script_source|default('scene_writer')) | tojson }};
+        const rewritePresent = !!document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"]');
+        const hintEl = document.getElementById('video-json-script-source-hint');
+        const formatNumRu = (n) => String(Math.max(0, parseInt(n, 10) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+
+        const readSceneWriterResult = () => {
+            const ta = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-result');
+            if (!ta) return '';
+            const v = String(ta.value || '').trim();
+            if (!v || v === 'Pending' || v === 'Генерация…') return '';
+            return v;
+        };
+        const sceneWriterHasResult = () => !!readSceneWriterResult().trim();
+
+        const getCheckedJsonScriptSource = () => {
+            const el = document.querySelector('input[name="json_script_source"]:checked');
+            return el ? el.value : null;
+        };
+        const setJsonScriptSourceSelection = (source) => {
+            document.querySelectorAll('input[name="json_script_source"]').forEach((inp) => {
+                inp.checked = inp.value === source;
+            });
+            jsonScriptLinkedSource = source;
+        };
+        const clearJsonScriptSourceSelection = (opts) => {
+            document.querySelectorAll('input[name="json_script_source"]').forEach((inp) => {
+                inp.checked = false;
+            });
+            jsonScriptLinkedSource = null;
+            updateJsonScriptSourceHint('manual', jsonInputEl ? jsonInputEl.value : '');
+            if (!(opts && opts.skipPersist)) schedulePersistJsonScriptSource();
+        };
+
+        let jsonScriptApplyingFromSource = false;
+        let jsonScriptLinkedSource = null;
+        let jsonScriptSyncTimer = null;
+        let saveJsonSourceTimer = null;
+
+        const schedulePersistJsonScriptSource = () => {
+            if (saveJsonSourceTimer) clearTimeout(saveJsonSourceTimer);
+            saveJsonSourceTimer = setTimeout(() => {
+                const el = document.querySelector('input[name="json_script_source"]:checked');
+                fetch('/job/' + jobId + '/video-json/source', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ json_script_source: el ? el.value : 'manual' }),
+                }).catch(() => {});
+            }, 250);
+        };
+
+        const updateJsonScriptSourceHint = (source, text) => {
+            if (!hintEl) return;
+            if (!rewritePresent) {
+                hintEl.textContent = 'Сначала загрузите блок ReWrite выше — тогда сюда подставится Result Scene Writer.';
+                return;
+            }
+            if (!source || source === 'manual') {
+                hintEl.textContent = 'Текст изменён вручную — выбор источника снят. Нажмите Scenes, чтобы снова подставить Result.';
+                return;
+            }
+            if (!String(text || '').trim()) {
+                hintEl.textContent = 'Result в «Scene Writer» пуст — заполните этап ReWrite или вставьте JSON вручную.';
+                return;
+            }
+            hintEl.textContent = 'Подставлен Result из «Scene Writer» (' + formatNumRu(String(text).length) + ' символов).';
+        };
+
+        const updateJsonScriptSourceBadges = () => {
+            const blockDisabled = !!document.querySelector('#video-json-script-source-block.tts-script-source-block--disabled');
+            document.querySelectorAll('#video-json-script-source-block .tts-script-source-result-badge').forEach((badge) => {
+                const sk = badge.getAttribute('data-json-stage') || '';
+                if (sk !== 'scene_writer') return;
+                const has = sceneWriterHasResult();
+                badge.classList.toggle('badge-yes', has);
+                badge.classList.toggle('badge-no', !has);
+                const opt = document.querySelector('.tts-script-source-option[data-json-stage="' + sk + '"]');
+                const inp = document.getElementById('json-src-scene-writer');
+                if (opt) {
+                    opt.classList.toggle('tts-script-source-option--no-result', !has);
+                    opt.setAttribute('aria-disabled', has ? 'false' : 'true');
+                }
+                if (inp && !blockDisabled) {
+                    if (!has && inp.checked) {
+                        inp.checked = false;
+                        if (jsonScriptLinkedSource === sk || getCheckedJsonScriptSource() === sk) {
+                            clearJsonScriptSourceSelection({ skipPersist: false });
+                        }
+                    }
+                    inp.disabled = !has;
+                }
+            });
+            if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
+                try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) {}
+            }
+        };
+        window.__updateJsonScriptSourceBadges = updateJsonScriptSourceBadges;
+
+        const applyJsonScriptFromSource = (source, opts) => {
+            if (!rewritePresent || !jsonInputEl) return;
+            const src = source || getCheckedJsonScriptSource() || jsonScriptSourceInitial;
+            if (!src || src === 'manual') return;
+            const fresh = readSceneWriterResult();
+            setJsonScriptSourceSelection(src);
+            updateJsonScriptSourceHint(src, fresh);
+            if (!(opts && opts.hintOnly)) {
+                jsonScriptApplyingFromSource = true;
+                try {
+                    jsonInputEl.value = fresh;
+                    updateJsonStats();
+                } finally {
+                    jsonScriptApplyingFromSource = false;
+                }
+            }
+        };
+
+        const onJsonInputMaybeManualEdit = () => {
+            if (jsonScriptApplyingFromSource) return;
+            if (!getCheckedJsonScriptSource()) return;
+            clearJsonScriptSourceSelection({ skipPersist: false });
+        };
+
+        const scheduleJsonScriptSync = (source) => {
+            if (jsonScriptSyncTimer) clearTimeout(jsonScriptSyncTimer);
+            jsonScriptSyncTimer = setTimeout(() => applyJsonScriptFromSource(source), 200);
+        };
+
+        updateJsonScriptSourceBadges();
+        if (rewritePresent) {
+            document.querySelectorAll('input[name="json_script_source"]').forEach((inp) => {
+                inp.addEventListener('change', () => {
+                    applyJsonScriptFromSource(inp.value);
+                    schedulePersistJsonScriptSource();
+                });
+            });
+            document.querySelectorAll('#video-json-script-source-block .tts-script-source-option').forEach((lab) => {
+                lab.addEventListener('mousedown', () => {
+                    const inp = lab.querySelector('input[name="json_script_source"]');
+                    lab.dataset.jsonWasChecked = inp && inp.checked ? '1' : '0';
+                });
+                lab.addEventListener('click', () => {
+                    const inp = lab.querySelector('input[name="json_script_source"]');
+                    if (!inp || inp.disabled) return;
+                    if (lab.dataset.jsonWasChecked === '1') {
+                        applyJsonScriptFromSource(inp.value);
+                        schedulePersistJsonScriptSource();
+                    }
+                });
+            });
+            const swTa = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-result');
+            if (swTa) {
+                swTa.addEventListener('input', () => {
+                    updateJsonScriptSourceBadges();
+                    const active = getCheckedJsonScriptSource();
+                    if (active === 'scene_writer') scheduleJsonScriptSync('scene_writer');
+                });
+                swTa.addEventListener('change', () => {
+                    updateJsonScriptSourceBadges();
+                    const active = getCheckedJsonScriptSource();
+                    if (active === 'scene_writer') scheduleJsonScriptSync('scene_writer');
+                });
+            }
+            const initialChecked = getCheckedJsonScriptSource();
+            const initialSrc = initialChecked || (jsonScriptSourceInitial !== 'manual' ? jsonScriptSourceInitial : null);
+            const existingText = String(jsonInputEl?.value || '').trim();
+            if (!existingText && initialSrc) {
+                applyJsonScriptFromSource(initialSrc);
+            } else if (existingText && initialSrc) {
+                const fromSrc = readSceneWriterResult();
+                if (fromSrc === (jsonInputEl.value || '')) {
+                    setJsonScriptSourceSelection(initialSrc);
+                    updateJsonScriptSourceHint(initialSrc, fromSrc);
+                } else {
+                    clearJsonScriptSourceSelection({ skipPersist: true });
+                }
+            } else if (existingText && !initialSrc) {
+                clearJsonScriptSourceSelection({ skipPersist: true });
+            }
+        }
+        if (jsonInputEl) {
+            jsonInputEl.addEventListener('input', onJsonInputMaybeManualEdit);
+            jsonInputEl.addEventListener('change', onJsonInputMaybeManualEdit);
+        }
+    })();
 
     const openJsonConfirm = (text) => {
         if (!jsonConfirmModal || !jsonConfirmText || !jsonConfirmCancelBtn || !jsonConfirmOkBtn) {
@@ -2018,12 +2292,15 @@
         jsonParseForm.dataset.parseLocked = locked ? '1' : '0';
         jsonParseForm.classList.toggle('video-parse-panel--locked', locked);
         if (parseLockOverlay) parseLockOverlay.classList.toggle('hidden', !locked);
+        applyJsonSceneTextLockUi();
     };
 
     parseUnlockBtn?.addEventListener('click', async () => {
         const ok = await openJsonEditConfirm();
         if (!ok) return;
         setParsePanelLocked(false);
+        jsonSceneTextLocked = false;
+        applyJsonSceneTextLockUi();
         jsonInputEl?.focus();
     });
 
@@ -3279,12 +3556,10 @@
         window.__applyVideoJsonPanelCollapsed = applyVideoJsonPanelCollapsed;
         window.__syncVideoJsonPanelCompactCounts = function () {
             const compactEl = document.getElementById('video-json-panel-compact-counts');
-            if (!compactEl) return;
-            const total = (document.getElementById('json-scenes-total') || {}).textContent || '0';
-            const start = (document.getElementById('json-scenes-start') || {}).textContent || '0';
-            const end = (document.getElementById('json-scenes-end') || {}).textContent || '0';
-            const video = (document.getElementById('json-scenes-video') || {}).textContent || '0';
-            compactEl.textContent = total + ' сцен · S' + start + ' E' + end + ' V' + video;
+            const ta = document.getElementById('json_input');
+            if (!compactEl || !ta) return;
+            const s = computeJsonPromptStats(ta.value || '');
+            compactEl.textContent = s.total + ' сцен · S' + s.start + ' E' + s.end + ' V' + s.video;
         };
         if (panelEl && panelEl.getAttribute('data-video-json-collapse') === '1') {
             applyVideoJsonPanelCollapsed(true);
