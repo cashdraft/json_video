@@ -3154,9 +3154,6 @@
         if (typeof window.__syncTtsPrereqWaitOverlay === 'function') {
             try { window.__syncTtsPrereqWaitOverlay(); } catch (_) { /* ignore */ }
         }
-        if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
-            try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) { /* ignore */ }
-        }
     }
 
     /** В пресете «Я уже ЗАrewriteИЛ» Inbox — только поле ввода, без POST /run; цепочка начинается с Voiceover Editor. */
@@ -5708,15 +5705,6 @@
             if (swInitTa && String(swInitTa.value || '').trim()) {
                 recomputeSceneWriterCheckLocal(sceneWriterBlockInit);
             }
-            if (swInitTa) {
-                var syncJsonSwOverlay = function () {
-                    if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
-                        try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) { /* ignore */ }
-                    }
-                };
-                swInitTa.addEventListener('input', syncJsonSwOverlay);
-                swInitTa.addEventListener('change', syncJsonSwOverlay);
-            }
         } catch (e) { /* noop */ }
     }
     var youtubePackagingBlockInit = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
@@ -5781,9 +5769,6 @@
         }
     }
     syncSceneWriterStructureSplitterWaitOverlay();
-    if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
-        try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) { /* ignore */ }
-    }
 
     (function voiceoverFinalCard() {
         var ta = document.getElementById('rewrite-voiceover-final-textarea');
@@ -6817,9 +6802,6 @@
 
     function syncRewriteDownstreamConsumersUi() {
         syncSceneWriterStructureSplitterWaitOverlay();
-        if (typeof window.__syncVideoJsonSceneWriterWaitOverlay === 'function') {
-            try { window.__syncVideoJsonSceneWriterWaitOverlay(); } catch (_) {}
-        }
         if (typeof window.__syncTtsPrereqWaitOverlay === 'function') {
             try { window.__syncTtsPrereqWaitOverlay(); } catch (_) {}
         }

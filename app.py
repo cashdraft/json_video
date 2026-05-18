@@ -534,11 +534,16 @@ app.config["STATIC_STYLE_HREF"] = (os.getenv("STATIC_STYLE_HREF") or "").strip()
 
 @app.context_processor
 def _inject_static_style_mtime() -> dict[str, str]:
-    """Cache-bust для style.css: `?v=<mtime>-<hash>` — меняется при любой правке файла."""
+    """Cache-bust для static: `?v=<mtime>-<hash>` — меняется при правке CSS/JS на job-странице."""
     try:
-        p = Path(app.static_folder) / "style.css"
-        raw = p.read_bytes()
-        v = f"{int(p.stat().st_mtime)}-{hashlib.md5(raw).hexdigest()[:10]}"
+        static_root = Path(app.static_folder)
+        parts: list[str] = []
+        for name in ("style.css", "image_template_editor.js", "rewrite_template_editor.js"):
+            p = static_root / name
+            if p.is_file():
+                raw = p.read_bytes()
+                parts.append(f"{name}:{int(p.stat().st_mtime)}:{hashlib.md5(raw).hexdigest()[:8]}")
+        v = hashlib.md5("|".join(parts).encode()).hexdigest()[:12] if parts else ""
     except (OSError, AttributeError, TypeError):
         v = ""
     return {"static_style_mtime": v}

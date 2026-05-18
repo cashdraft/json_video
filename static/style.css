@@ -1280,8 +1280,8 @@ textarea::placeholder {
 .image-template-editor-logo-preview-wrap {
     position: relative;
     display: block;
-    width: 5.25rem;
-    height: 5.25rem;
+    width: 5.5rem;
+    height: 5.5rem;
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--bg-input);
@@ -1308,53 +1308,6 @@ textarea::placeholder {
 .image-template-editor-logo-hit:hover .template-logo-upload-hover,
 .image-template-editor-logo-hit:focus-visible .template-logo-upload-hover {
     opacity: 1;
-}
-
-.image-template-editor-crop-toolbar {
-    display: flex;
-    gap: 0.4rem;
-    margin-bottom: 0.4rem;
-}
-
-.image-template-editor-crop-toolbar .btn {
-    min-width: 2.25rem;
-    padding-left: 0.55rem;
-    padding-right: 0.55rem;
-    font-size: 1rem;
-    line-height: 1;
-}
-
-.image-template-editor-hint {
-    margin: 0 0 0.4rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.image-template-editor-crop-stage {
-    position: relative;
-    display: inline-block;
-    max-width: 100%;
-    margin-bottom: 0.45rem;
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-}
-
-.image-template-editor-crop-stage--square {
-    width: min(320px, 100%);
-    aspect-ratio: 1;
-    cursor: grab;
-    touch-action: none;
-}
-
-.image-template-editor-crop-stage--square:active {
-    cursor: grabbing;
-}
-
-.image-template-editor-crop-stage--square canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
 }
 
 .image-template-editor-dropzone {
@@ -3797,8 +3750,7 @@ hr.rewrite-preset-section-divider {
 .rewrite-voiceover-final-empty-overlay,
 .rewrite-scene-writer-wait-overlay,
 .rewrite-youtube-packaging-wait-overlay,
-.tts-section-wait-overlay,
-.video-json-panel-wait-overlay {
+.tts-section-wait-overlay {
     position: absolute;
     inset: 0;
     margin: 0;
@@ -3818,8 +3770,7 @@ hr.rewrite-preset-section-divider {
 .rewrite-voiceover-final-empty-overlay.hidden,
 .rewrite-scene-writer-wait-overlay.hidden,
 .rewrite-youtube-packaging-wait-overlay.hidden,
-.tts-section-wait-overlay.hidden,
-.video-json-panel-wait-overlay.hidden {
+.tts-section-wait-overlay.hidden {
     display: none !important;
 }
 
@@ -5384,29 +5335,27 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     flex: 1 1 auto;
 }
 
+.video-json-panel .settings-section .template-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
+}
+
+.video-json-panel .settings-section .template-setting > .rewrite-source-subtitle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--tts-field-label);
+    line-height: 1.25;
+}
+
 /* JSON-код сцен — сворачиваемая шапка как у Озвучка / YouTube packaging */
 .video-json-panel.video-json-panel--collapsible {
     position: relative;
     overflow: hidden;
     padding: 0.55rem 1.25rem 1.25rem;
     border-radius: 8px;
-}
-
-.video-json-panel--waiting {
-    pointer-events: none;
-}
-
-.video-json-panel--waiting .video-json-panel-wait-overlay {
-    pointer-events: auto;
-    display: flex;
-}
-
-.video-json-panel--collapsible.video-json-panel--body-collapsed.video-json-panel--waiting .video-json-panel-wait-overlay {
-    display: flex;
-}
-
-.video-json-panel--collapsible.video-json-panel--body-collapsed.video-json-panel--waiting .video-json-panel-card-header {
-    align-items: center;
 }
 
 .video-json-panel.video-json-panel--collapsible.video-json-panel--body-collapsed {
