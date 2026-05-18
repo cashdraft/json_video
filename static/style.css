@@ -2479,23 +2479,126 @@ textarea::placeholder {
     background: rgba(0, 0, 0, 0.2);
 }
 
-.rewrite-template-section__title {
-    margin: 0 0 0.5rem;
+.rewrite-template-section__picker-wrap {
+    position: relative;
+}
+
+.rewrite-template-lock-overlay {
+    position: absolute;
+    inset: -1px;
+    border-radius: 0.35rem;
+    background: rgba(12, 14, 20, 0.66);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
+.rewrite-template-section--locked .rewrite-template-carousel,
+.rewrite-template-section--locked .rewrite-template-carousel__nav {
+    pointer-events: none;
+}
+
+.rewrite-template-section--locked .rewrite-template-section__title,
+.rewrite-template-section--locked .rewrite-template-carousel,
+.rewrite-template-section--locked .rewrite-template-picker {
+    opacity: 0.42;
+}
+
+.rewrite-template-section--locked .rewrite-template-lock-overlay {
+    display: flex;
+}
+
+.rewrite-template-lock-overlay.hidden {
+    display: none;
+}
+
+.rewrite-template-section__title.rewrite-source-subtitle {
+    margin: 0 0 1.1rem;
     font-size: 0.82rem;
+    font-weight: 600;
     line-height: 1.2;
+    text-align: center;
+    color: #fff;
+}
+
+.rewrite-template-carousel {
+    --template-carousel-gap: 0.35rem;
+    /* Размер кружков как до карусели (не делим на 10 — лишние шаблоны листаются стрелками). */
+    --template-option-size: clamp(3.25rem, calc((100% - var(--template-carousel-gap) * 8) / 9), 5.5rem);
+    --template-carousel-nav-size: 1.85rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-bottom: 0.55rem;
+}
+
+.rewrite-template-carousel__viewport {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    /* Зазор, чтобы обводка выбранного шаблона не обрезалась по краю. */
+    padding: 0 2px;
+    box-sizing: border-box;
+}
+
+.rewrite-template-carousel__nav {
+    flex: 0 0 var(--template-carousel-nav-size);
+    width: var(--template-carousel-nav-size);
+    height: var(--template-carousel-nav-size);
+    align-self: flex-start;
+    /* По центру кружка логотипа (без подписи снизу). */
+    margin-top: calc(0.15rem + var(--template-option-size) / 2 - var(--template-carousel-nav-size) / 2);
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1.35rem;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.rewrite-template-carousel__nav:hover:not(:disabled) {
+    border-color: var(--accent, #3b82f6);
+    color: #fff;
+    background: rgba(59, 130, 246, 0.35);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.45);
+}
+
+.rewrite-template-carousel__nav:disabled {
+    color: rgba(255, 255, 255, 0.28);
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+    cursor: default;
 }
 
 .rewrite-template-picker.template-picker {
-    --template-option-size: clamp(3.25rem, calc((100% - 0.35rem * 8) / 9), 5.5rem);
+    --template-option-size: clamp(3.25rem, calc((100% - var(--template-carousel-gap, 0.35rem) * 8) / 9), 5.5rem);
     flex-wrap: nowrap;
     align-items: flex-start;
+    gap: var(--template-carousel-gap);
     overflow-x: auto;
     overflow-y: visible;
-    scroll-snap-type: x proximity;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    scrollbar-width: none;
     padding: 0.15rem 0 0.35rem;
-    margin-bottom: 0.55rem;
+    margin-bottom: 0;
+}
+
+.rewrite-template-picker.template-picker::-webkit-scrollbar {
+    display: none;
+}
+
+.rewrite-template-picker .template-option,
+.rewrite-template-picker #rewrite-template-create.template-option--add {
+    scroll-snap-align: start;
 }
 
 .rewrite-template-picker .template-option-frame {
@@ -2717,18 +2820,30 @@ textarea::placeholder {
 
 .rewrite-prompts-duration-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(12rem, 18rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(10rem, 14rem) minmax(10rem, 14rem);
     gap: 1rem 1.25rem;
     align-items: start;
-    margin: 0 0 1rem 0;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border);
+    margin: 0;
 }
 
-.rewrite-prompts-duration-row__col--model-duration {
+.rewrite-prompts-duration-row__col--model-temp,
+.rewrite-prompts-duration-row__col--lang-duration {
     display: flex;
     flex-direction: column;
     gap: 1.15rem;
+}
+
+/* Hero / Master — тот же золотистый тон, что «Голос» / «Настройки» в Озвучке */
+.rewrite-prompts-duration-row__col--hero .rewrite-source-subtitle,
+.rewrite-prompts-duration-row__col--master .rewrite-source-subtitle {
+    color: var(--tts-field-label-warm);
+}
+
+/* Model / Язык / Temperature / Duration — как «Модель» / «Источник текста» в Озвучке */
+.rewrite-prompts-duration-row__col--model-temp .rewrite-source-subtitle,
+.rewrite-prompts-duration-row__col--lang-duration .rewrite-source-subtitle {
+    color: var(--tts-field-label);
+    font-size: 0.85rem;
 }
 
 .rewrite-prompts-duration-row__model-block {
@@ -2874,7 +2989,13 @@ textarea::placeholder {
     display: none;
 }
 
-@media (max-width: 60rem) {
+@media (max-width: 75rem) {
+    .rewrite-prompts-duration-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 40rem) {
     .rewrite-prompts-duration-row {
         grid-template-columns: 1fr;
     }
@@ -3128,13 +3249,45 @@ input.rewrite-source-title-input.rewrite-source-textarea {
     border-radius: 8px;
 }
 
+/* Секционный разделитель (<hr>) между крупными блоками — не внутри карточек. */
+.scene-card.rewrite-source-card:has(+ .rewrite-preset-section-divider) {
+    margin-bottom: 0;
+}
+
+hr.rewrite-preset-section-divider {
+    --rewrite-divider-gap: 2.15rem;
+    display: block;
+    width: 100%;
+    margin: 2.5rem 0 var(--rewrite-divider-gap);
+    padding: 0;
+    border: none;
+    border-top: 3px solid var(--border);
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+    opacity: 1;
+}
+
+.rewrite-preset-section-divider + .rewrite-preset-toggle--segmented {
+    margin-top: 0;
+}
+
+#rewrite-stages-list.scenes-grid.rewrite-stages-list > hr.rewrite-preset-section-divider {
+    grid-column: 1 / -1;
+    /* Как зазор под верхней линией до пресетов: row-gap сетки + margin-top = --rewrite-divider-gap */
+    margin-top: max(0.35rem, calc(var(--rewrite-divider-gap, 2.15rem) - 0.85rem));
+    margin-bottom: var(--rewrite-divider-gap, 2.15rem);
+}
+
+#rewrite-stages-list.scenes-grid.rewrite-stages-list > hr.rewrite-preset-section-divider + .rewrite-voiceover-final-card {
+    margin-top: 0;
+}
+
 .rewrite-preset-toggle--segmented {
     flex-direction: row;
     justify-content: center;
     align-items: center;
-    margin: 0 auto 0.85rem;
+    margin: 0 auto 1.25rem;
     padding: 0;
-    max-width: min(42rem, 100%);
+    max-width: min(54rem, 100%);
     background: transparent;
     border: none;
     border-radius: 0;
@@ -3143,7 +3296,7 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 .rewrite-preset-segmented {
     display: flex;
     width: 100%;
-    max-width: 42rem;
+    max-width: 54rem;
     border-radius: 10px;
     border: 1px solid var(--border);
     overflow: hidden;
@@ -3152,22 +3305,52 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 }
 
 .rewrite-preset-segmented__btn {
+    position: relative;
+    display: flex;
     flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
     min-width: 0;
+    min-height: 4.35rem;
     margin: 0;
-    padding: 0.58rem 0.45rem;
+    padding: 0.85rem 0.55rem 0.75rem;
     border: none;
     border-right: 1px solid var(--border);
     border-radius: 0;
     background: transparent;
     color: var(--text-muted);
     font: inherit;
-    font-size: clamp(0.72rem, 1.1vw, 0.84rem);
-    font-weight: 500;
-    line-height: 1.25;
     text-align: center;
     cursor: pointer;
-    transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+
+.rewrite-preset-segmented__btn:first-child {
+    border-radius: 9px 0 0 9px;
+}
+
+.rewrite-preset-segmented__btn:last-child {
+    border-radius: 0 9px 9px 0;
+}
+
+.rewrite-preset-segmented__title {
+    display: block;
+    color: #fff;
+    font-size: clamp(0.78rem, 1.05vw, 0.9rem);
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.rewrite-preset-segmented__desc {
+    display: block;
+    max-width: 14rem;
+    color: var(--text-muted);
+    font-size: clamp(0.62rem, 0.92vw, 0.72rem);
+    font-weight: 400;
+    line-height: 1.32;
+    opacity: 0.92;
 }
 
 .rewrite-preset-segmented__btn:last-of-type {
@@ -3181,15 +3364,32 @@ input.rewrite-source-title-input.rewrite-source-textarea {
 
 .rewrite-preset-segmented__btn:focus-visible {
     outline: none;
-    box-shadow: inset 0 0 0 2px var(--accent, #3b82f6);
     z-index: 1;
 }
 
+.rewrite-preset-segmented__btn:focus-visible::after,
+.rewrite-preset-segmented__btn.rewrite-preset-toggle__btn--active::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--accent, #3b82f6);
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 2;
+}
+
 .rewrite-preset-segmented__btn.rewrite-preset-toggle__btn--active {
-    color: var(--accent, #3b82f6);
     background: rgba(59, 130, 246, 0.1);
-    box-shadow: inset 0 0 0 2px var(--accent, #3b82f6);
     z-index: 1;
+}
+
+.rewrite-preset-segmented__btn.rewrite-preset-toggle__btn--active .rewrite-preset-segmented__title {
+    color: #fff;
+}
+
+.rewrite-preset-segmented__btn.rewrite-preset-toggle__btn--active .rewrite-preset-segmented__desc {
+    color: rgba(255, 255, 255, 0.72);
+    opacity: 1;
 }
 
 .rewrite-preset-segmented__btn:disabled {
@@ -3321,7 +3521,6 @@ input.rewrite-source-title-input.rewrite-source-textarea {
    без явного span он занимает одну колонку как карточка агента. Тянем на всю ширину, как «Исходный текст». */
 .scenes-grid.rewrite-stages-list > .rewrite-voiceover-final-card {
     grid-column: 1 / -1;
-    /* В сетке этапов зазор только через grid-gap (как между Scene Writer и YouTube). */
     margin-bottom: 0;
     overflow: visible;
 }
@@ -4130,7 +4329,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-row--controls,
     .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-row--controls,
     .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-row--controls,
-    .rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-row--controls,
     .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-row--controls,
     .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-row--controls,
     .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls,
@@ -4151,7 +4349,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-subtitle,
     .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-subtitle,
     .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-subtitle,
-    .rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-subtitle,
     .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-subtitle,
     .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-subtitle,
     .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-subtitle,
@@ -4164,7 +4361,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-rewrite-locked-badges-row,
 .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-rewrite-locked-badges-row,
 .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-rewrite-locked-badges-row,
-.rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-rewrite-locked-badges-row,
 .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-rewrite-locked-badges-row,
 .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-rewrite-locked-badges-row,
 .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-rewrite-locked-badges-row,
@@ -4186,7 +4382,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
         .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-stage-row--controls,
         .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-stage-row--controls,
         .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-stage-row--controls,
-        .rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-stage-row--controls,
         .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-stage-row--controls,
         .rewrite-stage-card[data-stage-key="elevenlabs_editor"] .rewrite-stage-row--controls,
         .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-stage-row--controls,
@@ -4222,7 +4417,6 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .rewrite-stage-card[data-stage-key="voiceover_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
 .rewrite-stage-card[data-stage-key="retention_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
 .rewrite-stage-card[data-stage-key="hook_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
-.rewrite-stage-card[data-stage-key="flow_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
 .rewrite-stage-card[data-stage-key="persona_editor"] .rewrite-scene-writer-check[data-editor-check]:empty,
 .rewrite-stage-card[data-stage-key="title_strategist"] .rewrite-scene-writer-check[data-editor-check]:empty {
     display: block;
@@ -6759,6 +6953,18 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin-top: 1.75rem;
 }
 
+/* YouTube packaging engine — под «Скачать все», на всю ширину (карточка переносится из ReWrite-сетки JS) */
+.rewrite-youtube-packaging-dock {
+    width: 100%;
+    margin: 1.1rem 0 1.35rem;
+}
+
+.rewrite-youtube-packaging-dock > .rewrite-youtube-packaging-module {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+}
+
 .job-download-all-link {
     display: inline-flex;
     align-items: center;
@@ -8598,33 +8804,76 @@ button.job-download-all-link {
 
 /* Модалка с textarea + цифровой клавиатурой. Реюзим базу .confirm-modal,
    добавляем чуть-чуть свободного места под textarea и keypad. */
+.locked-prompt-modal:not(.hidden) {
+    align-items: flex-start;
+    padding: 1rem 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+body.locked-prompt-modal-open {
+    overflow: hidden;
+}
+
 .locked-prompt-modal__card {
     max-width: 560px;
     width: min(96vw, 560px);
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
-.locked-prompt-modal__textarea-wrap {
+.locked-prompt-modal__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.locked-prompt-modal__pin-block {
+    flex-shrink: 0;
+}
+
+.locked-prompt-modal__card .confirm-modal__head {
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.locked-prompt-modal__head-actions {
+    flex-shrink: 0;
+}
+
+.locked-prompt-modal__head-btn--reset {
+    width: auto;
+    min-width: 32px;
+    padding: 0 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+/* Обёртка и textarea — как «Исходный текст» → Source; рамка фиолетовая (locked prompt). */
+.locked-prompt-modal__textarea-wrap.slot-placeholder.rewrite-slot-placeholder.rewrite-slot--source {
     margin: 0.5rem 0 0.25rem;
+    min-height: 0;
+    overflow: visible;
+    border-color: color-mix(in srgb, var(--tts-field-label) 48%, transparent);
 }
 
-.locked-prompt-modal__textarea {
-    width: 100%;
-    min-height: 220px;
-    resize: vertical;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    font-size: 0.85rem;
-    line-height: 1.45;
-    padding: 0.6rem 0.7rem;
-    background: var(--bg-elev-1, #1b1b22);
-    color: var(--text);
-    border: 1px dashed var(--editable-prompt-border);
-    border-radius: 6px;
+.locked-prompt-modal__textarea-wrap.slot-placeholder.rewrite-slot-placeholder:focus-within {
+    border-color: color-mix(in srgb, var(--tts-field-label) 72%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tts-field-label) 18%, transparent);
+}
+
+.locked-prompt-modal__textarea.rewrite-source-textarea {
+    min-height: calc(5 * 1.45em + 1.1rem);
+    max-height: min(42vh, 22rem);
+    flex: 0 0 auto;
     outline: none;
-}
-
-.locked-prompt-modal__textarea:focus {
-    border-color: var(--editable-prompt-border-focus);
-    box-shadow: 0 0 0 2px var(--editable-prompt-focus-ring);
+    resize: vertical;
+    overflow-y: auto;
 }
 
 .locked-prompt-modal__msg {
@@ -8698,6 +8947,10 @@ button.job-download-all-link {
 
 .locked-prompt-modal__key:active {
     transform: translateY(1px);
+}
+
+.locked-prompt-modal__key--zero {
+    grid-column: 2;
 }
 
 .locked-prompt-modal__key--util {

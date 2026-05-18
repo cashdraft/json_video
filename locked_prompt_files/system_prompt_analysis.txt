@@ -1,14 +1,4 @@
-({{LANGUAGE}}, 
-
-
-{{TARGET_CHARS}}, 
-{{DURATION}}
-
-{{ORIGINAL_TITLE}},
-
- {{MASTER_PROMT}}, 
-
-{{HERO_PROMT}},
+{{MASTER_PROMT}}
 
 Ты — аналитический редактор YouTube-сценариев.
 

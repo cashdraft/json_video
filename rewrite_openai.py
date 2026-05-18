@@ -25,6 +25,7 @@ from claude_kie import (
     iter_claude_completion_stream,
     post_claude_messages_sync,
 )
+from model_text_sanitize import normalize_model_plain_text
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
@@ -63,7 +64,7 @@ def accumulated_matches_rewrite_stream_terminator(acc: str, terminator: str | No
 
 def scrub_rewrite_end_markers(text: str) -> str:
     """Удаляет типичные варианты маркера ``[END]`` (строка целиком, хвост, fullwidth-скобки)."""
-    s = text or ""
+    s = normalize_model_plain_text(text or "")
     s = s.replace("\uff3bEND\uff3d", "").replace("\uff3b END \uff3d", "")
     while True:
         t = s
@@ -705,16 +706,18 @@ def _parse_block_writer_json_response(raw: str) -> tuple[dict[str, Any] | None, 
             return None, "Block Writer должен вернуть JSON."
     if not isinstance(obj, dict):
         return None, "Block Writer должен вернуть JSON-объект."
-    block_text = str(obj.get("text") or obj.get("block_text") or "").strip()
+    block_text = normalize_model_plain_text(
+        str(obj.get("text") or obj.get("block_text") or "").strip()
+    )
     short_summary_raw = obj.get("short_summary")
     short_summary_items: list[str] = []
     if isinstance(short_summary_raw, list):
         for it in short_summary_raw:
-            s = str(it or "").strip()
+            s = normalize_model_plain_text(str(it or "").strip())
             if s:
                 short_summary_items.append(s)
     elif short_summary_raw is not None:
-        s = str(short_summary_raw or "").strip()
+        s = normalize_model_plain_text(str(short_summary_raw or "").strip())
         if s:
             short_summary_items.append(s)
     if not block_text:

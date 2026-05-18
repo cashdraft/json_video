@@ -15,7 +15,7 @@ rewrite_templates/ игнорируются: файлы кладите внут�
 Имена файлов внутри шаблона (без учёта регистра, расширение .txt):
   Config — целевой объём в символах 500–40 000, шаг 500 (см. parse_template_config; старые chars/duration тоже читаются)
   Hero Prompt, Master Prompt
-  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», flow_editor: «Flow Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», title_strategist: «Title Strategist …», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt», youtube_packaging: «YouTube packaging …»)
+  Analysis … Scene Writer Prompt (draft1: «Block Writer Prompt.txt», retention_editor: «Retention Editor Prompt.txt», hook_editor: «Hook Editor Prompt.txt», persona_editor: «Persona Editor Prompt.txt», voiceover_editor: «Voiceover Editor Prompt.txt», title_strategist: «Title Strategist …», structure_splitter: «Structure Splitter Prompt.txt», scene_writer: «Scene Writer Prompt.txt», youtube_packaging: «YouTube packaging …»)
 """
 
 from __future__ import annotations
@@ -141,11 +141,6 @@ _STEM_TO_TARGET: dict[str, str] = {
     "hook editor system prompt": "stage:hook_editor",
     "hook editor user promt": "stage_user:hook_editor",
     "hook editor user prompt": "stage_user:hook_editor",
-    "flow editor prompt": "stage:flow_editor",
-    "flow editor system promt": "stage:flow_editor",
-    "flow editor system prompt": "stage:flow_editor",
-    "flow editor user promt": "stage_user:flow_editor",
-    "flow editor user prompt": "stage_user:flow_editor",
     "persona editor prompt": "stage:persona_editor",
     "persona editor system promt": "stage:persona_editor",
     "persona editor system prompt": "stage:persona_editor",
@@ -206,8 +201,6 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:retention_editor": "Retention Editor User Promt.txt",
     "stage:hook_editor": "Hook Editor System Promt.txt",
     "stage_user:hook_editor": "Hook Editor User Promt.txt",
-    "stage:flow_editor": "Flow Editor System Promt.txt",
-    "stage_user:flow_editor": "Flow Editor User Promt.txt",
     "stage:persona_editor": "Persona Editor System Promt.txt",
     "stage_user:persona_editor": "Persona Editor User Promt.txt",
     "stage:voiceover_editor": "Voiceover Editor System Promt.txt",
@@ -231,7 +224,6 @@ _STAGE_TARGETS: dict[str, str] = {
     "rewrite": "Rewrite",
     "retention_editor": "Retention Editor",
     "hook_editor": "Hook Editor",
-    "flow_editor": "Flow Editor",
     "persona_editor": "Persona Editor",
     "voiceover_editor": "Voiceover Editor",
     "title_strategist": "Title Strategist",

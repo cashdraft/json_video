@@ -120,6 +120,7 @@ from rewrite_openai import (
 from rewrite_pipeline import (
     REWRITE_PRESET_DEFAULT,
     REWRITE_PRESET_KEYS,
+    REWRITE_PRESET_DESCRIPTIONS,
     REWRITE_PRESET_LABELS,
     REWRITE_PRESET_PREWRITTEN,
     REWRITE_PRESET_SOFT,
@@ -177,6 +178,8 @@ from locked_prompts import (
     verify_pin as verify_locked_prompts_pin,
 )
 from claude_kie import CLAUDE_MODEL_IDS, strip_markdown_code_fence
+from json_llm_repair import STAGE_JSON_OBJECT_KEYS, normalize_llm_json_object
+from model_text_sanitize import normalize_model_plain_text
 from task_manager import (
     cancel_task as _tm_cancel_task,
     get_active_task as _tm_get_active_task,
@@ -196,7 +199,6 @@ REWRITE_MEDIA_DIR = BASE_DIR / "data" / "rewrite_media"
 _REWRITE_JSON_EDITOR_STAGES = frozenset({
     "retention_editor",
     "hook_editor",
-    "flow_editor",
     "persona_editor",
     "voiceover_editor",
 })
@@ -931,44 +933,21 @@ def _scene_writer_block_check(block: dict[str, Any], part_text: str, idx: int) -
     }
 
 
-def _inject_past_prompt_into_scene_json_lines(raw_text: str, past_prompt: str) -> str:
-    """Prepends past_prompt to non-empty start/end prompts in line-delimited scene JSON."""
-    txt = str(raw_text or "")
-    pp = str(past_prompt or "").strip()
-    if not txt.strip() or not pp:
-        return txt
+def _normalize_stage_json_result(stage_key: str, content: str) -> str:
+    """Починка типичных синтаксических ошибок в JSON-ответах Analysis / Architect."""
+    sk = str(stage_key or "").strip().lower()
+    if sk not in STAGE_JSON_OBJECT_KEYS:
+        return content
+    fixed, _repaired = normalize_llm_json_object(content)
+    return fixed
 
-    out_lines: list[str] = []
-    changed = False
-    for ln in txt.splitlines():
-        s = ln.strip()
-        if not s:
-            out_lines.append(ln)
-            continue
-        try:
-            obj = json.loads(s)
-        except json.JSONDecodeError:
-            out_lines.append(ln)
-            continue
-        if not isinstance(obj, dict):
-            out_lines.append(ln)
-            continue
 
-        for slot_name in ("start", "end"):
-            slot = obj.get(slot_name)
-            if not isinstance(slot, dict):
-                continue
-            prompt = str(slot.get("prompt") or "").strip()
-            if not prompt:
-                continue
-            if prompt.startswith(pp):
-                continue
-            slot["prompt"] = f"{pp} {prompt}"
-            changed = True
-
-        out_lines.append(json.dumps(obj, ensure_ascii=False))
-
-    return "\n".join(out_lines) if changed else txt
+def _normalize_stage_plain_result(stage_key: str, content: str) -> str:
+    """Убирает HTML <br> из plain-text Result (Block Writer, Rewrite, редакторы)."""
+    sk = str(stage_key or "").strip().lower()
+    if sk in STAGE_JSON_OBJECT_KEYS:
+        return content
+    return normalize_model_plain_text(content)
 
 
 def _sanitize_editor_result_json(raw_result: str) -> str:
@@ -986,7 +965,7 @@ def _sanitize_editor_result_json(raw_result: str) -> str:
     tt = obj.get("text")
 
     def _norm_inline(s: str) -> str:
-        t = str(s or "")
+        t = normalize_model_plain_text(str(s or ""))
         t = re.sub(r"\\+r\\+n", " ", t)
         t = re.sub(r"\\+n", " ", t)
         t = re.sub(r"\\+r", " ", t)
@@ -3529,6 +3508,7 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         "rewrite_stage_key_order": rewrite_stage_key_order,
         "rewrite_preset_current": rewrite_preset_current,
         "rewrite_preset_labels": REWRITE_PRESET_LABELS,
+        "rewrite_preset_descriptions": REWRITE_PRESET_DESCRIPTIONS,
         "rewrite_preset_stage_keys": REWRITE_PRESET_STAGE_KEYS,
         "rewrite_preset_default": REWRITE_PRESET_DEFAULT,
         "rewrite_models": REWRITE_MODELS,
@@ -3622,7 +3602,12 @@ def _rewrite_project_page_legacy_unused(rewrite_id: str):
 
 @app.route("/rewrite/api/templates", methods=["GET"])
 def rewrite_api_templates_list():
-    return jsonify({"ok": True, "templates": list_rewrite_template_names()})
+    rows = rewrite_templates_ui_rows()
+    return jsonify({
+        "ok": True,
+        "templates": [r["name"] for r in rows],
+        "templates_ui": rows,
+    })
 
 
 @app.route("/rewrite/api/templates", methods=["POST"])
@@ -5471,7 +5456,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             "structure",
             "retention_editor",
             "hook_editor",
-            "flow_editor",
             "persona_editor",
             "voiceover_editor",
             "elevenlabs_editor",
@@ -5491,7 +5475,9 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
             if full_text_path.exists():
                 try:
-                    block_writer_full_text = full_text_path.read_text(encoding="utf-8")
+                    block_writer_full_text = normalize_model_plain_text(
+                        full_text_path.read_text(encoding="utf-8")
+                    )
                 except OSError:
                     block_writer_full_text = ""
         retention_editor_text = ""
@@ -5503,21 +5489,13 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 except OSError:
                     retention_editor_text = ""
         hook_editor_text = ""
-        if stage_key == "flow_editor":
+        if stage_key == "persona_editor":
             p = _rewrite_stage_result_path(rewrite_id, "hook_editor")
             if p.exists():
                 try:
                     hook_editor_text = p.read_text(encoding="utf-8")
                 except OSError:
                     hook_editor_text = ""
-        flow_editor_text = ""
-        if stage_key == "persona_editor":
-            p = _rewrite_stage_result_path(rewrite_id, "flow_editor")
-            if p.exists():
-                try:
-                    flow_editor_text = p.read_text(encoding="utf-8")
-                except OSError:
-                    flow_editor_text = ""
         persona_editor_text = ""
         if stage_key == "voiceover_editor":
             p = _rewrite_stage_result_path(rewrite_id, "persona_editor")
@@ -5570,7 +5548,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             block_writer_full_text=block_writer_full_text,
             retention_editor_text=retention_editor_text,
             hook_editor_text=hook_editor_text,
-            flow_editor_text=flow_editor_text,
             persona_editor_text=persona_editor_text,
             voiceover_editor_text=voiceover_editor_text,
             elevenlabs_editor_text=elevenlabs_editor_text,
@@ -5703,21 +5680,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             yield json.dumps({"type": "result", "content": split_result}, ensure_ascii=False) + "\n"
         elif stage_key == "scene_writer":
             raw_blocks = str(structure_splitter_text or "").strip()
-            scene_writer_past_prompt = str(
-                ((stages_snap.get("scene_writer") or {}).get("past_prompt") or "")
-            ).strip()
-            # Fallback: if frontend snapshot missed past_prompt (stale JS/cache),
-            # take persisted value from rewrite job JSON.
-            if not scene_writer_past_prompt:
-                rw_saved = load_rewrite_job(rewrite_id)
-                if isinstance(rw_saved, dict):
-                    st_saved = rw_saved.get("stages") if isinstance(rw_saved.get("stages"), dict) else {}
-                    sw_saved = st_saved.get("scene_writer") if isinstance(st_saved, dict) else {}
-                    if isinstance(sw_saved, dict):
-                        scene_writer_past_prompt = str(sw_saved.get("past_prompt") or "").strip()
-            scene_writer_past_prompt = rewrite_placeholder_apply_from_request(
-                scene_writer_past_prompt, body, rw_job, allow_nested_master_hero=False
-            )
             blocks, parse_err = _parse_structure_splitter_blocks_with_error(raw_blocks)
             if not blocks:
                 human_reason = "пустой или невалидный JSON"
@@ -5765,7 +5727,6 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                         return
                     elif t == "status":
                         yield json.dumps({"type": "status", "message": f"[{i}/{total}] {str(item.get('message') or '')}"}, ensure_ascii=False) + "\n"
-                part = _inject_past_prompt_into_scene_json_lines(part, scene_writer_past_prompt)
                 acc_parts.append(part)
                 block_checks.append(_scene_writer_block_check(block, part, i))
             full = "\n\n".join([p for p in acc_parts if p]).strip()
@@ -5825,10 +5786,15 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 if t_item == "result" and isinstance(item.get("content"), str):
                     item = dict(item)
                     item["content"] = strip_markdown_code_fence(str(item.get("content") or ""))
+                    item["content"] = _normalize_stage_json_result(
+                        stage_key, str(item.get("content") or "")
+                    )
+                    item["content"] = _normalize_stage_plain_result(
+                        stage_key, str(item.get("content") or "")
+                    )
                     if stage_key in (
                         "retention_editor",
                         "hook_editor",
-                        "flow_editor",
                         "persona_editor",
                         "voiceover_editor",
                         "title_strategist",
@@ -5854,6 +5820,8 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             _orig = _ev["content"]
             _stripped = strip_markdown_code_fence(_orig)
             _content = scrub_rewrite_end_markers(_stripped) if stage_key == "rewrite" else _stripped
+            _content = _normalize_stage_json_result(stage_key, _content)
+            _content = _normalize_stage_plain_result(stage_key, _content)
             if _content != _orig:
                 _ev = dict(_ev)
                 _ev["content"] = _content
@@ -6025,7 +5993,9 @@ def rewrite_project_api_payload(rewrite_id: str):
         full_text_path = _rewrite_block_writer_dir(rewrite_id) / "full_text.txt"
         if full_text_path.exists():
             try:
-                block_writer_full_text = full_text_path.read_text(encoding="utf-8")
+                block_writer_full_text = normalize_model_plain_text(
+                    full_text_path.read_text(encoding="utf-8")
+                )
             except OSError:
                 block_writer_full_text = ""
     retention_editor_text = ""
@@ -6037,21 +6007,13 @@ def rewrite_project_api_payload(rewrite_id: str):
             except OSError:
                 retention_editor_text = ""
     hook_editor_text = ""
-    if stage_key == "flow_editor":
+    if stage_key == "persona_editor":
         p = _rewrite_stage_result_path(rewrite_id, "hook_editor")
         if p.exists():
             try:
                 hook_editor_text = p.read_text(encoding="utf-8")
             except OSError:
                 hook_editor_text = ""
-    flow_editor_text = ""
-    if stage_key == "persona_editor":
-        p = _rewrite_stage_result_path(rewrite_id, "flow_editor")
-        if p.exists():
-            try:
-                flow_editor_text = p.read_text(encoding="utf-8")
-            except OSError:
-                flow_editor_text = ""
     persona_editor_text = ""
     if stage_key == "voiceover_editor":
         p = _rewrite_stage_result_path(rewrite_id, "persona_editor")
@@ -6135,7 +6097,6 @@ def rewrite_project_api_payload(rewrite_id: str):
         block_writer_full_text=block_writer_full_text,
         retention_editor_text=retention_editor_text,
         hook_editor_text=hook_editor_text,
-        flow_editor_text=flow_editor_text,
         persona_editor_text=persona_editor_text,
         voiceover_editor_text=voiceover_editor_text,
         elevenlabs_editor_text=elevenlabs_editor_text,

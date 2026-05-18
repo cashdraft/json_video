@@ -64,7 +64,6 @@
     const masterToggleBtn = document.getElementById('rewrite-master-toggle');
     const sourceToggleBtn = document.getElementById('rewrite-source-toggle');
     const heroToggleBtn = document.getElementById('rewrite-hero-toggle');
-    const audioToggleBtn = document.getElementById('rewrite-audio-toggle');
     let sourceLocked = {{ rw.source_locked|default(false)|tojson }};
     let sourceRuLocked = {{ rw.source_text_ru_locked|default(false)|tojson }};
     let semanticAnalysisLocked = {{ rw.semantic_text_analysis_locked|default(true)|tojson }};
@@ -73,7 +72,6 @@
     let voiceoverFinalTextRuLocked = {{ rw.voiceover_final_text_ru_locked|default(false)|tojson }};
     let masterLocked = {{ rw.master_prompt_locked|default(false)|tojson }};
     let heroLocked = {{ rw.hero_prompt_locked|default(false)|tojson }};
-    let audioTimingLocked = {{ rw.audio_timing_locked|default(false)|tojson }};
     /* Не полагаемся на data-openai-key у body: на странице job скрипт может
        выполняться в контексте, где атрибут ещё не учитывается, или HTML закэширован.
        Источник истины — тот же флаг, что в шаблоне для disabled у полей. */
@@ -84,8 +82,8 @@
     window.__rewriteVoiceoverFinalStagesRestartChain = function () {};
     const STAGE_KEYS_ORDER = {{ rewrite_stage_key_order | tojson }};
     const STAGE_LABELS = {{ dict(rewrite_stages) | tojson }};
-    var REWRITE_JSON_SPLIT_STAGES = { retention_editor: true, hook_editor: true, flow_editor: true, persona_editor: true, voiceover_editor: true };
-    var REWRITE_EDITOR_CHAIN_FOR_CHECKS = ['draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor'];
+    var REWRITE_JSON_SPLIT_STAGES = { retention_editor: true, hook_editor: true, persona_editor: true, voiceover_editor: true };
+    var REWRITE_EDITOR_CHAIN_FOR_CHECKS = ['draft1', 'retention_editor', 'hook_editor', 'persona_editor', 'voiceover_editor'];
     let COLLAPSIBLE_PIPELINE_STAGE_KEYS = {{ collapsible_pipeline_stages | tojson }};
     /** Совпадает с `rewrite_pipeline.REWRITE_STAGE_CARD_NO_INDEX_KEYS` (бейдж этапа скрыт). */
     var PIPELINE_LABEL_SKIP = { scene_writer: true, youtube_packaging: true };
@@ -98,7 +96,7 @@
        ключа soft (старый HTML/кеш), раньше applyRewritePresetVisibility сбрасывала
        пресет на deep — селект «Мягкий» не удерживался. */
     const REWRITE_PRESET_STAGE_KEYS_FALLBACK = {
-        deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter'],
+        deep: ['analysis', 'structure', 'draft1', 'retention_editor', 'hook_editor', 'persona_editor', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter'],
         soft: ['rewrite', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter'],
         prewritten: ['inbox', 'voiceover_editor', 'elevenlabs_editor', 'title_strategist', 'structure_splitter']
     };
@@ -172,6 +170,10 @@
     const ytCardEl = document.getElementById('rewrite-youtube-card');
     const ytLockOverlay = document.getElementById('rewrite-youtube-lock-overlay');
     const ytUnlockBtn = document.getElementById('rewrite-youtube-unlock-btn');
+    const templateSectionEl = document.querySelector('[data-template-picker-field="1"]');
+    const templateLockOverlay = document.getElementById('rewrite-template-lock-overlay');
+    const templateUnlockBtn = document.getElementById('rewrite-template-unlock-btn');
+    let templatePickerUserUnlocked = false;
     const ytEditConfirmModal = document.getElementById('rewrite-youtube-edit-confirm-modal');
     const ytEditConfirmCancelBtn = document.getElementById('rewrite-youtube-edit-confirm-cancel');
     const ytEditConfirmOkBtn = document.getElementById('rewrite-youtube-edit-confirm-ok');
@@ -206,6 +208,9 @@
     const presetChangeConfirmModal = document.getElementById('rewrite-preset-change-confirm-modal');
     const presetChangeConfirmCancelBtn = document.getElementById('rewrite-preset-change-confirm-cancel');
     const presetChangeConfirmOkBtn = document.getElementById('rewrite-preset-change-confirm-ok');
+    const templateCreateConfirmModal = document.getElementById('rewrite-template-create-confirm-modal');
+    const templateCreateConfirmCancelBtn = document.getElementById('rewrite-template-create-confirm-cancel');
+    const templateCreateConfirmOkBtn = document.getElementById('rewrite-template-create-confirm-ok');
     const templateCreateModal = document.getElementById('rewrite-template-create-modal');
     const templateCreateNameEl = document.getElementById('rewrite-template-create-name');
     const templateCreateCancelBtn = document.getElementById('rewrite-template-create-cancel');
@@ -221,6 +226,7 @@
     let youtubeInsertConfirmResolver = null;
     let clearResultsConfirmResolver = null;
     let presetChangeConfirmResolver = null;
+    let templateCreateConfirmResolver = null;
     let templateCreateResolver = null;
     var ytTranscriptReady = false;
     var ytWorking = false;
@@ -825,6 +831,40 @@
         applyYoutubeToolbar();
     }
 
+    function anyRewriteStageHasResult() {
+        var cards = document.querySelectorAll('.rewrite-stage-card');
+        for (var i = 0; i < cards.length; i++) {
+            var ta = cards[i].querySelector('.rewrite-stage-result');
+            if (ta && String(ta.value || '').trim()) return true;
+        }
+        return false;
+    }
+
+    function shouldLockTemplatePicker() {
+        return anyRewriteStageHasResult() && !templatePickerUserUnlocked;
+    }
+
+    function applyTemplatePickerLockUi() {
+        var locked = shouldLockTemplatePicker();
+        if (templateSectionEl) {
+            templateSectionEl.classList.toggle('rewrite-template-section--locked', locked);
+            templateSectionEl.setAttribute('data-template-locked', locked ? '1' : '0');
+        }
+        if (templateLockOverlay) templateLockOverlay.classList.toggle('hidden', !locked);
+        var pickerDis = locked || !openaiOk;
+        if (templateSelectEl) templateSelectEl.disabled = pickerDis;
+        if (templateSectionEl) {
+            templateSectionEl.querySelectorAll('.rewrite-template-radio').forEach(function (rb) {
+                rb.disabled = pickerDis;
+            });
+            if (templateCreateBtn) templateCreateBtn.disabled = pickerDis;
+            var prevNav = document.getElementById('rewrite-template-carousel-prev');
+            var nextNav = document.getElementById('rewrite-template-carousel-next');
+            if (prevNav) prevNav.disabled = pickerDis;
+            if (nextNav) nextNav.disabled = pickerDis;
+        }
+    }
+
     function openClearResultsConfirm() {
         if (!clearResultsConfirmModal || !clearResultsConfirmCancelBtn || !clearResultsConfirmOkBtn) {
             return Promise.resolve(window.confirm('Очистить Result, Changes и проверки у всех этапов, кроме Inbox?'));
@@ -884,6 +924,38 @@
     if (presetChangeConfirmModal) {
         presetChangeConfirmModal.addEventListener('click', function (e) {
             if (e.target && e.target.hasAttribute('data-preset-change-confirm-close')) closePresetChangeConfirm(false);
+        });
+    }
+
+    function openTemplateCreateConfirm() {
+        if (!templateCreateConfirmModal || !templateCreateConfirmCancelBtn || !templateCreateConfirmOkBtn) {
+            return Promise.resolve(window.confirm(
+                'Все шаблонные данные на странице (Hero Promt, Master Promt, промты Rewrite и Scene Writer) будут сброшены. Вы уверены, что хотите создать новый шаблон?'
+            ));
+        }
+        templateCreateConfirmModal.classList.remove('hidden');
+        templateCreateConfirmModal.setAttribute('aria-hidden', 'false');
+        return new Promise(function (resolve) {
+            templateCreateConfirmResolver = resolve;
+        });
+    }
+
+    function closeTemplateCreateConfirm(accepted) {
+        if (!templateCreateConfirmModal) return;
+        templateCreateConfirmModal.classList.add('hidden');
+        templateCreateConfirmModal.setAttribute('aria-hidden', 'true');
+        if (templateCreateConfirmResolver) {
+            var fn = templateCreateConfirmResolver;
+            templateCreateConfirmResolver = null;
+            fn(Boolean(accepted));
+        }
+    }
+
+    if (templateCreateConfirmCancelBtn) templateCreateConfirmCancelBtn.addEventListener('click', function () { closeTemplateCreateConfirm(false); });
+    if (templateCreateConfirmOkBtn) templateCreateConfirmOkBtn.addEventListener('click', function () { closeTemplateCreateConfirm(true); });
+    if (templateCreateConfirmModal) {
+        templateCreateConfirmModal.addEventListener('click', function (e) {
+            if (e.target && e.target.hasAttribute('data-template-create-confirm-close')) closeTemplateCreateConfirm(false);
         });
     }
 
@@ -991,21 +1063,28 @@
         });
     }
 
+    if (templateUnlockBtn) {
+        templateUnlockBtn.addEventListener('click', function () {
+            templatePickerUserUnlocked = true;
+            applyTemplatePickerLockUi();
+        });
+    }
+
     if (templateCreateBtn) {
         templateCreateBtn.addEventListener('click', async function () {
-            if (!openaiOk || !templateSelectEl) return;
-            var name = (await openTemplateCreateModal() || '').trim();
+            if (!openaiOk || !templateSelectEl || shouldLockTemplatePicker()) return;
+            if (!(await openTemplateCreateConfirm())) return;
             templateCreateBtn.disabled = true;
             try {
-                var snap = collectSnapshot();
+                clearTemplateScopedFormFields();
                 const r = await fetch(templateListUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        name: name,
-                        hero_prompt: snap.hero_prompt,
-                        master_prompt: snap.master_prompt,
-                        stages: collectTemplateScopeStages(snap.stages)
+                        name: '',
+                        hero_prompt: '',
+                        master_prompt: '',
+                        stages: collectTemplateScopeStages({})
                     })
                 });
                 const data = await r.json().catch(function () { return {}; });
@@ -1013,10 +1092,13 @@
                     setTemplateOpStatus(data.message || 'Не удалось создать шаблон.', true);
                     return;
                 }
-                var createdName = (data.name || name || '').trim();
+                var createdName = (data.name || '').trim();
                 await reloadRewriteTemplateOptions(createdName);
                 setTemplateOpStatus('Шаблон создан: ' + createdName, false);
                 await saveToServer();
+                if (typeof window.openRewriteTemplateEditor === 'function' && createdName) {
+                    window.openRewriteTemplateEditor(createdName, { unlockName: true });
+                }
             } catch (e) {
                 setTemplateOpStatus(String(e), true);
             } finally {
@@ -1076,6 +1158,7 @@
     }
 
     var lastAutoAppliedTemplate = templateSelectEl ? (templateSelectEl.value || '').trim() : '';
+    var rewriteTemplateLogoByName = {};
     var templateApplySeq = 0;
     var REWRITE_TEMPLATE_SCOPE_STAGE_KEYS = { rewrite: true, scene_writer: true };
 
@@ -1088,8 +1171,7 @@
             out[sk] = {
                 prompt: cell.prompt || '',
                 user_prompt: '',
-                style_prompt: sk === 'scene_writer' ? (cell.style_prompt || '') : '',
-                past_prompt: sk === 'scene_writer' ? (cell.past_prompt || '') : ''
+                style_prompt: sk === 'scene_writer' ? (cell.style_prompt || '') : ''
             };
         });
         return out;
@@ -1129,14 +1211,19 @@
                     syncStylePromptBadge(block);
                 }
             }
-            if (key === 'scene_writer' && cell && typeof cell.past_prompt === 'string') {
-                var pta = block.querySelector('.rewrite-stage-past-prompt');
-                if (pta) {
-                    pta.value = cell.past_prompt;
-                    syncPastPromptBadge(block);
-                }
+        });
+    }
+
+    function clearTemplateScopedFormFields() {
+        populateRewriteFormFromTemplateData({
+            hero_prompt: '',
+            master_prompt: '',
+            stages: {
+                rewrite: { prompt: '', style_prompt: '' },
+                scene_writer: { prompt: '', style_prompt: '' }
             }
         });
+        lastAutoAppliedTemplate = '';
     }
 
     async function applyRewriteTemplateFromDisk(name) {
@@ -1255,7 +1342,7 @@
         return (n.slice(0, 1) || '·').toUpperCase();
     }
 
-    function buildRewriteTemplateOptionEl(opt) {
+    function buildRewriteTemplateOptionEl(opt, logoUrl) {
         var val = String(opt.value || '').trim();
         var label = document.createElement('label');
         label.className = 'template-option rewrite-template-option';
@@ -1275,12 +1362,23 @@
         inner.className = 'template-option-inner';
         var frame = document.createElement('span');
         frame.className = 'template-option-frame';
+        var logo = String(logoUrl || rewriteTemplateLogoByName[val] || '').trim();
         var visual = document.createElement('span');
-        visual.className = 'template-option-visual template-option-visual--letter';
-        if (val.toLowerCase() === 'base template') visual.classList.add('template-option-visual--base');
-        visual.setAttribute('aria-hidden', 'true');
-        visual.textContent = label.classList.contains('rewrite-template-option--missing')
-            ? '?' : rewriteTemplateCircleLetter(val);
+        if (logo) {
+            visual.className = 'template-option-visual';
+            var img = document.createElement('img');
+            img.src = logo;
+            img.alt = '';
+            img.className = 'template-logo-preview';
+            img.loading = 'lazy';
+            visual.appendChild(img);
+        } else {
+            visual.className = 'template-option-visual template-option-visual--letter';
+            if (val.toLowerCase() === 'base template') visual.classList.add('template-option-visual--base');
+            visual.setAttribute('aria-hidden', 'true');
+            visual.textContent = label.classList.contains('rewrite-template-option--missing')
+                ? '?' : rewriteTemplateCircleLetter(val);
+        }
         frame.appendChild(visual);
         var nameEl = document.createElement('span');
         nameEl.className = 'template-option-name';
@@ -1292,6 +1390,27 @@
         return label;
     }
 
+    function scrollRewriteTemplatePickerToSelection() {
+        var picker = document.getElementById('rewrite-template-picker');
+        if (!picker || !templateSelectEl) return;
+        var v = String(templateSelectEl.value || '').trim();
+        if (!v) {
+            picker.scrollLeft = 0;
+            return;
+        }
+        var esc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(v) : v.replace(/"/g, '\\"');
+        var el = picker.querySelector('.rewrite-template-option[data-template-name="' + esc + '"]');
+        if (el) {
+            try {
+                el.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'instant' });
+            } catch (_e) {
+                try { el.scrollIntoView(false); } catch (_e2) { picker.scrollLeft = 0; }
+            }
+        } else {
+            picker.scrollLeft = 0;
+        }
+    }
+
     function rebuildTemplatePickerFromSelect() {
         var picker = document.getElementById('rewrite-template-picker');
         var addBtn = document.getElementById('rewrite-template-create');
@@ -1299,6 +1418,14 @@
         picker.querySelectorAll('label.rewrite-template-option').forEach(function (el) { el.remove(); });
         Array.prototype.forEach.call(templateSelectEl.options, function (opt) {
             picker.insertBefore(buildRewriteTemplateOptionEl(opt), addBtn);
+        });
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                scrollRewriteTemplatePickerToSelection();
+                if (typeof window.__rewriteTemplateCarouselRefresh === 'function') {
+                    window.__rewriteTemplateCarouselRefresh();
+                }
+            });
         });
     }
 
@@ -1347,6 +1474,12 @@
         if (!r.ok || !data.ok || !Array.isArray(data.templates)) {
             throw new Error('Не удалось обновить список шаблонов.');
         }
+        rewriteTemplateLogoByName = {};
+        if (Array.isArray(data.templates_ui)) {
+            data.templates_ui.forEach(function (row) {
+                if (row && row.name) rewriteTemplateLogoByName[row.name] = row.logo_url || '';
+            });
+        }
         var arr = data.templates.slice();
         if (arr.indexOf('Base Template') < 0) arr.unshift('Base Template');
         templateSelectEl.innerHTML = '';
@@ -1362,6 +1495,10 @@
         syncTemplatePickerUIFromSelect();
         if (selected && selected !== lastAutoAppliedTemplate) {
             await applyRewriteTemplateFromDisk(selected);
+        }
+        scrollRewriteTemplatePickerToSelection();
+        if (typeof window.__rewriteTemplateCarouselRefresh === 'function') {
+            window.__rewriteTemplateCarouselRefresh();
         }
     }
 
@@ -2003,14 +2140,69 @@
         };
     }
 
+
+    function normalizeModelPlainText(s) {
+        var t = String(s || '');
+        if (!/<br\s*\/?>/i.test(t)) return t;
+        return t.replace(/<br\s*\/?>/gi, '\n').replace(/\n{3,}/g, '\n\n');
+    }
+
     function _analysisCountArrayOrObjectRows(v) {
         if (Array.isArray(v)) return v.length;
         if (v && typeof v === 'object') return Object.keys(v).length;
         return 0;
     }
 
+    function _stripMarkdownJsonFence(raw) {
+        var s = String(raw || '').trim();
+        if (s.indexOf('```') !== 0) return s;
+        var m = s.match(/^```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)\n?```$/);
+        return m ? m[1].trim() : s.replace(/^```+|```+$/g, '').trim();
+    }
+
+    function _extractJsonObjectSubstring(raw) {
+        var s = _stripMarkdownJsonFence(raw);
+        if (!s) return '';
+        var first = s.indexOf('{');
+        var last = s.lastIndexOf('}');
+        if (first !== -1 && last !== -1 && last > first) return s.slice(first, last + 1).trim();
+        return s;
+    }
+
+    function _repairJsonStringDelimiterTypos(text) {
+        return String(text || '').replace(/("(?:[^"\\]|\\.)*)'(\s*[,}\]])/g, '$1"$2');
+    }
+
+    function _repairJsonTrailingCommas(text) {
+        return String(text || '').replace(/,(\s*[}\]])/g, '$1');
+    }
+
+    /** Починка типичных ошибок LLM в JSON-объекте; возвращает { text, repaired, ok }. */
+    function normalizeLlmJsonObjectText(raw) {
+        var original = String(raw || '').trim();
+        if (!original) return { text: '', repaired: false, ok: false };
+        var candidate = _extractJsonObjectSubstring(original) || original;
+        function tryParse(s) {
+            try {
+                var o = JSON.parse(s);
+                return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
+            } catch (_e) { return null; }
+        }
+        var obj = tryParse(candidate);
+        if (obj) {
+            var pretty = JSON.stringify(obj, null, 2) + '\n';
+            if (tryParse(original)) return { text: original, repaired: false, ok: true };
+            return { text: pretty, repaired: candidate !== original || pretty !== original, ok: true };
+        }
+        var repaired = _repairJsonTrailingCommas(_repairJsonStringDelimiterTypos(candidate));
+        obj = tryParse(repaired);
+        if (!obj) return { text: original, repaired: false, ok: false };
+        return { text: JSON.stringify(obj, null, 2) + '\n', repaired: true, ok: true };
+    }
+
     function parseAnalysisCheckPayload(raw) {
-        var txt = String(raw || '').trim();
+        var norm = normalizeLlmJsonObjectText(raw);
+        var txt = norm.ok ? norm.text : String(raw || '').trim();
         if (!txt) return null;
         try {
             var obj = JSON.parse(txt);
@@ -2045,7 +2237,8 @@
     }
 
     function parseArchitectCheckPayload(raw) {
-        var txt = String(raw || '').trim();
+        var norm = normalizeLlmJsonObjectText(raw);
+        var txt = norm.ok ? norm.text : String(raw || '').trim();
         if (!txt) return null;
         try {
             var obj = JSON.parse(txt);
@@ -2082,9 +2275,23 @@
         var wrap = block.querySelector('[data-editor-check]');
         if (!wrap) return;
         var ta = block.querySelector('.rewrite-stage-result');
-        var metrics = parseArchitectCheckPayload(((ta || {}).value || ''));
+        var rawResult = ((ta || {}).value || '');
+        var norm = normalizeLlmJsonObjectText(rawResult);
+        if (norm.repaired && norm.ok && ta && ta.value !== norm.text) {
+            ta.value = norm.text;
+            if (!block._llmJsonAutoRepaired) {
+                block._llmJsonAutoRepaired = true;
+                scheduleAutosave(500);
+            }
+            rawResult = norm.text;
+        }
+        var metrics = parseArchitectCheckPayload(rawResult);
         if (!metrics) {
-            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">Ожидание валидного JSON</span></div>';
+            var waitMsg = 'Ожидание валидного JSON';
+            if (String(rawResult || '').trim() && !norm.ok) {
+                waitMsg = 'JSON не распознан (проверьте кавычки и запятые)';
+            }
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Architect</strong> <span class="rewrite-scene-writer-check__wait">' + waitMsg + '</span></div>';
             return;
         }
         var ok = metrics.blocks_total > 0;
@@ -2164,9 +2371,23 @@
         var wrap = block.querySelector('[data-editor-check]');
         if (!wrap) return;
         var ta = block.querySelector('.rewrite-stage-result');
-        var metrics = parseAnalysisCheckPayload(((ta || {}).value || ''));
+        var rawResult = ((ta || {}).value || '');
+        var norm = normalizeLlmJsonObjectText(rawResult);
+        if (norm.repaired && norm.ok && ta && ta.value !== norm.text) {
+            ta.value = norm.text;
+            if (!block._llmJsonAutoRepaired) {
+                block._llmJsonAutoRepaired = true;
+                scheduleAutosave(500);
+            }
+            rawResult = norm.text;
+        }
+        var metrics = parseAnalysisCheckPayload(rawResult);
         if (!metrics) {
-            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">Ожидание валидного JSON</span></div>';
+            var waitMsg = 'Ожидание валидного JSON';
+            if (String(rawResult || '').trim() && !norm.ok) {
+                waitMsg = 'JSON не распознан (проверьте кавычки и запятые)';
+            }
+            wrap.innerHTML = '<div class="rewrite-scene-writer-check__head"><strong>Проверка Analysis</strong> <span class="rewrite-scene-writer-check__wait">' + waitMsg + '</span></div>';
             return;
         }
         function yesNo(ok) {
@@ -2647,9 +2868,8 @@
 
     function applyAudioLockUI() {
         if (targetCharsRangeEl) {
-            targetCharsRangeEl.disabled = !openaiOk || audioTimingLocked;
+            targetCharsRangeEl.disabled = !openaiOk;
         }
-        styleToggleBtn(audioToggleBtn, audioTimingLocked);
     }
 
     function applyMasterLockUI() {
@@ -2820,11 +3040,8 @@
         if (stageKey === 'hook_editor') {
             return stageLastResultNonEmpty(byKey, 'retention_editor');
         }
-        if (stageKey === 'flow_editor') {
-            return stageLastResultNonEmpty(byKey, 'hook_editor');
-        }
         if (stageKey === 'persona_editor') {
-            return stageLastResultNonEmpty(byKey, 'flow_editor');
+            return stageLastResultNonEmpty(byKey, 'hook_editor');
         }
         if (stageKey === 'rewrite') {
             if (preset === 'soft') {
@@ -3078,10 +3295,10 @@
         applySourceRuLockUI();
         applySemanticResultLockUI();
         applyVoiceoverFinalSemanticResultLockUI();
+        applyTemplatePickerLockUi();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             applyPromptLockUI(block);
             applyStylePromptLockUI(block);
-            applyPastPromptLockUI(block);
             applyTargetLockUI(block);
             applyResultLockUI(block);
         });
@@ -3613,6 +3830,10 @@
 
     if (templateSelectEl) {
         templateSelectEl.addEventListener('change', function () {
+            if (shouldLockTemplatePicker()) {
+                syncTemplatePickerUIFromSelect();
+                return;
+            }
             var sel = (templateSelectEl.value || '').trim();
             syncTemplatePickerUIFromSelect();
             if (!sel || sel === lastAutoAppliedTemplate) return;
@@ -3994,7 +4215,6 @@
                 model: globalModel,
                 prompt: promptEl ? promptEl.value : '',
                 style_prompt: ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || ''),
-                past_prompt: ((block.querySelector('.rewrite-stage-past-prompt') || {}).value || ''),
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
                 elevenlabs_editor_check: (key === 'elevenlabs_editor' ? readElevenLabsEditorCheckFromBlock(block) : null),
@@ -4008,15 +4228,11 @@
                 hook_editor_changes: (key === 'hook_editor'
                     ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
                     : undefined),
-                flow_editor_changes: (key === 'flow_editor'
-                    ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
-                    : undefined),
                 persona_editor_changes: (key === 'persona_editor'
                     ? ((block.querySelector('.rewrite-stage-changes') || {}).value || '')
                     : undefined),
                 prompt_locked: block.getAttribute('data-prompt-locked') === '1',
                 style_prompt_locked: (block.getAttribute('data-style-prompt-locked') === '1'),
-                past_prompt_locked: (block.getAttribute('data-past-prompt-locked') === '1'),
                 result_locked: (block.getAttribute('data-result-locked') === '1')
             };
         });
@@ -4040,7 +4256,7 @@
             chat_temperature: readChatTemperatureFromUi(),
             hero_prompt: heroPromptEl ? heroPromptEl.value : '',
             hero_prompt_locked: heroLocked,
-            audio_timing_locked: audioTimingLocked,
+            audio_timing_locked: false,
             rewrite_template: templateSelectEl ? (templateSelectEl.value || '').trim() : '',
             rewrite_preset: currentRewritePreset || 'deep',
             rewrite_pipeline_language: (function () {
@@ -4201,14 +4417,6 @@
         syncTemplate: true
     });
 
-    wireTextLockToggle(audioToggleBtn, {
-        get: function () { return audioTimingLocked; },
-        set: function (v) { audioTimingLocked = v; },
-        apply: applyAudioLockUI,
-        focusEl: targetCharsRangeEl,
-        syncTemplate: false
-    });
-
     function stageKeySyncsToTemplate(block) {
         var key = block ? block.getAttribute('data-stage-key') : '';
         return !!(key && REWRITE_TEMPLATE_SCOPE_STAGE_KEYS[key]);
@@ -4250,53 +4458,6 @@
         badge.classList.toggle('badge-no', !hasP);
     }
 
-    function syncPastPromptBadge(block) {
-        const promptEl = block.querySelector('.rewrite-stage-past-prompt');
-        const badge = block.querySelector('.rewrite-stage-past-prompt-badge');
-        if (!promptEl || !badge) return;
-        var hasP = (promptEl.value || '').trim().length > 0;
-        badge.textContent = hasP ? 'Past in Promt: YES' : 'Past in Promt: NO';
-        badge.classList.toggle('badge-yes', hasP);
-        badge.classList.toggle('badge-no', !hasP);
-    }
-
-    function injectPastPromptIntoSceneWriterResult(rawText, pastPrompt) {
-        var txt = String(rawText || '');
-        var pp = String(pastPrompt || '').trim();
-        if (!txt.trim() || !pp) return txt;
-        var changed = false;
-        var out = [];
-        txt.split('\n').forEach(function (ln) {
-            var s = (ln || '').trim();
-            if (!s) {
-                out.push(ln);
-                return;
-            }
-            var obj = null;
-            try {
-                obj = JSON.parse(s);
-            } catch (_) {
-                out.push(ln);
-                return;
-            }
-            if (!obj || typeof obj !== 'object') {
-                out.push(ln);
-                return;
-            }
-            ['start', 'end'].forEach(function (slotName) {
-                var slot = obj[slotName];
-                if (!slot || typeof slot !== 'object') return;
-                var prompt = String(slot.prompt || '').trim();
-                if (!prompt) return;
-                if (prompt.indexOf(pp) === 0) return;
-                slot.prompt = pp + ' ' + prompt;
-                changed = true;
-            });
-            out.push(JSON.stringify(obj));
-        });
-        return changed ? out.join('\n') : txt;
-    }
-
     function applyStylePromptLockUI(block) {
         if (!block) return;
         var sk = block.getAttribute('data-stage-key');
@@ -4305,32 +4466,6 @@
         const ta = block.querySelector('.rewrite-stage-style-prompt');
         const toggle = block.querySelector('.rewrite-stage-style-prompt-toggle');
         const promptWrap = block.querySelector('.rewrite-slot--stage-style-prompt');
-        if (!openaiOk) {
-            if (ta) ta.disabled = true;
-            if (toggle) toggle.disabled = true;
-            if (promptWrap) promptWrap.style.display = 'none';
-            return;
-        }
-        if (ta) {
-            ta.disabled = false;
-            ta.readOnly = locked;
-            ta.classList.toggle('rewrite-source-textarea--locked', locked);
-        }
-        if (promptWrap) promptWrap.style.display = locked ? 'none' : '';
-        if (toggle) {
-            toggle.disabled = false;
-            styleToggleBtn(toggle, locked);
-        }
-    }
-
-    function applyPastPromptLockUI(block) {
-        if (!block) return;
-        var sk = block.getAttribute('data-stage-key');
-        if (sk !== 'scene_writer') return;
-        const locked = block.getAttribute('data-past-prompt-locked') === '1';
-        const ta = block.querySelector('.rewrite-stage-past-prompt');
-        const toggle = block.querySelector('.rewrite-stage-past-prompt-toggle');
-        const promptWrap = block.querySelector('.rewrite-slot--stage-past-prompt');
         if (!openaiOk) {
             if (ta) ta.disabled = true;
             if (toggle) toggle.disabled = true;
@@ -4405,7 +4540,7 @@
         if (on) {
             document.querySelectorAll('.rewrite-stage-api-export').forEach(function (b) { b.disabled = true; });
         }
-        if (targetCharsRangeEl) targetCharsRangeEl.disabled = dis || audioTimingLocked;
+        if (targetCharsRangeEl) targetCharsRangeEl.disabled = dis;
         if (heroPromptEl) {
             heroPromptEl.disabled = !openaiOk;
             heroPromptEl.readOnly = dis || heroLocked;
@@ -4431,8 +4566,6 @@
             semanticTa.disabled = !openaiOk;
             semanticTa.readOnly = dis || semanticAnalysisLocked;
         }
-        if (templateSelectEl) templateSelectEl.disabled = dis;
-        if (templateCreateBtn) templateCreateBtn.disabled = dis;
         var presetSelectBusy = document.getElementById('rewrite-preset-select');
         document.querySelectorAll('.rewrite-preset-toggle__btn').forEach(function (b) {
             b.disabled = dis;
@@ -4456,14 +4589,8 @@
                 rb.disabled = dis;
             });
         }
-        var templatePickerField = document.querySelector('[data-template-picker-field="1"]');
-        if (templatePickerField) {
-            templatePickerField.querySelectorAll('.rewrite-template-radio').forEach(function (rb) {
-                rb.disabled = dis;
-            });
-            if (templateCreateBtn) templateCreateBtn.disabled = dis;
-        }
         applyYoutubeToolbar();
+        applyTemplatePickerLockUi();
         document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
             const locked = block.getAttribute('data-prompt-locked') === '1';
             const ta = block.querySelector('.rewrite-stage-prompt');
@@ -4478,13 +4605,6 @@
                     sTa.disabled = !openaiOk;
                     sTa.readOnly = dis || sLocked;
                     sTa.classList.toggle('rewrite-source-textarea--locked', dis || sLocked);
-                }
-                const pTa = block.querySelector('.rewrite-stage-past-prompt');
-                if (pTa) {
-                    const pLocked = block.getAttribute('data-past-prompt-locked') === '1';
-                    pTa.disabled = !openaiOk;
-                    pTa.readOnly = dis || pLocked;
-                    pTa.classList.toggle('rewrite-source-textarea--locked', dis || pLocked);
                 }
             }
             const rLocked = block.getAttribute('data-result-locked') !== '0';
@@ -4534,6 +4654,7 @@
                 ytCompactBadge.classList.toggle('badge-no', mainBadge.classList.contains('badge-no'));
             }
         }
+        applyTemplatePickerLockUi();
     }
 
     function syncStageErrorBorder(block) {
@@ -4711,6 +4832,14 @@
         promptBadge.classList.toggle('badge-no', !hasP);
     }
 
+    function mountYoutubePackagingAtJobDock() {
+        var dock = document.getElementById('rewrite-youtube-packaging-dock');
+        var card = document.querySelector('.rewrite-stage-card[data-stage-key="youtube_packaging"]');
+        if (!dock || !card || dock.contains(card)) return;
+        dock.appendChild(card);
+    }
+    mountYoutubePackagingAtJobDock();
+
     document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
         var pe = block.querySelector('.rewrite-stage-prompt');
         if (pe) {
@@ -4721,18 +4850,6 @@
         if (spe) {
             syncStylePromptBadge(block);
             spe.addEventListener('input', function () { syncStylePromptBadge(block); });
-        }
-        var ppe = block.querySelector('.rewrite-stage-past-prompt');
-        if (ppe) {
-            ppe.addEventListener('input', function () {
-                syncPastPromptBadge(block);
-                scheduleAutosave(500);
-            });
-            ppe.addEventListener('change', function () {
-                syncPastPromptBadge(block);
-                scheduleAutosave(0);
-            });
-            syncPastPromptBadge(block);
         }
         applyPromptLockUI(block);
         applyStylePromptLockUI(block);
@@ -4824,51 +4941,6 @@
                     } catch (e2) {
                         block.setAttribute('data-style-prompt-locked', '0');
                         applyStylePromptLockUI(block);
-                        alert(String(e2));
-                    }
-                }
-            });
-        }
-        var pastToggle = block.querySelector('.rewrite-stage-past-prompt-toggle');
-        if (pastToggle) {
-            pastToggle.addEventListener('click', async function () {
-                if (!openaiOk || pastToggle.disabled) return;
-                var locked = block.getAttribute('data-past-prompt-locked') === '1';
-                if (locked) {
-                    block.setAttribute('data-past-prompt-locked', '0');
-                    applyPastPromptLockUI(block);
-                    try {
-                        var ok = await saveToServer();
-                        if (!ok) {
-                            block.setAttribute('data-past-prompt-locked', '1');
-                            applyPastPromptLockUI(block);
-                            alert('Не удалось переключить режим');
-                            return;
-                        }
-                        var pte = block.querySelector('.rewrite-stage-past-prompt');
-                        if (pte) pte.focus();
-                    } catch (e) {
-                        block.setAttribute('data-past-prompt-locked', '1');
-                        applyPastPromptLockUI(block);
-                        alert(String(e));
-                    }
-                } else {
-                    block.setAttribute('data-past-prompt-locked', '1');
-                    applyPastPromptLockUI(block);
-                    try {
-                        var ok2 = await saveToServer();
-                        if (!ok2) {
-                            block.setAttribute('data-past-prompt-locked', '0');
-                            applyPastPromptLockUI(block);
-                            alert('Не удалось сохранить');
-                        } else {
-                            if (stageKeySyncsToTemplate(block) && !(await trySyncRewriteTemplateToDisk())) {
-                                alertTemplateSyncFailed();
-                            }
-                        }
-                    } catch (e2) {
-                        block.setAttribute('data-past-prompt-locked', '0');
-                        applyPastPromptLockUI(block);
                         alert(String(e2));
                     }
                 }
@@ -5229,10 +5301,12 @@
                         if (stageKey === 'rewrite') {
                             resultContent = scrubRewriteStreamEndMarkers(resultContent);
                         }
-                        if (stageKey === 'scene_writer') {
-                            var pastEl = block.querySelector('.rewrite-stage-past-prompt');
-                            var pastVal = pastEl ? (pastEl.value || '') : '';
-                            resultContent = injectPastPromptIntoSceneWriterResult(resultContent, pastVal);
+                        if (typeof resultContent === 'string') {
+                            resultContent = normalizeModelPlainText(resultContent);
+                        }
+                        if ((stageKey === 'analysis' || stageKey === 'architect') && typeof resultContent === 'string') {
+                            var normStageJson = normalizeLlmJsonObjectText(resultContent);
+                            if (normStageJson.ok) resultContent = normStageJson.text;
                         }
                         if (resTextarea) {
                             if (REWRITE_JSON_SPLIT_STAGES[stageKey]) {
@@ -6163,7 +6237,18 @@
         }
         window.__rewriteVoiceoverFinalTranslateIsRunning = function () { return voFinalTranslateRunning; };
     })();
-    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="rewrite"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="flow_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="title_strategist"]').forEach(function (block) {
+    document.querySelectorAll('.rewrite-stage-card[data-stage-key="analysis"], .rewrite-stage-card[data-stage-key="architect"], .rewrite-stage-card[data-stage-key="block_writer"], .rewrite-stage-card[data-stage-key="structure"], .rewrite-stage-card[data-stage-key="draft1"], .rewrite-stage-card[data-stage-key="rewrite"], .rewrite-stage-card[data-stage-key="retention_editor"], .rewrite-stage-card[data-stage-key="hook_editor"], .rewrite-stage-card[data-stage-key="persona_editor"], .rewrite-stage-card[data-stage-key="voiceover_editor"], .rewrite-stage-card[data-stage-key="title_strategist"]').forEach(function (block) {
+        var resTaInit = block.querySelector('.rewrite-stage-result');
+        if (resTaInit) {
+            var plainFixed = normalizeModelPlainText(resTaInit.value);
+            if (plainFixed !== resTaInit.value) {
+                resTaInit.value = plainFixed;
+                if (!block._modelPlainTextAutoFixed) {
+                    block._modelPlainTextAutoFixed = true;
+                    scheduleAutosave(500);
+                }
+            }
+        }
         renderEditorCheck(block);
         var ta = block.querySelector('.rewrite-stage-result');
         if (ta) {
@@ -6472,12 +6557,61 @@
         field.addEventListener('change', function (e) {
             var t = e.target;
             if (!t || !t.classList || !t.classList.contains('rewrite-template-radio')) return;
+            if (shouldLockTemplatePicker()) {
+                syncTemplatePickerUIFromSelect();
+                return;
+            }
             var checked = field.querySelector('input.rewrite-template-radio:checked');
             if (checked) select.value = checked.value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
             syncTemplatePickerUIFromSelect();
             scheduleAutosave(0);
         });
+    })();
+
+    (function initRewriteTemplateCarousel() {
+        var picker = document.getElementById('rewrite-template-picker');
+        var prevBtn = document.getElementById('rewrite-template-carousel-prev');
+        var nextBtn = document.getElementById('rewrite-template-carousel-next');
+        if (!picker || !prevBtn || !nextBtn) return;
+
+        function firstCarouselItem() {
+            return picker.querySelector('.template-option');
+        }
+
+        function carouselStepPx() {
+            var item = firstCarouselItem();
+            if (!item) return 0;
+            var gap = 0;
+            try {
+                var cs = window.getComputedStyle(picker);
+                gap = parseFloat(cs.columnGap || cs.gap) || 0;
+            } catch (_e) { /* ignore */ }
+            return item.offsetWidth + gap;
+        }
+
+        function refreshCarouselNav() {
+            var maxScroll = Math.max(0, picker.scrollWidth - picker.clientWidth);
+            prevBtn.disabled = picker.scrollLeft <= 1;
+            nextBtn.disabled = picker.scrollLeft >= maxScroll - 1;
+        }
+
+        function scrollCarouselBy(direction) {
+            var step = carouselStepPx();
+            if (!step) return;
+            picker.scrollBy({ left: direction * step, behavior: 'smooth' });
+        }
+
+        prevBtn.addEventListener('click', function () { scrollCarouselBy(-1); });
+        nextBtn.addEventListener('click', function () { scrollCarouselBy(1); });
+        picker.addEventListener('scroll', refreshCarouselNav, { passive: true });
+        window.addEventListener('resize', refreshCarouselNav);
+
+        window.__rewriteTemplateCarouselRefresh = function () {
+            refreshCarouselNav();
+        };
+
+        refreshCarouselNav();
     })();
 
     function refreshStageCheckUI(block) {
@@ -8514,7 +8648,7 @@
         const msg = document.getElementById('locked-prompt-modal-msg');
         const dotsWrap = document.getElementById('locked-prompt-modal-pin-dots');
         const keypad = document.getElementById('locked-prompt-modal-keypad');
-        const cancelBtn = document.getElementById('locked-prompt-modal-cancel');
+        const closeBtn = modal.querySelector('[data-locked-prompt-modal-close].locked-prompt-modal__head-btn');
         const resetBtn = document.getElementById('locked-prompt-modal-reset');
         if (!textarea || !msg || !dotsWrap || !keypad) return;
         const dots = Array.from(dotsWrap.querySelectorAll('.locked-prompt-modal__pin-dot'));
@@ -8537,11 +8671,13 @@
         function openModal() {
             modal.classList.remove('hidden');
             modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('locked-prompt-modal-open');
             try { textarea.focus(); } catch (_) {}
         }
         function closeModal() {
             modal.classList.add('hidden');
             modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('locked-prompt-modal-open');
             state.name = null;
             state.pin = '';
             state.loadedContent = '';
@@ -8676,7 +8812,7 @@
         });
 
         // ----- Кнопки модалки -----
-        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 textarea.value = state.loadedContent;
@@ -8693,10 +8829,7 @@
             const k = ev.target.closest && ev.target.closest('button');
             if (!k) return;
             const d = k.getAttribute('data-pin-digit');
-            const a = k.getAttribute('data-pin-action');
             if (d != null) { pushDigit(d); return; }
-            if (a === 'clear') { popDigit(); return; }
-            if (a === 'ok') { save(); return; }
         });
 
         // ----- Клавиатура: цифры/Backspace/Enter/Escape пока открыто -----

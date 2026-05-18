@@ -520,7 +520,7 @@
     }
 
     function defaultStageCell() {
-        return { prompt: '', user_prompt: '', style_prompt: '', past_prompt: '' };
+        return { prompt: '', user_prompt: '', style_prompt: '' };
     }
 
     function readStagesPayload() {
@@ -533,7 +533,6 @@
         ensure('scene_writer');
         stages.scene_writer.prompt = (document.getElementById('rte-scene-writer-prompt') || {}).value || '';
         stages.scene_writer.style_prompt = (document.getElementById('rte-scene-writer-style') || {}).value || '';
-        stages.scene_writer.past_prompt = (document.getElementById('rte-scene-writer-past') || {}).value || '';
         return stages;
     }
 
@@ -701,14 +700,12 @@
         var rw = document.getElementById('rte-rewrite-prompt');
         var sw = document.getElementById('rte-scene-writer-prompt');
         var swStyle = document.getElementById('rte-scene-writer-style');
-        var swPast = document.getElementById('rte-scene-writer-past');
         if (hero) hero.value = data.hero_prompt || '';
         if (master) master.value = data.master_prompt || '';
         var st = state.initialStages;
         if (rw) rw.value = (st.rewrite && st.rewrite.prompt) || '';
         if (sw) sw.value = (st.scene_writer && st.scene_writer.prompt) || '';
         if (swStyle) swStyle.value = (st.scene_writer && st.scene_writer.style_prompt) || '';
-        if (swPast) swPast.value = (st.scene_writer && st.scene_writer.past_prompt) || '';
 
         modal.querySelectorAll('[data-rte-prompt]').forEach(function (block) {
             var ta = block.querySelector('[data-rte-field]');
@@ -727,7 +724,19 @@
         return loadVoices((data.tts_defaults || {}).voice_id);
     }
 
-    function openModal(name) {
+    function unlockNameFieldForEdit() {
+        if (!nameEl || state.protected) return;
+        var nameToggle = document.getElementById('rte-name-toggle');
+        var nameBlock = modal.querySelector('[data-rte-meta="name"]');
+        lockMetaField(nameEl, nameToggle, false);
+        syncMetaBadge(nameBlock);
+        setTimeout(function () {
+            try { nameEl.focus(); nameEl.select(); } catch (_e) { /* ignore */ }
+        }, 0);
+    }
+
+    function openModal(name, options) {
+        options = options || {};
         var n = String(name || '').trim();
         if (!n) return;
         state.name = n;
@@ -746,6 +755,7 @@
             })
             .then(function () {
                 setStatus('', false);
+                if (options.unlockName) unlockNameFieldForEdit();
             })
             .catch(function (e) {
                 setStatus(String(e && e.message ? e.message : e), true);

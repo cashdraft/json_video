@@ -1,6 +1,6 @@
 """
 ReWrite Master — цепочка этапов: Analysis → Architect → Block Writer → редакторы
-(Retention → Hook → Flow → Persona → Voiceover → Title Strategist / Structure Splitter → Scene Writer).
+(Retention → Hook → Persona → Voiceover → Title Strategist / Structure Splitter → Scene Writer).
 """
 
 from __future__ import annotations
@@ -298,20 +298,6 @@ def build_hook_editor_user_message(
     return build_editor_stage_user_json(hook_editor_user_prompt, edited_text)
 
 
-def build_flow_editor_system_prompt(
-    flow_editor_prompt: str,
-    flow_rules: str = "",
-) -> str:
-    return build_voiceover_editor_system_prompt(flow_editor_prompt, flow_rules)
-
-
-def build_flow_editor_user_message(
-    flow_editor_user_prompt: str,
-    edited_text: str = "",
-) -> str:
-    return build_editor_stage_user_json(flow_editor_user_prompt, edited_text)
-
-
 def build_persona_editor_system_prompt(
     persona_editor_prompt: str,
     persona_rules: str = "",
@@ -564,7 +550,6 @@ REWRITE_STAGES: list[tuple[str, str]] = [
     ("draft1", "Block Writer"),
     ("retention_editor", "Retention Editor"),
     ("hook_editor", "Hook Editor"),
-    ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
     ("elevenlabs_editor", "ElevenLabs Editor"),
@@ -620,6 +605,12 @@ REWRITE_PRESET_LABELS: dict[str, str] = {
     REWRITE_PRESET_SOFT: "Мягкий Rewrite",
 }
 
+REWRITE_PRESET_DESCRIPTIONS: dict[str, str] = {
+    REWRITE_PRESET_DEEP: "Полный конвейер: анализ, структура, написание, редакторы",
+    REWRITE_PRESET_SOFT: "Лёгкая правка текста из поля Source",
+    REWRITE_PRESET_PREWRITTEN: "Готовый текст — старт с Voiceover Editor",
+}
+
 REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
     REWRITE_PRESET_DEEP: [
         "analysis",
@@ -627,7 +618,6 @@ REWRITE_PRESET_STAGE_KEYS: dict[str, list[str]] = {
         "draft1",
         "retention_editor",
         "hook_editor",
-        "flow_editor",
         "persona_editor",
         "voiceover_editor",
         "elevenlabs_editor",
@@ -711,13 +701,9 @@ REWRITE_STAGE_SEND_HINTS: dict[str, str] = {
         "Отправляем. В System: Hook Editor System Promt + System Rules (locked). "
         "В User — JSON: user_promt, edited_text (результат Retention Editor)."
     ),
-    "flow_editor": (
-        "Отправляем. В System: Flow Editor System Promt + System Rules (locked). "
-        "В User — JSON: user_promt, edited_text (результат Hook Editor)."
-    ),
     "persona_editor": (
         "Отправляем. В System: Persona Editor System Promt + System Rules (locked). "
-        "В User — JSON: user_promt, hero_promt (Hero после плейсхолдеров), edited_text (результат Flow Editor)."
+        "В User — JSON: user_promt, hero_promt (Hero после плейсхолдеров), edited_text (результат Hook Editor)."
     ),
     "voiceover_editor": (
         "Отправляем. В System: Voiceover Editor System Promt + System Rules (locked). "
@@ -757,7 +743,6 @@ REWRITE_STAGE_SUBTITLES: dict[str, str] = {
     "draft1": "Агент-сценарист одного блока",
     "retention_editor": "Агент-редактор удержания",
     "hook_editor": "Агент-редактор хуков",
-    "flow_editor": "Агент-редактор потока",
     "persona_editor": "Агент-редактор персонажа",
     "voiceover_editor": "Агент-редактор войсовера",
     "title_strategist": "Агент-стратег заголовков",
@@ -819,15 +804,6 @@ REWRITE_STAGE_HELP_HINTS: dict[str, str] = {
         "(обычно 3–8 мест) и исправляет их так, чтобы хук усиливал смысл, а не заменял его. "
         "На выходе — полный обновлённый текст и список конкретных hook-правок."
     ),
-    "flow_editor": (
-        "Этот агент берёт сценарий после всех предыдущих редакторов и устраняет "
-        "исключительно flow-проблемы: слабые переходы между блоками, резкие смысловые "
-        "скачки, сломанные мосты между абзацами и ощущение склейки отдельных кусков. "
-        "Он не трогает логику, хуки, стиль или voiceover — только добавляет точечные "
-        "bridge-фразы или сглаживает переходы там, где текст ощущается как набор "
-        "несвязанных фрагментов. На выходе — полный текст с естественным движением "
-        "и список конкретных flow-правок."
-    ),
     "persona_editor": (
         "Этот агент финально приводит сценарий к чистому и стабильному голосу героя — "
         "в данном случае Naomi, аналитичного финансового рассказчика с умным, спокойным "
@@ -888,7 +864,6 @@ def default_stage_entry() -> dict[str, Any]:
         "voiceover_changes": "",
         "retention_editor_changes": "",
         "hook_editor_changes": "",
-        "flow_editor_changes": "",
         "persona_editor_changes": "",
     }
 
@@ -952,6 +927,7 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     if "scene_media_planner" in stages:
         stages.pop("scene_media_planner", None)
     stages.pop("scene_writer_live", None)
+    stages.pop("flow_editor", None)
 
     for key in REWRITE_STAGE_KEYS:
         if key not in stages or not isinstance(stages[key], dict):
@@ -976,7 +952,6 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
         e.setdefault("voiceover_changes", "")
         e.setdefault("retention_editor_changes", "")
         e.setdefault("hook_editor_changes", "")
-        e.setdefault("flow_editor_changes", "")
         e.setdefault("persona_editor_changes", "")
         e["model"] = normalize_rewrite_model(str(e.get("model", "")))
         e["prompt_locked"] = bool(e.get("prompt_locked"))
@@ -1151,7 +1126,7 @@ def merge_stages_from_request(rw: dict[str, Any], body_stages: Any) -> None:
             e["last_result"] = str(sv.get("last_result") or "")
         if sk == "voiceover_editor" and "voiceover_changes" in sv:
             e["voiceover_changes"] = str(sv.get("voiceover_changes") or "")
-        for _ek in ("retention_editor", "hook_editor", "flow_editor", "persona_editor"):
+        for _ek in ("retention_editor", "hook_editor", "persona_editor"):
             ck = f"{_ek}_changes"
             if sk == _ek and ck in sv:
                 e[ck] = str(sv.get(ck) or "")
@@ -1218,11 +1193,8 @@ def _validate_stage_input_sources(
     if stage_key == "hook_editor":
         return need_result("retention_editor")
 
-    if stage_key == "flow_editor":
-        return need_result("hook_editor")
-
     if stage_key == "persona_editor":
-        return need_result("flow_editor")
+        return need_result("hook_editor")
 
     if stage_key == "rewrite":
         if preset_n == REWRITE_PRESET_SOFT:
@@ -1307,7 +1279,6 @@ def compose_rewrite_openai_request_body(
     block_writer_full_text: str = "",
     retention_editor_text: str = "",
     hook_editor_text: str = "",
-    flow_editor_text: str = "",
     persona_editor_text: str = "",
     voiceover_editor_text: str = "",
     elevenlabs_editor_text: str = "",
@@ -1328,7 +1299,6 @@ def compose_rewrite_openai_request_body(
         "structure",
         "retention_editor",
         "hook_editor",
-        "flow_editor",
         "persona_editor",
         "voiceover_editor",
         "elevenlabs_editor",
@@ -1411,14 +1381,6 @@ def compose_rewrite_openai_request_body(
             up_txt,
             retention_editor_text,
         )
-    elif stage_key == "flow_editor":
-        fl_sys = subp(_stage_system_prompt_text("flow_editor", cell))
-        fl_rules = subp(_editor_stage_system_rules_text("flow_editor", cell))
-        prompt = build_flow_editor_system_prompt(fl_sys, fl_rules)
-        user_text = build_flow_editor_user_message(
-            up_txt,
-            hook_editor_text,
-        )
     elif stage_key == "persona_editor":
         pe_sys = subp(_stage_system_prompt_text("persona_editor", cell))
         pe_rules = subp(_editor_stage_system_rules_text("persona_editor", cell))
@@ -1426,7 +1388,7 @@ def compose_rewrite_openai_request_body(
         user_text = build_persona_editor_user_message(
             up_txt,
             hero_use,
-            flow_editor_text,
+            hook_editor_text,
         )
     elif stage_key == "rewrite":
         preset_n = normalize_rewrite_preset(preset)
@@ -1548,7 +1510,6 @@ def compose_rewrite_openai_request_body(
         "structure",
         "retention_editor",
         "hook_editor",
-        "flow_editor",
         "persona_editor",
         "voiceover_editor",
         "title_strategist",
@@ -1629,7 +1590,6 @@ def snapshot_stages_from_body(body: dict[str, Any]) -> tuple[str, dict[str, dict
             "voiceover_changes": str(cell.get("voiceover_changes") or "") if key == "voiceover_editor" else "",
             "retention_editor_changes": str(cell.get("retention_editor_changes") or "") if key == "retention_editor" else "",
             "hook_editor_changes": str(cell.get("hook_editor_changes") or "") if key == "hook_editor" else "",
-            "flow_editor_changes": str(cell.get("flow_editor_changes") or "") if key == "flow_editor" else "",
             "persona_editor_changes": str(cell.get("persona_editor_changes") or "") if key == "persona_editor" else "",
             "style_prompt_locked": bool(cell.get("style_prompt_locked")),
             "past_prompt_locked": bool(cell.get("past_prompt_locked")),

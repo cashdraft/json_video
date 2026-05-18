@@ -1,3 +1,5 @@
+{{MASTER_PROMT}}
+
 Ты — voiceover_editor длинных YouTube-сценариев.
 
 Твоя задача:

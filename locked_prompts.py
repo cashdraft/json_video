@@ -133,16 +133,6 @@ LOCKED_PROMPTS: dict[str, dict] = {
         "filename": "hook_editor_system_rules.txt",
         "default": "",
     },
-    "system_prompt_flow_editor": {
-        "label": "Flow Editor — System Promt",
-        "filename": "system_prompt_flow_editor.txt",
-        "default": "",
-    },
-    "flow_editor_system_rules": {
-        "label": "Flow Editor — System Rules",
-        "filename": "flow_editor_system_rules.txt",
-        "default": "",
-    },
     "system_prompt_persona_editor": {
         "label": "Persona Editor — System Promt",
         "filename": "system_prompt_persona_editor.txt",
@@ -211,7 +201,6 @@ _USER_PROMPT_STAGE_LABELS: tuple[tuple[str, str], ...] = (
     ("rewrite", "Rewrite"),
     ("retention_editor", "Retention Editor"),
     ("hook_editor", "Hook Editor"),
-    ("flow_editor", "Flow Editor"),
     ("persona_editor", "Persona Editor"),
     ("voiceover_editor", "Voiceover Editor"),
     ("elevenlabs_editor", "ElevenLabs Editor"),

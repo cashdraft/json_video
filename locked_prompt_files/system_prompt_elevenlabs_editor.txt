@@ -1,4 +1,4 @@
-=== SYSTEM PROMPT ===
+{{MASTER_PROMT}}
 
 Ты — редактор voice-direction для ElevenLabs V3.
 

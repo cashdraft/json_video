@@ -1,4 +1,3 @@
-
 Analyze the following YouTube script and original title.
 
 The video is for an English-speaking audience.
@@ -15,5 +14,4 @@ Extract:
 
 Return ONLY JSON in the exact schema.
 
-ORIGINAL TITLE:
-{{ORIGINAL_TITLE}}
+ORIGINAL TITLE: {{ORIGINAL_TITLE}}

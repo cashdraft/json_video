@@ -363,7 +363,11 @@
             {% set _rw_saved_tpl = (rw.rewrite_template or '')|trim %}
             {% set cur_tpl = _rw_saved_tpl if _rw_saved_tpl else (rewrite_template_names[0] if rewrite_template_names else '') %}
             <div class="rewrite-template-section" data-template-picker-field="1">
+                <div class="rewrite-template-section__picker-wrap">
                 <h3 class="rewrite-source-subtitle rewrite-template-section__title">Шаблон проекта</h3>
+                <div class="rewrite-template-carousel">
+                    <button type="button" class="rewrite-template-carousel__nav rewrite-template-carousel__nav--prev" id="rewrite-template-carousel-prev" aria-label="Предыдущий шаблон" title="Предыдущий шаблон">‹</button>
+                    <div class="rewrite-template-carousel__viewport">
                 <div class="rewrite-template-picker template-picker" id="rewrite-template-picker" role="radiogroup" aria-label="Шаблон проекта">
                     {% for t in rewrite_templates_ui %}
                     <label class="template-option rewrite-template-option" data-template-name="{{ t.name|e }}" title="Двойной щелчок — редактировать шаблон">
@@ -402,6 +406,13 @@
                         </span>
                     </button>
                 </div>
+                    </div>
+                    <button type="button" class="rewrite-template-carousel__nav rewrite-template-carousel__nav--next" id="rewrite-template-carousel-next" aria-label="Следующий шаблон" title="Следующий шаблон">›</button>
+                </div>
+                <div class="rewrite-template-lock-overlay hidden" id="rewrite-template-lock-overlay">
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-unlock-btn">Редактировать</button>
+                </div>
+                </div>
                 <select id="rewrite-template-select" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
                     {% for t in rewrite_template_names %}
                     <option value="{{ t }}" {% if cur_tpl == t %}selected{% endif %}>{{ t }}</option>
@@ -415,7 +426,6 @@
 
             <div class="scene-card rewrite-source-card">
                 {% set hero_locked = rw.hero_prompt_locked|default(false) %}
-                {% set audio_locked = rw.audio_timing_locked|default(false) %}
                 <div class="rewrite-prompts-duration-row">
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--hero">
                         <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
@@ -447,7 +457,7 @@
                             <textarea id="rewrite-master-prompt" class="rewrite-source-textarea{% if rw.master_prompt_locked|default(false) %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Общие инструкции для всех этапов…" {% if not openai_key_set %}disabled{% elif rw.master_prompt_locked|default(false) %}readonly{% endif %}>{{ rw.master_prompt or '' }}</textarea>
                         </div>
                     </div>
-                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--model-duration">
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--model-temp">
                         <div class="rewrite-prompts-duration-row__model-block">
                             {% set cur_model = (rw.stages.analysis.model or '')|trim %}
                             {% if not cur_model and rewrite_models %}
@@ -484,18 +494,34 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
-                        {% if _plang_raw in ['en', 'english', 'англ'] %}
-                            {% set _plang = 'en' %}
-                        {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
-                            {% set _plang = 'es' %}
-                        {% elif _plang_raw in ['ja', 'jp', 'japanese'] %}
-                            {% set _plang = 'ja' %}
-                        {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
-                            {% set _plang = _plang_raw %}
-                        {% else %}
-                            {% set _plang = 'ru' %}
-                        {% endif %}
+                        {% set _ct_saved = rw.chat_temperature|default(default_chat_temperature, true) %}
+                        {% set _ct_model_openai = (cur_model not in claude_rewrite_model_ids) %}
+                        <div class="rewrite-prompts-duration-row__duration-block" id="rewrite-chat-temperature-block">
+                            <h3 class="rewrite-source-subtitle">Temperature</h3>
+                            <p class="rewrite-source-subhint">Только для моделей OpenAI (Chat Completions). Для Claude через Kie.ai поле отключено.</p>
+                            <div class="tts-slider-block rewrite-source-duration">
+                                <label class="tts-slider-label" for="rewrite-chat-temperature">Значение <span class="tts-slider-val" id="rewrite-chat-temperature-val">{{ '%.2f'|format(_ct_saved|float) }}</span></label>
+                                <input type="range" id="rewrite-chat-temperature" name="chat_temperature" min="0" max="2" step="0.05" value="{{ '%.2f'|format(_ct_saved|float) }}" class="tts-range" {% if not openai_key_set or not _ct_model_openai %}disabled{% endif %} aria-valuemin="0" aria-valuemax="2">
+                                <div class="tts-slider-ends">
+                                    <span>0</span>
+                                    <span>2</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
+                    {% if _plang_raw in ['en', 'english', 'англ'] %}
+                        {% set _plang = 'en' %}
+                    {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
+                        {% set _plang = 'es' %}
+                    {% elif _plang_raw in ['ja', 'jp', 'japanese'] %}
+                        {% set _plang = 'ja' %}
+                    {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
+                        {% set _plang = _plang_raw %}
+                    {% else %}
+                        {% set _plang = 'ru' %}
+                    {% endif %}
+                    <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--lang-duration">
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
                             <h3 class="rewrite-source-subtitle">Язык</h3>
                             <p class="rewrite-source-subhint">Язык для последующих шагов конвейера (пока только сохраняется в проект).</p>
@@ -539,39 +565,20 @@
                         <div class="rewrite-prompts-duration-row__duration-block">
                             <h3 class="rewrite-source-subtitle">Duration</h3>
                             <p class="rewrite-source-subhint">Ориентир длины озвучки в символах (500–40 000, шаг 500).</p>
-                            <div class="rewrite-source-toolbar slot-header">
-                                <span class="slot-badge badge-yes">Duration</span>
-                                <button type="button" class="rewrite-lock-toggle btn-icon{% if audio_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-audio-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                </button>
-                            </div>
                             <div class="tts-slider-block rewrite-source-duration">
                                 <label class="tts-slider-label" for="rewrite-target-chars">Символы <span class="tts-slider-val" id="rewrite-target-chars-val">{{ (rw.target_chars|default(1500))|int|fmt_num_ru }}</span></label>
-                                <input type="range" id="rewrite-target-chars" name="target_chars" min="500" max="40000" step="500" value="{{ (rw.target_chars|default(1500))|int }}" class="tts-range" {% if not openai_key_set or audio_locked %}disabled{% endif %} aria-valuemin="500" aria-valuemax="40000">
+                                <input type="range" id="rewrite-target-chars" name="target_chars" min="500" max="40000" step="500" value="{{ (rw.target_chars|default(1500))|int }}" class="tts-range" {% if not openai_key_set %}disabled{% endif %} aria-valuemin="500" aria-valuemax="40000">
                                 <div class="tts-slider-ends">
                                     <span>500</span>
                                     <span>40000</span>
                                 </div>
                             </div>
                         </div>
-                        {% set _ct_saved = rw.chat_temperature|default(default_chat_temperature, true) %}
-                        {% set _ct_model_openai = (cur_model not in claude_rewrite_model_ids) %}
-                        <div class="rewrite-prompts-duration-row__duration-block" id="rewrite-chat-temperature-block">
-                            <h3 class="rewrite-source-subtitle">Temperature</h3>
-                            <p class="rewrite-source-subhint">Только для моделей OpenAI (Chat Completions). Для Claude через Kie.ai поле отключено.</p>
-                            <div class="tts-slider-block rewrite-source-duration">
-                                <label class="tts-slider-label" for="rewrite-chat-temperature">Значение <span class="tts-slider-val" id="rewrite-chat-temperature-val">{{ '%.2f'|format(_ct_saved|float) }}</span></label>
-                                <input type="range" id="rewrite-chat-temperature" name="chat_temperature" min="0" max="2" step="0.05" value="{{ '%.2f'|format(_ct_saved|float) }}" class="tts-range" {% if not openai_key_set or not _ct_model_openai %}disabled{% endif %} aria-valuemin="0" aria-valuemax="2">
-                                <div class="tts-slider-ends">
-                                    <span>0</span>
-                                    <span>2</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
+
+            <hr class="rewrite-preset-section-divider" aria-hidden="true">
 
             {# «Свернуть все»: до 11 этапов с начала пресета (Scene Writer / YouTube packaging — вне пресетов, отдельные модули). #}
             {% set _preset_keys = rewrite_preset_stage_keys[rewrite_preset_current] %}
@@ -605,7 +612,8 @@
                         role="radio"
                         aria-checked="{{ 'true' if rewrite_preset_current == 'deep' else 'false' }}"
                         {% if not openai_key_set %}disabled{% endif %}>
-                        {{ (rewrite_preset_labels.get('deep') or 'Глубокий Rewrite')|e }}
+                        <span class="rewrite-preset-segmented__title">{{ (rewrite_preset_labels.get('deep') or 'Глубокий Rewrite')|e }}</span>
+                        <span class="rewrite-preset-segmented__desc">{{ (rewrite_preset_descriptions.get('deep') or 'Полный конвейер: анализ, структура, написание, редакторы')|e }}</span>
                     </button>
                     <button type="button"
                         class="rewrite-preset-segmented__btn rewrite-preset-toggle__btn{% if rewrite_preset_current == 'soft' %} rewrite-preset-toggle__btn--active{% endif %}"
@@ -613,7 +621,8 @@
                         role="radio"
                         aria-checked="{{ 'true' if rewrite_preset_current == 'soft' else 'false' }}"
                         {% if not openai_key_set %}disabled{% endif %}>
-                        {{ (rewrite_preset_labels.get('soft') or 'Мягкий Rewrite')|e }}
+                        <span class="rewrite-preset-segmented__title">{{ (rewrite_preset_labels.get('soft') or 'Мягкий Rewrite')|e }}</span>
+                        <span class="rewrite-preset-segmented__desc">{{ (rewrite_preset_descriptions.get('soft') or 'Лёгкая правка текста из поля Source')|e }}</span>
                     </button>
                     <button type="button"
                         class="rewrite-preset-segmented__btn rewrite-preset-toggle__btn{% if rewrite_preset_current == 'prewritten' %} rewrite-preset-toggle__btn--active{% endif %}"
@@ -621,7 +630,8 @@
                         role="radio"
                         aria-checked="{{ 'true' if rewrite_preset_current == 'prewritten' else 'false' }}"
                         {% if not openai_key_set %}disabled{% endif %}>
-                        {{ (rewrite_preset_labels.get('prewritten') or 'Я уже ЗАrewriteИЛ')|e }}
+                        <span class="rewrite-preset-segmented__title">{{ (rewrite_preset_labels.get('prewritten') or 'Я уже ЗАrewriteИЛ')|e }}</span>
+                        <span class="rewrite-preset-segmented__desc">{{ (rewrite_preset_descriptions.get('prewritten') or 'Готовый текст — старт с Voiceover Editor')|e }}</span>
                     </button>
                 </div>
             </div>
@@ -649,11 +659,9 @@
             {% set _sys_lp_hdr = (locked_prompts_state|default({}, true)).get('system_prompt_' ~ stage_key) or {} %}
             {% set has_prompt = (_sys_lp_hdr.get('present')|default(false)) or ((cell.prompt or '')|trim|length) > 0 %}
             {% set has_style_prompt = ((cell.style_prompt or '')|trim|length) > 0 %}
-            {% set has_past_prompt = ((cell.past_prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
             {% set prompt_locked = cell.prompt_locked|default(false) %}
             {% set style_prompt_locked = cell.style_prompt_locked|default(false) %}
-            {% set past_prompt_locked = cell.past_prompt_locked|default(true) %}
             {# Inbox — пользователь вставляет текст сразу, поэтому Result у него по умолчанию разблокирован. #}
             {% set result_locked = cell.result_locked|default(false if stage_key == 'inbox' else true) %}
             {% set can_run_stage = rewrite_stage_run_ok[stage_key] %}
@@ -669,7 +677,7 @@
             {% if stage_key == 'youtube_packaging' %}
             {% set _yt_ts_has = ((rw.stages.title_strategist.last_result or '')|trim|length) > 0 %}
             {% endif %}
-                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_key == 'youtube_packaging' %} rewrite-youtube-packaging-module rewrite-stage-card--body-collapsed{% if not _yt_ts_has %} rewrite-youtube-packaging-module--waiting{% endif %}{% endif %}{% if stage_key == 'scene_writer' %} rewrite-scene-writer-module rewrite-stage-card--body-collapsed{% if not _sw_ss_has %} rewrite-scene-writer-module--waiting{% endif %}{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-past-prompt-locked="{{ '1' if past_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
+                <article class="scene-card rewrite-stage-card{% if stage_key == 'scene_writer' or stage_key == 'youtube_packaging' %} rewrite-stage-card--full rewrite-stage-card--no-index{% endif %}{% if stage_key == 'youtube_packaging' %} rewrite-youtube-packaging-module rewrite-stage-card--body-collapsed{% if not _yt_ts_has %} rewrite-youtube-packaging-module--waiting{% endif %}{% endif %}{% if stage_key == 'scene_writer' %} rewrite-scene-writer-module rewrite-stage-card--body-collapsed{% if not _sw_ss_has %} rewrite-scene-writer-module--waiting{% endif %}{% endif %}{% if stage_collapsible %} rewrite-stage-card--collapsible{% endif %}{% if not _in_current_preset %} rewrite-stage-card--hidden-by-preset{% endif %}" data-stage-key="{{ stage_key }}" {% if stage_key in collapsible_pipeline_stages %}data-pipeline-collapse="1" {% endif %}{% if stage_key in collapsible_extra_stages %}data-extra-collapse="1" aria-expanded="false" {% endif %}data-prompt-locked="{{ '1' if prompt_locked else '0' }}" data-style-prompt-locked="{{ '1' if style_prompt_locked else '0' }}" data-result-locked="{{ '1' if result_locked else '0' }}"{% if stage_key in ('retention_editor', 'hook_editor', 'persona_editor', 'voiceover_editor') %} data-changes-locked="1"{% endif %}{% if stage_key == 'scene_writer' %} data-scene-writer-check-json="{{ (cell.scene_writer_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'structure_splitter' %} data-structure-splitter-check-json="{{ (cell.structure_splitter_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'elevenlabs_editor' %} data-elevenlabs-editor-check-json="{{ (cell.elevenlabs_editor_check or none)|tojson|forceescape }}"{% endif %}{% if stage_key == 'draft1' %} data-block-writer-check-json="{{ (cell.block_writer_check or none)|tojson|forceescape }}"{% endif %}>
                     {% if stage_key == 'youtube_packaging' %}
                     <div class="rewrite-youtube-packaging-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
                         <div class="rewrite-youtube-packaging-title-row">
@@ -747,6 +755,12 @@
                             <div class="rewrite-stage-subtitle">Агент-архитектор структуры YouTube-сценария, данные берутся из <code>Analysis</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
                             {% elif stage_key == 'draft1' %}
                             <div class="rewrite-stage-subtitle">Агент-сценарист одного блока, данные берутся из <code>Architect</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            {% elif stage_key == 'retention_editor' %}
+                            <div class="rewrite-stage-subtitle">Агент-редактор удержания, данные берутся из <code>Block Writer</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            {% elif stage_key == 'hook_editor' %}
+                            <div class="rewrite-stage-subtitle">Агент-редактор хуков, данные берутся из <code>Retention Editor</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
+                            {% elif stage_key == 'persona_editor' %}
+                            <div class="rewrite-stage-subtitle">Агент-редактор персонажа, данные берутся из <code>Hook Editor</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
                             {% elif stage_key == 'elevenlabs_editor' %}
                             <div class="rewrite-stage-subtitle">Редактор voice-direction, данные берутся из <code>Voiceover Editor</code><span class="rewrite-stage-subtitle__code-sep" aria-hidden="true">-</span><code class="rewrite-stage-subtitle-code--source-en">Result</code></div>
                             {% elif stage_key == 'title_strategist' %}
@@ -808,7 +822,7 @@
                                     </div>
                                 </div>
                             </div>
-                            {% elif stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %}
+                            {% elif stage_key in ('retention_editor', 'hook_editor', 'persona_editor', 'voiceover_editor') %}
                             {% include '_rewrite_stage_locked_voiceover_like_prompts.html' %}
 
                             {% elif stage_key in ('analysis', 'structure', 'draft1') %}
@@ -978,18 +992,6 @@
                                     <textarea id="rewrite-stage-{{ stage_key }}-style-prompt" class="rewrite-stage-style-prompt rewrite-slot-textarea{% if style_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Стиль/тон для всех сцен…" {% if not openai_key_set %}disabled{% elif style_prompt_locked %}readonly{% endif %}>{{ cell.style_prompt or '' }}</textarea>
                                 </div>
                             </div>
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-style-prompt-cell">
-                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge badge-{{ 'yes' if has_past_prompt else 'no' }} rewrite-stage-past-prompt-badge">Past in Promt: {{ 'YES' if has_past_prompt else 'NO' }}</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-past-prompt-toggle{% if past_prompt_locked %} rewrite-lock-toggle--locked{% endif %}" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
-                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                    </button>
-                                </div>
-                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-past-prompt">
-                                    <textarea id="rewrite-stage-{{ stage_key }}-past-prompt" class="rewrite-stage-past-prompt rewrite-slot-textarea{% if past_prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="4" placeholder="Дополнительный past-контекст для Scene Writer…" {% if not openai_key_set %}disabled{% elif past_prompt_locked %}readonly{% endif %}>{{ cell.past_prompt or '' }}</textarea>
-                                </div>
-                            </div>
                             {% endif %}
                         </div>
                         {% endif %}{# stage_key != 'inbox' #}
@@ -1016,12 +1018,11 @@
                                 </div>
                                 <textarea id="rewrite-stage-{{ stage_key }}-result" class="rewrite-source-textarea rewrite-stage-result{% if result_locked %} rewrite-source-textarea--locked{% endif %}" rows="{% if stage_key == 'youtube_packaging' %}8{% elif stage_key == 'inbox' %}12{% else %}3{% endif %}" {% if result_locked %}readonly{% endif %} placeholder="{% if stage_key == 'inbox' %}Вставьте сюда готовый текст сценария…{% else %}Pending{% endif %}" {% if not openai_key_set %}disabled{% endif %}>{{ cell.last_result or '' }}</textarea>
                             </div>
-                            {% if stage_key in ('retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor') %}
+                            {% if stage_key in ('retention_editor', 'hook_editor', 'persona_editor', 'voiceover_editor') %}
                             {% set _ch_field = ({
                                 'voiceover_editor': 'voiceover_changes',
                                 'retention_editor': 'retention_editor_changes',
                                 'hook_editor': 'hook_editor_changes',
-                                'flow_editor': 'flow_editor_changes',
                                 'persona_editor': 'persona_editor_changes',
                             })[stage_key] %}
                             <div class="rewrite-stage-changes-block">
@@ -1052,7 +1053,7 @@
                             {% if stage_key == 'structure_splitter' %}
                             <div class="rewrite-scene-writer-check" data-structure-splitter-check></div>
                             {% endif %}
-                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'rewrite', 'retention_editor', 'hook_editor', 'flow_editor', 'persona_editor', 'voiceover_editor', 'title_strategist'] %}
+                            {% if stage_key in ['analysis', 'architect', 'block_writer', 'structure', 'draft1', 'rewrite', 'retention_editor', 'hook_editor', 'persona_editor', 'voiceover_editor', 'title_strategist'] %}
                             <div class="rewrite-scene-writer-check" data-editor-check></div>
                             {% endif %}
                         </div>
@@ -1084,6 +1085,7 @@
                 {% set _vf_sa_user_lp = (locked_prompts_state or {}).get('semantic_text_analyzer_user') or {} %}
                 {% set _vf_sa_sys_present = _vf_sa_sys_lp.get('present')|default(false) %}
                 {% set _vf_sa_user_present = _vf_sa_user_lp.get('present')|default(false) %}
+                <hr class="rewrite-preset-section-divider" aria-hidden="true">
                 <div class="scene-card rewrite-source-card rewrite-source-card--body rewrite-voiceover-final-card rewrite-voiceover-final-card--collapsible rewrite-voiceover-final-card--body-collapsed{% if not _vf_res %} rewrite-voiceover-final-card--waiting{% endif %}" id="rewrite-voiceover-final-card" data-voiceover-final-collapse="1" aria-label="Итоговый текст для озвучки" aria-expanded="false">
                     <div class="rewrite-voiceover-final-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
                         <div class="rewrite-voiceover-final-title-row">
@@ -1247,6 +1249,20 @@
             </div>
         </section>
 
+    <div class="confirm-modal hidden" id="rewrite-template-create-confirm-modal" aria-hidden="true">
+        <div class="confirm-modal__backdrop" data-template-create-confirm-close></div>
+        <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-create-confirm-title">
+            <div class="confirm-modal__head">
+                <h3 class="confirm-modal__title" id="rewrite-template-create-confirm-title">Новый шаблон</h3>
+            </div>
+            <p class="confirm-modal__lead">Все шаблонные данные на странице (Hero Promt, Master Promt, промты Rewrite и Scene Writer) будут сброшены. Вы уверены, что хотите создать новый шаблон?</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-create-confirm-cancel">Отмена</button>
+                <button type="button" class="btn btn-primary btn-sm confirm-modal__ok" id="rewrite-template-create-confirm-ok">Да, создать</button>
+            </div>
+        </div>
+    </div>
+
     <div class="confirm-modal hidden" id="rewrite-template-create-modal" aria-hidden="true">
         <div class="confirm-modal__backdrop" data-template-create-close></div>
         <div class="confirm-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewrite-template-create-title">
@@ -1382,12 +1398,19 @@
         <div class="confirm-modal__card locked-prompt-modal__card" role="dialog" aria-modal="true" aria-labelledby="locked-prompt-modal-title">
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="locked-prompt-modal-title">Редактирование промта</h3>
+                <div class="locked-prompt-modal__head-actions image-template-editor-head-actions">
+                    <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn locked-prompt-modal__head-btn locked-prompt-modal__head-btn--reset" id="locked-prompt-modal-reset" title="Вернуть исходный текст из файла на сервере (изменения в textarea будут сброшены)">Сбросить</button>
+                    <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn locked-prompt-modal__head-btn" data-locked-prompt-modal-close aria-label="Закрыть">✕</button>
+                </div>
             </div>
-            <p class="confirm-modal__lead">Промт хранится в каталоге <code>locked_prompt_files/</code>. Для сохранения изменений введите пин-код (4 цифры). Пин лежит в переменной окружения <code>LOCKED_PROMPTS_PIN</code> — это барьер от случайной правки, а не криптозащита.</p>
-            <div class="locked-prompt-modal__textarea-wrap">
-                <textarea id="locked-prompt-modal-textarea" class="locked-prompt-modal__textarea" rows="14" spellcheck="false"></textarea>
+            <div class="locked-prompt-modal__scroll">
+                <p class="confirm-modal__lead">Промт хранится в каталоге <code>locked_prompt_files/</code>. Для сохранения изменений введите пин-код - 4 цифры.</p>
+                <div class="locked-prompt-modal__textarea-wrap slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                    <textarea id="locked-prompt-modal-textarea" class="locked-prompt-modal__textarea rewrite-source-textarea" rows="14" spellcheck="false"></textarea>
+                </div>
+                <p class="confirm-modal__lead locked-prompt-modal__msg hidden" id="locked-prompt-modal-msg" aria-live="polite"></p>
             </div>
-            <p class="confirm-modal__lead locked-prompt-modal__msg hidden" id="locked-prompt-modal-msg" aria-live="polite"></p>
+            <div class="locked-prompt-modal__pin-block">
             <div class="locked-prompt-modal__pin-row">
                 <span class="locked-prompt-modal__pin-label">Пин-код:</span>
                 <div class="locked-prompt-modal__pin-dots" id="locked-prompt-modal-pin-dots" aria-live="polite">
@@ -1407,13 +1430,8 @@
                 <button type="button" class="locked-prompt-modal__key" data-pin-digit="7">7</button>
                 <button type="button" class="locked-prompt-modal__key" data-pin-digit="8">8</button>
                 <button type="button" class="locked-prompt-modal__key" data-pin-digit="9">9</button>
-                <button type="button" class="locked-prompt-modal__key locked-prompt-modal__key--util" data-pin-action="clear" aria-label="Очистить">⌫</button>
-                <button type="button" class="locked-prompt-modal__key" data-pin-digit="0">0</button>
-                <button type="button" class="locked-prompt-modal__key locked-prompt-modal__key--ok" data-pin-action="ok" aria-label="Подтвердить и сохранить">OK</button>
+                <button type="button" class="locked-prompt-modal__key locked-prompt-modal__key--zero" data-pin-digit="0">0</button>
             </div>
-            <div class="confirm-modal__actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="locked-prompt-modal-reset" title="Вернуть исходный текст из файла на сервере (изменения в textarea будут сброшены)">Сбросить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="locked-prompt-modal-cancel">Закрыть</button>
             </div>
         </div>
     </div>

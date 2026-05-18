@@ -1,3 +1,4 @@
+{{MASTER_PROMT}}
 
 You are a YouTube title strategy extraction engine.
 
