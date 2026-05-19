@@ -4531,7 +4531,7 @@
     function setBusy(on) {
         rewriteStageBusy = !!on;
         const dis = on || !openaiOk;
-        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-stage-changes-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn):not(.semantic-analyzer-result-copy-btn):not(.semantic-analyzer-result-toggle):not(.rewrite-voiceover-final-semantic-result-copy-btn):not(.rewrite-voiceover-final-semantic-result-toggle)').forEach(function (b) { b.disabled = dis; });
+        document.querySelectorAll('.rewrite-lock-toggle:not(.rewrite-stage-copy-btn):not(.rewrite-stage-changes-copy-btn):not(.rewrite-source-copy-btn):not(.rewrite-source-ru-copy-btn):not(.semantic-analyzer-result-copy-btn):not(.semantic-analyzer-result-toggle):not(.rewrite-voiceover-final-semantic-result-copy-btn):not(.rewrite-voiceover-final-semantic-result-toggle):not(.slot-prompt-toggle)').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-run').forEach(function (b) { b.disabled = dis; });
         document.querySelectorAll('.rewrite-stage-compact-run').forEach(function (b) { b.disabled = dis; });
         if (on) {

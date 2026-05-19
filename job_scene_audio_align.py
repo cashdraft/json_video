@@ -399,6 +399,50 @@ def format_duration_seconds(ms: int) -> str:
     return f"{max(0, int(ms)) / 1000.0:.2f}"
 
 
+def _duration_seconds_from_audio_timing(audio_timing: dict | None) -> float | None:
+    if not isinstance(audio_timing, dict):
+        return None
+    try:
+        dm = audio_timing.get("duration_ms")
+        if dm is not None:
+            return max(0.0, int(dm) / 1000.0)
+    except (TypeError, ValueError):
+        pass
+    ds = audio_timing.get("duration_s")
+    if ds is not None and str(ds).strip() != "":
+        try:
+            return max(0.0, float(str(ds).replace(",", ".").strip()))
+        except (TypeError, ValueError):
+            pass
+    try:
+        sm = int(audio_timing["start_ms"])
+        em = int(audio_timing["end_ms"])
+        if em >= sm:
+            return (em - sm) / 1000.0
+    except (TypeError, ValueError, KeyError):
+        pass
+    return None
+
+
+def scene_timing_badge_duration_class(audio_timing: dict | None) -> str:
+    """
+    CSS-модификатор бейджа длительности на карточке сцены (только цвет, без проверок).
+    <1 с и >20 с — красный; 2–2.5 с — серый; 2.5–10 с — зелёный; >10 с — жёлтый.
+    """
+    dur_s = _duration_seconds_from_audio_timing(audio_timing)
+    if dur_s is None:
+        return ""
+    if dur_s < 1.0 or dur_s > 20.0:
+        return "scene-audio-timing--dur-red"
+    if dur_s > 10.0:
+        return "scene-audio-timing--dur-yellow"
+    if dur_s >= 2.5:
+        return "scene-audio-timing--dur-green"
+    if dur_s >= 2.0:
+        return "scene-audio-timing--dur-gray"
+    return ""
+
+
 def _sanity_fix_boundaries(bounds: list[int], total_ms: int) -> list[int]:
     """Финальный санити-чек: строго возрастают, минимум длительности."""
     if not bounds:

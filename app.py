@@ -93,10 +93,13 @@ from elevenlabs_client import (
     text_to_speech_bytes,
     text_to_speech_with_timestamps,
 )
-from job_scene_audio_align import align_scenes_to_word_timings, merge_audio_timing_into_scenes
+from job_scene_audio_align import (
+    align_scenes_to_word_timings,
+    merge_audio_timing_into_scenes,
+    scene_timing_badge_duration_class,
+)
 from job_scene_timings_validation import validate_scene_timings
 from kie_client import (
-    create_grok_image_to_video_task,
     create_image_task,
     create_video_task,
     get_task_result,
@@ -665,6 +668,16 @@ def _fmt_num_ru_filter(n: object) -> str:
 
 app.jinja_env.filters["fmt_num_ru"] = _fmt_num_ru_filter
 app.jinja_env.filters["rewrite_pipeline_lang"] = normalize_rewrite_pipeline_language
+
+
+def _scene_timing_badge_class_filter(audio_timing: object) -> str:
+    cls = scene_timing_badge_duration_class(audio_timing if isinstance(audio_timing, dict) else None)
+    return f" {cls}" if cls else ""
+
+
+app.jinja_env.filters["scene_timing_badge_class"] = _scene_timing_badge_class_filter
+# alias for templates
+app.jinja_env.filters["scene_timing_block_class"] = _scene_timing_badge_class_filter
 # Large scene batches can exceed Werkzeug's form defaults.
 # Allow bigger payloads for `/parse` and similar form submissions.
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
@@ -1268,15 +1281,8 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
                 current_scene["start"] = start_val
             continue
 
-        # Блок end
+        # Блок end — больше не парсим (в UI колонка «Later…», кадр хранится отдельно).
         if "end" in obj:
-            end_val = obj["end"]
-            if end_val is not None and not isinstance(end_val, dict):
-                errors.append(f"У сцены {current_scene.get('scene_id')} блок end должен быть объектом")
-            elif end_val is not None and "prompt" not in end_val:
-                errors.append(f"У сцены {current_scene.get('scene_id')} в блоке end нет поля prompt")
-            else:
-                current_scene["end"] = end_val
             continue
 
         # Блок video
@@ -3448,14 +3454,12 @@ def normalize_video_model(value: str | None) -> str:
     if normalized in {"veo3", "veo 3.1 quality"}:
         return "veo3"
     if normalized in {"grok-imagine/image-to-video", "grok imagine image to video", "grok-imagine"}:
-        return "grok-imagine/image-to-video"
+        return "veo3_fast"
     return "veo3_fast"
 
 
 def video_model_label(value: str | None) -> str:
     model_id = normalize_video_model(value)
-    if model_id == "grok-imagine/image-to-video":
-        return "Grok Imagine Image to Video"
     return "Veo 3.1 Fast" if model_id == "veo3_fast" else "Veo 3.1 Quality"
 
 
@@ -3471,25 +3475,18 @@ def _kie_gen_extra(task_meta: dict) -> dict:
     return out
 
 
-IMAGE_MODELS_REQUIRE_REFERENCE_URLS: frozenset[str] = frozenset(
-    (
-        "gpt-image-2-image-to-image",
-        "grok-imagine/image-to-image",
-    )
-)
-
-
 def normalize_image_model(value: str | None) -> str:
     """Значение модели для Kie createTask (известные id из UI)."""
     raw = (value or "").strip().lower()
     mid = raw.replace(" ", "-")
     if mid == "nano-banana-2":
         return "nano-banana-2"
-    if mid == "gpt-image-2-image-to-image":
-        return "gpt-image-2-image-to-image"
-    if raw == "grok-imagine/image-to-image":
-        return "grok-imagine/image-to-image"
-    if raw in ("wan/2-7-image", "qwen2/image-edit"):
+    if mid in (
+        "gpt-image-2-image-to-image",
+        "grok-imagine/image-to-image",
+        "wan/2-7-image",
+        "qwen2/image-edit",
+    ):
         return "nano-banana-pro"
     return "nano-banana-pro"
 
@@ -3502,11 +3499,7 @@ def image_model_label(value: str | None) -> str:
         return "Nano Banana Pro"
     if mid == "nano-banana-2":
         return "Google - Nano Banana 2"
-    if mid == "gpt-image-2-image-to-image":
-        return "GPT Image 2 - Image To Image"
-    if raw == "grok-imagine/image-to-image":
-        return "Grok Imagine — Image To Image"
-    if raw in ("wan/2-7-image", "qwen2/image-edit"):
+    if mid in ("gpt-image-2-image-to-image", "grok-imagine/image-to-image", "wan/2-7-image", "qwen2/image-edit"):
         return "Nano Banana Pro"
     return (value or "").strip() or "Nano Banana Pro"
 
@@ -6484,6 +6477,12 @@ def parse_for_job(job_id: str):
                 old_slot = old_map.get((sid, slot))
                 if not isinstance(old_slot, dict):
                     continue
+                if slot == "end":
+                    for k in ("image_url", "video_url", "video_quality", "generation"):
+                        if k in old_slot:
+                            new_slot[k] = old_slot[k]
+                    scene[slot] = new_slot
+                    continue
                 if (new_slot.get("prompt") or "") != (old_slot.get("prompt") or ""):
                     continue
                 for k in ("image_url", "video_url", "video_quality", "generation"):
@@ -6702,6 +6701,88 @@ def job_scenes_apply_tts_timings(job_id: str):
     )
 
 
+def _scene_audio_timings_from_scenes(scenes: list[dict]) -> list[dict[str, Any]]:
+    """Строки таймингов из ``audio_timing`` сцен (для проверки без повторного align)."""
+    out: list[dict[str, Any]] = []
+    for sc in scenes:
+        if not isinstance(sc, dict):
+            continue
+        at = sc.get("audio_timing")
+        if not isinstance(at, dict):
+            continue
+        if at.get("start_ms") is None and at.get("end_ms") is None:
+            continue
+        row = dict(at)
+        row["scene_id"] = sc.get("scene_id")
+        out.append(row)
+    return out
+
+
+def _merge_job_audio_timing_meta_into_scenes(job_id: str, scenes: list[dict]) -> None:
+    """Подмешивает match_ratio / low_confidence из job.scenes в распарсенный Result."""
+    job = load_job(job_id)
+    if not job or not isinstance(job.get("scenes"), list):
+        return
+    by_id: dict[str, dict] = {}
+    for s in job["scenes"]:
+        if isinstance(s, dict) and s.get("scene_id"):
+            by_id[str(s["scene_id"])] = s
+    for sc in scenes:
+        if not isinstance(sc, dict):
+            continue
+        sid = str(sc.get("scene_id") or "")
+        src = by_id.get(sid)
+        if not src:
+            continue
+        jat = src.get("audio_timing")
+        if not isinstance(jat, dict):
+            continue
+        at = sc.get("audio_timing") if isinstance(sc.get("audio_timing"), dict) else {}
+        for key in ("match_ratio", "low_confidence", "align_flags"):
+            if key in jat:
+                at[key] = jat[key]
+        if at:
+            sc["audio_timing"] = at
+
+
+@app.route("/job/<job_id>/scenes/timings-panel", methods=["GET"])
+def job_scenes_timings_panel(job_id: str):
+    """Актуальный Result и проверка из job.scenes (без повторного align)."""
+    job = load_job(job_id)
+    if job is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    scenes = job.get("scenes")
+    if not isinstance(scenes, list) or not scenes:
+        return jsonify(
+            {
+                "ok": True,
+                "scenes_stripped_text": "",
+                "timings_validation": None,
+                "scenes_count": 0,
+            }
+        )
+    source = _timings_source_normalize(job.get("apply_timings_source"))
+    words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id, source=source)
+    scene_audio_timings = _scene_audio_timings_from_scenes(scenes)
+    timings_validation = _scenes_timings_validation_payload(
+        job_id,
+        scenes,
+        source=source,
+        scene_audio_timings=scene_audio_timings or None,
+        words_doc=words_doc,
+        audio_filename=audio_fname or "",
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "scenes_stripped_text": _render_scenes_stripped_with_timing(scenes),
+            "timings_validation": timings_validation,
+            "scenes_count": len(scenes),
+            "source": source,
+        }
+    )
+
+
 @app.route("/job/<job_id>/scenes/validate-timings", methods=["POST"])
 def job_scenes_validate_timings(job_id: str):
     """Проверка «Тайминги Scenes» по тексту Result без сохранения job."""
@@ -6747,7 +6828,14 @@ def job_scenes_validate_timings(job_id: str):
     if load_job(job_id) is None:
         return jsonify({"ok": False, "error": "Job not found"}), 404
 
-    timings_validation = _scenes_timings_validation_payload(job_id, scenes, source=source)
+    _merge_job_audio_timing_meta_into_scenes(job_id, scenes)
+    scene_audio_timings = _scene_audio_timings_from_scenes(scenes)
+    timings_validation = _scenes_timings_validation_payload(
+        job_id,
+        scenes,
+        source=source,
+        scene_audio_timings=scene_audio_timings or None,
+    )
     return jsonify({"ok": True, "timings_validation": timings_validation, "scenes_count": len(scenes)})
 
 
@@ -6760,6 +6848,8 @@ def generate_slot_start(job_id: str):
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid scene index"}), 400
     slot = data.get("slot", "start")  # start | end | video
+    if slot == "end":
+        return jsonify({"error": "Слот Later… не генерируется по промпту — только сохранённый кадр для видео."}), 400
 
     with _job_file_lock(job_id):
         job = load_job(job_id)
@@ -6796,8 +6886,6 @@ def generate_slot_start(job_id: str):
         prompt = None
         if slot == "start":
             prompt = scene.get("start", {}).get("prompt")
-        elif slot == "end":
-            prompt = scene.get("end", {}).get("prompt")
         elif slot == "video":
             prompt = scene.get("video", {}).get("prompt")
         else:
@@ -6810,21 +6898,20 @@ def generate_slot_start(job_id: str):
         video_generation_type = "TEXT_2_VIDEO"
         if slot == "video":
             start_prompt_exists = bool(scene.get("start", {}).get("prompt"))
-            end_prompt_exists = bool(scene.get("end", {}).get("prompt"))
             start_image_url = scene.get("start", {}).get("image_url")
-            end_image_url = scene.get("end", {}).get("image_url")
+            later_image_url = scene.get("end", {}).get("image_url")
 
             if start_prompt_exists and not start_image_url:
                 return jsonify({"error": "Generate Start image first"}), 400
-            if end_prompt_exists and not end_image_url:
-                return jsonify({"error": "Generate End image first"}), 400
 
             if start_image_url:
                 video_image_urls.append(start_image_url)
-            if end_image_url:
-                video_image_urls.append(end_image_url)
+            if later_image_url:
+                video_image_urls.append(later_image_url)
 
-            if video_image_urls:
+            if len(video_image_urls) >= 2:
+                video_generation_type = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+            elif len(video_image_urls) == 1:
                 video_generation_type = "FIRST_AND_LAST_FRAMES_2_VIDEO"
 
     kie_api_model = ""
@@ -6832,24 +6919,14 @@ def generate_slot_start(job_id: str):
 
     try:
         if slot == "video":
-            if video_model == "grok-imagine/image-to-video":
-                task_id, kie_api_model = create_grok_image_to_video_task(
-                    prompt=prompt,
-                    image_urls=video_image_urls or None,
-                    aspect_ratio=aspect_ratio,
-                    duration_seconds=video_duration,
-                    nsfw_checker=False,
-                )
-                kie_request_path = "/api/v1/jobs/createTask"
-            else:
-                task_id, kie_api_model = create_video_task(
-                    prompt=prompt,
-                    model=video_model,
-                    aspect_ratio=aspect_ratio,
-                    image_urls=video_image_urls,
-                    generation_type=video_generation_type,
-                )
-                kie_request_path = "/api/v1/veo/generate"
+            task_id, kie_api_model = create_video_task(
+                prompt=prompt,
+                model=video_model,
+                aspect_ratio=aspect_ratio,
+                image_urls=video_image_urls,
+                generation_type=video_generation_type,
+            )
+            kie_request_path = "/api/v1/veo/generate"
         else:
             image_input_urls: list[str] = []
             tid = image_template_id
@@ -6871,12 +6948,6 @@ def generate_slot_start(job_id: str):
                             "error": "В шаблоне нет референс-изображений: добавьте 1–5 файлов .jpg/.png/.webp (logo.png не считается)"
                         }
                     ), 400
-            if image_model in IMAGE_MODELS_REQUIRE_REFERENCE_URLS and not image_input_urls:
-                return jsonify(
-                    {
-                        "error": "Эта модель (image-to-image) требует референсы: выберите шаблон с изображениями в блоке «Шаблон изображений»."
-                    }
-                ), 400
             task_id, kie_api_model = create_image_task(
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
@@ -7012,14 +7083,9 @@ def generate_slot_status(job_id: str):
                 task_meta.get("video_model")
                 or ((job_for_model.get("job_meta") or {}).get("video_model") or "veo3_fast")
             )
-            if vm == "grok-imagine/image-to-video":
-                result = get_task_result(task_id)
-                task_meta["video_model"] = vm
-                GENERATION_TASKS[task_id] = task_meta
-            else:
-                result = get_video_task_result(task_id)
-                task_meta["video_model"] = vm
-                GENERATION_TASKS[task_id] = task_meta
+            result = get_video_task_result(task_id)
+            task_meta["video_model"] = vm
+            GENERATION_TASKS[task_id] = task_meta
         else:
             job_for_model = load_job(job_id) or {}
             im = normalize_image_model(
@@ -7089,101 +7155,76 @@ def generate_slot_status(job_id: str):
 
         if slot == "video":
             vm = normalize_video_model(task_meta.get("video_model") or "veo3_fast")
-            if vm == "grok-imagine/image-to-video":
-                response["url"] = url
-                if url:
-                    with _job_file_lock(job_id):
-                        job = load_job(job_id)
-                        if job is not None:
-                            scene_idx = task_meta["scene_idx"]
-                            scenes = job.get("scenes", [])
-                            if 0 <= scene_idx < len(scenes):
-                                scene = scenes[scene_idx]
-                                scene[slot] = scene.get(slot) or {"prompt": None}
-                                scene[slot]["video_url"] = url
-                                scene[slot]["video_quality"] = "720p"
-                                scene[slot]["generation"] = {
-                                    "task_id": task_id,
-                                    "state": "success",
-                                    "started_at": task_meta["started_at"],
-                                    "completed_at": datetime.now().timestamp(),
-                                    "canceled": False,
-                                    **_kie_gen_extra(task_meta),
-                                }
-                                job["scenes"] = scenes
-                                save_job(job_id, job)
-                GENERATION_TASKS.pop(task_id, None)
-            else:
-                # Show base video immediately, then keep polling until 1080p is ready.
-                hd_started_at = task_meta.get("hd_started_at")
-                if not hd_started_at:
-                    hd_started_at = datetime.now().timestamp()
-                    task_meta["hd_started_at"] = hd_started_at
-                    GENERATION_TASKS[task_id] = task_meta
+            # Show base video immediately, then keep polling until 1080p is ready.
+            hd_started_at = task_meta.get("hd_started_at")
+            if not hd_started_at:
+                hd_started_at = datetime.now().timestamp()
+                task_meta["hd_started_at"] = hd_started_at
+                GENERATION_TASKS[task_id] = task_meta
 
-                response["url"] = url
-                response["state"] = "upgrading_1080"
-                response["state_text"] = f"720p waiting 1080p{model_suffix}"
-                response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
-                response["hd_status_text"] = f"720p waiting 1080p ({response['hd_elapsed_seconds']} sec)"
+            response["url"] = url
+            response["state"] = "upgrading_1080"
+            response["state_text"] = f"720p waiting 1080p{model_suffix}"
+            response["hd_elapsed_seconds"] = int(datetime.now().timestamp() - hd_started_at)
+            response["hd_status_text"] = f"720p waiting 1080p ({response['hd_elapsed_seconds']} sec)"
 
-                hd_done = False
-                hd_url = ""
-                hd_error = ""
-                try:
-                    hd_result = get_video_1080p_result(task_id=task_id, index=0)
-                    hd_done = bool(hd_result.get("ready") and hd_result.get("url"))
-                    hd_url = hd_result.get("url", "")
-                except RuntimeError as e:
-                    hd_error = str(e)
+            hd_done = False
+            hd_url = ""
+            hd_error = ""
+            try:
+                hd_result = get_video_1080p_result(task_id=task_id, index=0)
+                hd_done = bool(hd_result.get("ready") and hd_result.get("url"))
+                hd_url = hd_result.get("url", "")
+            except RuntimeError as e:
+                hd_error = str(e)
 
-                with _job_file_lock(job_id):
-                    job = load_job(job_id)
-                    if job is not None:
-                        scene_idx = task_meta["scene_idx"]
-                        scenes = job.get("scenes", [])
-                        if 0 <= scene_idx < len(scenes):
-                            scene = scenes[scene_idx]
-                            scene[slot] = scene.get(slot) or {"prompt": None}
-                            if url:
-                                scene[slot]["video_url"] = url
-                                scene[slot]["video_quality"] = "720p"
+            with _job_file_lock(job_id):
+                job = load_job(job_id)
+                if job is not None:
+                    scene_idx = task_meta["scene_idx"]
+                    scenes = job.get("scenes", [])
+                    if 0 <= scene_idx < len(scenes):
+                        scene = scenes[scene_idx]
+                        scene[slot] = scene.get(slot) or {"prompt": None}
+                        if url:
+                            scene[slot]["video_url"] = url
+                            scene[slot]["video_quality"] = "720p"
 
-                            if hd_done and hd_url:
-                                scene[slot]["video_url"] = hd_url
-                                scene[slot]["video_quality"] = "1080p"
-                                scene[slot]["generation"] = {
-                                    "task_id": task_id,
-                                    "state": "success",
-                                    "started_at": task_meta["started_at"],
-                                    "completed_at": datetime.now().timestamp(),
-                                    "hd_state": "done",
-                                    "hd_started_at": hd_started_at,
-                                    "canceled": False,
-                                    **_kie_gen_extra(task_meta),
-                                }
-                                response["state"] = "success"
-                                response["state_text"] = f"Generation complete{model_suffix}"
-                                response["url"] = hd_url
-                                response["hd_status_text"] = "1080p - done"
-                                response["hd_elapsed_seconds"] = int(
-                                    datetime.now().timestamp() - hd_started_at
-                                )
-                                GENERATION_TASKS.pop(task_id, None)
-                            else:
-                                scene[slot]["video_quality"] = "720p"
-                                scene[slot]["generation"] = {
-                                    "task_id": task_id,
-                                    "state": "upgrading_1080",
-                                    "started_at": task_meta["started_at"],
-                                    "hd_state": "waiting",
-                                    "hd_started_at": hd_started_at,
-                                    "hd_error": hd_error,
-                                    "canceled": False,
-                                    **_kie_gen_extra(task_meta),
-                                }
-                            job["scenes"] = scenes
-                            save_job(job_id, job)
+                        if hd_done and hd_url:
+                            scene[slot]["video_url"] = hd_url
+                            scene[slot]["video_quality"] = "1080p"
+                            scene[slot]["generation"] = {
+                                "task_id": task_id,
+                                "state": "success",
+                                "started_at": task_meta["started_at"],
+                                "completed_at": datetime.now().timestamp(),
+                                "hd_state": "done",
+                                "hd_started_at": hd_started_at,
+                                "canceled": False,
+                                **_kie_gen_extra(task_meta),
+                            }
+                            response["state"] = "success"
+                            response["state_text"] = f"Generation complete{model_suffix}"
+                            response["url"] = hd_url
+                            response["hd_status_text"] = "1080p - done"
+                            response["hd_elapsed_seconds"] = int(
+                                datetime.now().timestamp() - hd_started_at
+                            )
+                            GENERATION_TASKS.pop(task_id, None)
+                        else:
+                            scene[slot]["video_quality"] = "720p"
+                            scene[slot]["generation"] = {
+                                "task_id": task_id,
+                                "state": "upgrading_1080",
+                                "started_at": task_meta["started_at"],
+                                "hd_state": "waiting",
+                                "hd_started_at": hd_started_at,
+                                "hd_error": hd_error,
+                                "canceled": False,
+                                **_kie_gen_extra(task_meta),
+                            }
+                        job["scenes"] = scenes
+                        save_job(job_id, job)
         else:
             response["url"] = url
             if url:
@@ -9590,9 +9631,12 @@ def job_page(job_id: str):
         )
         else ("whisper" if whisper_last_words_href else "elevenlabs")
     )
-    scenes_stripped_with_timing = _render_scenes_stripped_with_timing(scenes_for_template)
+    _words_timings_available = bool(tts_last_words_href) or bool(whisper_last_words_href)
+    scenes_stripped_with_timing = (
+        _render_scenes_stripped_with_timing(scenes_for_template) if _words_timings_available else ""
+    )
     scenes_for_timings_check = scenes_for_template
-    if (scenes_stripped_with_timing or "").strip():
+    if _words_timings_available and (scenes_stripped_with_timing or "").strip():
         parsed_for_check, _parse_errs = parse_scenes_stripped_timings(scenes_stripped_with_timing)
         if parsed_for_check and not _parse_errs:
             scenes_for_timings_check = parsed_for_check
@@ -9600,7 +9644,7 @@ def job_page(job_id: str):
         _scenes_timings_validation_payload(
             job_id, scenes_for_timings_check, source=apply_timings_source_val
         )
-        if scenes_for_timings_check
+        if _words_timings_available and scenes_for_timings_check
         else None
     )
     html = render_template(

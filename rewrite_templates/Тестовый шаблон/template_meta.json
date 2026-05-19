@@ -1,8 +1,8 @@
 {
   "description": "",
   "tts_defaults": {
-    "voice_id": "pNInz6obpgDQGcFmaJgB",
-    "voice_name": "Adam - Dominant, Firm",
+    "voice_id": "PGoKnSD4gKn2aS99wOR2",
+    "voice_name": "Brian S. - Viral Social Media Narration",
     "model_id": "eleven_v3",
     "stability_pct": 36,
     "similarity_pct": 26,

@@ -177,7 +177,7 @@
                     <span class="slot-badge badge-{{ 'yes' if _tts_has_text else 'no' }} tts-section-compact-elevenlabs-badge" id="tts-section-compact-elevenlabs-badge">ElevenLabs</span>
                     <span class="tts-section-compact-sep" aria-hidden="true">|</span>
                     <span class="rewrite-stages-compact__pair">
-                        <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-section-compact-result-badge">Result</span>
+                        <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-section-compact-result-badge">Voiceover</span>
                     </span>
                     <span class="tts-section-compact-sep" aria-hidden="true">|</span>
                     <span class="tts-section-compact-timings tts-section-compact-timings--eleven">
@@ -337,7 +337,7 @@
                 </div>
                 <div id="tts-player-wrap" class="tts-player-wrap tts-result-block">
                     <div class="rewrite-source-toolbar slot-header tts-result-toolbar">
-                        <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-result-badge">Result</span>
+                        <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-result-badge">Voiceover</span>
                         <span class="rewrite-source-counts tts-result-duration hidden" id="tts-result-duration" aria-live="polite"></span>
                     </div>
                     <div id="tts-result-slot" class="slot-placeholder rewrite-slot-placeholder tts-result-slot" data-status="{% if tts_last_audio_href %}done{% else %}pending{% endif %}">
@@ -606,12 +606,10 @@
                     </div>
                     <div class="setting setting-model-dropdown">
                         {% set _im = job.job_meta.image_model or job.selected_image_model or 'nano-banana-pro' %}
-                        {% if _im in ['wan/2-7-image', 'qwen2/image-edit'] %}{% set _im = 'nano-banana-pro' %}{% endif %}
+                        {% if _im in ['wan/2-7-image', 'qwen2/image-edit', 'gpt-image-2-image-to-image', 'grok-imagine/image-to-image'] %}{% set _im = 'nano-banana-pro' %}{% endif %}
                         {% set _image_models = [
                             ('nano-banana-pro', 'Nano Banana Pro'),
                             ('nano-banana-2', 'Google - Nano Banana 2'),
-                            ('gpt-image-2-image-to-image', 'GPT Image 2 - Image To Image'),
-                            ('grok-imagine/image-to-image', 'Grok Imagine — Image To Image'),
                         ] %}
                         {% set ns_im_lbl = namespace(d='Nano Banana Pro') %}
                         {% for mid, mlbl in _image_models %}
@@ -642,10 +640,10 @@
                     </div>
                     <div class="setting setting-model-dropdown">
                         {% set _vm = job.job_meta.video_model or 'veo3_fast' %}
+                        {% if _vm == 'grok-imagine/image-to-video' %}{% set _vm = 'veo3_fast' %}{% endif %}
                         {% set _video_models = [
                             ('veo3', 'Veo 3.1 Quality'),
                             ('veo3_fast', 'Veo 3.1 Fast'),
-                            ('grok-imagine/image-to-video', 'Grok Imagine Image to Video'),
                         ] %}
                         {% set ns_vm_lbl = namespace(d='Veo 3.1 Fast') %}
                         {% for mid, mlbl in _video_models %}
@@ -732,7 +730,7 @@
 
             {% set _vj_any_words = tts_words_available or whisper_words_available %}
             {% set _vj_can_apply_timings = _json_has_scenes and _vj_any_words %}
-            {% set _vj_has_timings = (scenes_stripped_with_timing or '')|trim %}
+            {% set _vj_has_timings = _vj_any_words and (scenes_stripped_with_timing or '')|trim %}
             <div class="video-json-scenes-row">
                 <article id="video-json-scenes-wrap" class="scene-card tts-word-timings-panel video-json-scenes-panel tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-video-json-scenes-collapse="1" data-has-scenes="{{ '1' if _json_has_scenes else '0' }}" data-has-words="{{ '1' if _vj_any_words else '0' }}">
                     <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="video-json-scenes-header">
@@ -791,7 +789,7 @@
                                         placeholder=""
                                         aria-label="JSON-код сцен с таймингами"
                                         readonly
-                                    >{{ scenes_stripped_with_timing or '' }}</textarea>
+                                    >{{ (scenes_stripped_with_timing or '') if _vj_any_words else '' }}</textarea>
                                 </div>
                             </div>
                             <div class="video-json-scenes-col video-json-scenes-col--check" aria-live="polite">
@@ -820,10 +818,20 @@
             </div>
         </form>
 
-        <div class="generation-image-bar">
+        <div class="generation-image-bar scenes-toolbar">
             <button
                 type="button"
-                class="btn btn-primary btn-sm"
+                class="rewrite-stages-collapsible__toggle rewrite-stages-pipeline-display-btn scenes-display-toggle"
+                id="scenes-display-toggle"
+                aria-expanded="false"
+                aria-controls="job-scenes-grid"
+            >
+                <span class="rewrite-stages-pipeline-display-btn__chev" aria-hidden="true">▾</span>
+                <span class="rewrite-stages-collapsible__title">Отобразить</span>
+            </button>
+            <button
+                type="button"
+                class="btn btn-primary btn-sm scenes-toolbar__bulk-image"
                 id="bulk-generate-image"
                 title="Сгенерировать Image — только слоты без готовой картинки"
                 aria-label="Сгенерировать Image — только слоты без готовой картинки"
@@ -831,10 +839,11 @@
         </div>
 
         <section
-            class="scenes-section"
+            id="job-scenes-section"
+            class="scenes-section job-scenes-section"
             style="--slot-aspect-ratio: 16/9;"
         >
-            <div class="scenes-grid">
+            <div class="scenes-grid" id="job-scenes-grid">
                 {% include 'partials/scenes_grid.html' %}
             </div>
         </section>
@@ -1093,7 +1102,7 @@
         </div>
     </div>
 
-    <script type="application/json" id="video-json-scenes-check-initial">{{ scenes_timings_validation | tojson }}</script>
+    <script type="application/json" id="video-json-scenes-check-initial">{% if _vj_any_words and scenes_timings_validation %}{{ scenes_timings_validation | tojson }}{% else %}null{% endif %}</script>
     <script>
     let galleryImages = [];
     let currentImageIndex = 0;
@@ -1239,7 +1248,7 @@
                 };
             }
         }
-        const cards = Array.from(document.querySelectorAll('.scenes-section .scene-card[data-scene-id]'));
+        const cards = Array.from(document.querySelectorAll('#job-scenes-section .scene-card[data-scene-id]'));
         for (const card of cards) {
             const sid = String(card.getAttribute('data-scene-id') || '').trim() || '?';
             const hasStart = card.getAttribute('data-has-start-prompt') === '1';
@@ -3009,6 +3018,7 @@
         placeholder.setAttribute('data-status', 'pending');
         if (placeholder.dataset) placeholder.dataset.taskId = '';
         placeholder.innerHTML = '<span class="slot-status">Pending</span>';
+        syncSceneGenerateFromPlaceholder(placeholder);
     };
 
     const showPlaceholderError = (placeholder, message) => {
@@ -3026,6 +3036,30 @@
         hint.textContent = hintText;
         wrap.appendChild(hint);
         placeholder.appendChild(wrap);
+        if (typeof syncSceneGenerateFromPlaceholder === 'function') {
+            syncSceneGenerateFromPlaceholder(placeholder);
+        }
+    };
+
+    const updateSceneSlotBadge = (sceneCard, slot) => {
+        if (!sceneCard || (slot !== 'start' && slot !== 'video')) return;
+        const slotEl = sceneCard.querySelector(`.scene-slot[data-slot="${slot}"]`);
+        if (!slotEl) return;
+        const promptEl = sceneCard.querySelector(`.slot-prompt-editor[data-slot="${slot}"]`);
+        const hasPrompt = Boolean((promptEl?.value || '').trim());
+        const ph = slotEl.querySelector('.slot-placeholder');
+        const hasResult = slot === 'start'
+            ? !!ph?.querySelector('img.slot-image')
+            : !!ph?.querySelector('video.slot-image');
+        const slotLabel = slot.charAt(0).toUpperCase() + slot.slice(1);
+        const badgeLabel = `${slotLabel}: ${hasPrompt ? 'YES' : 'NO'}`;
+        [slotEl.querySelector('.slot-badge'), sceneCard.querySelector(`[data-scene-compact-slot="${slot}"] .slot-badge`)]
+            .filter(Boolean)
+            .forEach((badge) => {
+                badge.textContent = badgeLabel;
+                badge.classList.toggle('badge-yes', hasResult);
+                badge.classList.toggle('badge-no', !hasResult);
+            });
     };
 
     const updateSlotPromptUi = (sceneCard, slot, promptText) => {
@@ -3035,13 +3069,6 @@
         const prompt = (promptText || '').trim();
         const hasPrompt = Boolean(prompt);
 
-        const badge = slotEl.querySelector('.slot-badge');
-        if (badge) {
-            const slotLabel = slot.charAt(0).toUpperCase() + slot.slice(1);
-            badge.classList.toggle('badge-yes', hasPrompt);
-            badge.classList.toggle('badge-no', !hasPrompt);
-            badge.textContent = `${slotLabel}: ${hasPrompt ? 'YES' : 'NO'}`;
-        }
         const tooltip = slotEl.querySelector('[data-slot-prompt-tooltip]');
         if (tooltip) {
             tooltip.textContent = prompt || '—';
@@ -3049,99 +3076,167 @@
 
         // Track prompt dependencies for video button lock.
         if (slot === 'start') sceneCard.dataset.hasStartPrompt = hasPrompt ? '1' : '0';
-        if (slot === 'end') sceneCard.dataset.hasEndPrompt = hasPrompt ? '1' : '0';
+        if (slot === 'end') return;
 
-        const regenBtn = slotEl.querySelector(`.btn-generate[data-slot="${slot}"]`);
-        if (regenBtn && slot !== 'video') {
-            regenBtn.classList.toggle('is-hidden', !hasPrompt);
-            regenBtn.disabled = !hasPrompt;
+        if (slot === 'start' || slot === 'video') {
+            updateSceneSlotBadge(sceneCard, slot);
+            syncSceneCardGenerateUi(sceneCard);
         }
     };
 
-    const bindSlotPromptToggle = (toggleBtn) => {
-        if (toggleBtn.dataset.scenesUiBound === '1') return;
-        toggleBtn.dataset.scenesUiBound = '1';
-        toggleBtn.addEventListener('click', async () => {
-            const sceneIndex = toggleBtn.dataset.sceneIndex;
-            const slot = toggleBtn.dataset.slot;
-            const sceneCard = toggleBtn.closest('.scene-card');
-            const textarea = sceneCard?.querySelector(`.slot-prompt-editor[data-scene-index="${sceneIndex}"][data-slot="${slot}"]`);
-            if (!sceneCard || !textarea) return;
+    const handleSlotPromptToggleClick = async (toggleBtn) => {
+        const sceneIndex = toggleBtn.dataset.sceneIndex;
+        const slot = toggleBtn.dataset.slot;
+        const sceneCard = toggleBtn.closest('.scene-card');
+        const textarea = sceneCard?.querySelector(`.slot-prompt-editor[data-scene-index="${sceneIndex}"][data-slot="${slot}"]`);
+        if (!sceneCard || !textarea) return;
 
-            const locked = toggleBtn.classList.contains('rewrite-lock-toggle--locked');
-            if (locked) {
-                sceneCard.querySelectorAll('.scene-slot').forEach((el) => el.classList.remove('scene-slot--editing'));
-                const slotEl = toggleBtn.closest('.scene-slot');
-                if (slotEl) slotEl.classList.add('scene-slot--editing');
-                toggleBtn.classList.remove('rewrite-lock-toggle--locked');
-                toggleBtn.title = 'Сохранить';
-                textarea.removeAttribute('readonly');
-                textarea.classList.remove('rewrite-source-textarea--locked');
-                textarea.focus();
-                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-                return;
-            }
-
-            toggleBtn.disabled = true;
-            const newPrompt = textarea.value.trim();
-            try {
-                const resp = await fetch(`/job/${jobId}/prompt/update`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scene_index: Number(sceneIndex), slot, prompt: newPrompt }),
-                });
-                const data = await parseJsonOrThrow(resp, 'Prompt update');
-                if (!resp.ok || !data.ok) throw new Error(data.error || 'Не удалось сохранить prompt');
-                textarea.value = data.prompt || '';
-                updateSlotPromptUi(sceneCard, slot, data.prompt || '');
-                updateVideoButtonState(sceneCard);
-            } catch (e) {
-                openJobErrorModal(e.message || 'Не удалось сохранить prompt');
-                return;
-            } finally {
-                toggleBtn.disabled = false;
-            }
-
-            toggleBtn.classList.add('rewrite-lock-toggle--locked');
-            toggleBtn.title = 'Редактировать';
-            textarea.setAttribute('readonly', 'readonly');
-            textarea.classList.add('rewrite-source-textarea--locked');
+        const locked = toggleBtn.classList.contains('rewrite-lock-toggle--locked');
+        if (locked) {
+            sceneCard.querySelectorAll('.scene-slot').forEach((el) => el.classList.remove('scene-slot--editing'));
             const slotEl = toggleBtn.closest('.scene-slot');
-            if (slotEl) slotEl.classList.remove('scene-slot--editing');
+            if (slotEl) slotEl.classList.add('scene-slot--editing');
+            toggleBtn.classList.remove('rewrite-lock-toggle--locked');
+            toggleBtn.title = 'Сохранить';
+            textarea.removeAttribute('readonly');
+            textarea.classList.remove('rewrite-source-textarea--locked');
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            return;
+        }
+
+        toggleBtn.disabled = true;
+        toggleBtn.dataset.scenesUiSaving = '1';
+        const newPrompt = textarea.value.trim();
+        try {
+            const resp = await fetch(`/job/${jobId}/prompt/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scene_index: Number(sceneIndex), slot, prompt: newPrompt }),
+            });
+            const data = await parseJsonOrThrow(resp, 'Prompt update');
+            if (!resp.ok || !data.ok) throw new Error(data.error || 'Не удалось сохранить prompt');
+            textarea.value = data.prompt || '';
+            updateSlotPromptUi(sceneCard, slot, data.prompt || '');
+        } catch (e) {
+            openJobErrorModal(e.message || 'Не удалось сохранить prompt');
+            return;
+        } finally {
+            delete toggleBtn.dataset.scenesUiSaving;
+            toggleBtn.disabled = false;
+        }
+
+        toggleBtn.classList.add('rewrite-lock-toggle--locked');
+        toggleBtn.title = 'Редактировать';
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.classList.add('rewrite-source-textarea--locked');
+        const slotEl = toggleBtn.closest('.scene-slot');
+        if (slotEl) slotEl.classList.remove('scene-slot--editing');
+    };
+
+    const jobScenesSectionEl = document.getElementById('job-scenes-section');
+    const initJobScenesPromptToggleDelegation = () => {
+        if (!jobScenesSectionEl || jobScenesSectionEl.dataset.slotPromptDelegBound === '1') return;
+        jobScenesSectionEl.dataset.slotPromptDelegBound = '1';
+        jobScenesSectionEl.addEventListener('click', (e) => {
+            const toggleBtn = e.target.closest('.slot-prompt-toggle');
+            if (!toggleBtn || !jobScenesSectionEl.contains(toggleBtn) || toggleBtn.disabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+            handleSlotPromptToggleClick(toggleBtn).catch((err) => {
+                openJobErrorModal(err?.message || String(err));
+            });
+        });
+    };
+
+    const enableJobScenePromptToggles = () => {
+        if (!jobScenesSectionEl) return;
+        jobScenesSectionEl.querySelectorAll('.slot-prompt-toggle').forEach((btn) => {
+            if (btn.dataset.scenesUiSaving === '1') return;
+            btn.disabled = false;
         });
     };
 
 
+    const SCENE_GEN_ACTIVE_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
+
+    const getSceneSlotPlaceholder = (sceneCard, slot) => {
+        if (!sceneCard || !slot) return null;
+        return sceneCard.querySelector(`.scene-slot[data-slot="${slot}"] .slot-placeholder`);
+    };
+
+    const sceneGenerateButtonsForSlot = (sceneCard, slot) => {
+        if (!sceneCard || !slot) return [];
+        return Array.from(sceneCard.querySelectorAll(`.btn-generate[data-slot="${slot}"]`));
+    };
+
+    const setSceneGenerateBusy = (sceneCard, slot, busy) => {
+        sceneGenerateButtonsForSlot(sceneCard, slot).forEach((b) => {
+            b.classList.toggle('btn-regenerate--busy', !!busy);
+            if (busy) b.disabled = true;
+        });
+    };
+
+    const syncSceneGenerateFromPlaceholder = (placeholder) => {
+        const slot = placeholder?.closest('.scene-slot')?.dataset?.slot;
+        const card = placeholder?.closest('#job-scenes-section .scene-card');
+        if (!card || (slot !== 'start' && slot !== 'video')) return;
+        syncSceneCardGenerateUi(card);
+    };
+
+    const updateStartButtonState = (sceneCard) => {
+        if (!sceneCard) return;
+        const startBtns = sceneGenerateButtonsForSlot(sceneCard, 'start');
+        if (!startBtns.length) return;
+        const hasPrompt = sceneCard.dataset.hasStartPrompt === '1';
+        const ph = getSceneSlotPlaceholder(sceneCard, 'start');
+        const genBusy = ph && SCENE_GEN_ACTIVE_STATUSES.has(String(ph.dataset.status || '').toLowerCase());
+        startBtns.forEach((b) => {
+            b.classList.toggle('is-hidden', !hasPrompt);
+            b.classList.toggle('btn-regenerate--busy', !!genBusy);
+            if (!genBusy) b.disabled = !hasPrompt;
+        });
+    };
+
+    const syncSceneCardGenerateUi = (sceneCard) => {
+        if (!sceneCard) return;
+        updateSceneSlotBadge(sceneCard, 'start');
+        updateSceneSlotBadge(sceneCard, 'video');
+        updateStartButtonState(sceneCard);
+        updateVideoButtonState(sceneCard);
+    };
+
     const updateVideoButtonState = (sceneCard) => {
         if (!sceneCard) return;
-        const videoBtn = sceneCard.querySelector('.btn-generate[data-slot="video"]');
-        const videoBlocked = sceneCard.querySelector('.slot-video-run-blocked');
-        if (!videoBtn && !videoBlocked) return;
+        const videoBtns = sceneCard.querySelectorAll('.btn-generate[data-slot="video"]');
+        const videoBlockedEls = sceneCard.querySelectorAll('.slot-video-run-blocked');
+        if (!videoBtns.length && !videoBlockedEls.length) return;
 
         const hasStartPrompt = sceneCard.dataset.hasStartPrompt === '1';
-        const hasEndPrompt = sceneCard.dataset.hasEndPrompt === '1';
         const videoPromptEl = sceneCard.querySelector('.slot-prompt-editor[data-slot="video"]');
         const hasVideoPrompt = Boolean((videoPromptEl?.value || '').trim());
         const hasStartImage = !!sceneCard.querySelector('.scene-slot[data-slot="start"] .slot-image');
-        const hasEndImage = !!sceneCard.querySelector('.scene-slot[data-slot="end"] .slot-image');
-        const depsReady = (!hasStartPrompt || hasStartImage) && (!hasEndPrompt || hasEndImage);
+        const depsReady = !hasStartPrompt || hasStartImage;
         const canGenerateVideo = hasVideoPrompt && depsReady;
+        const ph = getSceneSlotPlaceholder(sceneCard, 'video');
+        const genBusy = ph && SCENE_GEN_ACTIVE_STATUSES.has(String(ph.dataset.status || '').toLowerCase());
 
-        if (videoBtn) {
+        videoBtns.forEach((videoBtn) => {
             videoBtn.classList.toggle('is-hidden', !canGenerateVideo);
-            videoBtn.disabled = !canGenerateVideo;
+            videoBtn.disabled = genBusy || !canGenerateVideo;
+            videoBtn.classList.toggle('btn-regenerate--busy', !!genBusy);
             videoBtn.title = canGenerateVideo
                 ? 'Generate video'
-                : (hasVideoPrompt ? 'Generate required start/end images first' : 'Add video prompt first');
-        }
-        if (videoBlocked) {
+                : (hasVideoPrompt ? 'Generate required start image first' : 'Add video prompt first');
+        });
+        const blockTitle = hasVideoPrompt
+            ? 'Сначала сгенерируйте кадр start (если есть промпт)'
+            : 'Добавьте video prompt';
+        videoBlockedEls.forEach((videoBlocked) => {
             videoBlocked.classList.toggle('is-hidden', !hasVideoPrompt || canGenerateVideo);
-            const blockTitle = hasVideoPrompt
-                ? 'Сначала сгенерируйте кадры start/end (если есть промпты)'
-                : 'Добавьте video prompt';
             videoBlocked.title = blockTitle;
             videoBlocked.setAttribute('aria-label', blockTitle);
-        }
+        });
     };
 
     const updateVideoHdStatus = (sceneCard, text = '') => {
@@ -3181,6 +3276,7 @@
         } else {
             placeholder.innerHTML = `<span class="slot-status ${withSpinner ? 'slot-status-with-spinner' : ''}">${safe}</span>`;
         }
+        syncSceneGenerateFromPlaceholder(placeholder);
     };
 
     const pollTask = async (btn, placeholder, slot, taskId) => {
@@ -3226,14 +3322,17 @@
                     } else {
                         placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
                     }
-                    // For Grok (and any non-upscale flow) backend returns success without hd_status_text.
-                    // Do not show stale "1080p - done" from previous Veo runs.
+                    // Non-upscale success: do not show stale "1080p - done" from previous runs.
                     updateVideoHdStatus(btn.closest('.scene-card'), statusData.hd_status_text || '');
                 } else {
                     placeholder.innerHTML = `<img src="${statusData.url}" alt="${slot}" class="slot-image">`;
                     refreshGallery();
                 }
-                updateVideoButtonState(btn.closest('.scene-card'));
+                const sceneCardDone = btn.closest('.scene-card');
+                if (sceneCardDone && (slot === 'start' || slot === 'video')) {
+                    updateSceneSlotBadge(sceneCardDone, slot);
+                }
+                updateVideoButtonState(sceneCardDone);
                 done = true;
             } else if (state === 'upgrading_1080' && slot === 'video') {
                 if (statusData.url) {
@@ -3247,8 +3346,10 @@
                         placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
                     }
                 }
+                const sceneCardHd = btn.closest('.scene-card');
+                if (sceneCardHd) updateSceneSlotBadge(sceneCardHd, 'video');
                 updateVideoHdStatus(
-                    btn.closest('.scene-card'),
+                    sceneCardHd,
                     statusData.hd_status_text || `720p waiting 1080p (${statusData.hd_elapsed_seconds || 0} sec)`
                 );
             } else if (state === 'fail') {
@@ -3265,23 +3366,24 @@
             if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
             if (slot === 'start' || slot === 'end') refreshGallery();
         }
-        btn.disabled = false;
+        syncSceneCardGenerateUi(btn.closest('.scene-card'));
     };
 
     const startGenerationForButton = async (btn, options = {}) => {
-        const sceneCard = btn.closest('.scenes-section .scene-card') || btn.closest('.scene-card');
+        const sceneCard = btn.closest('#job-scenes-section .scene-card') || btn.closest('.scene-card');
         const rawIdx = sceneCard?.dataset?.sceneIndex ?? btn.dataset.sceneIndex;
         const sceneIndex = Number.parseInt(String(rawIdx ?? ''), 10);
         if (!Number.isFinite(sceneIndex) || sceneIndex < 0) {
             throw new Error('Invalid scene index');
         }
         const slot = btn.dataset.slot;
-        const placeholder = btn.closest('.scene-slot').querySelector('.slot-placeholder');
+        const placeholder = getSceneSlotPlaceholder(sceneCard, slot);
+        if (!placeholder) throw new Error('Slot placeholder not found');
         const sceneId = sceneCard?.querySelector('.scene-id')?.textContent?.trim() || `scene#${sceneIndex}`;
-        if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
+        if (slot === 'video') updateVideoHdStatus(sceneCard, '');
         setSlotPlaceholderPending(placeholder);
         if (slot === 'start' || slot === 'end') refreshGallery();
-        btn.disabled = true;
+        setSceneGenerateBusy(sceneCard, slot, true);
         renderStatus(placeholder, 'Task submitted', 0, true);
         try {
             let taskId = '';
@@ -3330,7 +3432,7 @@
                 setSlotPlaceholderPending(placeholder);
                 if (slot === 'start' || slot === 'end') refreshGallery();
                 appendBulkLog(`✖ ${sceneId} · ${slot}: остановка — опрос не запущен.`);
-                btn.disabled = false;
+                syncSceneCardGenerateUi(sceneCard);
                 return;
             }
             renderStatus(placeholder, 'Task submitted', 0, true, taskId);
@@ -3338,7 +3440,7 @@
             if (options.bulk) appendBulkLog(`✓ ${sceneId} · ${slot}: завершено.`);
         } catch (e) {
             showPlaceholderError(placeholder, e.message || String(e));
-            btn.disabled = false;
+            syncSceneCardGenerateUi(sceneCard);
             if (options.bulk) appendBulkLog(`✖ ${sceneId} · ${slot}: ${e.message || String(e)}`);
         }
     };
@@ -3383,10 +3485,10 @@
     };
 
     const collectBulkButtons = (kind) => {
-        const root = '.scenes-section ';
+        const root = '#job-scenes-section ';
         const selector = kind === 'video'
-            ? `${root}.btn-generate[data-slot="video"]`
-            : `${root}.btn-generate[data-slot="start"], ${root}.btn-generate[data-slot="end"]`;
+            ? `${root}.scene-slot[data-slot="video"] .btn-generate`
+            : `${root}.scene-slot[data-slot="start"] .btn-generate`;
         let list = Array.from(document.querySelectorAll(selector)).filter((btn) => {
             if (!btn) return false;
             if (btn.classList.contains('is-hidden')) return false;
@@ -3406,7 +3508,7 @@
         let count = targets.length;
         if (!count) {
             if (isImageOnlyMissing) {
-                openJobErrorModal('Нет кадров Start/End без готового изображения (или все ещё в очереди/генерации). Запустите ↻ у нужного слота вручную или измените сцены.');
+                openJobErrorModal('Нет кадров Start без готового изображения (или все ещё в очереди/генерации). Запустите ↻ у нужного слота вручную или измените сцены.');
             } else {
                 openJobErrorModal(`Нет доступных ${noun} задач для запуска.`);
             }
@@ -3416,7 +3518,7 @@
         if (isVideo) {
             confirmText = `Будет запущено ${count} задач Video на генерацию. Точно запускаем?`;
         } else {
-            confirmText = `Будет запущена генерация для ${count} кадров Start/End без готовой картинки (ошибка, отмена, пусто — включено; уже идущие задачи пропущены). Точно запускаем?`;
+            confirmText = `Будет запущена генерация для ${count} кадров Start без готовой картинки (ошибка, отмена, пусто — включено; уже идущие задачи пропущены). Точно запускаем?`;
         }
         const agreed = await openBulkConfirm(confirmText);
         if (!agreed) return;
@@ -3497,35 +3599,244 @@
     });
 
     const resumeScenesSectionPolling = () => {
-        document.querySelectorAll('.scenes-section .scene-slot[data-slot="start"], .scenes-section .scene-slot[data-slot="end"], .scenes-section .scene-slot[data-slot="video"]').forEach((slotEl) => {
+        document.querySelectorAll('#job-scenes-section .scene-slot[data-slot="start"], #job-scenes-section .scene-slot[data-slot="end"], #job-scenes-section .scene-slot[data-slot="video"]').forEach((slotEl) => {
         const placeholder = slotEl.querySelector('.slot-placeholder');
         const taskId = placeholder?.dataset?.taskId;
         const slot = slotEl.dataset.slot;
         if (!taskId || !placeholder) return;
         if (placeholder.dataset.pollingResumed === '1') return;
-        if (placeholder.dataset.status === 'waiting' || placeholder.dataset.status === 'queuing' || placeholder.dataset.status === 'generating' || placeholder.dataset.status === 'submitted') {
+            if (placeholder.dataset.status === 'waiting' || placeholder.dataset.status === 'queuing' || placeholder.dataset.status === 'generating' || placeholder.dataset.status === 'submitted') {
             const btn = slotEl.querySelector('.btn-generate');
             if (btn) {
                 placeholder.dataset.pollingResumed = '1';
                 renderStatus(placeholder, 'Resuming task tracking', 0, true, taskId);
-                btn.disabled = true;
+                setSceneGenerateBusy(btn.closest('.scene-card'), slot, true);
                 pollTask(btn, placeholder, slot, taskId).catch((e) => {
                     showPlaceholderError(placeholder, e.message || String(e));
-                    btn.disabled = false;
-                    updateVideoButtonState(btn.closest('.scene-card'));
+                    syncSceneCardGenerateUi(btn.closest('.scene-card'));
                 });
             }
         }
     });
     };
 
+    (function setupJobScenesDisplayToggle() {
+        const btn = document.getElementById('scenes-display-toggle');
+        const gridEl = document.getElementById('job-scenes-grid');
+        if (!btn || !gridEl) return;
+        const jobId = {{ job_id | tojson }};
+        const SCENES_COLLAPSE_LS = 'json-video-job-scenes-collapse-v2';
+        const SCENES_TOGGLE_BATCH = 18;
+        let scenesCollapsedPref = true;
+        let scenesToggleAnimToken = 0;
+        let scenesToggleAnimating = false;
+
+        const loadScenesCollapsedPref = () => {
+            try {
+                const all = JSON.parse(localStorage.getItem(SCENES_COLLAPSE_LS) || '{}');
+                if (Object.prototype.hasOwnProperty.call(all, jobId)) {
+                    scenesCollapsedPref = !!all[jobId];
+                }
+            } catch (_) { /* ignore */ }
+        };
+
+        const saveScenesCollapsedPref = (collapsed) => {
+            scenesCollapsedPref = !!collapsed;
+            try {
+                const all = JSON.parse(localStorage.getItem(SCENES_COLLAPSE_LS) || '{}');
+                all[jobId] = scenesCollapsedPref;
+                localStorage.setItem(SCENES_COLLAPSE_LS, JSON.stringify(all));
+            } catch (_) { /* ignore */ }
+        };
+
+        const getSceneCards = () => Array.from(
+            gridEl.querySelectorAll('.scene-card[data-scene-collapse="1"]')
+        );
+
+        const scenesCardsState = () => {
+            const cards = getSceneCards();
+            if (!cards.length) {
+                return { allCollapsed: true, allExpanded: false, anyVisible: false, count: 0 };
+            }
+            let collapsedCount = 0;
+            cards.forEach((c) => {
+                if (c.classList.contains('scene-card--body-collapsed')) collapsedCount += 1;
+            });
+            return {
+                allCollapsed: collapsedCount === cards.length,
+                allExpanded: collapsedCount === 0,
+                anyVisible: true,
+                count: cards.length,
+            };
+        };
+
+        const nextFrame = () => new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+
+        const syncJobScenesDisplayToggle = (opts) => {
+            const st = scenesCardsState();
+            const title = btn.querySelector('.rewrite-stages-collapsible__title');
+            const chev = btn.querySelector('.rewrite-stages-pipeline-display-btn__chev');
+            const busy = !!(opts && opts.busy);
+            btn.disabled = !st.anyVisible;
+            if (busy && opts.busyLabel) {
+                if (title) title.textContent = opts.busyLabel;
+                if (chev) chev.textContent = '…';
+                btn.setAttribute('aria-busy', 'true');
+                return;
+            }
+            btn.removeAttribute('aria-busy');
+            btn.setAttribute('aria-expanded', st.allCollapsed ? 'false' : 'true');
+            if (title) title.textContent = st.allCollapsed ? 'Отобразить' : 'Скрыть';
+            if (chev) chev.textContent = st.allCollapsed ? '▾' : '▴';
+        };
+        window.__syncJobScenesDisplayToggle = syncJobScenesDisplayToggle;
+
+        const syncSceneCardCollapseAria = (card) => {
+            const hdr = card?.querySelector('.scene-card-header--toggle');
+            if (!hdr) return;
+            const collapsed = card.classList.contains('scene-card--body-collapsed');
+            hdr.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        };
+
+        const toggleSceneCardCollapsed = (card) => {
+            if (!card) return;
+            const collapsed = !card.classList.contains('scene-card--body-collapsed');
+            card.classList.toggle('scene-card--body-collapsed', collapsed);
+            syncSceneCardCollapseAria(card);
+            syncJobScenesDisplayToggle();
+        };
+
+        const applySceneCardsCollapsedBatch = (cards, collapsed) => {
+            const cls = 'scene-card--body-collapsed';
+            cards.forEach((card) => {
+                if (collapsed) card.classList.add(cls);
+                else card.classList.remove(cls);
+                syncSceneCardCollapseAria(card);
+            });
+        };
+
+        if (!gridEl.dataset.sceneCardToggleBound) {
+            gridEl.dataset.sceneCardToggleBound = '1';
+            gridEl.addEventListener('click', (e) => {
+                const hdr = e.target.closest('.scene-card-header--toggle');
+                if (!hdr || !gridEl.contains(hdr)) return;
+                if (e.target.closest('button, a, input, select, textarea, label, .scene-card-compact')) return;
+                const card = hdr.closest('.scene-card[data-scene-collapse="1"]');
+                if (!card) return;
+                toggleSceneCardCollapsed(card);
+            });
+            gridEl.addEventListener('keydown', (e) => {
+                const hdr = e.target.closest('.scene-card-header--toggle');
+                if (!hdr || !gridEl.contains(hdr)) return;
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                if (e.target.closest('button, a, input, select, textarea, label, .scene-card-compact')) return;
+                e.preventDefault();
+                const card = hdr.closest('.scene-card[data-scene-collapse="1"]');
+                if (!card) return;
+                toggleSceneCardCollapsed(card);
+            });
+        }
+
+        const setScenesCollapsedChunked = async (collapsed) => {
+            const token = ++scenesToggleAnimToken;
+            scenesToggleAnimating = true;
+            const cards = getSceneCards();
+            const total = cards.length;
+            const busyLabel = collapsed ? 'Сворачиваем…' : 'Разворачиваем…';
+            syncJobScenesDisplayToggle({ busy: true, busyLabel });
+
+            for (let i = 0; i < total; i += SCENES_TOGGLE_BATCH) {
+                if (token !== scenesToggleAnimToken) {
+                    scenesToggleAnimating = false;
+                    syncJobScenesDisplayToggle();
+                    return;
+                }
+                applySceneCardsCollapsedBatch(cards.slice(i, i + SCENES_TOGGLE_BATCH), collapsed);
+                if (i + SCENES_TOGGLE_BATCH < total) {
+                    syncJobScenesDisplayToggle({
+                        busy: true,
+                        busyLabel: collapsed
+                            ? `Сворачиваем… ${Math.min(i + SCENES_TOGGLE_BATCH, total)}/${total}`
+                            : `Разворачиваем… ${Math.min(i + SCENES_TOGGLE_BATCH, total)}/${total}`,
+                    });
+                    await nextFrame();
+                }
+            }
+
+            if (token !== scenesToggleAnimToken) {
+                scenesToggleAnimating = false;
+                syncJobScenesDisplayToggle();
+                return;
+            }
+            saveScenesCollapsedPref(collapsed);
+            scenesToggleAnimating = false;
+            syncJobScenesDisplayToggle();
+        };
+
+        const applyJobScenesCollapseState = () => {
+            if (scenesToggleAnimating) return;
+            const cards = getSceneCards();
+            if (!cards.length) {
+                syncJobScenesDisplayToggle();
+                return;
+            }
+            const st = scenesCardsState();
+            if (scenesCollapsedPref && st.allCollapsed) {
+                syncJobScenesDisplayToggle();
+                return;
+            }
+            if (!scenesCollapsedPref && st.allExpanded) {
+                syncJobScenesDisplayToggle();
+                return;
+            }
+            if (cards.length > SCENES_TOGGLE_BATCH * 2) {
+                setScenesCollapsedChunked(scenesCollapsedPref).catch(() => {});
+                return;
+            }
+            applySceneCardsCollapsedBatch(cards, scenesCollapsedPref);
+            syncJobScenesDisplayToggle();
+        };
+        window.__applyJobScenesCollapseState = applyJobScenesCollapseState;
+
+        btn.addEventListener('click', () => {
+            const st = scenesCardsState();
+            if (!st.anyVisible) return;
+            if (scenesToggleAnimating) {
+                scenesToggleAnimToken += 1;
+                scenesToggleAnimating = false;
+                syncJobScenesDisplayToggle();
+                return;
+            }
+            const targetCollapsed = !st.allCollapsed;
+            setScenesCollapsedChunked(targetCollapsed).catch(() => {});
+        });
+
+        loadScenesCollapsedPref();
+        if (!scenesCollapsedPref && getSceneCards().length > SCENES_TOGGLE_BATCH * 2) {
+            setScenesCollapsedChunked(false).catch(() => {});
+        } else {
+            applyJobScenesCollapseState();
+        }
+    })();
+
     const reinitScenesSectionUi = () => {
-        document.querySelectorAll('.scenes-section .slot-prompt-toggle').forEach(bindSlotPromptToggle);
-        document.querySelectorAll('.scenes-section .btn-generate').forEach(bindSceneGenerateButton);
-        document.querySelectorAll('.scenes-section .scene-card').forEach(updateVideoButtonState);
+        initJobScenesPromptToggleDelegation();
+        enableJobScenePromptToggles();
+        document.querySelectorAll('#job-scenes-section .btn-generate').forEach(bindSceneGenerateButton);
+        document.querySelectorAll('#job-scenes-section .scene-card').forEach(syncSceneCardGenerateUi);
         resumeScenesSectionPolling();
+        if (typeof window.__applyJobScenesCollapseState === 'function') {
+            window.__applyJobScenesCollapseState();
+        }
+        if (typeof window.__syncJobScenesDisplayToggle === 'function') {
+            window.__syncJobScenesDisplayToggle();
+        }
     };
     window.reinitScenesSectionUi = reinitScenesSectionUi;
+    initJobScenesPromptToggleDelegation();
+    enableJobScenePromptToggles();
     reinitScenesSectionUi();
 
 
@@ -3610,9 +3921,13 @@
         }
         applyCollapsed(loadCollapsed());
         const onToggle = () => {
-            const expanded = wrapEl.getAttribute('aria-expanded') === 'true';
-            saveCollapsed(expanded);
-            applyCollapsed(expanded);
+            const wasExpanded = wrapEl.getAttribute('aria-expanded') === 'true';
+            const nowCollapsed = wasExpanded;
+            saveCollapsed(nowCollapsed);
+            applyCollapsed(nowCollapsed);
+            if (!nowCollapsed && typeof window.__refreshVideoJsonScenesPanel === 'function') {
+                window.__refreshVideoJsonScenesPanel();
+            }
         };
         headerEl.addEventListener('click', (e) => {
             if (e.target.closest('button, a, input, label')) return;
@@ -4977,6 +5292,87 @@
             const badgeTitle = src === 'whisper'
                 ? 'Интервал в озвучке (по словам Whisper)'
                 : 'Интервал в озвучке (по словам ElevenLabs)';
+            const sceneTimingDurationClass = (row) => {
+                let durS = null;
+                if (row.duration_ms != null && row.duration_ms !== '') {
+                    const n = Number(row.duration_ms);
+                    if (Number.isFinite(n)) durS = Math.max(0, n / 1000);
+                }
+                if (durS == null && row.duration_s != null && String(row.duration_s).trim() !== '') {
+                    const n = parseFloat(String(row.duration_s).replace(',', '.'));
+                    if (Number.isFinite(n)) durS = Math.max(0, n);
+                }
+                if (durS == null && row.start_ms != null && row.end_ms != null) {
+                    const sm = Number(row.start_ms);
+                    const em = Number(row.end_ms);
+                    if (Number.isFinite(sm) && Number.isFinite(em) && em >= sm) durS = (em - sm) / 1000;
+                }
+                if (durS == null) return '';
+                if (durS < 1 || durS > 20) return ' scene-audio-timing--dur-red';
+                if (durS > 10) return ' scene-audio-timing--dur-yellow';
+                if (durS >= 2.5) return ' scene-audio-timing--dur-green';
+                if (durS >= 2) return ' scene-audio-timing--dur-gray';
+                return '';
+            };
+            const buildSceneAudioTimingBlock = (row) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'scene-audio-timing' + sceneTimingDurationClass(row);
+                wrap.title = badgeTitle;
+                const durEl = document.createElement('div');
+                durEl.className = 'scene-audio-timing__dur';
+                const ds = row.duration_s != null ? String(row.duration_s).trim() : '';
+                durEl.textContent = ds ? `${ds} с` : '— с';
+                const rangeEl = document.createElement('div');
+                rangeEl.className = 'scene-audio-timing__range';
+                const st = row.start_time ? String(row.start_time) : '—';
+                const en = row.start_end ? String(row.start_end) : '—';
+                rangeEl.textContent = `${st} → ${en}`;
+                wrap.appendChild(durEl);
+                wrap.appendChild(rangeEl);
+                return wrap;
+            };
+            const buildTitleRowTimingDur = (row) => {
+                const wrap = document.createElement('span');
+                wrap.className = 'scene-audio-timing scene-card-title__timing' + sceneTimingDurationClass(row);
+                wrap.title = badgeTitle;
+                const durEl = document.createElement('span');
+                durEl.className = 'scene-audio-timing__dur';
+                const ds = row.duration_s != null ? String(row.duration_s).trim() : '';
+                durEl.textContent = ds ? `${ds} с` : '— с';
+                wrap.appendChild(durEl);
+                return wrap;
+            };
+            const upsertTitleRowTiming = (card, row) => {
+                const titleRow = card.querySelector('.scene-card-title-row');
+                if (!titleRow) return;
+                const ds = row.duration_s != null ? String(row.duration_s).trim() : '';
+                const has = !!(ds || row.start_ms != null || row.badge);
+                let sep = titleRow.querySelector('.scene-card-title-sep');
+                let timing = titleRow.querySelector('.scene-card-title__timing');
+                if (!has) {
+                    sep?.remove();
+                    timing?.remove();
+                    return;
+                }
+                if (!sep) {
+                    sep = document.createElement('span');
+                    sep.className = 'scene-card-title-sep';
+                    sep.setAttribute('aria-hidden', 'true');
+                    sep.textContent = '—';
+                    const sceneIdEl = titleRow.querySelector('.scene-id');
+                    if (sceneIdEl) sceneIdEl.after(sep);
+                    else titleRow.appendChild(sep);
+                }
+                if (!timing) {
+                    timing = buildTitleRowTimingDur(row);
+                    sep.after(timing);
+                } else {
+                    timing.className = 'scene-audio-timing scene-card-title__timing' + sceneTimingDurationClass(row);
+                    timing.title = badgeTitle;
+                    const durEl = timing.querySelector('.scene-audio-timing__dur');
+                    if (durEl) durEl.textContent = ds ? `${ds} с` : '— с';
+                }
+            };
             rows.forEach((row) => {
                 if (!row || typeof row !== 'object') return;
                 const sid = row.scene_id;
@@ -4984,21 +5380,31 @@
                 const esc = String(sid).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
                 const card = document.querySelector('.scene-card[data-scene-id="' + esc + '"]');
                 if (!card) return;
-                card.querySelectorAll('.scene-audio-timing-badge').forEach((el) => el.remove());
-                const badge = row.badge;
-                if (!badge) return;
-                const span = document.createElement('span');
-                span.className = 'scene-audio-timing-badge'
-                    + (row.low_confidence ? ' scene-audio-timing-badge--warn' : '');
-                span.textContent = String(badge);
-                span.title = badgeTitle;
-                const header = card.querySelector('.scene-header');
-                const sceneIdEl = card.querySelector('.scene-id');
-                if (header && sceneIdEl) {
-                    sceneIdEl.insertAdjacentElement('afterend', span);
-                } else if (header) {
-                    header.insertBefore(span, header.firstChild);
+                card.querySelectorAll('.scene-header__row .scene-audio-timing, .scene-audio-timing-badge').forEach((el) => el.remove());
+                if (!row.start_time && !row.start_end && !row.duration_s && !row.badge) {
+                    upsertTitleRowTiming(card, row);
+                    return;
                 }
+                const chrome = card.querySelector('.scene-card-chrome');
+                if (!chrome) return;
+                let rowEl = chrome.querySelector('.scene-header__row');
+                if (!rowEl) return;
+                let divider = rowEl.querySelector('.scene-header__divider');
+                if (!divider) {
+                    divider = document.createElement('div');
+                    divider.className = 'scene-header__divider';
+                    divider.setAttribute('aria-hidden', 'true');
+                    const texts = rowEl.querySelector('.scene-header__texts');
+                    if (texts) rowEl.insertBefore(divider, texts);
+                    else rowEl.appendChild(divider);
+                }
+                rowEl.insertBefore(buildSceneAudioTimingBlock(row), divider);
+                upsertTitleRowTiming(card, row);
+                card.querySelectorAll('.scene-card-compact .scene-card-compact__timing').forEach((el) => {
+                    const sep = el.nextElementSibling;
+                    el.remove();
+                    if (sep && sep.classList.contains('tts-section-compact-sep')) sep.remove();
+                });
             });
             if (typeof window.rebuildScenesStrippedBlock === 'function') {
                 window.rebuildScenesStrippedBlock(rows);
@@ -5688,7 +6094,7 @@
         };
 
         let saveDefaultsTimer = null;
-        const persistTtsDefaults = async () => {
+        const persistTtsDefaults = async (opts) => {
             const payload = {
                 ...collectCurrentTtsSettings(),
             };
@@ -5698,6 +6104,7 @@
                 body: JSON.stringify(payload),
             });
             if (!r.ok) return;
+            if (opts && opts.skipTemplateSync) return;
             if (rewriteBlockPresent && typeof window.syncJobTtsToRewriteTemplateAndNotify === 'function') {
                 await window.syncJobTtsToRewriteTemplateAndNotify({
                     voice_id: payload.voice_id || '',
@@ -5711,10 +6118,10 @@
                 });
             }
         };
-        const schedulePersistTtsDefaults = () => {
+        const schedulePersistTtsDefaults = (opts) => {
             if (saveDefaultsTimer) clearTimeout(saveDefaultsTimer);
             saveDefaultsTimer = setTimeout(() => {
-                persistTtsDefaults().catch(() => {});
+                persistTtsDefaults(opts).catch(() => {});
             }, 250);
         };
         const ttsSpeedPctToApi = (pct) => {
@@ -5930,7 +6337,7 @@
             ttsScriptLinkedSource = null;
             updateTtsScriptSourceHint('manual', textEl ? textEl.value : '');
             syncTtsSplitHint(textEl ? textEl.value : '');
-            if (!(opts && opts.skipPersist)) schedulePersistTtsDefaults();
+            if (!(opts && opts.skipPersist)) schedulePersistTtsDefaults({ skipTemplateSync: true });
         };
         window.__clearJobElevenlabsOnRewritePipelineReset = async function (opts) {
             opts = opts || {};
@@ -6035,7 +6442,7 @@
             document.querySelectorAll('input[name="tts_script_source"]').forEach((inp) => {
                 inp.addEventListener('change', () => {
                     applyTtsScriptFromSource(inp.value);
-                    schedulePersistTtsDefaults();
+                    schedulePersistTtsDefaults({ skipTemplateSync: true });
                 });
             });
             document.querySelectorAll('.tts-script-source-option').forEach((lab) => {
@@ -6048,7 +6455,7 @@
                     if (!inp || inp.disabled) return;
                     if (lab.dataset.ttsWasChecked === '1') {
                         applyTtsScriptFromSource(inp.value);
-                        schedulePersistTtsDefaults();
+                        schedulePersistTtsDefaults({ skipTemplateSync: true });
                     }
                 });
             });
@@ -6556,7 +6963,7 @@
 
         try {
             const initialCheckEl = document.getElementById('video-json-scenes-check-initial');
-            if (initialCheckEl && initialCheckEl.textContent.trim()) {
+            if (panelWrap.dataset.hasWords === '1' && initialCheckEl && initialCheckEl.textContent.trim()) {
                 const initialV = JSON.parse(initialCheckEl.textContent);
                 if (initialV) renderScenesTimingsValidation(initialV);
             }
@@ -6938,6 +7345,10 @@
         };
 
         const scheduleScenesTimingsValidation = () => {
+            if (!selectedSourceHasWords()) {
+                renderScenesTimingsValidation(null);
+                return;
+            }
             if (validateTimingsDebounce) clearTimeout(validateTimingsDebounce);
             validateTimingsDebounce = setTimeout(() => {
                 validateTimingsDebounce = null;
@@ -6962,8 +7373,35 @@
             scheduleScenesTimingsValidation();
         };
 
+        const clearVideoJsonScenesPanelNoWords = () => {
+            origSetVideoJsonScenesTimingsText('');
+            renderScenesTimingsValidation(null);
+            if (checkSummaryEl) checkSummaryEl.textContent = '—';
+            setApplyStatus('');
+        };
+
+        let refreshScenesPanelInFlight = false;
+        window.__refreshVideoJsonScenesPanel = async () => {
+            if (refreshScenesPanelInFlight) return;
+            refreshScenesPanelInFlight = true;
+            try {
+                if (!canApplyTimings()) {
+                    clearVideoJsonScenesPanelNoWords();
+                    return;
+                }
+                setScenesCheckLoading();
+                if (checkSummaryEl) checkSummaryEl.textContent = 'Обновление…';
+                await runApplyScenesTimings({ auto: true });
+            } finally {
+                refreshScenesPanelInFlight = false;
+            }
+        };
+
         applyTimingsJsonLockUi();
         updateCounts();
+        if (panelWrap && panelWrap.getAttribute('aria-expanded') === 'true') {
+            window.__refreshVideoJsonScenesPanel();
+        }
     })();
 
     </script>

@@ -19,8 +19,6 @@ GET_TASK = f"{API_BASE}/api/v1/jobs/recordInfo"
 CREATE_VIDEO_TASK = f"{API_BASE}/api/v1/veo/generate"
 GET_VIDEO_TASK = f"{API_BASE}/api/v1/veo/record-info"
 GET_VIDEO_1080P = f"{API_BASE}/api/v1/veo/get-1080p-video"
-CREATE_GROK_VIDEO_TASK = f"{API_BASE}/api/v1/jobs/createTask"
-
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
 _DOTENV_LOADED = False
 
@@ -67,20 +65,6 @@ def normalize_aspect_ratio(value: str | None, default: str = "16:9") -> str:
     return raw if raw in allowed else default
 
 
-def _aspect_ratio_gpt_image2_i2i(ratio: str) -> str:
-    """Map normalized W:H to gpt-image-2-image-to-image allowed aspect_ratio values."""
-    r = (ratio or "").strip().replace("/", ":").replace(" ", "")
-    if r == "9:16":
-        return "16:9"
-    if r in {"auto", "1:1", "16:9", "4:3", "3:4"}:
-        return r
-    if r == "3:2":
-        return "16:9"
-    if r == "2:3":
-        return "16:9"
-    return "16:9"
-
-
 def create_image_task(
     prompt: str,
     aspect_ratio: str = "16:9",
@@ -92,56 +76,24 @@ def create_image_task(
     """Create image generation task. Returns (taskId, model field sent in JSON body)."""
     api_key = _get_api_key()
     mid_raw = (model or "").strip().lower()
-    if mid_raw not in {
-        "nano-banana-pro",
-        "nano-banana-2",
-        "gpt-image-2-image-to-image",
-        "grok-imagine/image-to-image",
-    }:
+    if mid_raw not in {"nano-banana-pro", "nano-banana-2"}:
         mid_raw = "nano-banana-pro"
 
-    if mid_raw == "gpt-image-2-image-to-image":
-        if not image_input:
-            raise ValueError(
-                "Для GPT Image 2 (image-to-image) нужны референс-URL: выберите шаблон с изображениями."
-            )
-        ratio_gpt = _aspect_ratio_gpt_image2_i2i(
-            normalize_aspect_ratio(aspect_ratio, "16:9"),
-        )
-        inp_gpt: dict[str, Any] = {
-            "prompt": prompt,
-            "input_urls": image_input[:16],
-            "aspect_ratio": ratio_gpt,
-            "resolution": resolution,
-        }
-        payload = {"model": "gpt-image-2-image-to-image", "input": inp_gpt}
-    elif mid_raw == "grok-imagine/image-to-image":
-        if not image_input:
-            raise ValueError(
-                "Для Grok Imagine (image-to-image) нужны референс-URL: выберите шаблон с изображениями."
-            )
-        inp_grok: dict[str, Any] = {
-            "prompt": prompt,
-            "image_urls": image_input[:5],
-            "nsfw_checker": False,
-        }
-        payload = {"model": "grok-imagine/image-to-image", "input": inp_grok}
-    else:
-        ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
-        inp: dict[str, Any] = {
-            "prompt": prompt,
-            "aspect_ratio": ratio,
-            # Some Kie endpoints/examples use camelCase; send both for compatibility.
-            "aspectRatio": ratio,
-            "resolution": resolution,
-            "output_format": output_format,
-        }
-        if image_input:
-            inp["image_input"] = image_input
-        payload = {
-            "model": mid_raw,
-            "input": inp,
-        }
+    ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
+    inp: dict[str, Any] = {
+        "prompt": prompt,
+        "aspect_ratio": ratio,
+        # Some Kie endpoints/examples use camelCase; send both for compatibility.
+        "aspectRatio": ratio,
+        "resolution": resolution,
+        "output_format": output_format,
+    }
+    if image_input:
+        inp["image_input"] = image_input
+    payload = {
+        "model": mid_raw,
+        "input": inp,
+    }
     resp = requests.post(
         CREATE_TASK,
         json=payload,
@@ -232,46 +184,6 @@ def create_video_task(
     if not task_id:
         raise RuntimeError("No taskId in response")
     return task_id, mapped_model
-
-
-def create_grok_image_to_video_task(
-    *,
-    prompt: str,
-    image_urls: list[str] | None = None,
-    aspect_ratio: str = "16:9",
-    duration_seconds: int = 6,
-    nsfw_checker: bool = False,
-) -> Tuple[str, str]:
-    """Create Grok Imagine image-to-video task. Returns (taskId, model field sent in JSON body)."""
-    api_key = _get_api_key()
-    dur = max(6, min(30, int(duration_seconds)))
-    payload: dict[str, Any] = {
-        "model": "grok-imagine/image-to-video",
-        "input": {
-            "prompt": prompt,
-            "mode": "normal",
-            "aspect_ratio": aspect_ratio,
-            "duration": str(dur),
-            "resolution": "720p",
-            "nsfw_checker": bool(nsfw_checker),
-        },
-    }
-    if image_urls:
-        payload["input"]["image_urls"] = image_urls
-    resp = requests.post(
-        CREATE_GROK_VIDEO_TASK,
-        json=payload,
-        headers={"Authorization": f"Bearer {api_key}"},
-        timeout=30,
-    )
-    data = resp.json()
-    if resp.status_code != 200 or data.get("code") != 200:
-        msg = data.get("msg", resp.text)
-        raise RuntimeError(f"Kie.ai API error: {msg}")
-    task_id = data.get("data", {}).get("taskId")
-    if not task_id:
-        raise RuntimeError("No taskId in response")
-    return task_id, str(payload["model"])
 
 
 def get_video_task_result(task_id: str) -> dict[str, Any]:

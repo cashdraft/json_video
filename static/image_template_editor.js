@@ -431,7 +431,7 @@
 
     async function openModalEdit(folder) {
         state.mode = 'edit';
-        if (titleEl) titleEl.textContent = 'Редактировать шаблон';
+        if (titleEl) titleEl.textContent = 'Шаблон изображений';
         nameLocked = true;
         applyImageTemplateNameLockUi();
         setStatus('Загрузка…');

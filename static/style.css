@@ -9,6 +9,8 @@
     --text-muted: #909098;
     --accent: #4a9eff;
     --accent-hover: #6bb0ff;
+    /* Заголовки scene_001, scene_002… на карточках сцен */
+    --scene-card-id: #b8b8c0;
     /* Подписи полей ElevenLabs: Модель / Источник текста */
     --tts-field-label: #b8aef2;
     /* Голос / Настройки — как предупреждение о лимите */
@@ -6387,9 +6389,13 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     flex-direction: column;
     align-items: stretch;
     justify-content: center;
-    padding: 0.35rem 0.45rem;
     width: 100%;
     box-sizing: border-box;
+}
+
+/* .rewrite-slot-placeholder { padding: 0 } иначе съедает отступы плеера */
+.slot-placeholder.rewrite-slot-placeholder.tts-result-slot {
+    padding: 0.5rem 1.35rem;
 }
 
 .tts-result-slot .slot-status-row {
@@ -7517,6 +7523,151 @@ button.job-download-all-link {
     margin-bottom: 1rem;
 }
 
+.generation-image-bar.scenes-toolbar {
+    gap: 0.65rem;
+}
+
+.generation-image-bar.scenes-toolbar .scenes-toolbar__bulk-image {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Сцены job: свёрнутый вид — как «Итоговый текст» (24px строка + padding 0.55rem). */
+.scene-card.scene-card--collapsible {
+    padding-top: 0.55rem;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed {
+    padding: 0.55rem 1.25rem;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 2.75rem;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-slots,
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-header__row {
+    display: none;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-card-chrome {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-card-header--toggle {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+#job-scenes-section .scene-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-card-title-row {
+    flex-shrink: 0;
+}
+
+.scene-card-header--toggle {
+    cursor: pointer;
+}
+
+.scene-card-header--toggle:hover,
+.scene-card-header--toggle:focus-visible {
+    outline: none;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-card-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) {
+    padding: 0.55rem 1.25rem 1.25rem;
+}
+
+.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-header--toggle {
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    max-height: 24px;
+    margin-bottom: 0;
+}
+
+.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-header__row {
+    margin-top: 0.35rem;
+    margin-bottom: 1rem;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-card-title-row .scene-id {
+    margin-bottom: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+}
+
+.scene-card.scene-card--collapsible.scene-card--body-collapsed .scene-card-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    min-height: 24px;
+    min-width: 0;
+}
+
+.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-compact {
+    display: none;
+}
+
+#job-scenes-section .scene-card.scene-card--collapsible .scene-card-title-row .scene-id {
+    margin-bottom: 0;
+}
+
+.scene-card-title-sep {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    opacity: 0.55;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+#job-scenes-section .scene-card-title__timing {
+    display: inline-flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: auto;
+    min-width: 0;
+}
+
+.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-title-sep,
+.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-title__timing {
+    display: none;
+}
+
+.scene-card-compact__text {
+    flex: 1 1 8rem;
+    min-width: 0;
+    max-width: min(42vw, 28rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: var(--text-muted);
+    -webkit-line-clamp: unset;
+    max-height: none;
+    display: block;
+}
+
 .generation-bulk-actions {
     display: flex;
     gap: 0.6rem;
@@ -7929,27 +8080,92 @@ body.job-page--booting {
     margin-bottom: 0;
 }
 
-.scene-audio-timing-badge {
-    display: inline-block;
-    margin-top: 0.25rem;
-    padding: 0.12rem 0.45rem;
-    border-radius: 4px;
-    font-size: 0.65rem;
-    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    color: var(--text-muted);
-    background: rgba(128, 128, 128, 0.12);
-    border: 1px solid rgba(128, 128, 128, 0.25);
-    max-width: 100%;
-    white-space: normal;
-    word-break: break-word;
+.scene-header__row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.65rem;
+    margin-top: 0.35rem;
 }
 
-.scene-audio-timing-badge--warn {
+.scene-audio-timing {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex-shrink: 0;
+    width: max-content;
+    min-width: 5.5rem;
+}
+
+.scene-audio-timing__dur,
+.scene-audio-timing__range {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.14rem 0.42rem;
+    border-radius: 4px;
+    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    text-align: left;
+    white-space: nowrap;
+    border: 1px solid rgba(128, 128, 128, 0.28);
+    background: rgba(128, 128, 128, 0.16);
+}
+
+.scene-audio-timing__dur {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.scene-audio-timing__range {
+    margin-top: 0.22rem;
+    font-size: 0.62rem;
+    font-weight: 500;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.scene-header__divider {
+    flex-shrink: 0;
+    align-self: stretch;
+    width: 1px;
+    min-height: calc(2 * 1.25em + 0.2rem);
+    margin: 0 0.1rem;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.scene-header__texts {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+}
+
+.scene-audio-timing--dur-red .scene-audio-timing__dur {
     color: #f07178;
-    background: rgba(240, 113, 120, 0.1);
-    border-color: rgba(240, 113, 120, 0.45);
+    background: rgba(240, 113, 120, 0.14);
+    border-color: rgba(240, 113, 120, 0.38);
+}
+
+.scene-audio-timing--dur-gray .scene-audio-timing__dur {
+    color: var(--text-muted);
+    background: rgba(128, 128, 128, 0.16);
+    border-color: rgba(128, 128, 128, 0.28);
+}
+
+.scene-audio-timing--dur-green .scene-audio-timing__dur {
+    color: #7dcea0;
+    background: rgba(125, 206, 160, 0.12);
+    border-color: rgba(125, 206, 160, 0.35);
+}
+
+.scene-audio-timing--dur-yellow .scene-audio-timing__dur {
+    color: #e6c84a;
+    background: rgba(230, 200, 74, 0.12);
+    border-color: rgba(230, 200, 74, 0.38);
 }
 
 .scenes-stripped-wrap {
@@ -8040,6 +8256,12 @@ body.job-page--booting {
     margin-bottom: 0.35rem;
 }
 
+#job-scenes-section .scene-id,
+.job-scenes-section .scene-id {
+    color: var(--scene-card-id);
+    letter-spacing: 0.03em;
+}
+
 .scene-text {
     font-size: 0.72rem;
     color: var(--text-muted);
@@ -8052,9 +8274,12 @@ body.job-page--booting {
     overflow: hidden;
 }
 
+.scene-text--en {
+    color: var(--text-muted);
+}
+
 .scene-text--ru {
     color: var(--text);
-    margin-bottom: 0.2rem;
 }
 
 .scene-slots {
@@ -8072,6 +8297,18 @@ body.job-page--booting {
 
 .scene-slot--pexels {
     grid-column: 1 / -1;
+}
+
+.scene-slot--later .slot-header {
+    justify-content: flex-start;
+}
+
+.scene-slot-later-badge {
+    cursor: default;
+}
+
+.scene-slot--later .slot-placeholder[data-status="pending"] .slot-status {
+    color: #55555c;
 }
 
 .slot-prompt-editor-wrap {
@@ -9154,6 +9391,11 @@ body.job-page--booting {
 }
 
 .rewrite-lock-toggle.locked-prompt-edit-btn .rewrite-lock-toggle__edit {
+    display: inline-flex !important;
+}
+
+/* ✎/✓ у промптов Start/Video на карточках сцен — не скрывать карандаш в locked. */
+.rewrite-lock-toggle.slot-prompt-toggle.rewrite-lock-toggle--locked .rewrite-lock-toggle__edit {
     display: inline-flex !important;
 }
 
