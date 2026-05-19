@@ -395,6 +395,135 @@ def _render_scenes_stripped_with_timing(scenes: list[dict]) -> str:
     return "\n".join(out)
 
 
+def _parse_ms_field(val: Any) -> int | None:
+    if val is None or val == "":
+        return None
+    try:
+        return int(float(str(val).strip()))
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_scenes_stripped_timings(raw_text: str) -> tuple[list[dict], list[str]]:
+    """Парсит «8 строк на сцену» из блока Тайминги Scenes → список сцен с ``audio_timing``."""
+    scenes: list[dict] = []
+    errors: list[str] = []
+    current: dict[str, Any] | None = None
+    at: dict[str, Any] = {}
+
+    def _flush() -> None:
+        nonlocal current, at
+        if current is None:
+            return
+        if at:
+            current["audio_timing"] = dict(at)
+        scenes.append(current)
+        current = None
+        at = {}
+
+    for line_no, obj, err in _iter_scene_json_objects(raw_text):
+        if err is not None:
+            errors.append(err)
+            continue
+        if not isinstance(obj, dict):
+            errors.append(f"Ошибка в строке {line_no}: ожидается JSON-объект")
+            continue
+
+        if "scene_id" in obj:
+            _flush()
+            current = {
+                "scene_id": str(obj.get("scene_id") or ""),
+                "text": "",
+                "text_ru": "",
+            }
+            continue
+
+        if current is None:
+            errors.append(f"Ошибка в строке {line_no}: блок без предшествующего scene_id")
+            continue
+
+        if "text" in obj:
+            current["text"] = str(obj.get("text") or "")
+            continue
+        if "text_ru" in obj:
+            current["text_ru"] = str(obj.get("text_ru") or "")
+            continue
+        if "start_time_ms" in obj:
+            sm = _parse_ms_field(obj.get("start_time_ms"))
+            if sm is not None:
+                at["start_ms"] = sm
+            continue
+        if "start_end_ms" in obj:
+            em = _parse_ms_field(obj.get("start_end_ms"))
+            if em is not None:
+                at["end_ms"] = em
+            continue
+        if "start_time" in obj:
+            st = str(obj.get("start_time") or "").strip()
+            if st:
+                at["start_time"] = st
+            continue
+        if "start_end" in obj:
+            en = str(obj.get("start_end") or "").strip()
+            if en:
+                at["start_end"] = en
+            continue
+        if "Duration" in obj or "duration" in obj:
+            dur = obj.get("Duration", obj.get("duration"))
+            if dur is not None and str(dur).strip() != "":
+                at["duration_s"] = str(dur).strip()
+            continue
+
+        # match_ratio / low_confidence — если вручную вставили в stripped
+        if "match_ratio" in obj:
+            try:
+                at["match_ratio"] = float(obj["match_ratio"])
+            except (TypeError, ValueError):
+                pass
+            continue
+        if "low_confidence" in obj:
+            at["low_confidence"] = bool(obj.get("low_confidence"))
+            continue
+
+    _flush()
+
+    # duration_ms из start/end, если не задано
+    for sc in scenes:
+        at_sc = sc.get("audio_timing") if isinstance(sc.get("audio_timing"), dict) else {}
+        sm = at_sc.get("start_ms")
+        em = at_sc.get("end_ms")
+        if isinstance(sm, int) and isinstance(em, int) and em >= sm and at_sc.get("duration_ms") is None:
+            at_sc["duration_ms"] = em - sm
+        if at_sc:
+            sc["audio_timing"] = at_sc
+
+    return scenes, errors
+
+
+def _timings_validation_parse_error_payload(errors: list[str]) -> dict[str, Any]:
+    detail = "; ".join(errors[:3])
+    if len(errors) > 3:
+        detail += f" … (+{len(errors) - 3})"
+    return {
+        "ok": False,
+        "status": "no",
+        "reasons": errors[:8],
+        "warns": [],
+        "checks": [
+            {
+                "label": "Разбор Result",
+                "ok": False,
+                "detail": detail or "ошибка JSON",
+                "failItems": errors[:12],
+                "severity": "fail",
+            }
+        ],
+        "stats": {},
+        "summary": "Не удалось разобрать Result: исправьте JSON.",
+        "timeline": {"items": [], "scene_count": 0, "pause_count": 0, "overlap_count": 0, "long_count": 0},
+    }
+
+
 def _apply_tts_word_timings_to_scenes(
     job_id: str,
     scenes: list[dict],
@@ -6281,12 +6410,21 @@ def _scenes_timings_validation_payload(
         doc, fname = _latest_tts_words_doc_for_job(job_id, source=src)
         if not audio_fn:
             audio_fn = fname or ""
+    project_scene_ids: list[str] = []
+    job = load_job(job_id)
+    if job and isinstance(job.get("scenes"), list):
+        project_scene_ids = [
+            str(s.get("scene_id") or "")
+            for s in job["scenes"]
+            if isinstance(s, dict) and s.get("scene_id")
+        ]
     return validate_scene_timings(
         scenes,
         timings_rows=scene_audio_timings,
         words_doc=doc,
         source=src,
         audio_filename=audio_fn,
+        project_scene_ids=project_scene_ids or None,
     )
 
 
@@ -6562,6 +6700,55 @@ def job_scenes_apply_tts_timings(job_id: str):
             ),
         }
     )
+
+
+@app.route("/job/<job_id>/scenes/validate-timings", methods=["POST"])
+def job_scenes_validate_timings(job_id: str):
+    """Проверка «Тайминги Scenes» по тексту Result без сохранения job."""
+    body = request.get_json(silent=True) or {}
+    raw_text = ""
+    if isinstance(body, dict):
+        raw_text = str(body.get("scenes_stripped_text") or body.get("text") or "")
+    source = _timings_source_normalize(body.get("source") if isinstance(body, dict) else None)
+
+    if not raw_text.strip():
+        return jsonify(
+            {
+                "ok": True,
+                "timings_validation": {
+                    "ok": False,
+                    "status": "no",
+                    "reasons": [],
+                    "warns": [],
+                    "checks": [],
+                    "stats": {},
+                    "summary": "Result пуст.",
+                    "timeline": {
+                        "items": [],
+                        "scene_count": 0,
+                        "pause_count": 0,
+                        "overlap_count": 0,
+                        "long_count": 0,
+                    },
+                },
+            }
+        )
+
+    scenes, errors = parse_scenes_stripped_timings(raw_text)
+    if errors:
+        return jsonify(
+            {
+                "ok": False,
+                "errors": errors,
+                "timings_validation": _timings_validation_parse_error_payload(errors),
+            }
+        )
+
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+
+    timings_validation = _scenes_timings_validation_payload(job_id, scenes, source=source)
+    return jsonify({"ok": True, "timings_validation": timings_validation, "scenes_count": len(scenes)})
 
 
 @app.route("/job/<job_id>/generate/start", methods=["POST"])
@@ -8334,11 +8521,30 @@ def job_audio_file(job_id: str, filename: str):
     return send_from_directory(d, filename, mimetype="audio/mpeg", max_age=0)
 
 
+def _wipe_whisper_words_files(mp3: Path) -> list[str]:
+    """Удаляет сохранённый Result Whisper для MP3 (и .tmp), чтобы ↻ не восстанавливался после F5."""
+    removed: list[str] = []
+    for path in (
+        mp3.parent / f"{mp3.stem}.whisper.words.json",
+        mp3.parent / f"{mp3.stem}.whisper.words.json.tmp",
+    ):
+        if not path.is_file():
+            continue
+        try:
+            path.unlink()
+            removed.append(path.name)
+        except OSError:
+            pass
+    return removed
+
+
 @app.route("/job/<job_id>/whisper/words", methods=["POST"])
 def job_whisper_words(job_id: str):
-    """Прогоняет последний MP3 джоба через локальный faster-whisper и сохраняет
+    """Прогоняет последний MP3 джоба через WhisperX (или faster-whisper) и сохраняет
     рядом ``<stem>.whisper.words.json``. Стримит прогресс в формате NDJSON
     (event-per-line), финальное событие — ``{"type":"final", ...}``.
+
+    При старте (↻) старый ``.whisper.words.json`` сразу удаляется с диска.
     """
     if load_job(job_id) is None:
         return jsonify({"ok": False, "error": "Job not found"}), 404
@@ -8352,6 +8558,9 @@ def job_whisper_words(job_id: str):
     audio_dir = mp3.parent
     out_filename = f"{mp3.stem}.whisper.words.json"
     out_path = audio_dir / out_filename
+
+    # Стираем прошлый Result до транскрипции — иначе F5 во время прогона подставит старый JSON.
+    _wipe_whisper_words_files(mp3)
 
     body = request.get_json(silent=True) or {}
     raw_lang = (body.get("language") or "").strip() if isinstance(body, dict) else ""
@@ -8373,7 +8582,7 @@ def job_whisper_words(job_id: str):
             yield _ev(
                 {
                     "type": "error",
-                    "error": f"faster-whisper недоступен: {e}",
+                    "error": f"Whisper недоступен: {e}",
                     "elapsed_seconds": elapsed(),
                 }
             )
@@ -8385,7 +8594,7 @@ def job_whisper_words(job_id: str):
                 "phase": "prepare",
                 "audio_filename": mp3.name,
                 "language": language,
-                "message": f"Транскрипция {mp3.name} через локальный faster-whisper…",
+                "message": f"Транскрипция {mp3.name} (faster-whisper)…",
                 "elapsed_seconds": elapsed(),
             }
         )
@@ -8404,12 +8613,26 @@ def job_whisper_words(job_id: str):
                 payload: dict[str, Any] = {"type": "status", "phase": stage, "elapsed_seconds": elapsed()}
                 payload.update({k: v for k, v in ev.items() if k != "stage"})
                 if stage == "model_load":
-                    payload["message"] = f"Загружаю модель Whisper «{ev.get('model')}»…"
+                    eng = ev.get("engine") or "whisper"
+                    payload["message"] = f"Загружаю {eng} «{ev.get('model')}»…"
                 elif stage == "model_ready":
+                    eng = ev.get("engine") or "whisper"
+                    vad = ev.get("vad_method")
+                    vad_s = f", vad={vad}" if vad else ""
                     payload["message"] = (
-                        f"Модель «{ev.get('model')}» готова "
-                        f"(device={ev.get('device')}, compute={ev.get('compute_type')})."
+                        f"«{ev.get('model')}» ({eng}) готова "
+                        f"(device={ev.get('device')}, compute={ev.get('compute_type')}{vad_s})."
                     )
+                elif stage in ("transcribe_start", "transcribe"):
+                    payload["message"] = "Транскрипция речи (VAD + Whisper)…"
+                elif stage == "align_model_load":
+                    payload["message"] = f"Загружаю модель выравнивания ({ev.get('align_model')})…"
+                elif stage in ("align_start", "align"):
+                    payload["message"] = "Уточнение таймингов (WhisperX wav2vec2)…"
+                elif stage == "align_fallback":
+                    payload["message"] = str(ev.get("message") or "Align пропущен…")
+                elif stage == "fallback":
+                    payload["message"] = str(ev.get("message") or "Фолбэк…")
                 elif stage == "segment":
                     total_ms = int(ev.get("total_ms") or 0)
                     cur_ms = int(ev.get("current_ms") or 0)
@@ -8419,6 +8642,13 @@ def job_whisper_words(job_id: str):
                         f"Сегмент {ev.get('segment_index')}: {cur_ms / 1000:.1f}s "
                         f"/ {(total_ms / 1000):.1f}s · слов накоплено {_fmt_num_ru(ev.get('words_so_far'))}."
                     )
+                elif stage == "heartbeat":
+                    payload["message"] = str(
+                        ev.get("message")
+                        or "Распознавание продолжается… (на CPU это может занять много минут)"
+                    )
+                elif stage == "done" and not payload.get("message"):
+                    payload["message"] = "Завершение…"
                 yield _ev(payload)
         except Exception as e:  # noqa: BLE001
             err = str(e)
@@ -8474,7 +8704,10 @@ def job_whisper_words(job_id: str):
                 "message": (
                     f"Готово: {_fmt_num_ru(len(words_list))} слов, "
                     f"язык={final_doc.get('language')}, "
-                    f"модель={final_doc.get('model')} ({final_doc.get('device')})."
+                    f"{final_doc.get('engine') or 'whisper'} / {final_doc.get('model')} "
+                    f"({final_doc.get('device')}"
+                    f"{', align=' + str(final_doc.get('align_model')) if final_doc.get('align_model') else ''}"
+                    f"{', без align' if final_doc.get('whisperx_align') is False else ''})."
                 ),
             }
         )
@@ -9357,11 +9590,17 @@ def job_page(job_id: str):
         )
         else ("whisper" if whisper_last_words_href else "elevenlabs")
     )
+    scenes_stripped_with_timing = _render_scenes_stripped_with_timing(scenes_for_template)
+    scenes_for_timings_check = scenes_for_template
+    if (scenes_stripped_with_timing or "").strip():
+        parsed_for_check, _parse_errs = parse_scenes_stripped_timings(scenes_stripped_with_timing)
+        if parsed_for_check and not _parse_errs:
+            scenes_for_timings_check = parsed_for_check
     scenes_timings_validation = (
         _scenes_timings_validation_payload(
-            job_id, scenes_for_template, source=apply_timings_source_val
+            job_id, scenes_for_timings_check, source=apply_timings_source_val
         )
-        if scenes_for_template
+        if scenes_for_timings_check
         else None
     )
     html = render_template(
@@ -9371,7 +9610,7 @@ def job_page(job_id: str):
         **rewrite_ctx,
         rewrite_id_allowed=rewrite_id_ok(job_id),
         scenes=scenes_for_template,
-        scenes_stripped_with_timing=_render_scenes_stripped_with_timing(scenes_for_template),
+        scenes_stripped_with_timing=scenes_stripped_with_timing,
         scenes_timings_validation=scenes_timings_validation,
         tts_words_available=bool(tts_last_words_href),
         whisper_words_available=bool(whisper_last_words_href),

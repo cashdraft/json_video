@@ -18,7 +18,7 @@ TAIL_FAIL_MS = 15_000
 SHORT_SCENE_WARN_MS = 200
 LONG_SCENE_WARN_MS = 120_000
 TIMELINE_LONG_SCENE_MS = 20_000
-TIMELINE_PAUSE_MS = 5_000
+TIMELINE_PAUSE_MS = 1_000  # пауза в «Сцены по порядку» (разрыв между соседними сценами в Result)
 OVERLAP_FAIL_MS = 1
 DURATION_SUM_WARN_RATIO = 0.55  # сумма сцен / охват озвучки
 UNUSED_WORDS_WARN_RATIO = 0.08
@@ -105,6 +105,7 @@ def validate_scene_timings(
     source: str = "elevenlabs",
     audio_filename: str = "",
     words_source_ok: bool | None = None,
+    project_scene_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Возвращает структуру для UI «Проверка» в блоке Тайминги Scenes:
@@ -190,6 +191,29 @@ def validate_scene_timings(
         f"{len(set(dup_ids))} повторов" if dup_ids else "",
         fail_items=dup_ids[:40],
     )
+
+    if project_scene_ids:
+        project_set = {str(x) for x in project_scene_ids if str(x).strip()}
+        result_set = {str(sc.get("scene_id") or "") for sc in scenes if isinstance(sc, dict)}
+        result_set.discard("")
+        missing_in_result = [x for x in project_scene_ids if str(x) not in result_set]
+        extra_in_result = sorted(result_set - project_set)
+        mismatch = bool(missing_in_result or extra_in_result)
+        miss_detail: list[str] = []
+        if missing_in_result:
+            miss_detail.append(f"нет в Result: {len(missing_in_result)}")
+        if extra_in_result:
+            miss_detail.append(f"лишние: {len(extra_in_result)}")
+        add_check(
+            "Сцены vs JSON проекта",
+            not mismatch,
+            " · ".join(miss_detail) if mismatch else f"{len(result_set)}/{len(project_set)}",
+            fail_items=(
+                [f"− {x}" for x in missing_in_result[:24]]
+                + [f"+ {x}" for x in extra_in_result[:24]]
+            )[:48],
+            severity="warn" if mismatch else "info",
+        )
 
     add_check(
         "Пустой текст с таймингом",
@@ -523,6 +547,8 @@ def _build_scene_timeline(
         if has_timing and prev_end is not None and start_ms < prev_end - OVERLAP_FAIL_MS:
             flags.append("overlap")
             overlap_count += 1
+        if has_timing and dur_ms < SHORT_SCENE_WARN_MS:
+            flags.append("short")
         if has_timing and dur_ms > TIMELINE_LONG_SCENE_MS:
             flags.append("long")
             long_count += 1

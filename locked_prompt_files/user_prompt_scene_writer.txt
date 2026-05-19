@@ -10,7 +10,7 @@
 
 {"scene_id":"scene_001"}
 {"text":"...original text..."}
-{"text_ru":"Перевод original text на Русский язык"}
+{"text_ru":"Перевод text на Русский язык, даже если текст уже на Русском языке, все равно переведи"}
 {"start":{"prompt":"..."}}
 {"end":{"prompt"}}
 {"video":{"prompt":"..."}}

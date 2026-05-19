@@ -5194,6 +5194,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .video-parse-panel .buttons-section {
     margin-top: 0.1rem;
+    justify-content: center;
 }
 
 .video-parse-lock-overlay {
@@ -5449,6 +5450,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .video-json-panel .buttons-section {
     margin-top: 0;
+    justify-content: center;
 }
 
 /* JSON-код сцен — сворачиваемая шапка как у Озвучка / YouTube packaging */
@@ -7011,6 +7013,11 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     background: rgba(255, 100, 100, 0.12);
 }
 
+.tts-word-timings-scenes-timeline__row--short {
+    background: rgba(255, 180, 60, 0.1);
+    color: rgba(255, 210, 120, 0.95);
+}
+
 .tts-word-timings-scenes-timeline__row--long {
     background: rgba(255, 180, 60, 0.1);
     color: rgba(255, 210, 120, 0.95);
@@ -7231,6 +7238,7 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .job-page .job-settings,
 .job-page .job-summary,
+.job-page .generation-image-bar,
 .job-page .generation-section,
 .job-page .tts-section,
 .job-page .scenes-section {
@@ -7502,6 +7510,13 @@ button.job-download-all-link {
     margin-bottom: 1rem;
 }
 
+.generation-image-bar {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
 .generation-bulk-actions {
     display: flex;
     gap: 0.6rem;
@@ -7636,6 +7651,67 @@ button.job-download-all-link {
 }
 
 /* Buttons */
+/* Экран загрузки job-страницы (белый блюр + спиннер) */
+.job-page-boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.job-page-boot-overlay.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.job-page-boot-overlay__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.job-page-boot-overlay__spinner {
+    width: 44px;
+    height: 44px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--accent, #3b82f6);
+    border-radius: 50%;
+    animation: job-page-boot-spin 0.85s linear infinite;
+}
+
+.job-page-boot-overlay__text {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #1a1a1a;
+    white-space: nowrap;
+}
+
+#job-page-boot-elapsed {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+@keyframes job-page-boot-spin {
+    to { transform: rotate(360deg); }
+}
+
+body.job-page--booting {
+    overflow: hidden;
+}
+
 .buttons-section {
     display: flex;
     gap: 0.75rem;
@@ -8158,18 +8234,9 @@ button.job-download-all-link {
     display: none;
 }
 
-.btn-regenerate.btn-video-locked,
-.btn-regenerate.btn-video-locked:hover {
-    color: #ff9a9a;
-    border-color: var(--error);
-    background: rgba(255, 77, 79, 0.12);
-    cursor: not-allowed;
-}
-
-.btn-regenerate.btn-video-locked .btn-icon {
-    font-size: 0.62rem;
-    font-weight: 700;
-    transform: none;
+.rewrite-stage-run-blocked.is-hidden,
+.slot-video-run-blocked.is-hidden {
+    display: none !important;
 }
 
 /* Russian / Semantic: нет исходника для запуска (пустой Source или пустой Russian) */

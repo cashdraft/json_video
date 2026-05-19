@@ -2,7 +2,7 @@
 ElevenLabs Text-to-Speech API (server-side only).
 
 Docs: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
-Озвучка только через Eleven v3 (~5000 символов на один запрос; длинный текст режется по точкам).
+Озвучка только через Eleven v3 (~5000 символов на один запрос; длинный текст режется по предложениям).
 """
 
 from __future__ import annotations
@@ -29,9 +29,10 @@ TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT = 1500
 TTS_TIMESTAMPS_TARGET_CHUNKS = 3
 TTS_TIMESTAMPS_MIN_CHUNK_CHARS = 400
 
-# Eleven v3: нарезка по предложениям (не жёстко 280/400 — комфортнее 500–600).
-TTS_V3_CHUNK_TARGET = 550
-TTS_V3_CHUNK_MAX = 600
+# Eleven v3: нарезка по предложениям, ориентир ~1000–1500 символов на кусок.
+TTS_V3_CHUNK_MIN = 1000
+TTS_V3_CHUNK_TARGET = 1250
+TTS_V3_CHUNK_MAX = 1500
 
 TTS_MODELS: list[dict[str, Any]] = [
     {
@@ -138,7 +139,7 @@ def smart_chunk_tts_v3(
     target: int = TTS_V3_CHUNK_TARGET,
     max_len: int = TTS_V3_CHUNK_MAX,
 ) -> list[str]:
-    """Нарезка для Eleven v3: ~500–600 символов, по концу предложения; [тег] не в конце чанка."""
+    """Нарезка для Eleven v3: ~1000–1500 символов, по концу предложения; [тег] не в конце чанка."""
     t = (text or "").strip()
     if not t:
         return []
@@ -166,7 +167,12 @@ def smart_chunk_tts_v3(
         if len(trial) <= max_len:
             current = trial
             idx += 1
-            if len(current) >= target and not _ends_with_bracket_tag(current):
+            min_flush = min(target, TTS_V3_CHUNK_MIN)
+            if (
+                len(current) >= target
+                and len(current) >= min_flush
+                and not _ends_with_bracket_tag(current)
+            ):
                 chunks.append(current.strip())
                 current = ""
             continue

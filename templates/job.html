@@ -4,9 +4,76 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Проект {{ job_id }} — Генерация</title>
+    <style id="job-page-boot-critical">
+        body.job-page--booting { overflow: hidden; }
+        .job-page-boot-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.16);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+    </style>
+    <script>window.__JOB_BOOT_T0 = Date.now();</script>
     {% include '_stylesheet_link.html' %}
 </head>
-<body class="job-page" data-openai-key="{{ '1' if openai_key_set else '0' }}">
+<body class="job-page job-page--booting" data-openai-key="{{ '1' if openai_key_set else '0' }}">
+    <div id="job-page-boot-overlay" class="job-page-boot-overlay" role="status" aria-live="polite" aria-busy="true">
+        <div class="job-page-boot-overlay__card">
+            <div class="job-page-boot-overlay__spinner" aria-hidden="true"></div>
+            <p class="job-page-boot-overlay__text">Загрузка страницы… <span id="job-page-boot-elapsed">0</span> с</p>
+        </div>
+    </div>
+    <script>
+    (function jobPageBootOverlay() {
+        var overlay = document.getElementById('job-page-boot-overlay');
+        var elapsedEl = document.getElementById('job-page-boot-elapsed');
+        if (!overlay) return;
+        var t0 = window.__JOB_BOOT_T0 || Date.now();
+        function tick() {
+            if (elapsedEl) {
+                elapsedEl.textContent = String(Math.max(0, Math.floor((Date.now() - t0) / 1000)));
+            }
+        }
+        tick();
+        var tickIv = window.setInterval(tick, 250);
+        var dismissed = false;
+        window.__jobPageBootDismiss = function () {
+            if (dismissed) return;
+            dismissed = true;
+            window.clearInterval(tickIv);
+            tick();
+            overlay.classList.add('is-hidden');
+            overlay.setAttribute('aria-busy', 'false');
+            document.body.classList.remove('job-page--booting');
+            window.setTimeout(function () {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 450);
+        };
+        function afterFullyLoaded() {
+            var fontsReady = (document.fonts && document.fonts.ready)
+                ? document.fonts.ready.catch(function () { return undefined; })
+                : Promise.resolve();
+            fontsReady.then(function () {
+                window.requestAnimationFrame(function () {
+                    window.requestAnimationFrame(function () {
+                        window.setTimeout(window.__jobPageBootDismiss, 120);
+                    });
+                });
+            });
+        }
+        if (document.readyState === 'complete') {
+            afterFullyLoaded();
+        } else {
+            window.addEventListener('load', afterFullyLoaded, { once: true });
+        }
+        window.setTimeout(window.__jobPageBootDismiss, 120000);
+    })();
+    </script>
     <script>window.__JSON_VIDEO_ROOT__ = {{ request.script_root | tojson }};</script>
     {% macro template_no_image_visual() %}
     <span class="template-option-visual template-option-visual--placeholder" aria-hidden="true">
@@ -753,20 +820,15 @@
             </div>
         </form>
 
-        <section class="generation-section scene-card rewrite-pipeline-runner video-panel" aria-label="Пакетная генерация изображений и видео">
-            <div class="rewrite-pipeline-runner__head generation-runner__head">
-                <div class="generation-runner__head-top">
-                    <div class="scene-id rewrite-pipeline-runner__title">Генерация</div>
-                    <div class="rewrite-pipeline-runner__actions generation-runner__actions">
-                        <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-image" title="Сгенерировать Image — только слоты без готовой картинки" aria-label="Сгенерировать Image — только слоты без готовой картинки">↻ Image</button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="bulk-generate-video" title="Сгенерировать Video" aria-label="Сгенерировать Video">↻ Video</button>
-                        <button type="button" class="btn btn-danger btn-sm" id="bulk-generate-stop" disabled title="Остановить пакетную генерацию" aria-label="Остановить">Остановить</button>
-                    </div>
-                </div>
-                <p class="scene-text rewrite-pipeline-runner__lead generation-runner__lead">Kie.ai: {{ job.job_meta.image_model_label or 'Nano Banana Pro' }} (image) и Veo (video). Нажми ↻ у слота с prompt.</p>
-            </div>
-            <pre class="rewrite-pipeline-runner__log" id="generation-bulk-log" aria-live="polite">Журнал пуст. Нажмите «↻ Image» или «↻ Video».</pre>
-        </section>
+        <div class="generation-image-bar">
+            <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                id="bulk-generate-image"
+                title="Сгенерировать Image — только слоты без готовой картинки"
+                aria-label="Сгенерировать Image — только слоты без готовой картинки"
+            >↻ Image</button>
+        </div>
 
         <section
             class="scenes-section"
@@ -1844,11 +1906,19 @@
         jsonInputEl.addEventListener('drop', blockJsonSceneTextEditWhenLocked);
     }
     if (jsonSceneTextToggleBtn && jsonInputEl) {
-        jsonSceneTextToggleBtn.addEventListener('click', () => {
+        jsonSceneTextToggleBtn.addEventListener('click', async () => {
             if (jsonParseForm && jsonParseForm.dataset.parseLocked === '1') return;
+            const wasUnlocked = !jsonSceneTextLocked;
             jsonSceneTextLocked = !jsonSceneTextLocked;
             applyJsonSceneTextLockUi();
-            if (!jsonSceneTextLocked) jsonInputEl.focus();
+            if (!jsonSceneTextLocked) {
+                jsonInputEl.focus();
+                return;
+            }
+            if (wasUnlocked && String(jsonInputEl.value || '').trim()
+                && typeof window.__submitParseScenesAjax === 'function') {
+                await window.__submitParseScenesAjax({ skipConfirm: true });
+            }
         });
     }
     if (jsonSceneTextCopyBtn && jsonInputEl) {
@@ -2013,6 +2083,9 @@
                 inp.addEventListener('change', () => {
                     applyJsonScriptFromSource(inp.value);
                     schedulePersistJsonScriptSource();
+                    if (typeof window.__scheduleParseScenesAndTimings === 'function') {
+                        window.__scheduleParseScenesAndTimings();
+                    }
                 });
             });
             document.querySelectorAll('#video-json-script-source-block .tts-script-source-option').forEach((lab) => {
@@ -2026,6 +2099,9 @@
                     if (lab.dataset.jsonWasChecked === '1') {
                         applyJsonScriptFromSource(inp.value);
                         schedulePersistJsonScriptSource();
+                        if (typeof window.__scheduleParseScenesAndTimings === 'function') {
+                            window.__scheduleParseScenesAndTimings();
+                        }
                     }
                 });
             });
@@ -2383,7 +2459,18 @@
         }
     };
 
-    submitParseScenesAjax = async () => {
+    let parseScenesAndTimingsTimer = null;
+    window.__scheduleParseScenesAndTimings = () => {
+        if (parseScenesAndTimingsTimer) clearTimeout(parseScenesAndTimingsTimer);
+        parseScenesAndTimingsTimer = setTimeout(() => {
+            parseScenesAndTimingsTimer = null;
+            const raw = jsonInputEl ? String(jsonInputEl.value || '').trim() : '';
+            if (!raw || typeof submitParseScenesAjax !== 'function') return;
+            submitParseScenesAjax({ skipConfirm: true });
+        }, 280);
+    };
+
+    submitParseScenesAjax = async (opts) => {
         if (!jsonParseForm) return;
         const submitBtn = jsonParseForm.querySelector('button[type="submit"]');
         const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
@@ -2441,10 +2528,6 @@
             if (typeof refreshGallery === 'function') {
                 try { refreshGallery(); } catch (_) { /* ignore */ }
             }
-            const genLead = document.querySelector('.generation-section .generation-runner__lead');
-            if (genLead && data.image_model_label && data.video_model_label) {
-                genLead.textContent = `Kie.ai: ${data.image_model_label} (image) и ${data.video_model_label} (video). Нажми ↻ у слота с prompt.`;
-            }
             updateJsonStats();
             setParseStatus(data.message || 'Сцены обновлены.', false);
             if (data.timings_validation && typeof window.renderScenesTimingsValidation === 'function') {
@@ -2462,6 +2545,7 @@
             }
         }
     };
+    window.__submitParseScenesAjax = submitParseScenesAjax;
 
     (function initMontagePanel() {
         const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
@@ -3031,7 +3115,8 @@
     const updateVideoButtonState = (sceneCard) => {
         if (!sceneCard) return;
         const videoBtn = sceneCard.querySelector('.btn-generate[data-slot="video"]');
-        if (!videoBtn) return;
+        const videoBlocked = sceneCard.querySelector('.slot-video-run-blocked');
+        if (!videoBtn && !videoBlocked) return;
 
         const hasStartPrompt = sceneCard.dataset.hasStartPrompt === '1';
         const hasEndPrompt = sceneCard.dataset.hasEndPrompt === '1';
@@ -3042,19 +3127,21 @@
         const depsReady = (!hasStartPrompt || hasStartImage) && (!hasEndPrompt || hasEndImage);
         const canGenerateVideo = hasVideoPrompt && depsReady;
 
-        videoBtn.classList.toggle('is-hidden', !hasVideoPrompt);
-        if (!hasVideoPrompt) {
-            videoBtn.disabled = true;
-            videoBtn.classList.remove('btn-video-locked');
-            videoBtn.innerHTML = '<span class="btn-icon">↻</span>';
-            videoBtn.title = 'Add video prompt first';
-            return;
+        if (videoBtn) {
+            videoBtn.classList.toggle('is-hidden', !canGenerateVideo);
+            videoBtn.disabled = !canGenerateVideo;
+            videoBtn.title = canGenerateVideo
+                ? 'Generate video'
+                : (hasVideoPrompt ? 'Generate required start/end images first' : 'Add video prompt first');
         }
-
-        videoBtn.disabled = !canGenerateVideo;
-        videoBtn.classList.toggle('btn-video-locked', !canGenerateVideo);
-        videoBtn.innerHTML = `<span class="btn-icon">${canGenerateVideo ? '↻' : '×'}</span>`;
-        videoBtn.title = canGenerateVideo ? 'Generate video' : (hasVideoPrompt ? 'Generate required start/end images first' : 'Add video prompt first');
+        if (videoBlocked) {
+            videoBlocked.classList.toggle('is-hidden', !hasVideoPrompt || canGenerateVideo);
+            const blockTitle = hasVideoPrompt
+                ? 'Сначала сгенерируйте кадры start/end (если есть промпты)'
+                : 'Добавьте video prompt';
+            videoBlocked.title = blockTitle;
+            videoBlocked.setAttribute('aria-label', blockTitle);
+        }
     };
 
     const updateVideoHdStatus = (sceneCard, text = '') => {
@@ -3303,7 +3390,6 @@
         let list = Array.from(document.querySelectorAll(selector)).filter((btn) => {
             if (!btn) return false;
             if (btn.classList.contains('is-hidden')) return false;
-            if (kind === 'video' && btn.classList.contains('btn-video-locked')) return false;
             return true;
         });
         if (kind === 'image') {
@@ -3617,8 +3703,9 @@
         const TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT = 1500;
         const TTS_TIMESTAMPS_TARGET_CHUNKS = 3;
         const TTS_TIMESTAMPS_MIN_CHUNK_CHARS = 400;
-        const TTS_V3_CHUNK_TARGET = 550;
-        const TTS_V3_CHUNK_MAX = 600;
+        const TTS_V3_CHUNK_MIN = 1000;
+        const TTS_V3_CHUNK_TARGET = 1250;
+        const TTS_V3_CHUNK_MAX = 1500;
         const modelSel = document.getElementById('tts-model');
         const voiceSel = document.getElementById('tts-voice');
         const textEl = document.getElementById('tts-text');
@@ -4023,6 +4110,8 @@
             TAIL_GAP_FAIL_MS: 5000,
             TAIL_GAP_WARN_MS: 2000,
             HEAD_GAP_FAIL_MS: 2000,
+            /** До этого числа слов с end_ms ≤ start_ms — проверка «Нулевая длина» остаётся OK. */
+            ZERO_DUR_TOLERANCE: 3,
             ZERO_DUR_FAIL_RATIO: 0.05,
             SAME_START_RATIO_FAIL: 0.15,
             CLUSTER_FAIL_SIZE: 8,
@@ -4077,12 +4166,12 @@
             const checks = [];
             const reasons = [];
             const warns = [];
-            const addCheck = (label, ok, detail, failItems) => {
+            const addCheck = (label, ok, detail, failItems, keepDetailWhenOk) => {
                 const row = {
                     label,
                     ok: !!ok,
-                    detail: ok ? '' : String(detail || '').trim(),
-                    failItems: ok ? [] : (Array.isArray(failItems) ? failItems.filter(Boolean) : []),
+                    detail: (!ok || keepDetailWhenOk) ? String(detail || '').trim() : '',
+                    failItems: (ok && !keepDetailWhenOk) ? [] : (Array.isArray(failItems) ? failItems.filter(Boolean) : []),
                 };
                 checks.push(row);
                 if (!row.ok && row.detail) reasons.push(`${label}: ${row.detail}`);
@@ -4140,14 +4229,15 @@
             addCheck('Длина MP3', mp3Ok, mp3Parts.join('; ') || '—');
 
             const zeroDur = clean.filter((w) => (Number(w.end_ms) - Number(w.start_ms)) <= 0);
-            let zeroOk = zeroDur.length === 0;
+            const zeroTol = T.ZERO_DUR_TOLERANCE ?? 3;
+            const zeroOk = zeroDur.length <= zeroTol;
             let zeroDetail = '';
             let zeroItems = [];
-            if (!zeroOk) {
+            if (zeroDur.length > 0) {
                 zeroDetail = `${zeroDur.length} слов`;
                 zeroItems = zeroDur.map((w) => formatWordTimingsTokenLine(w)).filter(Boolean);
             }
-            addCheck('Нулевая длина', zeroOk, zeroDetail, zeroItems);
+            addCheck('Нулевая длина', zeroOk, zeroDetail, zeroItems, true);
 
             let collapseOk = true;
             let collapseDetail = '';
@@ -4257,7 +4347,7 @@
                 const label = String(c.label || '').padEnd(WORD_TIMINGS_SCENES_CHECK_LABEL_W, ' ');
                 const status = c.ok ? 'OK' : 'FAIL';
                 let main = `${branch} ${label} ${status}`;
-                if (!c.ok && c.detail) main += ` — ${c.detail}`;
+                if (c.detail) main += ` — ${c.detail}`;
                 const mainCls = status === 'FAIL'
                     ? 'tts-word-timings-scenes-check-row__main tts-word-timings-scenes-check-row__main--fail'
                     : 'tts-word-timings-scenes-check-row__main';
@@ -4557,6 +4647,9 @@
                     }
                     if (typeof window.__scheduleAutoApplyScenesTimings === 'function') {
                         window.__scheduleAutoApplyScenesTimings();
+                    }
+                    if (typeof window.__scheduleScenesTimingsValidation === 'function') {
+                        window.__scheduleScenesTimingsValidation();
                     }
                 });
             });
@@ -4949,7 +5042,7 @@
             syncWordTimingsJsonEditable(wordsJsonEl);
         }
 
-        // --- Тайминги слов от локального Whisper (faster-whisper) ---
+        // --- Тайминги слов: faster-whisper (small) + WhisperX align (wav2vec2) ---
         const whisperWrapEl       = document.getElementById('whisper-words-wrap');
         const whisperHeaderEl     = document.getElementById('whisper-words-header');
         const whisperToggleEl     = document.getElementById('whisper-words-toggle');
@@ -5242,7 +5335,19 @@
                     const line = `${String(msg || 'Whisper…')} (${waitSec}с)`;
                     setWhisperWordsGenerating(true, line);
                 };
-                setBusy('Запуск локального Whisper…');
+                let lastWhisperStatusMsg = 'Запуск локального Whisper…';
+                const whisperStatusFromPhase = (phase) => {
+                    const p = String(phase || '').toLowerCase();
+                    if (p === 'prepare') return 'Подготовка…';
+                    if (p === 'model_load') return 'Загрузка модели Whisper…';
+                    if (p === 'model_ready') return 'Модель готова, распознавание…';
+                    if (p === 'transcribe_start' || p === 'transcribe') return 'Транскрипция речи (VAD + Whisper)…';
+                    if (p === 'align_model_load') return 'Загрузка модели выравнивания…';
+                    if (p === 'align_start' || p === 'align') return 'Уточнение таймингов (wav2vec2)…';
+                    if (p === 'heartbeat') return 'Распознавание продолжается… (на CPU это может занять много минут)';
+                    return '';
+                };
+                setBusy(lastWhisperStatusMsg);
                 try {
                     const resp = await fetch(`/job/{{ job_id }}/whisper/words`, {
                         method: 'POST',
@@ -5271,7 +5376,15 @@
                         }
                         if (ev.type === 'status') {
                             const pct = Number.isFinite(Number(ev.progress_pct)) ? ` · ${ev.progress_pct.toFixed(1)}%` : '';
-                            setBusy(`${ev.message || ev.phase || 'Whisper…'}${pct}`);
+                            const phase = String(ev.phase || '');
+                            let msg = String(ev.message || '').trim();
+                            if (!msg) msg = whisperStatusFromPhase(phase);
+                            if (!msg || phase.toLowerCase() === 'heartbeat') {
+                                msg = String(ev.message || '').trim() || lastWhisperStatusMsg || whisperStatusFromPhase('heartbeat');
+                            } else {
+                                lastWhisperStatusMsg = msg;
+                            }
+                            setBusy(`${msg}${pct}`);
                         }
                     };
 
@@ -5389,7 +5502,12 @@
                 if (trial.length <= maxLen) {
                     current = trial;
                     idx += 1;
-                    if (current.length >= target && !endsWithBracketTag(current)) {
+                    const minFlush = Math.min(target, TTS_V3_CHUNK_MIN);
+                    if (
+                        current.length >= target
+                        && current.length >= minFlush
+                        && !endsWithBracketTag(current)
+                    ) {
                         chunks.push(current.trim());
                         current = '';
                     }
@@ -5488,7 +5606,8 @@
             const nChunks = countTtsChunks(text, chunkMax);
             if (nChunks <= 1) return '';
             let hint = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
-            hint += ' (≤ ' + ttsFormatNumRu(chunkMax) + ' символов на кусок, Eleven v3)';
+            hint += ' (~' + ttsFormatNumRu(TTS_V3_CHUNK_MIN) + '–' + ttsFormatNumRu(TTS_V3_CHUNK_MAX)
+                + ' симв. на кусок, Eleven v3)';
             return hint;
         };
         const syncTtsSplitHint = (raw) => {
@@ -6340,10 +6459,12 @@
                 const flags = Array.isArray(it.flags) ? it.flags : [];
                 let rowCls = 'tts-word-timings-scenes-timeline__row tts-word-timings-scenes-timeline__row--scene';
                 if (flags.indexOf('overlap') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--overlap';
+                if (flags.indexOf('short') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--short';
                 if (flags.indexOf('long') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--long';
                 if (flags.indexOf('no_timing') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--no-timing';
                 const tags = [];
                 if (flags.indexOf('overlap') >= 0) tags.push('наезд');
+                if (flags.indexOf('short') >= 0) tags.push('&lt;0.2 с');
                 if (flags.indexOf('long') >= 0) tags.push('&gt;20 с');
                 if (flags.indexOf('no_timing') >= 0) tags.push('нет тайминга');
                 const tagHtml = tags.length
@@ -6369,8 +6490,12 @@
                 const branch = i === checks.length - 1 ? '└─' : '├─';
                 const label = String(c.label || '').padEnd(SCENES_CHECK_LABEL_W, ' ');
                 let status = 'OK';
-                if (!c.ok) status = 'FAIL';
-                else if (c.severity === 'warn') status = 'WARN';
+                if (!c.ok) {
+                    status = c.severity === 'warn' ? 'WARN' : 'FAIL';
+                } else if (c.severity === 'warn' && c.detail) {
+                    // Мягкое предупреждение при ok (напр. «начало далеко от 0»)
+                    status = 'WARN';
+                }
                 let main = `${branch} ${label} ${status}`;
                 if (c.detail) main += ` — ${c.detail}`;
                 const mainCls = status === 'FAIL'
@@ -6767,6 +6892,76 @@
                 }
             });
         }
+        let validateTimingsDebounce = null;
+        let validateTimingsSeq = 0;
+
+        const setScenesCheckLoading = () => {
+            if (!checkStatusEl) return;
+            checkStatusEl.textContent = '…';
+            checkStatusEl.className = 'tts-word-timings-check-scenes-status rewrite-scene-writer-check__wait';
+        };
+
+        const runScenesTimingsValidationLive = async () => {
+            const txt = (textEl.value || '').trim();
+            if (!txt) {
+                renderScenesTimingsValidation(null);
+                return;
+            }
+            const seq = ++validateTimingsSeq;
+            setScenesCheckLoading();
+            try {
+                const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+                const r = await fetch(`${ROOT}/job/${jobId}/scenes/validate-timings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        scenes_stripped_text: textEl.value,
+                        source: readTimingsSource(),
+                    }),
+                });
+                const data = await parseJsonOrThrow(r, 'validate-timings');
+                if (seq !== validateTimingsSeq) return;
+                if (data.timings_validation) {
+                    renderScenesTimingsValidation(data.timings_validation);
+                }
+            } catch (e) {
+                if (seq !== validateTimingsSeq) return;
+                if (checkSummaryEl) {
+                    checkSummaryEl.textContent = 'Ошибка проверки: ' + (e?.message || String(e));
+                }
+                if (checkStatusEl) {
+                    checkStatusEl.textContent = 'NO';
+                    checkStatusEl.className = 'tts-word-timings-check-scenes-status rewrite-scene-writer-check__no';
+                }
+            }
+        };
+
+        const scheduleScenesTimingsValidation = () => {
+            if (validateTimingsDebounce) clearTimeout(validateTimingsDebounce);
+            validateTimingsDebounce = setTimeout(() => {
+                validateTimingsDebounce = null;
+                runScenesTimingsValidationLive();
+            }, 350);
+        };
+        window.__scheduleScenesTimingsValidation = scheduleScenesTimingsValidation;
+
+        const onTimingsResultEdited = () => {
+            updateCounts();
+            scheduleScenesTimingsValidation();
+        };
+
+        textEl.addEventListener('input', onTimingsResultEdited);
+        textEl.addEventListener('change', onTimingsResultEdited);
+        textEl.addEventListener('paste', () => { setTimeout(onTimingsResultEdited, 0); });
+        textEl.addEventListener('keyup', onTimingsResultEdited);
+
+        const origSetVideoJsonScenesTimingsText = setVideoJsonScenesTimingsText;
+        window.setVideoJsonScenesTimingsText = (txt) => {
+            origSetVideoJsonScenesTimingsText(txt);
+            scheduleScenesTimingsValidation();
+        };
+
         applyTimingsJsonLockUi();
         updateCounts();
     })();

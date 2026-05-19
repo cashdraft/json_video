@@ -155,12 +155,18 @@
                                 </button>
                                 <button
                                     type="button"
-                                    class="btn-regenerate btn-generate {{ '' if scene.video.prompt else 'is-hidden' }} {{ '' if video_ready else 'btn-video-locked' }}"
+                                    class="btn-regenerate btn-generate {{ '' if (has_video_prompt and video_ready) else 'is-hidden' }}"
                                     data-scene-index="{{ loop.index0 }}"
                                     data-slot="video"
-                                    title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
+                                    title="Generate video"
                                     {{ '' if (has_video_prompt and video_ready) else 'disabled' }}
-                                ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
+                                ><span class="btn-icon">↻</span></button>
+                                <span
+                                    class="rewrite-stage-run-blocked slot-video-run-blocked {{ '' if (has_video_prompt and not video_ready) else 'is-hidden' }}"
+                                    role="img"
+                                    aria-label="Сначала сгенерируйте кадры start/end"
+                                    title="Сначала сгенерируйте кадры start/end (если есть промпты)"
+                                >✕</span>
                                 <span class="slot-header-trailing">
                                 <span class="video-hd-status {{ 'active' if show_hd_done or show_hd_wait else '' }}" data-video-hd-status>
                                     {% if show_hd_done %}
