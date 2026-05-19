@@ -17,6 +17,8 @@ TAIL_WARN_MS = 3_000
 TAIL_FAIL_MS = 15_000
 SHORT_SCENE_WARN_MS = 200
 LONG_SCENE_WARN_MS = 120_000
+TIMELINE_LONG_SCENE_MS = 20_000
+TIMELINE_PAUSE_MS = 5_000
 OVERLAP_FAIL_MS = 1
 DURATION_SUM_WARN_RATIO = 0.55  # сумма сцен / охват озвучки
 UNUSED_WORDS_WARN_RATIO = 0.08
@@ -154,6 +156,7 @@ def validate_scene_timings(
             "checks": checks,
             "stats": {},
             "summary": "Нет сцен для проверки.",
+            "timeline": _build_scene_timeline([], []),
         }
 
     rows = timings_rows if timings_rows is not None else _timings_rows_from_scenes(scenes)
@@ -440,6 +443,8 @@ def validate_scene_timings(
     ]
     summary = " · ".join(summary_parts)
 
+    timeline = _build_scene_timeline(scenes, rows if isinstance(rows, list) else [])
+
     return {
         "ok": ok,
         "status": "ok" if ok else "no",
@@ -448,6 +453,7 @@ def validate_scene_timings(
         "checks": checks,
         "stats": stats,
         "summary": summary,
+        "timeline": timeline,
     }
 
 
@@ -456,3 +462,90 @@ def _fmt_pct(x: float) -> str:
         return f"{float(x):.0%}"
     except (TypeError, ValueError):
         return "—"
+
+
+def _fmt_duration_s(ms: int | float | None) -> str:
+    try:
+        return f"{max(0, int(ms)) / 1000.0:.2f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _build_scene_timeline(
+    scenes: list[dict],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Список сцен и пауз для UI «Сцены по порядку»."""
+    items: list[dict[str, Any]] = []
+    pause_count = 0
+    overlap_count = 0
+    long_count = 0
+    prev_end: int | None = None
+
+    for i, sc in enumerate(scenes):
+        if not isinstance(sc, dict):
+            continue
+        sid = str(sc.get("scene_id") or f"scene_{i + 1:03d}")
+        at = sc.get("audio_timing") if isinstance(sc.get("audio_timing"), dict) else {}
+        row = rows[i] if i < len(rows) else {}
+
+        try:
+            start_ms = int(
+                at.get("start_ms")
+                if at.get("start_ms") is not None
+                else row.get("start_ms") or 0
+            )
+            end_ms = int(
+                at.get("end_ms") if at.get("end_ms") is not None else row.get("end_ms") or 0
+            )
+        except (TypeError, ValueError):
+            start_ms = 0
+            end_ms = 0
+
+        has_timing = end_ms > start_ms or at.get("start_ms") is not None
+
+        if prev_end is not None and has_timing and start_ms > prev_end:
+            gap_ms = start_ms - prev_end
+            if gap_ms >= TIMELINE_PAUSE_MS:
+                pause_count += 1
+                items.append(
+                    {
+                        "type": "pause",
+                        "gap_s": _fmt_duration_s(gap_ms),
+                        "gap_clock": f"{_fmt_ms(prev_end)} → {_fmt_ms(start_ms)}",
+                    }
+                )
+
+        flags: list[str] = []
+        if not has_timing:
+            flags.append("no_timing")
+        dur_ms = max(0, end_ms - start_ms) if has_timing else 0
+        if has_timing and prev_end is not None and start_ms < prev_end - OVERLAP_FAIL_MS:
+            flags.append("overlap")
+            overlap_count += 1
+        if has_timing and dur_ms > TIMELINE_LONG_SCENE_MS:
+            flags.append("long")
+            long_count += 1
+
+        items.append(
+            {
+                "type": "scene",
+                "scene_id": sid,
+                "start": _fmt_ms(start_ms) if has_timing else "—",
+                "end": _fmt_ms(end_ms) if has_timing else "—",
+                "duration_s": _fmt_duration_s(dur_ms) if has_timing else "—",
+                "flags": flags,
+            }
+        )
+
+        if has_timing:
+            prev_end = end_ms
+
+    scene_count = sum(1 for it in items if it.get("type") == "scene")
+    return {
+        "items": items,
+        "scene_count": scene_count,
+        "pause_count": pause_count,
+        "overlap_count": overlap_count,
+        "long_count": long_count,
+    }

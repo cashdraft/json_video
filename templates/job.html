@@ -3617,6 +3617,8 @@
         const TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT = 1500;
         const TTS_TIMESTAMPS_TARGET_CHUNKS = 3;
         const TTS_TIMESTAMPS_MIN_CHUNK_CHARS = 400;
+        const TTS_V3_CHUNK_TARGET = 550;
+        const TTS_V3_CHUNK_MAX = 600;
         const modelSel = document.getElementById('tts-model');
         const voiceSel = document.getElementById('tts-voice');
         const textEl = document.getElementById('tts-text');
@@ -3872,15 +3874,7 @@
             return parseInt(max || String(TTS_MAX_CHARS), 10);
         };
 
-        const getTtsChunkCharsForTimestamps = (text) => {
-            const modelMax = getMaxChars();
-            const n = String(text || '').trim().length;
-            if (n <= TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT) return modelMax;
-            const target = Math.max(2, TTS_TIMESTAMPS_TARGET_CHUNKS);
-            let alignmentLimit = Math.ceil(n / target);
-            alignmentLimit = Math.max(TTS_TIMESTAMPS_MIN_CHUNK_CHARS, alignmentLimit);
-            return Math.min(modelMax, alignmentLimit);
-        };
+        const getTtsChunkCharsForTimestamps = () => Math.min(getMaxChars(), TTS_V3_CHUNK_MAX);
 
         // --- Тайминги Eleven / Whisper (два столбца под плеером) ---
         const wordsWrapEl       = document.getElementById('tts-words-wrap');
@@ -5370,10 +5364,84 @@
             return chunks;
         };
 
+        const BRACKET_TAG_END_RE = /\[[^\]]+\]\s*$/;
+        const BRACKET_TAG_START_RE = /^\s*\[/;
+        const endsWithBracketTag = (s) => BRACKET_TAG_END_RE.test(String(s || '').trimEnd());
+
+        const smartChunkTtsV3 = (text, target = TTS_V3_CHUNK_TARGET, maxLen = TTS_V3_CHUNK_MAX) => {
+            const t = String(text || '').trim();
+            if (!t) return [];
+            const sentences = t.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+            if (!sentences.length) return [t];
+            const chunks = [];
+            let current = '';
+            let idx = 0;
+            while (idx < sentences.length) {
+                const s = sentences[idx];
+                if (s.length > maxLen) {
+                    if (current.trim()) chunks.push(current.trim());
+                    current = '';
+                    for (let i = 0; i < s.length; i += maxLen) chunks.push(s.slice(i, i + maxLen));
+                    idx += 1;
+                    continue;
+                }
+                const trial = current ? `${current} ${s}`.trim() : s;
+                if (trial.length <= maxLen) {
+                    current = trial;
+                    idx += 1;
+                    if (current.length >= target && !endsWithBracketTag(current)) {
+                        chunks.push(current.trim());
+                        current = '';
+                    }
+                    continue;
+                }
+                if (current.trim()) {
+                    if (endsWithBracketTag(current)) {
+                        let extended = current.trim();
+                        let j = idx;
+                        while (j < sentences.length) {
+                            const piece = sentences[j].trim();
+                            if (extended && BRACKET_TAG_START_RE.test(piece) && !endsWithBracketTag(extended)) break;
+                            const attempt = extended ? `${extended} ${piece}`.trim() : piece;
+                            if (attempt.length > maxLen) break;
+                            extended = attempt;
+                            j += 1;
+                        }
+                        chunks.push(extended);
+                        idx = j;
+                        current = '';
+                        continue;
+                    }
+                    chunks.push(current.trim());
+                    current = s;
+                    idx += 1;
+                    continue;
+                }
+                current = s;
+                idx += 1;
+            }
+            if (current.trim()) chunks.push(current.trim());
+            if (chunks.length >= 2 && chunks[chunks.length - 1].length < 80) {
+                const merged = `${chunks[chunks.length - 2]} ${chunks[chunks.length - 1]}`.trim();
+                if (merged.length <= maxLen) chunks.splice(-2, 2, merged);
+            }
+            const fixed = [];
+            for (let i = 0; i < chunks.length; i += 1) {
+                const c = chunks[i];
+                if (i + 1 < chunks.length && endsWithBracketTag(c)) {
+                    const merged = `${c} ${chunks[i + 1]}`.trim();
+                    if (merged.length <= maxLen) { fixed.push(merged); i += 1; continue; }
+                }
+                fixed.push(c);
+            }
+            return fixed;
+        };
+
         const countTtsChunks = (text, maxChars) => {
             const raw = text || '';
             if (!raw.trim()) return 0;
-            return packSentencesIntoChunks(sentencesSplitByDot(raw), maxChars).length;
+            const cap = Math.min(maxChars, TTS_V3_CHUNK_MAX);
+            return smartChunkTtsV3(raw, TTS_V3_CHUNK_TARGET, cap).length;
         };
 
         const ruRequestsWord = (n) => {
@@ -5416,15 +5484,11 @@
         const buildTtsSplitHint = (raw) => {
             const text = String(raw || '');
             if (!text.trim()) return '';
-            const max = getMaxChars();
-            const chunkMax = getTtsChunkCharsForTimestamps(text);
-            const nChunks = Math.max(
-                countTtsChunks(text, max),
-                countTtsChunks(text, chunkMax)
-            );
+            const chunkMax = getTtsChunkCharsForTimestamps();
+            const nChunks = countTtsChunks(text, chunkMax);
             if (nChunks <= 1) return '';
             let hint = '→ будет ' + nChunks + ' ' + ruRequestsWord(nChunks) + ' к API и склейка MP3';
-            hint += ' (≤ ' + ttsFormatNumRu(chunkMax) + ' символов на кусок для таймингов)';
+            hint += ' (≤ ' + ttsFormatNumRu(chunkMax) + ' символов на кусок, Eleven v3)';
             return hint;
         };
         const syncTtsSplitHint = (raw) => {
@@ -6011,6 +6075,11 @@
                         voice_id,
                         voice_name,
                         model_id: TTS_MODEL_ID,
+                        rewrite_pipeline_language: (function () {
+                            const el = document.getElementById('rewrite-pipeline-language');
+                            const v = el ? String(el.value || '').trim().toLowerCase() : '';
+                            return v || 'ru';
+                        })(),
                         speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
                         stability_pct: parseInt(document.getElementById('tts-stability').value, 10),
                         similarity_pct: parseInt(document.getElementById('tts-similarity').value, 10),
@@ -6249,6 +6318,50 @@
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
+        const buildScenesTimelineHtml = (timeline) => {
+            const items = (timeline && timeline.items) || [];
+            if (!items.length) return '';
+            const pauseN = timeline.pause_count || 0;
+            const ovN = timeline.overlap_count || 0;
+            const longN = timeline.long_count || 0;
+            let meta = `${timeline.scene_count || 0} сцен`;
+            if (pauseN) meta += ` · пауз ${pauseN}`;
+            if (ovN) meta += ` · наезд ${ovN}`;
+            if (longN) meta += ` · &gt;20 с: ${longN}`;
+            let body = '';
+            items.forEach((it) => {
+                if (it.type === 'pause') {
+                    body += '<div class="tts-word-timings-scenes-timeline__row tts-word-timings-scenes-timeline__row--pause">'
+                        + `<span class="tts-word-timings-scenes-timeline__label">— пауза</span>`
+                        + `<span class="tts-word-timings-scenes-timeline__dur">${escScenesTimingsCheck(it.gap_clock || it.gap_s || '')}</span>`
+                        + '</div>';
+                    return;
+                }
+                const flags = Array.isArray(it.flags) ? it.flags : [];
+                let rowCls = 'tts-word-timings-scenes-timeline__row tts-word-timings-scenes-timeline__row--scene';
+                if (flags.indexOf('overlap') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--overlap';
+                if (flags.indexOf('long') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--long';
+                if (flags.indexOf('no_timing') >= 0) rowCls += ' tts-word-timings-scenes-timeline__row--no-timing';
+                const tags = [];
+                if (flags.indexOf('overlap') >= 0) tags.push('наезд');
+                if (flags.indexOf('long') >= 0) tags.push('&gt;20 с');
+                if (flags.indexOf('no_timing') >= 0) tags.push('нет тайминга');
+                const tagHtml = tags.length
+                    ? `<span class="tts-word-timings-scenes-timeline__tags">${tags.join(' · ')}</span>`
+                    : '';
+                body += `<div class="${rowCls}">`
+                    + `<span class="tts-word-timings-scenes-timeline__sid">${escScenesTimingsCheck(it.scene_id || '')}</span>`
+                    + `<span class="tts-word-timings-scenes-timeline__times">${escScenesTimingsCheck(it.start || '')} → ${escScenesTimingsCheck(it.end || '')}</span>`
+                    + `<span class="tts-word-timings-scenes-timeline__dur">${escScenesTimingsCheck(it.duration_s || '')} с</span>`
+                    + tagHtml
+                    + '</div>';
+            });
+            return '<details class="tts-word-timings-scenes-timeline" open>'
+                + `<summary class="tts-word-timings-scenes-timeline__summary">Сцены по порядку <span class="tts-word-timings-scenes-timeline__meta">${meta}</span></summary>`
+                + `<div class="tts-word-timings-scenes-timeline__body">${body}</div>`
+                + '</details>';
+        };
+
         const buildScenesTimingsCheckTreeHtml = (v) => {
             const checks = (v && v.checks) || [];
             if (!checks.length) return '';
@@ -6300,14 +6413,15 @@
             }
             if (checkTreeEl) {
                 const treeHtml = buildScenesTimingsCheckTreeHtml(v);
+                const timelineHtml = buildScenesTimelineHtml(v.timeline);
                 let warnHtml = '';
                 if (v.warns && v.warns.length) {
                     warnHtml = '<div class="tts-word-timings-scenes-check-warns">' + v.warns.map((w) => (
                         '<div class="tts-word-timings-scenes-check-warns__line">• ' + escScenesTimingsCheck(w) + '</div>'
                     )).join('') + '</div>'
                 }
-                checkTreeEl.innerHTML = (treeHtml || '') + warnHtml;
-                checkTreeEl.classList.toggle('hidden', !treeHtml && !warnHtml);
+                checkTreeEl.innerHTML = (treeHtml || '') + timelineHtml + warnHtml;
+                checkTreeEl.classList.toggle('hidden', !treeHtml && !timelineHtml && !warnHtml);
             }
             if (checkWrapEl) checkWrapEl.dataset.scenesOk = ok ? '1' : '0';
             if (checkSectionEl) checkSectionEl.dataset.scenesOk = ok ? '1' : '0';
@@ -6660,7 +6774,7 @@
     </script>
     <div class="confirm-modal hidden" id="image-template-editor-modal" aria-hidden="true">
         <div class="confirm-modal__backdrop" data-image-template-modal-close></div>
-        <div class="confirm-modal__card image-template-editor-card" role="dialog" aria-modal="true" aria-labelledby="image-template-editor-title">
+        <div class="confirm-modal__card image-template-editor-card rewrite-template-editor-card" role="dialog" aria-modal="true" aria-labelledby="image-template-editor-title">
             <div class="confirm-modal__head">
                 <h3 class="confirm-modal__title" id="image-template-editor-title">Шаблон изображений</h3>
                 <div class="image-template-editor-head-actions">
@@ -6668,18 +6782,17 @@
                     <button type="button" class="btn btn-secondary btn-sm image-template-editor-head-btn" data-image-template-modal-close aria-label="Закрыть">✕</button>
                 </div>
             </div>
-            <p class="confirm-modal__lead image-template-editor-lead">Название, логотип и до 7 референсов для Nano Banana.</p>
-            <div class="image-template-editor-field">
-                <label class="image-template-editor-label" for="image-template-editor-name">Название</label>
-                <input type="text" id="image-template-editor-name" class="project-name-input" autocomplete="off" placeholder="Имя папки шаблона">
-            </div>
-            <div class="image-template-editor-field image-template-editor-field--logo">
-                <span class="image-template-editor-label">Логотип</span>
+            <div class="rewrite-template-editor-body">
+            <p class="confirm-modal__lead image-template-editor-lead rewrite-template-editor-hint">Логотип, название и до 7 референсов для Nano Banana.</p>
+            <section class="rewrite-template-editor-section rewrite-template-editor-section--meta">
+                <div class="rewrite-template-editor-meta-row">
+                    <div class="rewrite-template-editor-meta-top">
+                        <div class="rewrite-template-editor-logo-wrap">
                 <input type="file" id="image-template-editor-logo-file" accept="image/jpeg,image/png,image/webp" hidden>
-                <button type="button" class="image-template-editor-logo-hit" id="image-template-editor-logo-hit" aria-label="Изменить логотип">
-                    <span class="image-template-editor-logo-preview-wrap image-template-editor-logo-preview-wrap--empty" id="image-template-editor-logo-preview-wrap">
-                        <img id="image-template-editor-logo-preview" class="image-template-editor-logo-preview hidden" alt="" />
-                        <span class="image-template-editor-logo-placeholder" id="image-template-editor-logo-placeholder" aria-hidden="true"></span>
+                <button type="button" class="rewrite-template-edit-logo-hit image-template-editor-logo-hit" id="image-template-editor-logo-hit" aria-label="Изменить логотип">
+                    <span class="rewrite-template-edit-logo-preview-wrap image-template-editor-logo-preview-wrap image-template-editor-logo-preview-wrap--empty" id="image-template-editor-logo-preview-wrap">
+                        <img id="image-template-editor-logo-preview" class="rewrite-template-edit-logo-preview image-template-editor-logo-preview hidden" alt="">
+                        <span class="rewrite-template-edit-logo-placeholder image-template-editor-logo-placeholder" id="image-template-editor-logo-placeholder" aria-hidden="true"></span>
                         <span class="template-logo-upload-hover" aria-hidden="true">
                             <svg class="template-logo-upload-hover__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -6688,7 +6801,20 @@
                         </span>
                     </span>
                 </button>
-            </div>
+                        </div>
+                        <div class="rewrite-template-meta-block rewrite-template-meta-block--name">
+                            <div class="rewrite-template-meta-name-row">
+                                <span class="slot-badge badge-no rewrite-stage-result-badge" id="image-template-editor-name-badge">Name</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="image-template-editor-name-toggle" title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
+                                <div class="slot-placeholder rewrite-slot-placeholder rewrite-template-meta-slot rewrite-template-meta-slot--inline">
+                                    <input type="text" id="image-template-editor-name" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-template-meta-input" autocomplete="off" readonly placeholder="Имя папки шаблона">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <hr class="rewrite-template-editor-divider" aria-hidden="true">
             <div class="image-template-editor-field">
                 <div class="image-template-editor-label-row">
                     <span class="image-template-editor-label">Фотографии (до 7)</span>
@@ -6713,6 +6839,7 @@
                 <div class="image-template-editor-ref-grid" id="image-template-editor-ref-grid"></div>
             </div>
             <p class="image-template-editor-status hidden" id="image-template-editor-status" aria-live="polite"></p>
+            </div>
         </div>
     </div>
 

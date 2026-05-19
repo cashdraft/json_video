@@ -7323,6 +7323,21 @@ def job_elevenlabs_tts_clear(job_id: str):
     return jsonify({"ok": True, "removed": removed})
 
 
+def _resolve_elevenlabs_language_code(job_id: str, data: dict | None) -> str:
+    """Язык озвучки: из тела запроса или `rewrite_pipeline_language` проекта."""
+    if isinstance(data, dict):
+        raw = data.get("language_code") or data.get("rewrite_pipeline_language")
+        if raw:
+            return normalize_rewrite_pipeline_language(raw)
+    rw = load_rewrite_job(job_id)
+    if isinstance(rw, dict):
+        return normalize_rewrite_pipeline_language(rw.get("rewrite_pipeline_language"))
+    job = load_job(job_id)
+    if isinstance(job, dict):
+        return normalize_rewrite_pipeline_language(job.get("rewrite_pipeline_language"))
+    return "ru"
+
+
 @app.route("/job/<job_id>/elevenlabs/tts", methods=["POST"])
 def job_elevenlabs_tts(job_id: str):
     """Генерация озвучки ElevenLabs, файл в data/job_audio/<job_id>/."""
@@ -7341,8 +7356,8 @@ def job_elevenlabs_tts(job_id: str):
         if load_job(job_id) is None:
             return jsonify({"error": "Job not found"}), 404
 
-    max_c = max_chars_for_model()
-    chunks = split_tts_text_into_chunks(text, max_c)
+    max_c = max_chars_for_tts_with_timestamps(text, model_id)
+    chunks = split_tts_text_into_chunks(text, max_c, model_id=model_id)
     if not chunks:
         return jsonify({"error": "Пустой текст"}), 400
 
@@ -7362,6 +7377,8 @@ def job_elevenlabs_tts(job_id: str):
     else:
         use_speaker_boost = bool(raw_boost)
 
+    language_code = _resolve_elevenlabs_language_code(job_id, data)
+
     tts_kw = dict(
         voice_id=voice_id,
         model_id=model_id,
@@ -7370,6 +7387,7 @@ def job_elevenlabs_tts(job_id: str):
         style_pct=style_pct,
         speed_pct=speed_pct,
         use_speaker_boost=use_speaker_boost,
+        language_code=language_code,
     )
 
     JOB_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
@@ -7416,6 +7434,7 @@ def job_elevenlabs_tts(job_id: str):
             "style_pct": style_pct,
             "speed_pct": speed_pct,
             "use_speaker_boost": use_speaker_boost,
+            "language_code": language_code,
         },
     }
     with _job_file_lock(job_id):
@@ -7472,7 +7491,7 @@ def job_elevenlabs_tts_stream(job_id: str):
         model_max_c = max_chars_for_model(model_id)
         max_c = max_chars_for_tts_with_timestamps(text, model_id)
         try:
-            chunks = split_tts_text_into_chunks(text, max_c)
+            chunks = split_tts_text_into_chunks(text, max_c, model_id=model_id)
         except RuntimeError as e:
             yield _ev({"type": "error", "error": f"Сплиттер TTS: {e}", "elapsed_seconds": elapsed()})
             return
@@ -7496,6 +7515,8 @@ def job_elevenlabs_tts_stream(job_id: str):
         else:
             use_speaker_boost = bool(raw_boost)
 
+        language_code = _resolve_elevenlabs_language_code(job_id, data)
+
         tts_kw = dict(
             voice_id=voice_id,
             model_id=model_id,
@@ -7504,6 +7525,7 @@ def job_elevenlabs_tts_stream(job_id: str):
             style_pct=style_pct,
             speed_pct=speed_pct,
             use_speaker_boost=use_speaker_boost,
+            language_code=language_code,
         )
 
         total_chars = len(text)
@@ -7537,8 +7559,10 @@ def job_elevenlabs_tts_stream(job_id: str):
                         if max_c < model_max_c
                         else ""
                     )
+                    + f", язык API: {language_code}"
                     + ")."
                 ),
+                "language_code": language_code,
                 "total_chunks": total_chunks,
                 "total_chars": total_chars,
                 "sum_chunk_chars": sum_chunk_chars,
@@ -7740,6 +7764,7 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "style_pct": style_pct,
                 "speed_pct": speed_pct,
                 "use_speaker_boost": use_speaker_boost,
+                "language_code": language_code,
             },
         }
 
@@ -7757,6 +7782,7 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "style_pct": style_pct,
                 "speed_pct": speed_pct,
                 "use_speaker_boost": use_speaker_boost,
+                "language_code": language_code,
             }
             job["tts_last_text"] = text
             scene_audio_timings: list[dict[str, Any]] = []

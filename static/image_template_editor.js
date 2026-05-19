@@ -295,12 +295,18 @@
             var sep = url.indexOf('?') >= 0 ? '&' : '?';
             logoPreviewImg.src = url + sep + 't=' + Date.now();
             logoPreviewImg.classList.remove('hidden');
-            logoPreviewWrap.classList.remove('image-template-editor-logo-preview-wrap--empty');
+            logoPreviewWrap.classList.remove(
+                'image-template-editor-logo-preview-wrap--empty',
+                'rewrite-template-edit-logo-preview-wrap--empty'
+            );
             if (logoPlaceholder) logoPlaceholder.classList.add('hidden');
         } else {
             logoPreviewImg.removeAttribute('src');
             logoPreviewImg.classList.add('hidden');
-            logoPreviewWrap.classList.add('image-template-editor-logo-preview-wrap--empty');
+            logoPreviewWrap.classList.add(
+                'image-template-editor-logo-preview-wrap--empty',
+                'rewrite-template-edit-logo-preview-wrap--empty'
+            );
             if (logoPlaceholder) logoPlaceholder.classList.remove('hidden');
         }
     }
@@ -411,10 +417,9 @@
         state.logoUrl = null;
         state.pendingLogoFile = null;
         if (titleEl) titleEl.textContent = 'Новый шаблон изображений';
-        if (nameEl) {
-            nameEl.value = '';
-            nameEl.disabled = false;
-        }
+        if (nameEl) nameEl.value = '';
+        nameLocked = false;
+        applyImageTemplateNameLockUi();
         showLogoPreview(null);
         renderReferences();
         syncDeleteBtnVisibility();
@@ -427,7 +432,8 @@
     async function openModalEdit(folder) {
         state.mode = 'edit';
         if (titleEl) titleEl.textContent = 'Редактировать шаблон';
-        if (nameEl) nameEl.disabled = false;
+        nameLocked = true;
+        applyImageTemplateNameLockUi();
         setStatus('Загрузка…');
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
@@ -436,6 +442,7 @@
             var data = await parseJson(resp);
             if (!data.ok || !data.template) throw new Error(data.error || 'Не удалось загрузить шаблон');
             loadTemplateIntoModal(data.template);
+            applyImageTemplateNameLockUi();
             setStatus('');
         } catch (e) {
             setStatus(String(e.message || e), true);
@@ -747,6 +754,37 @@
             openModalCreate();
         });
     });
+
+    var nameToggle = document.getElementById('image-template-editor-name-toggle');
+    var nameBadge = document.getElementById('image-template-editor-name-badge');
+    var nameLocked = true;
+
+    function applyImageTemplateNameLockUi() {
+        if (!nameEl) return;
+        nameEl.readOnly = nameLocked;
+        nameEl.classList.toggle('rewrite-source-textarea--locked', nameLocked);
+        if (nameToggle) {
+            nameToggle.classList.toggle('rewrite-lock-toggle--locked', nameLocked);
+            nameToggle.setAttribute('aria-label', nameLocked ? 'Редактировать' : 'Сохранить');
+            nameToggle.title = nameLocked ? 'Редактировать' : 'Сохранить';
+        }
+        if (nameBadge) {
+            var has = !!(nameEl.value || '').trim();
+            nameBadge.classList.toggle('badge-yes', has);
+            nameBadge.classList.toggle('badge-no', !has);
+        }
+    }
+
+    if (nameToggle) {
+        nameToggle.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            nameLocked = !nameLocked;
+            applyImageTemplateNameLockUi();
+            if (!nameLocked) nameEl.focus();
+        });
+    }
+    if (nameEl) nameEl.addEventListener('input', applyImageTemplateNameLockUi);
+    applyImageTemplateNameLockUi();
 
     try {
         var sel = sessionStorage.getItem('json_video_select_image_template');

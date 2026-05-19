@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -27,6 +28,10 @@ TTS_MAX_CHARS = 5000
 TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT = 1500
 TTS_TIMESTAMPS_TARGET_CHUNKS = 3
 TTS_TIMESTAMPS_MIN_CHUNK_CHARS = 400
+
+# Eleven v3: нарезка по предложениям (не жёстко 280/400 — комфортнее 500–600).
+TTS_V3_CHUNK_TARGET = 550
+TTS_V3_CHUNK_MAX = 600
 
 TTS_MODELS: list[dict[str, Any]] = [
     {
@@ -66,13 +71,10 @@ def max_chars_for_model(model_id: str | None = None) -> int:
 
 
 def max_chars_for_tts_with_timestamps(text: str, model_id: str | None = None) -> int:
-    """Лимит символов на один запрос with-timestamps (может быть ниже лимита модели).
-
-    Короткий текст — один запрос (до ``max_chars_for_model``).
-    Длиннее ``TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT`` — ориентир ``TTS_TIMESTAMPS_TARGET_CHUNKS``
-    кусков (лимит ≈ ceil(n / target)), чтобы проверить гипотезу качества alignment.
-    """
+    """Лимит символов на один запрос with-timestamps."""
     model_max = max_chars_for_model(model_id)
+    if normalize_tts_model_id(model_id) == TTS_MODEL_ID:
+        return min(model_max, TTS_V3_CHUNK_MAX)
     n = len((text or "").strip())
     if n <= TTS_TIMESTAMPS_MIN_TEXT_FOR_SPLIT:
         return model_max
@@ -80,6 +82,154 @@ def max_chars_for_tts_with_timestamps(text: str, model_id: str | None = None) ->
     alignment_limit = (n + target - 1) // target
     alignment_limit = max(TTS_TIMESTAMPS_MIN_CHUNK_CHARS, alignment_limit)
     return min(model_max, alignment_limit)
+
+
+_BRACKET_TAG_END_RE = re.compile(r"\[[^\]]+\]\s*$")
+_BRACKET_TAG_START_RE = re.compile(r"^\s*\[")
+
+
+def _ends_with_bracket_tag(s: str) -> bool:
+    return bool(_BRACKET_TAG_END_RE.search((s or "").rstrip()))
+
+
+def _split_oversized_sentence(sentence: str, max_len: int) -> list[str]:
+    s = sentence.strip()
+    if len(s) <= max_len:
+        return [s] if s else []
+    parts = re.split(r"(?<=[,;])\s+", s)
+    out: list[str] = []
+    buf = ""
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        trial = f"{buf} {part}".strip() if buf else part
+        if len(trial) <= max_len:
+            buf = trial
+        else:
+            if buf:
+                out.append(buf)
+            if len(part) > max_len:
+                start = 0
+                while start < len(part):
+                    chunk = part[start : start + max_len]
+                    if start + max_len < len(part):
+                        sp = chunk.rfind(" ")
+                        if sp > max_len // 3:
+                            chunk = chunk[:sp]
+                            start += sp
+                        else:
+                            start += max_len
+                    else:
+                        start = len(part)
+                    if chunk.strip():
+                        out.append(chunk.strip())
+                buf = ""
+            else:
+                buf = part
+    if buf:
+        out.append(buf)
+    return out
+
+
+def smart_chunk_tts_v3(
+    text: str,
+    *,
+    target: int = TTS_V3_CHUNK_TARGET,
+    max_len: int = TTS_V3_CHUNK_MAX,
+) -> list[str]:
+    """Нарезка для Eleven v3: ~500–600 символов, по концу предложения; [тег] не в конце чанка."""
+    t = (text or "").strip()
+    if not t:
+        return []
+    sentences = re.split(r"(?<=[.!?])\s+", t)
+    sentences = [s.strip() for s in sentences if s and s.strip()]
+    if not sentences:
+        return [t]
+
+    chunks: list[str] = []
+    current = ""
+    idx = 0
+    n = len(sentences)
+
+    while idx < n:
+        s = sentences[idx]
+        if len(s) > max_len:
+            if current.strip():
+                chunks.append(current.strip())
+                current = ""
+            chunks.extend(_split_oversized_sentence(s, max_len))
+            idx += 1
+            continue
+
+        trial = f"{current} {s}".strip() if current else s
+        if len(trial) <= max_len:
+            current = trial
+            idx += 1
+            if len(current) >= target and not _ends_with_bracket_tag(current):
+                chunks.append(current.strip())
+                current = ""
+            continue
+
+        if current.strip():
+            if _ends_with_bracket_tag(current):
+                extended = current.strip()
+                j = idx
+                while j < n:
+                    piece = sentences[j].strip()
+                    if (
+                        extended
+                        and _BRACKET_TAG_START_RE.match(piece)
+                        and not _ends_with_bracket_tag(extended)
+                    ):
+                        break
+                    attempt = f"{extended} {piece}".strip() if extended else piece
+                    if len(attempt) > max_len:
+                        break
+                    extended = attempt
+                    j += 1
+                chunks.append(extended)
+                idx = j
+                current = ""
+                continue
+            chunks.append(current.strip())
+            current = s
+            idx += 1
+            continue
+
+        current = s
+        idx += 1
+
+    if current.strip():
+        chunks.append(current.strip())
+
+    if len(chunks) >= 2 and len(chunks[-1]) < 80:
+        merged = f"{chunks[-2]} {chunks[-1]}".strip()
+        if len(merged) <= max_len:
+            chunks = chunks[:-2] + [merged]
+
+    fixed: list[str] = []
+    i = 0
+    while i < len(chunks):
+        c = chunks[i]
+        if i + 1 < len(chunks) and _ends_with_bracket_tag(c):
+            merged = f"{c} {chunks[i + 1]}".strip()
+            if len(merged) <= max_len:
+                fixed.append(merged)
+                i += 2
+                continue
+        fixed.append(c)
+        i += 1
+    chunks = fixed
+
+    expected_len = len(re.sub(r"\s+", "", t))
+    actual_len = sum(len(re.sub(r"\s+", "", c)) for c in chunks)
+    if actual_len != expected_len:
+        raise RuntimeError(
+            "smart_chunk_tts_v3: потеря/дублирование текста при нарезке "
+            f"({actual_len} ≠ {expected_len} символов без пробелов)."
+        )
+    return chunks
 
 
 def sentences_split_by_dot(text: str) -> list[str]:
@@ -154,14 +304,17 @@ def pack_sentences_into_chunks(sentences: list[str], max_chars: int) -> list[str
     return chunks
 
 
-def split_tts_text_into_chunks(text: str, max_chars: int) -> list[str]:
-    """Публичная обёртка: точки → предложения → пакеты ≤ max_chars.
+def split_tts_text_into_chunks(
+    text: str,
+    max_chars: int,
+    *,
+    model_id: str | None = None,
+) -> list[str]:
+    """Публичная обёртка: для eleven_v3 — ``smart_chunk_tts_v3``, иначе нарезка по точкам."""
+    if normalize_tts_model_id(model_id) == TTS_MODEL_ID:
+        cap = min(int(max_chars), TTS_V3_CHUNK_MAX)
+        return smart_chunk_tts_v3(text, target=TTS_V3_CHUNK_TARGET, max_len=cap)
 
-    После пакования делает sanity-check: длина «склейки» чанков должна совпадать
-    с длиной нормализованного источника (получаемого через тот же
-    `sentences_split_by_dot`). Это ловит любые регрессии, при которых одно и то же
-    предложение случайно попало в два чанка.
-    """
     sentences = sentences_split_by_dot(text)
     chunks = pack_sentences_into_chunks(sentences, max_chars)
     expected_len = sum(len(s) for s in sentences)
@@ -301,6 +454,14 @@ def speed_to_pct(speed: float | int) -> int:
     return int(round(u * 100))
 
 
+def tts_language_code_payload(language_code: str | None) -> dict[str, Any]:
+    """ISO 639-1 для ElevenLabs (`language_code` в теле запроса)."""
+    code = str(language_code or "").strip().lower()
+    if code in ("ru", "en", "es", "ja"):
+        return {"language_code": code}
+    return {}
+
+
 def text_to_speech_bytes(
     *,
     voice_id: str,
@@ -312,6 +473,7 @@ def text_to_speech_bytes(
     speed_pct: float,
     use_speaker_boost: bool,
     output_format: str = DEFAULT_OUTPUT_FORMAT,
+    language_code: str | None = None,
 ) -> bytes:
     url = f"{ELEVEN_BASE}/v1/text-to-speech/{voice_id}"
     params = {"output_format": output_format}
@@ -325,6 +487,7 @@ def text_to_speech_bytes(
             "speed": pct_to_speed(speed_pct),
             "use_speaker_boost": bool(use_speaker_boost),
         },
+        **tts_language_code_payload(language_code),
     }
     resp = requests.post(
         url,
@@ -374,6 +537,7 @@ def text_to_speech_with_timestamps(
     speed_pct: float,
     use_speaker_boost: bool,
     output_format: str = DEFAULT_OUTPUT_FORMAT,
+    language_code: str | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
     """POST /v1/text-to-speech/{voice_id}/with-timestamps.
 
@@ -398,6 +562,7 @@ def text_to_speech_with_timestamps(
             "speed": pct_to_speed(speed_pct),
             "use_speaker_boost": bool(use_speaker_boost),
         },
+        **tts_language_code_payload(language_code),
     }
     resp = requests.post(
         url,

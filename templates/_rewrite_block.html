@@ -524,7 +524,7 @@
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--lang-duration">
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
                             <h3 class="rewrite-source-subtitle">Язык</h3>
-                            <p class="rewrite-source-subhint">Язык для последующих шагов конвейера (пока только сохраняется в проект).</p>
+                            <p class="rewrite-source-subhint">Язык конвейера и озвучки ElevenLabs (<code>language_code</code>: ru, en, es, ja).</p>
                             <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Выбор языка конвейера">
                                 <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% elif _plang == 'es' %}Spanish{% elif _plang == 'ja' %}Japanese{% else %}Русский{% endif %}</span>
                                 <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
