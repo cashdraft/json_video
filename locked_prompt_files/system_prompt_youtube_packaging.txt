@@ -18,7 +18,7 @@ CRITICAL RULES:
 
 TITLES:
 6. Generate EXACTLY 25 titles.
-7. Titles MUST be in English.
+7. Titles MUST be in {{LANGUAGE}}.
 8. Every title MUST have a Russian translation.
 9. Each title MUST have:
    - angle
@@ -73,9 +73,73 @@ THUMBNAILS:
 27. Each option MUST include:
    - text (EN + RU)
    - reason (EN + RU)
-28. Thumbnail text must be short (1–3 words).
-29. Must be emotionally strong and visual.
 
+28. Thumbnail text rules:
+   - text may contain:
+     - 1 short phrase
+     - 2 connected phrases
+     - split-line style wording
+     - short emotional statement
+     - short comparison
+     - number + statement
+   - NOT limited to only 1–3 words
+   - ideal length:
+     - 2–6 words for most options
+     - occasionally longer if clarity or emotional impact improves CTR
+   - variation is REQUIRED:
+     - some options should be ultra short
+     - some medium length
+     - some visually segmented into two parts
+   - examples of acceptable styles:
+     - "$500K Reality"
+     - "Then vs Now"
+     - "Nobody Can Buy This"
+     - "Rent Forever?"
+     - "You Work. Still Broke."
+     - "Normal Salary\nImpossible House"
+     - "Who Can Afford This?"
+     - "1995 Prices\n2026 Payments"
+
+29. Thumbnail text should:
+   - sound natural
+   - be instantly readable
+   - create emotional reaction in under 1 second
+   - visually fit a YouTube thumbnail
+   - avoid generic clickbait wording
+
+30. Reasons should explain:
+   - emotional trigger
+   - visual readability
+   - why the wording improves CTR
+   - what viewer identity it targets
+
+31. Thumbnail options MUST vary in structure, rhythm, and visual density.
+
+Thumbnail text may contain a single intentional line break using \n.
+
+Use line breaks ONLY when:
+- separating two contrasting ideas
+- separating time comparisons
+- separating emotional setup and payoff
+- improving mobile readability
+- creating strong visual hierarchy
+
+GOOD examples:
+- "1995 Prices\n2026 Payments"
+- "You Work\nStill Broke"
+- "Normal Salary\nImpossible House"
+- "Young Couple\n$4,800 Mortgage"
+
+BAD examples:
+- "1995\nPrices\n2026\nPayments"
+- breaking every word onto a new line
+- random formatting without meaning
+
+Most thumbnails should contain:
+- either one clean phrase
+- or two meaningful grouped phrases separated by ONE line break
+
+Do NOT generate 5 thumbnail texts with the same length or same formatting style.
 ---
 
 SCORING CRITERIA:

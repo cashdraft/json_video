@@ -2385,7 +2385,7 @@ textarea::placeholder {
 }
 
 .rewrite-youtube-progress-stage[data-status="error"] .slot-status {
-    color: #f07178;
+    color: var(--error);
 }
 
 /* Завершённое / ошибочное состояние: ни спиннера, ни кнопки Cancel — только
@@ -2432,6 +2432,9 @@ textarea::placeholder {
     border-radius: 0.35rem;
     border: 1px solid var(--border);
     background: rgba(0, 0, 0, 0.2);
+    /* Оверлей на всю карточку (как YouTube Transcriber), не только на карусель */
+    position: relative;
+    overflow: hidden;
 }
 
 .rewrite-template-section__picker-wrap {
@@ -2440,6 +2443,7 @@ textarea::placeholder {
 
 .rewrite-template-lock-overlay {
     position: absolute;
+    /* На 1px шире padding-box, чтобы перекрыть серую рамку секции */
     inset: -1px;
     border-radius: 0.35rem;
     background: rgba(12, 14, 20, 0.66);
@@ -2462,6 +2466,7 @@ textarea::placeholder {
 
 .rewrite-template-section--locked .rewrite-template-lock-overlay {
     display: flex;
+    pointer-events: auto;
 }
 
 .rewrite-template-lock-overlay.hidden {
@@ -3746,6 +3751,177 @@ hr.rewrite-preset-section-divider {
 
 .rewrite-source-inbox-card--collapsible.rewrite-source-inbox-card--body-collapsed .rewrite-stage-body-collapse-chevron {
     transform: rotate(-90deg);
+}
+
+/* «Настройки» — сворачивание как у «Исходный текст» / «Итоговый текст». */
+.rewrite-project-settings-card {
+    position: relative;
+    overflow: visible;
+}
+
+.scene-card.rewrite-project-settings-card.rewrite-project-settings-card--collapsible {
+    padding: 0.55rem 1.25rem 1.25rem;
+    border-radius: 8px;
+    height: auto;
+    align-self: start;
+}
+
+.scene-card.rewrite-project-settings-card.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed {
+    padding-bottom: 0.55rem;
+}
+
+.rewrite-project-settings-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.rewrite-project-settings-card-header.scene-header {
+    margin-bottom: 0;
+}
+
+.rewrite-project-settings-card--collapsible .rewrite-project-settings-card-header {
+    min-height: 30px;
+}
+
+.rewrite-project-settings-card-header:hover,
+.rewrite-project-settings-card-header:focus-visible {
+    background: transparent;
+    outline: none;
+}
+
+.rewrite-project-settings-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 24px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.rewrite-project-settings-title-row .rewrite-source-body-title,
+.rewrite-project-settings-title-row .rewrite-stage-title-text,
+.rewrite-project-settings-title-row .scene-id {
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    align-self: center;
+}
+
+.rewrite-project-settings-card-compact.rewrite-stages-compact {
+    margin-left: auto;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed .rewrite-project-settings-card-compact {
+    flex-wrap: nowrap;
+}
+
+.rewrite-project-settings-card-compact .rewrite-stages-compact__pair {
+    gap: 0.35rem;
+}
+
+.rewrite-project-settings-card-compact > .slot-badge.template-prompt-badge {
+    flex-shrink: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.rewrite-project-settings-compact__control {
+    position: relative;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.rewrite-project-settings-compact__dropdown-btn {
+    width: auto;
+    max-width: none;
+}
+
+.rewrite-project-settings-compact__chars-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.rewrite-project-settings-compact__range {
+    width: 6.4rem;
+    min-width: 6rem;
+    max-width: 6.75rem;
+    margin: 0;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.rewrite-project-settings-compact__chars {
+    margin: 0;
+    padding: 0;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.rewrite-project-settings-compact__chars .tts-slider-val {
+    color: var(--accent, #7eb8ff);
+}
+
+.rewrite-project-settings-card--collapsible:not(.rewrite-project-settings-card--body-collapsed) .rewrite-project-settings-collapsible-inner {
+    margin-top: 0.65rem;
+}
+
+.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed .rewrite-project-settings-collapsible-inner {
+    display: none;
+}
+
+.rewrite-project-settings-card--collapsible:not(.rewrite-project-settings-card--body-collapsed) .rewrite-project-settings-card-compact {
+    display: none;
+}
+
+.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed .rewrite-project-settings-card-header {
+    gap: 0.5rem 0.75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+    align-items: center;
+}
+
+.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed .rewrite-project-settings-card-compact {
+    align-self: center;
+}
+
+.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed .rewrite-stage-body-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+.rewrite-project-settings-card--collapsible .rewrite-project-settings-title-row {
+    align-self: center;
+}
+
+.rewrite-project-settings-card--collapsible.rewrite-project-settings-card--body-collapsed .rewrite-project-settings-title-row {
+    flex-shrink: 0;
+}
+
+.rewrite-project-settings-card--collapsible:not(.rewrite-project-settings-card--body-collapsed) .rewrite-project-settings-card-header {
+    flex-wrap: nowrap;
+    align-items: center;
+    /* та же высота шапки, что у свёрнутой строки — «Настройки» на одной вертикали */
+    min-height: 30px;
 }
 
 /* Пустой Result / ожидание этапа — затемнение как у YouTube Transcriber (клики не проходят). */
@@ -5228,6 +5404,17 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     pointer-events: auto;
 }
 
+/* Свернуто: вся шапка (заголовок + compact) под lock-оверлеем */
+.video-json-panel--collapsible.video-json-panel--body-collapsed.video-parse-panel--locked .video-json-panel-card-header {
+    z-index: auto;
+    pointer-events: none;
+}
+
+.video-json-panel--collapsible.video-json-panel--body-collapsed.video-parse-panel--locked .video-json-panel-title-row,
+.video-json-panel--collapsible.video-json-panel--body-collapsed.video-parse-panel--locked .video-json-panel-card-compact {
+    pointer-events: none;
+}
+
 /* JSON-код сцен — источник данных (как «Источник текста» в Озвучке) */
 .video-json-panel .tts-script-source-block {
     margin-bottom: 0.65rem;
@@ -5521,11 +5708,21 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     box-sizing: border-box;
 }
 
-.video-json-panel-card-compact .video-json-panel-compact-counts {
+.video-json-panel-card-compact .video-json-panel-compact-scenes-count {
     flex-shrink: 0;
-    margin-left: 0.15rem;
     font-size: 0.78rem;
+    font-weight: 600;
     color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.video-json-panel-card-compact .video-json-panel-compact-timings {
+    flex-shrink: 0;
+}
+
+.video-json-panel-card-compact .video-json-panel-compact-check {
+    flex-shrink: 0;
 }
 
 .video-json-panel--collapsible:not(.video-json-panel--body-collapsed) .video-json-panel-collapsible-inner {
@@ -7251,6 +7448,23 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     margin-bottom: 1rem;
 }
 
+/* Разделитель после «JSON-код сцен» — как между этапами и «Итоговый текст» в ReWrite. */
+.job-page hr.job-section-divider--after-json-scenes {
+    --rewrite-divider-gap: 2.15rem;
+    display: block;
+    width: 100%;
+    margin: 2.5rem 0 var(--rewrite-divider-gap);
+    padding: 0;
+    border: none;
+    border-top: 3px solid var(--border);
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+    opacity: 1;
+}
+
+.job-page form.video-json-panel.video-parse-panel {
+    margin-bottom: 0;
+}
+
 .job-page .container {
     padding-bottom: 3rem;
 }
@@ -7620,8 +7834,10 @@ button.job-download-all-link {
     flex: 1 1 auto;
     justify-content: flex-end;
     align-items: center;
+    gap: 0.4rem;
     min-height: 24px;
     min-width: 0;
+    box-sizing: border-box;
 }
 
 .scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-compact {
@@ -7640,17 +7856,22 @@ button.job-download-all-link {
     line-height: 1;
 }
 
-#job-scenes-section .scene-card-title__timing {
+#job-scenes-section .scene-card-title__timing-dur,
+#job-scenes-section .scene-card-title__timing-range {
     display: inline-flex;
-    flex-direction: column;
     flex-shrink: 0;
     width: auto;
     min-width: 0;
 }
 
-.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-title-sep,
-.scene-card.scene-card--collapsible:not(.scene-card--body-collapsed) .scene-card-title__timing {
-    display: none;
+#job-scenes-section .scene-card-title__timing-dur .scene-audio-timing__dur,
+#job-scenes-section .scene-card-title__timing-range .scene-audio-timing__range {
+    width: auto;
+    margin-top: 0;
+}
+
+#job-scenes-section .scene-card-title__timing-dur + .scene-card-title__timing-range {
+    margin-left: 0.35rem;
 }
 
 .scene-card-compact__text {
@@ -8648,16 +8869,17 @@ body.job-page--booting {
     color: var(--success);
 }
 
-/* Состояние ошибки для любого .slot-placeholder (Russian / Semantic / прочие):
-   красная dashed-рамка, красный текст, без спиннера, без Cancel. Аналог
-   YouTube-«Остановлено». Блок остаётся видимым, пока пользователь
-   не нажмёт ↻ или авто-конвейер не перезапустит этап. */
+/* Состояние ошибки для любого .slot-placeholder: прирывистая рамка и текст
+   как у ✕ (.rewrite-stage-run-blocked). Без спиннера, без Cancel. */
 .slot-placeholder[data-status="error"] {
-    border-color: var(--error);
+    border-style: dashed;
+    border-color: rgba(255, 77, 79, 0.45);
+    background: rgba(255, 77, 79, 0.1);
 }
 
-.slot-placeholder[data-status="error"] .slot-status {
-    color: #f07178;
+.slot-placeholder[data-status="error"] .slot-status,
+.slot-placeholder[data-status="error"] .slot-status-row .slot-status {
+    color: #e0858f;
 }
 
 .slot-placeholder[data-status="error"] .slot-status-with-spinner::before {
@@ -8666,6 +8888,18 @@ body.job-page--booting {
 
 .slot-placeholder[data-status="error"] .btn-cancel-generation {
     display: none;
+}
+
+.slot-placeholder[data-status="error"] .slot-status-row {
+    width: 100%;
+    max-width: 100%;
+    padding: 0.55rem 0.75rem;
+    box-sizing: border-box;
+}
+
+.slot-placeholder[data-status="error"] .slot-status-row .slot-status {
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
 }
 
 .slot-image {
@@ -8849,7 +9083,7 @@ body.job-page--booting {
 }
 
 .slot-status-error {
-    color: var(--error) !important;
+    color: #e0858f !important;
 }
 
 /* Lightbox */
@@ -9002,6 +9236,34 @@ body.job-page--booting {
     background: rgba(255, 255, 255, 0.015);
     color: #55555c;
     border: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+/* Job scenes: Start / Video — NO (серый) | YES+промпт (зелёная рамка) | YES+результат (рамка + текст). */
+#job-scenes-section .slot-badge.badge-slot-prompt {
+    background: rgba(255, 255, 255, 0.015);
+    color: #55555c;
+    border: 1px solid transparent;
+}
+
+#job-scenes-section .slot-badge.badge-slot-ready {
+    background: rgba(255, 255, 255, 0.015);
+    color: #7dd99a;
+    border: 1px solid rgba(52, 199, 89, 0.52);
+}
+
+/* Job scenes: ↻ у слота с ошибкой — рамка и фон как у ✕ (.rewrite-stage-run-blocked), символ ↻ серый. */
+#job-scenes-section .scene-card:has(.scene-slot[data-slot="start"] .slot-placeholder[data-status="error"]) .btn-generate[data-slot="start"]:not(.btn-regenerate--busy),
+#job-scenes-section .scene-card:has(.scene-slot[data-slot="video"] .slot-placeholder[data-status="error"]) .btn-generate[data-slot="video"]:not(.btn-regenerate--busy) {
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 77, 79, 0.45);
+    background: rgba(255, 77, 79, 0.1);
+}
+
+#job-scenes-section .scene-card:has(.scene-slot[data-slot="start"] .slot-placeholder[data-status="error"]) .btn-generate[data-slot="start"]:not(.btn-regenerate--busy):hover,
+#job-scenes-section .scene-card:has(.scene-slot[data-slot="video"] .slot-placeholder[data-status="error"]) .btn-generate[data-slot="video"]:not(.btn-regenerate--busy):hover {
+    color: var(--text-muted);
+    border-color: rgba(255, 77, 79, 0.45);
+    background: rgba(255, 77, 79, 0.1);
 }
 
 /* ReWrite этап: редактируемые промты (System / User / Style / Past) — YES как

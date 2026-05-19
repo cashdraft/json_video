@@ -409,9 +409,6 @@
                     </div>
                     <button type="button" class="rewrite-template-carousel__nav rewrite-template-carousel__nav--next" id="rewrite-template-carousel-next" aria-label="Следующий шаблон" title="Следующий шаблон">›</button>
                 </div>
-                <div class="rewrite-template-lock-overlay hidden" id="rewrite-template-lock-overlay">
-                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-unlock-btn">Редактировать</button>
-                </div>
                 </div>
                 <select id="rewrite-template-select" class="rewrite-global-model-select-hidden" {% if not openai_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
                     {% for t in rewrite_template_names %}
@@ -422,16 +419,106 @@
                     {% endif %}
                 </select>
                 <span id="rewrite-template-op-status" class="tts-template-status hidden" aria-live="polite"></span>
+                <div class="rewrite-template-lock-overlay hidden" id="rewrite-template-lock-overlay">
+                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-unlock-btn">Редактировать</button>
+                </div>
             </div>
 
-            <div class="scene-card rewrite-source-card">
+            <div class="scene-card rewrite-source-card rewrite-project-settings-card rewrite-project-settings-card--collapsible rewrite-project-settings-card--body-collapsed" id="rewrite-project-settings-card" data-project-settings-collapse="1" aria-label="Настройки" aria-expanded="false">
                 {% set hero_locked = rw.hero_prompt_locked|default(false) %}
+                {% set _hero_has_text = (rw.hero_prompt or '')|trim %}
+                {% set _master_has_text = (rw.master_prompt or '')|trim %}
+                {% set cur_model = (rw.stages.analysis.model or '')|trim %}
+                {% if not cur_model and rewrite_models %}
+                    {% set cur_model = rewrite_models[0].id %}
+                {% endif %}
+                {% set ns_gm = namespace(d='—') %}
+                {% if rewrite_models %}
+                {% set ns_gm.d = rewrite_models[0].label %}
+                {% endif %}
+                {% for m in rewrite_models %}
+                {% if cur_model == m.id %}{% set ns_gm.d = m.label %}{% endif %}
+                {% endfor %}
+                {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
+                {% if _plang_raw in ['en', 'english', 'англ'] %}
+                    {% set _plang = 'en' %}
+                {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
+                    {% set _plang = 'es' %}
+                {% elif _plang_raw in ['ja', 'jp', 'japanese'] %}
+                    {% set _plang = 'ja' %}
+                {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
+                    {% set _plang = _plang_raw %}
+                {% else %}
+                    {% set _plang = 'ru' %}
+                {% endif %}
+                <div class="rewrite-project-settings-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
+                    <div class="rewrite-project-settings-title-row">
+                        <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                        <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Настройки</div>
+                    </div>
+                    <div class="rewrite-project-settings-card-compact rewrite-stages-compact" aria-live="polite">
+                        <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _hero_has_text else 'no' }}" id="rewrite-project-settings-compact-hero-badge">Hero Promt: {{ 'YES' if _hero_has_text else 'NO' }}</span>
+                        <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                        <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _master_has_text else 'no' }}" id="rewrite-project-settings-compact-master-badge">Master Promt: {{ 'YES' if _master_has_text else 'NO' }}</span>
+                        <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                        <span class="rewrite-stages-compact__pair">
+                        <div class="rewrite-project-settings-compact__control rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-global-model-field="compact">
+                            <button type="button" class="rewrite-anim-dropdown__btn rewrite-project-settings-compact__dropdown-btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Модель OpenAI">
+                                <span class="rewrite-anim-dropdown__btn-label" data-global-model-label>{{ ns_gm.d }}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                {% for m in rewrite_models %}
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-global-model-radio" class="rewrite-anim-radio rewrite-global-model-radio visually-hidden-input" value="{{ m.id }}" {% if cur_model == m.id %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body">
+                                        <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        </span>
+                        <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                        <span class="rewrite-stages-compact__pair">
+                        <div class="rewrite-project-settings-compact__control rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="compact">
+                            <button type="button" class="rewrite-anim-dropdown__btn rewrite-project-settings-compact__dropdown-btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set %}disabled{% endif %} aria-label="Язык конвейера">
+                                <span class="rewrite-anim-dropdown__btn-label" data-pipeline-language-label>{% if _plang == 'en' %}English{% elif _plang == 'es' %}Spanish{% elif _plang == 'ja' %}Japanese{% else %}Русский{% endif %}</span>
+                                <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel" hidden role="listbox">
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ru" {% if _plang == 'ru' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body"><span class="rewrite-anim-option__title">Русский</span></span>
+                                </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="en" {% if _plang == 'en' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body"><span class="rewrite-anim-option__title">English</span></span>
+                                </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="es" {% if _plang == 'es' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body"><span class="rewrite-anim-option__title">Spanish</span></span>
+                                </label>
+                                <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-global-model-option">
+                                    <input type="radio" name="rewrite-pipeline-lang-radio" class="rewrite-anim-radio rewrite-pipeline-lang-radio visually-hidden-input" value="ja" {% if _plang == 'ja' %}checked{% endif %} {% if not openai_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-anim-option__body"><span class="rewrite-anim-option__title">Japanese</span></span>
+                                </label>
+                            </div>
+                        </div>
+                        </span>
+                        <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                        <span class="rewrite-stages-compact__pair rewrite-project-settings-compact__chars-row">
+                            <input type="range" id="rewrite-target-chars-compact" name="target_chars_compact" min="500" max="40000" step="500" value="{{ (rw.target_chars|default(1500))|int }}" class="tts-range rewrite-project-settings-compact__range" {% if not openai_key_set %}disabled{% endif %} aria-valuemin="500" aria-valuemax="40000" aria-label="Длительность в символах">
+                            <span class="rewrite-project-settings-compact__chars tts-slider-label">Символы <span class="tts-slider-val" id="rewrite-target-chars-compact-val">{{ (rw.target_chars|default(1500))|int|fmt_num_ru }}</span></span>
+                        </span>
+                    </div>
+                </div>
+                <div class="rewrite-project-settings-collapsible-inner">
                 <div class="rewrite-prompts-duration-row">
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--hero">
                         <h3 class="rewrite-source-subtitle">Hero Prompt</h3>
                         <p class="rewrite-source-subhint">Описание героя озвучки. Добавляется во все этапы (в user-сообщение, вместе с ориентиром по символам).</p>
                         <div class="rewrite-source-toolbar slot-header">
-                            {% set _hero_has_text = (rw.hero_prompt or '')|trim %}
                             <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _hero_has_text else 'no' }}" id="rewrite-hero-badge" data-text-badge-for="rewrite-hero-prompt">Hero Promt: {{ 'YES' if _hero_has_text else 'NO' }}</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if hero_locked %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-hero-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
@@ -446,7 +533,6 @@
                         <h3 class="rewrite-source-subtitle">Master Prompt</h3>
                         <p class="rewrite-source-subhint">Добавляется к системному промпту на каждом этапе (после промпта этапа, через пустую строку).</p>
                         <div class="rewrite-source-toolbar slot-header">
-                            {% set _master_has_text = (rw.master_prompt or '')|trim %}
                             <span class="slot-badge template-prompt-badge template-prompt-badge--{{ 'yes' if _master_has_text else 'no' }}" id="rewrite-master-badge" data-text-badge-for="rewrite-master-prompt">Master Promt: {{ 'YES' if _master_has_text else 'NO' }}</span>
                             <button type="button" class="rewrite-lock-toggle btn-icon{% if rw.master_prompt_locked|default(false) %} rewrite-lock-toggle--locked{% endif %}" id="rewrite-master-toggle" title="Редактировать" aria-label="Редактировать" {% if not openai_key_set %}disabled{% endif %}>
                                 <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
@@ -459,17 +545,6 @@
                     </div>
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--model-temp">
                         <div class="rewrite-prompts-duration-row__model-block">
-                            {% set cur_model = (rw.stages.analysis.model or '')|trim %}
-                            {% if not cur_model and rewrite_models %}
-                                {% set cur_model = rewrite_models[0].id %}
-                            {% endif %}
-                            {% set ns_gm = namespace(d='—') %}
-                            {% if rewrite_models %}
-                            {% set ns_gm.d = rewrite_models[0].label %}
-                            {% endif %}
-                            {% for m in rewrite_models %}
-                            {% if cur_model == m.id %}{% set ns_gm.d = m.label %}{% endif %}
-                            {% endfor %}
                             <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-global-model-field="1">
                                 <h3 class="rewrite-source-subtitle">Model</h3>
                                 <p class="rewrite-source-subhint">Модель OpenAI для всех этапов конвейера.</p>
@@ -509,18 +584,6 @@
                             </div>
                         </div>
                     </div>
-                    {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
-                    {% if _plang_raw in ['en', 'english', 'англ'] %}
-                        {% set _plang = 'en' %}
-                    {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
-                        {% set _plang = 'es' %}
-                    {% elif _plang_raw in ['ja', 'jp', 'japanese'] %}
-                        {% set _plang = 'ja' %}
-                    {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
-                        {% set _plang = _plang_raw %}
-                    {% else %}
-                        {% set _plang = 'ru' %}
-                    {% endif %}
                     <div class="rewrite-prompts-duration-row__col rewrite-prompts-duration-row__col--lang-duration">
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
                             <h3 class="rewrite-source-subtitle">Язык</h3>
@@ -575,6 +638,7 @@
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
 

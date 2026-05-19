@@ -240,17 +240,31 @@ def get_video_1080p_result(task_id: str, index: int = 0) -> dict[str, Any]:
         raise RuntimeError(f"Kie.ai API error: {resp.text}")
 
     code = data.get("code")
+    msg = str(data.get("msg") or "").strip()
+    msg_l = msg.lower()
     if resp.status_code == 200 and code == 200:
-        url = (data.get("data") or {}).get("resultUrl", "")
+        url = (data.get("data") or {}).get("resultUrl", "") or (data.get("data") or {}).get("result_url", "")
         if url:
             return {"ready": True, "url": url}
         return {"ready": False}
 
-    # Not ready yet / validation-in-progress states should be retried.
+    # Not ready yet — Kie часто отвечает 422/429 или текстом «try again later».
     if code in (422, 429):
         return {"ready": False}
+    if any(
+        p in msg_l
+        for p in (
+            "try again later",
+            "being generated",
+            "still processing",
+            "not ready",
+            "in progress",
+            "please wait",
+        )
+    ):
+        return {"ready": False}
 
-    raise RuntimeError(f"Kie.ai API error: {data.get('msg', resp.text)}")
+    raise RuntimeError(f"Kie.ai API error: {msg or resp.text}")
 
 
 def generate_image(

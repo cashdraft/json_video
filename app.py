@@ -7053,6 +7053,7 @@ def generate_slot_status(job_id: str):
                             "scene_idx": idx,
                             "slot": slot_name,
                             "started_at": gen.get("started_at", datetime.now().timestamp()),
+                            "hd_started_at": gen.get("hd_started_at"),
                             "video_model": (
                                 normalize_video_model(meta_j.get("video_model"))
                                 if slot_name == "video"

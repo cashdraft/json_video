@@ -1,17 +1,18 @@
-Analyze the following YouTube script and original title.
+Проанализируй следующий YouTube-сценарий и оригинальный заголовок.
 
-The video is for an English-speaking audience.
+Это видео рассчитано на аудиторию, говорящую на {{LANGUAGE}} языке.
 
-Use the original title as a packaging benchmark.
-Do NOT generate final titles yet.
+Используй оригинальный заголовок как benchmark упаковки.
+НЕ генерируй финальные заголовки.
 
-Extract:
-- the strategy from the script
-- the formula of the original title
-- what makes the original title work
-- what should be preserved
-- what should not be copied blindly
+Извлеки:
+— стратегию из сценария
+— формулу оригинального заголовка
+— что делает оригинальный заголовок рабочим
+— что нужно сохранить
+— что НЕ нужно слепо копировать
 
-Return ONLY JSON in the exact schema.
+Верни ТОЛЬКО JSON строго по указанной схеме.
 
-ORIGINAL TITLE: {{ORIGINAL_TITLE}}
+Переведи сначала ORIGINAL TITLE на {{LANGUAGE}}
+ORIGINAL TITLE: {{ORIGINAL_TITLE}} 

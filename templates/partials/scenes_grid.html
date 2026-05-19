@@ -13,6 +13,8 @@
                 {% set video_active = video_gen and video_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not video_gen.canceled %}
                 {% set at = scene.audio_timing if scene.audio_timing is mapping else {} %}
                 {% set _at_has_timing = at.get('start_ms') is not none or at.get('badge') %}
+                {% set start_badge_cls = 'badge-no' if not scene.start.prompt else ('badge-slot-ready' if start_has_result else 'badge-slot-prompt') %}
+                {% set video_badge_cls = 'badge-no' if not scene.video.prompt else ('badge-slot-ready' if video_has_result else 'badge-slot-prompt') %}
                 <div
                     class="scene-card scene-card--collapsible scene-card--body-collapsed"
                     data-scene-collapse="1"
@@ -34,14 +36,23 @@
                             <div class="scene-id">{{ scene.scene_id }}</div>
                             {% if at.duration_s or _at_has_timing %}
                             <span class="scene-card-title-sep" aria-hidden="true">—</span>
-                            <span class="scene-audio-timing scene-card-title__timing{{ at | scene_timing_badge_class }}" title="{{ _audio_timing_title }}">
+                            <span class="scene-audio-timing scene-card-title__timing-dur{{ at | scene_timing_badge_class }}" title="{{ _audio_timing_title }}">
                                 <span class="scene-audio-timing__dur">{{ at.duration_s or '—' }} с</span>
                             </span>
+                            {% if at.start_time or at.start_end %}
+                            <span class="scene-audio-timing scene-card-title__timing-range" title="{{ _audio_timing_title }}">
+                                <span class="scene-audio-timing__range">{{ at.start_time or '—' }} → {{ at.start_end or '—' }}</span>
+                            </span>
+                            {% endif %}
                             {% endif %}
                         </div>
                         <div class="scene-card-compact rewrite-stages-compact" aria-live="polite">
+                            {% if scene.text %}
+                            <span class="scene-card-compact__text scene-text scene-text--en" title="{{ scene.text }}">{{ scene.text }}</span>
+                            <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                            {% endif %}
                             <span class="rewrite-stages-compact__pair" data-scene-compact-slot="start">
-                                <span class="slot-badge badge-{{ 'yes' if start_has_result else 'no' }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
+                                <span class="slot-badge {{ start_badge_cls }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
                                 <button
                                     type="button"
                                     class="btn-regenerate btn-generate scene-card-compact__run rewrite-stages-compact__run{{ ' btn-regenerate--busy' if start_active else '' }}{{ ' is-hidden' if not scene.start.prompt else '' }}"
@@ -52,11 +63,9 @@
                                     {{ '' if scene.start.prompt else 'disabled' }}
                                 >↻</button>
                             </span>
-                            {% if scene.text %}
-                            <span class="scene-card-compact__text scene-text scene-text--en" title="{{ scene.text }}">{{ scene.text }}</span>
-                            {% endif %}
+                            <span class="tts-section-compact-sep" aria-hidden="true">|</span>
                             <span class="rewrite-stages-compact__pair" data-scene-compact-slot="video">
-                                <span class="slot-badge badge-{{ 'yes' if video_has_result else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
+                                <span class="slot-badge {{ video_badge_cls }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
                                 <button
                                     type="button"
                                     class="btn-regenerate btn-generate scene-card-compact__run rewrite-stages-compact__run{{ ' btn-regenerate--busy' if video_active else '' }}{{ ' is-hidden' if not (has_video_prompt and video_ready) else '' }}"
@@ -76,16 +85,6 @@
                         </div>
                     </div>
                         <div class="scene-header__row">
-                        {% if _at_has_timing %}
-                        <div
-                            class="scene-audio-timing{{ at | scene_timing_badge_class }}"
-                            title="{{ _audio_timing_title }}"
-                        >
-                            <div class="scene-audio-timing__dur">{{ at.duration_s or '—' }} с</div>
-                            <div class="scene-audio-timing__range">{{ at.start_time or '—' }} → {{ at.start_end or '—' }}</div>
-                        </div>
-                        <div class="scene-header__divider" aria-hidden="true"></div>
-                        {% endif %}
                         <div class="scene-header__texts">
                         {% if scene.text %}
                         <div class="scene-text scene-text--en" title="{{ scene.text }}">{{ scene.text }}</div>
@@ -100,7 +99,7 @@
                         <div class="scene-slot" data-slot="start">
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
-                                    <span class="slot-badge badge-{{ 'yes' if start_has_result else 'no' }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
+                                    <span class="slot-badge {{ start_badge_cls }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
                                     <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.start.prompt or '—' }}</span>
                                 </span>
                                 <button
@@ -129,7 +128,7 @@
                             </div>
                             <div
                                 class="slot-placeholder"
-                                data-status="{{ (start_gen.state if start_gen else ('done' if scene.start.image_url else 'pending')) }}"
+                                data-status="{{ 'error' if start_gen and start_gen.state == 'fail' else (start_gen.state if start_gen else ('done' if scene.start.image_url else 'pending')) }}"
                                 data-task-id="{{ start_gen.task_id if start_gen else '' }}"
                                 data-started-at="{{ start_gen.started_at if start_gen else '' }}"
                             >
@@ -156,7 +155,7 @@
                             {% set end_active = end_gen and end_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not end_gen.canceled %}
                             <div
                                 class="slot-placeholder"
-                                data-status="{{ (end_gen.state if end_gen else ('done' if scene.end.image_url else 'pending')) }}"
+                                data-status="{{ 'error' if end_gen and end_gen.state == 'fail' else (end_gen.state if end_gen else ('done' if scene.end.image_url else 'pending')) }}"
                                 data-task-id="{{ end_gen.task_id if end_gen else '' }}"
                                 data-started-at="{{ end_gen.started_at if end_gen else '' }}"
                             >
@@ -179,7 +178,7 @@
                             {% set show_hd_wait = video_gen and video_gen.hd_state == 'waiting' %}
                             <div class="slot-header">
                                 <span class="slot-badge-wrap">
-                                    <span class="slot-badge badge-{{ 'yes' if video_has_result else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
+                                    <span class="slot-badge {{ video_badge_cls }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
                                     <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.video.prompt or '—' }}</span>
                                 </span>
                                 <button
@@ -232,7 +231,7 @@
                             </div>
                             <div
                                 class="slot-placeholder"
-                                data-status="{{ (video_gen.state if video_gen else ('done' if scene.video.video_url else 'pending')) }}"
+                                data-status="{{ 'error' if video_gen and video_gen.state == 'fail' else (video_gen.state if video_gen else ('done' if scene.video.video_url else 'pending')) }}"
                                 data-task-id="{{ video_gen.task_id if video_gen else '' }}"
                                 data-started-at="{{ video_gen.started_at if video_gen else '' }}"
                             >

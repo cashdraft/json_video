@@ -498,6 +498,16 @@
             {% endif %}
         </section>
         {% set _json_has_scenes = (scenes|length) > 0 %}
+        {% set _json_has_input_hdr = (job.raw_input or '')|trim %}
+        {% set _vj_any_words_hdr = tts_words_available or whisper_words_available %}
+        {% set _vj_has_timings_hdr = _vj_any_words_hdr and (scenes_stripped_with_timing or '')|trim %}
+        {% if scenes_timings_validation and _vj_any_words_hdr %}
+        {% set _vj_check_lbl_hdr = 'OK' if scenes_timings_validation.ok else 'NO' %}
+        {% set _vj_check_cls_hdr = 'rewrite-scene-writer-check__ok' if scenes_timings_validation.ok else 'rewrite-scene-writer-check__no' %}
+        {% else %}
+        {% set _vj_check_lbl_hdr = '—' %}
+        {% set _vj_check_cls_hdr = 'rewrite-scene-writer-check__wait' %}
+        {% endif %}
         <form
             method="post"
             action="{{ url_for('parse_for_job', job_id=job_id) }}"
@@ -518,7 +528,21 @@
                     <div class="scene-id rewrite-source-body-title rewrite-stage-title-text video-json-title">JSON-код сцен</div>
                 </div>
                 <div class="video-json-panel-card-compact rewrite-stages-compact" aria-live="polite">
-                    <span class="rewrite-source-counts video-json-panel-compact-counts" id="video-json-panel-compact-counts"></span>
+                    <span class="rewrite-stages-compact__pair">
+                        <span class="slot-badge badge-{{ 'yes' if _json_has_input_hdr else 'no' }}" id="video-json-panel-compact-scenes-badge">Scenes</span>
+                    </span>
+                    <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                    <span class="video-json-panel-compact-scenes-count" id="video-json-panel-compact-scenes-count">Сцен {{ scenes|length|fmt_num_ru }}</span>
+                    <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                    <span class="tts-section-compact-timings video-json-panel-compact-timings">
+                        <span class="tts-section-compact-timings-name">Тайминги</span>
+                        <span class="slot-badge badge-{{ 'yes' if _vj_has_timings_hdr else 'no' }} rewrite-stage-result-badge" id="video-json-panel-compact-timings-badge">Result</span>
+                    </span>
+                    <span class="tts-section-compact-sep" aria-hidden="true">|</span>
+                    <span class="video-json-panel-compact-check tts-section-compact-timings">
+                        <span class="tts-section-compact-timings-name">Проверка</span>
+                        <span class="tts-section-compact-timings-status tts-word-timings-panel-compact-scenes-status {{ _vj_check_cls_hdr }}" id="video-json-panel-compact-check-status" aria-live="polite">{{ _vj_check_lbl_hdr }}</span>
+                    </span>
                 </div>
             </div>
             <div class="video-json-panel-collapsible-inner">
@@ -818,6 +842,8 @@
             </div>
         </form>
 
+        <hr class="rewrite-preset-section-divider job-section-divider--after-json-scenes" aria-hidden="true">
+
         <div class="generation-image-bar scenes-toolbar">
             <button
                 type="button"
@@ -827,7 +853,7 @@
                 aria-controls="job-scenes-grid"
             >
                 <span class="rewrite-stages-pipeline-display-btn__chev" aria-hidden="true">▾</span>
-                <span class="rewrite-stages-collapsible__title">Отобразить</span>
+                <span class="rewrite-stages-collapsible__title">Отобразить все</span>
             </button>
             <button
                 type="button"
@@ -1903,8 +1929,8 @@
             jsonSceneTextBadgeEl.classList.toggle('badge-yes', has);
             jsonSceneTextBadgeEl.classList.toggle('badge-no', !has);
         }
-        if (typeof window.__syncVideoJsonPanelCompactCounts === 'function') {
-            try { window.__syncVideoJsonPanelCompactCounts(); } catch (e) {}
+        if (typeof window.__syncVideoJsonPanelCompact === 'function') {
+            try { window.__syncVideoJsonPanelCompact(); } catch (e) {}
         }
     };
     if (jsonInputEl) {
@@ -3021,24 +3047,35 @@
         syncSceneGenerateFromPlaceholder(placeholder);
     };
 
+    const slotErrorDisplayText = (message) => {
+        const s = String(message || '');
+        const hint = slotErrorUserHint(s);
+        const generic = 'Сообщение выше — от Kie.ai. Повторите позже или измените промпт и параметры.';
+        if (hint !== generic) return hint;
+        return s || 'Generation failed';
+    };
+
     const showPlaceholderError = (placeholder, message) => {
-        placeholder.setAttribute('data-status', 'pending');
+        placeholder.setAttribute('data-status', 'error');
         placeholder.replaceChildren();
-        const wrap = document.createElement('div');
-        wrap.className = 'slot-error-stack';
+        const row = document.createElement('div');
+        row.className = 'slot-status-row';
         const span = document.createElement('span');
         span.className = 'slot-status slot-status-error';
-        span.textContent = message;
-        wrap.appendChild(span);
-        const hintText = slotErrorUserHint(message);
-        const hint = document.createElement('p');
-        hint.className = 'slot-status-error-hint';
-        hint.textContent = hintText;
-        wrap.appendChild(hint);
-        placeholder.appendChild(wrap);
+        span.textContent = slotErrorDisplayText(message);
+        row.appendChild(span);
+        placeholder.appendChild(row);
         if (typeof syncSceneGenerateFromPlaceholder === 'function') {
             syncSceneGenerateFromPlaceholder(placeholder);
         }
+    };
+
+    const applySceneSlotBadgeState = (badge, hasPrompt, hasResult) => {
+        if (!badge) return;
+        badge.classList.remove('badge-no', 'badge-yes', 'badge-slot-prompt', 'badge-slot-ready');
+        if (!hasPrompt) badge.classList.add('badge-no');
+        else if (hasResult) badge.classList.add('badge-slot-ready');
+        else badge.classList.add('badge-slot-prompt');
     };
 
     const updateSceneSlotBadge = (sceneCard, slot) => {
@@ -3057,8 +3094,7 @@
             .filter(Boolean)
             .forEach((badge) => {
                 badge.textContent = badgeLabel;
-                badge.classList.toggle('badge-yes', hasResult);
-                badge.classList.toggle('badge-no', !hasResult);
+                applySceneSlotBadgeState(badge, hasPrompt, hasResult);
             });
     };
 
@@ -3353,7 +3389,6 @@
                     statusData.hd_status_text || `720p waiting 1080p (${statusData.hd_elapsed_seconds || 0} sec)`
                 );
             } else if (state === 'fail') {
-                placeholder.setAttribute('data-status', 'pending');
                 showPlaceholderError(placeholder, `${statusData.error || 'Generation failed'} (${elapsed}s)`);
                 if (slot === 'video') updateVideoHdStatus(btn.closest('.scene-card'), '');
                 done = true;
@@ -3600,24 +3635,38 @@
 
     const resumeScenesSectionPolling = () => {
         document.querySelectorAll('#job-scenes-section .scene-slot[data-slot="start"], #job-scenes-section .scene-slot[data-slot="end"], #job-scenes-section .scene-slot[data-slot="video"]').forEach((slotEl) => {
-        const placeholder = slotEl.querySelector('.slot-placeholder');
-        const taskId = placeholder?.dataset?.taskId;
-        const slot = slotEl.dataset.slot;
-        if (!taskId || !placeholder) return;
-        if (placeholder.dataset.pollingResumed === '1') return;
-            if (placeholder.dataset.status === 'waiting' || placeholder.dataset.status === 'queuing' || placeholder.dataset.status === 'generating' || placeholder.dataset.status === 'submitted') {
+            const placeholder = slotEl.querySelector('.slot-placeholder');
+            const taskId = placeholder?.dataset?.taskId;
+            const slot = slotEl.dataset.slot;
+            if (!taskId || !placeholder) return;
+            if (placeholder.dataset.pollingResumed === '1') return;
+            const st = String(placeholder.dataset.status || '').toLowerCase();
+            const needsPoll = (
+                st === 'waiting'
+                || st === 'queuing'
+                || st === 'generating'
+                || st === 'submitted'
+                || st === 'upgrading_1080'
+            );
+            if (!needsPoll) return;
             const btn = slotEl.querySelector('.btn-generate');
-            if (btn) {
-                placeholder.dataset.pollingResumed = '1';
-                renderStatus(placeholder, 'Resuming task tracking', 0, true, taskId);
+            if (!btn) return;
+            placeholder.dataset.pollingResumed = '1';
+            if (st === 'upgrading_1080' && slot === 'video') {
                 setSceneGenerateBusy(btn.closest('.scene-card'), slot, true);
                 pollTask(btn, placeholder, slot, taskId).catch((e) => {
                     showPlaceholderError(placeholder, e.message || String(e));
                     syncSceneCardGenerateUi(btn.closest('.scene-card'));
                 });
+                return;
             }
-        }
-    });
+            renderStatus(placeholder, 'Resuming task tracking', 0, true, taskId);
+            setSceneGenerateBusy(btn.closest('.scene-card'), slot, true);
+            pollTask(btn, placeholder, slot, taskId).catch((e) => {
+                showPlaceholderError(placeholder, e.message || String(e));
+                syncSceneCardGenerateUi(btn.closest('.scene-card'));
+            });
+        });
     };
 
     (function setupJobScenesDisplayToggle() {
@@ -3688,7 +3737,7 @@
             }
             btn.removeAttribute('aria-busy');
             btn.setAttribute('aria-expanded', st.allCollapsed ? 'false' : 'true');
-            if (title) title.textContent = st.allCollapsed ? 'Отобразить' : 'Скрыть';
+            if (title) title.textContent = st.allCollapsed ? 'Отобразить все' : 'Скрыть все';
             if (chev) chev.textContent = st.allCollapsed ? '▾' : '▴';
         };
         window.__syncJobScenesDisplayToggle = syncJobScenesDisplayToggle;
@@ -3865,13 +3914,38 @@
             panelEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
         window.__applyVideoJsonPanelCollapsed = applyVideoJsonPanelCollapsed;
-        window.__syncVideoJsonPanelCompactCounts = function () {
-            const compactEl = document.getElementById('video-json-panel-compact-counts');
-            const ta = document.getElementById('json_input');
-            if (!compactEl || !ta) return;
-            const s = computeJsonPromptStats(ta.value || '');
-            compactEl.textContent = s.total + ' сцен · S' + s.start + ' E' + s.end + ' V' + s.video;
+        window.__syncVideoJsonPanelCompact = function () {
+            const panel = document.getElementById('job-parse-form');
+            const scenesBadge = document.getElementById('video-json-panel-compact-scenes-badge');
+            const mainScenesBadge = document.getElementById('json-scene-text-badge');
+            if (scenesBadge && mainScenesBadge) {
+                scenesBadge.className = mainScenesBadge.className;
+            }
+            const countEl = document.getElementById('video-json-panel-compact-scenes-count');
+            if (countEl && panel) {
+                const n = parseInt(panel.dataset.existingScenesCount || '0', 10) || 0;
+                const fmt = (typeof formatNumRu === 'function')
+                    ? formatNumRu
+                    : (x) => String(Math.max(0, parseInt(x, 10) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+                countEl.textContent = 'Сцен ' + fmt(n);
+            }
+            const timingsBadge = document.getElementById('video-json-panel-compact-timings-badge');
+            const mainTimings = document.getElementById('video-json-scenes-compact-badge')
+                || document.getElementById('video-json-scenes-result-badge');
+            if (timingsBadge && mainTimings) {
+                timingsBadge.classList.toggle('badge-yes', mainTimings.classList.contains('badge-yes'));
+                timingsBadge.classList.toggle('badge-no', mainTimings.classList.contains('badge-no'));
+            }
+            const compactCheck = document.getElementById('video-json-panel-compact-check-status');
+            const mainCheck = document.getElementById('video-json-scenes-check-status');
+            if (compactCheck && mainCheck) {
+                compactCheck.textContent = mainCheck.textContent;
+                const checkCls = ['rewrite-scene-writer-check__ok', 'rewrite-scene-writer-check__no', 'rewrite-scene-writer-check__wait']
+                    .find((c) => mainCheck.classList.contains(c)) || 'rewrite-scene-writer-check__wait';
+                compactCheck.className = 'tts-section-compact-timings-status tts-word-timings-panel-compact-scenes-status ' + checkCls;
+            }
         };
+        window.__syncVideoJsonPanelCompactCounts = window.__syncVideoJsonPanelCompact;
         if (panelEl && panelEl.getAttribute('data-video-json-collapse') === '1') {
             applyVideoJsonPanelCollapsed(true);
             const hdr = panelEl.querySelector('.video-json-panel-card-header');
@@ -3889,7 +3963,7 @@
                     }
                 });
             }
-            try { window.__syncVideoJsonPanelCompactCounts(); } catch (e) {}
+            try { window.__syncVideoJsonPanelCompact(); } catch (e) {}
         }
     })();
     (function setupVideoJsonScenesPanelCollapse() {
@@ -5314,44 +5388,21 @@
                 if (durS >= 2) return ' scene-audio-timing--dur-gray';
                 return '';
             };
-            const buildSceneAudioTimingBlock = (row) => {
-                const wrap = document.createElement('div');
-                wrap.className = 'scene-audio-timing' + sceneTimingDurationClass(row);
-                wrap.title = badgeTitle;
-                const durEl = document.createElement('div');
-                durEl.className = 'scene-audio-timing__dur';
-                const ds = row.duration_s != null ? String(row.duration_s).trim() : '';
-                durEl.textContent = ds ? `${ds} с` : '— с';
-                const rangeEl = document.createElement('div');
-                rangeEl.className = 'scene-audio-timing__range';
-                const st = row.start_time ? String(row.start_time) : '—';
-                const en = row.start_end ? String(row.start_end) : '—';
-                rangeEl.textContent = `${st} → ${en}`;
-                wrap.appendChild(durEl);
-                wrap.appendChild(rangeEl);
-                return wrap;
-            };
-            const buildTitleRowTimingDur = (row) => {
-                const wrap = document.createElement('span');
-                wrap.className = 'scene-audio-timing scene-card-title__timing' + sceneTimingDurationClass(row);
-                wrap.title = badgeTitle;
-                const durEl = document.createElement('span');
-                durEl.className = 'scene-audio-timing__dur';
-                const ds = row.duration_s != null ? String(row.duration_s).trim() : '';
-                durEl.textContent = ds ? `${ds} с` : '— с';
-                wrap.appendChild(durEl);
-                return wrap;
-            };
             const upsertTitleRowTiming = (card, row) => {
                 const titleRow = card.querySelector('.scene-card-title-row');
                 if (!titleRow) return;
+                titleRow.querySelector('.scene-card-title__timing-group')?.remove();
                 const ds = row.duration_s != null ? String(row.duration_s).trim() : '';
                 const has = !!(ds || row.start_ms != null || row.badge);
+                const st = row.start_time ? String(row.start_time) : '';
+                const en = row.start_end ? String(row.start_end) : '';
                 let sep = titleRow.querySelector('.scene-card-title-sep');
-                let timing = titleRow.querySelector('.scene-card-title__timing');
+                let durWrap = titleRow.querySelector('.scene-card-title__timing-dur');
+                let rangeWrap = titleRow.querySelector('.scene-card-title__timing-range');
                 if (!has) {
                     sep?.remove();
-                    timing?.remove();
+                    durWrap?.remove();
+                    rangeWrap?.remove();
                     return;
                 }
                 if (!sep) {
@@ -5363,14 +5414,38 @@
                     if (sceneIdEl) sceneIdEl.after(sep);
                     else titleRow.appendChild(sep);
                 }
-                if (!timing) {
-                    timing = buildTitleRowTimingDur(row);
-                    sep.after(timing);
+                if (!durWrap) {
+                    durWrap = document.createElement('span');
+                    durWrap.className = 'scene-audio-timing scene-card-title__timing-dur' + sceneTimingDurationClass(row);
+                    durWrap.title = badgeTitle;
+                    const durEl = document.createElement('span');
+                    durEl.className = 'scene-audio-timing__dur';
+                    durWrap.appendChild(durEl);
+                    sep.after(durWrap);
                 } else {
-                    timing.className = 'scene-audio-timing scene-card-title__timing' + sceneTimingDurationClass(row);
-                    timing.title = badgeTitle;
-                    const durEl = timing.querySelector('.scene-audio-timing__dur');
+                    durWrap.className = 'scene-audio-timing scene-card-title__timing-dur' + sceneTimingDurationClass(row);
+                    durWrap.title = badgeTitle;
+                    const durEl = durWrap.querySelector('.scene-audio-timing__dur');
                     if (durEl) durEl.textContent = ds ? `${ds} с` : '— с';
+                }
+                if (st || en) {
+                    const rangeText = `${st || '—'} → ${en || '—'}`;
+                    if (!rangeWrap) {
+                        rangeWrap = document.createElement('span');
+                        rangeWrap.className = 'scene-audio-timing scene-card-title__timing-range';
+                        rangeWrap.title = badgeTitle;
+                        const rangeEl = document.createElement('span');
+                        rangeEl.className = 'scene-audio-timing__range';
+                        rangeEl.textContent = rangeText;
+                        rangeWrap.appendChild(rangeEl);
+                        durWrap.after(rangeWrap);
+                    } else {
+                        rangeWrap.title = badgeTitle;
+                        const rangeEl = rangeWrap.querySelector('.scene-audio-timing__range');
+                        if (rangeEl) rangeEl.textContent = rangeText;
+                    }
+                } else {
+                    rangeWrap?.remove();
                 }
             };
             rows.forEach((row) => {
@@ -5380,25 +5455,7 @@
                 const esc = String(sid).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
                 const card = document.querySelector('.scene-card[data-scene-id="' + esc + '"]');
                 if (!card) return;
-                card.querySelectorAll('.scene-header__row .scene-audio-timing, .scene-audio-timing-badge').forEach((el) => el.remove());
-                if (!row.start_time && !row.start_end && !row.duration_s && !row.badge) {
-                    upsertTitleRowTiming(card, row);
-                    return;
-                }
-                const chrome = card.querySelector('.scene-card-chrome');
-                if (!chrome) return;
-                let rowEl = chrome.querySelector('.scene-header__row');
-                if (!rowEl) return;
-                let divider = rowEl.querySelector('.scene-header__divider');
-                if (!divider) {
-                    divider = document.createElement('div');
-                    divider.className = 'scene-header__divider';
-                    divider.setAttribute('aria-hidden', 'true');
-                    const texts = rowEl.querySelector('.scene-header__texts');
-                    if (texts) rowEl.insertBefore(divider, texts);
-                    else rowEl.appendChild(divider);
-                }
-                rowEl.insertBefore(buildSceneAudioTimingBlock(row), divider);
+                card.querySelectorAll('.scene-header__row .scene-audio-timing, .scene-audio-timing-badge, .scene-header__row .scene-header__divider').forEach((el) => el.remove());
                 upsertTitleRowTiming(card, row);
                 card.querySelectorAll('.scene-card-compact .scene-card-compact__timing').forEach((el) => {
                     const sep = el.nextElementSibling;
@@ -6934,6 +6991,9 @@
                 if (checkSummaryEl) checkSummaryEl.textContent = '—';
                 if (checkWrapEl) checkWrapEl.dataset.scenesOk = '';
                 if (checkSectionEl) checkSectionEl.dataset.scenesOk = '';
+                if (typeof window.__syncVideoJsonPanelCompact === 'function') {
+                    try { window.__syncVideoJsonPanelCompact(); } catch (e) {}
+                }
                 return null;
             }
             const ok = !!v.ok;
@@ -6957,6 +7017,9 @@
             }
             if (checkWrapEl) checkWrapEl.dataset.scenesOk = ok ? '1' : '0';
             if (checkSectionEl) checkSectionEl.dataset.scenesOk = ok ? '1' : '0';
+            if (typeof window.__syncVideoJsonPanelCompact === 'function') {
+                try { window.__syncVideoJsonPanelCompact(); } catch (e) {}
+            }
             return v;
         };
         window.renderScenesTimingsValidation = renderScenesTimingsValidation;
@@ -7040,6 +7103,9 @@
                 el.classList.toggle('badge-no', !has);
             });
             updateCounts();
+            if (typeof window.__syncVideoJsonPanelCompact === 'function') {
+                try { window.__syncVideoJsonPanelCompact(); } catch (e) {}
+            }
         };
         window.setVideoJsonScenesTimingsText = setVideoJsonScenesTimingsText;
 
