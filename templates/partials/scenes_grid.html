@@ -1,0 +1,208 @@
+{% from 'macros/scene_slots.html' import slot_fail_block %}
+{% set _audio_timing_title = audio_timing_badge_title|default('Интервал в озвучке (по словам ElevenLabs)') %}
+                {% for scene in scenes %}
+                {% set has_start_prompt = scene.start.prompt|default('', true) %}
+                {% set has_end_prompt = scene.end.prompt|default('', true) %}
+                {% set has_video_prompt = scene.video.prompt|default('', true) %}
+                {% set start_ready = scene.start.image_url|default('', true) %}
+                {% set end_ready = scene.end.image_url|default('', true) %}
+                {% set video_ready = (not has_start_prompt or start_ready) and (not has_end_prompt or end_ready) %}
+                <div
+                    class="scene-card"
+                    data-scene-index="{{ loop.index0 }}"
+                    data-scene-id="{{ scene.scene_id }}"
+                    data-has-start-prompt="{{ '1' if has_start_prompt else '0' }}"
+                    data-has-end-prompt="{{ '1' if has_end_prompt else '0' }}"
+                >
+                    <div class="scene-header">
+                        <div class="scene-id">{{ scene.scene_id }}</div>
+                        {% set at = scene.audio_timing if scene.audio_timing is mapping else {} %}
+                        {% if at.get('badge') %}
+                        <span
+                            class="scene-audio-timing-badge{% if at.get('low_confidence') %} scene-audio-timing-badge--warn{% endif %}"
+                            title="{{ _audio_timing_title }}"
+                        >{{ at.badge }}</span>
+                        {% endif %}
+                        {% if scene.text_ru %}
+                        <div class="scene-text scene-text--ru" title="{{ scene.text_ru }}">{{ scene.text_ru }}</div>
+                        {% endif %}
+                        <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
+                    </div>
+                    <div class="scene-slots">
+                        <div class="scene-slot" data-slot="start">
+                            <div class="slot-header">
+                                <span class="slot-badge-wrap">
+                                    <span class="slot-badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
+                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.start.prompt or '—' }}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
+                                    title="Редактировать"
+                                    aria-label="Редактировать"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="start"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="btn-regenerate btn-generate {{ '' if scene.start.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="start" title="Generate" {{ '' if scene.start.prompt else 'disabled' }}>↻</button>
+                                <span class="slot-header-trailing"><span class="slot-header-meta" title="{{ scene_slot_image_header_meta }}">{{ scene_slot_image_header_meta }}</span></span>
+                            </div>
+                            <div class="slot-prompt-editor-wrap">
+                                <textarea
+                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
+                                    rows="4"
+                                    readonly
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="start"
+                                    placeholder="Start prompt…"
+                                >{{ scene.start.prompt or '' }}</textarea>
+                            </div>
+                            {% set start_gen = scene.start.generation if scene.start and scene.start.generation else none %}
+                            {% set start_active = start_gen and start_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not start_gen.canceled %}
+                            <div
+                                class="slot-placeholder"
+                                data-status="{{ (start_gen.state if start_gen else ('done' if scene.start.image_url else 'pending')) }}"
+                                data-task-id="{{ start_gen.task_id if start_gen else '' }}"
+                                data-started-at="{{ start_gen.started_at if start_gen else '' }}"
+                            >
+                                {% if start_active %}
+                                <span class="slot-status slot-status-with-spinner">{{ start_gen.state|capitalize }}…</span>
+                                {% elif start_gen and start_gen.state == 'canceled' %}
+                                <span class="slot-status">Canceled</span>
+                                {% elif start_gen and start_gen.state == 'fail' %}
+                                {{ slot_fail_block(start_gen.error) }}
+                                {% elif scene.start.image_url %}
+                                <img src="{{ scene.start.image_url }}" alt="Start" class="slot-image">
+                                {% else %}
+                                <span class="slot-status">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="scene-slot" data-slot="end">
+                            <div class="slot-header">
+                                <span class="slot-badge-wrap">
+                                    <span class="slot-badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">End: {{ 'YES' if scene.end.prompt else 'NO' }}</span>
+                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.end.prompt or '—' }}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
+                                    title="Редактировать"
+                                    aria-label="Редактировать"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="end"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="btn-regenerate btn-generate {{ '' if scene.end.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="end" title="Generate" {{ '' if scene.end.prompt else 'disabled' }}>↻</button>
+                                <span class="slot-header-trailing"><span class="slot-header-meta" title="{{ scene_slot_image_header_meta }}">{{ scene_slot_image_header_meta }}</span></span>
+                            </div>
+                            <div class="slot-prompt-editor-wrap">
+                                <textarea
+                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
+                                    rows="4"
+                                    readonly
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="end"
+                                    placeholder="End prompt…"
+                                >{{ scene.end.prompt or '' }}</textarea>
+                            </div>
+                            {% set end_gen = scene.end.generation if scene.end and scene.end.generation else none %}
+                            {% set end_active = end_gen and end_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not end_gen.canceled %}
+                            <div
+                                class="slot-placeholder"
+                                data-status="{{ (end_gen.state if end_gen else ('done' if scene.end.image_url else 'pending')) }}"
+                                data-task-id="{{ end_gen.task_id if end_gen else '' }}"
+                                data-started-at="{{ end_gen.started_at if end_gen else '' }}"
+                            >
+                                {% if end_active %}
+                                <span class="slot-status slot-status-with-spinner">{{ end_gen.state|capitalize }}…</span>
+                                {% elif end_gen and end_gen.state == 'canceled' %}
+                                <span class="slot-status">Canceled</span>
+                                {% elif end_gen and end_gen.state == 'fail' %}
+                                {{ slot_fail_block(end_gen.error) }}
+                                {% elif scene.end.image_url %}
+                                <img src="{{ scene.end.image_url }}" alt="End" class="slot-image">
+                                {% else %}
+                                <span class="slot-status">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="scene-slot" data-slot="video">
+                            {% set video_gen = scene.video.generation if scene.video and scene.video.generation else none %}
+                            {% set video_active = video_gen and video_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not video_gen.canceled %}
+                            {% set video_quality = scene.video['video_quality'] if scene.video and 'video_quality' in scene.video else none %}
+                            {% set show_hd_done = (video_gen and video_gen.hd_state == 'done') or (video_quality == '1080p') %}
+                            {% set show_hd_wait = video_gen and video_gen.hd_state == 'waiting' %}
+                            <div class="slot-header">
+                                <span class="slot-badge-wrap">
+                                    <span class="slot-badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
+                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.video.prompt or '—' }}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
+                                    title="Редактировать"
+                                    aria-label="Редактировать"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="video"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn-regenerate btn-generate {{ '' if scene.video.prompt else 'is-hidden' }} {{ '' if video_ready else 'btn-video-locked' }}"
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="video"
+                                    title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
+                                    {{ '' if (has_video_prompt and video_ready) else 'disabled' }}
+                                ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
+                                <span class="slot-header-trailing">
+                                <span class="video-hd-status {{ 'active' if show_hd_done or show_hd_wait else '' }}" data-video-hd-status>
+                                    {% if show_hd_done %}
+                                    1080p - done
+                                    {% elif show_hd_wait %}
+                                    720p waiting 1080p
+                                    {% elif video_quality == '720p' and scene.video and scene.video.video_url %}
+                                    720p
+                                    {% endif %}
+                                </span>
+                                <span class="slot-header-meta" title="{{ scene_slot_video_header_meta }}">{{ scene_slot_video_header_meta }}</span>
+                                </span>
+                            </div>
+                            <div class="slot-prompt-editor-wrap">
+                                <textarea
+                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
+                                    rows="4"
+                                    readonly
+                                    data-scene-index="{{ loop.index0 }}"
+                                    data-slot="video"
+                                    placeholder="Video prompt…"
+                                >{{ scene.video.prompt or '' }}</textarea>
+                            </div>
+                            <div
+                                class="slot-placeholder"
+                                data-status="{{ (video_gen.state if video_gen else ('done' if scene.video.video_url else 'pending')) }}"
+                                data-task-id="{{ video_gen.task_id if video_gen else '' }}"
+                                data-started-at="{{ video_gen.started_at if video_gen else '' }}"
+                            >
+                                {% if video_active %}
+                                <span class="slot-status slot-status-with-spinner">{{ video_gen.state|capitalize }}…</span>
+                                {% elif video_gen and video_gen.state == 'canceled' %}
+                                <span class="slot-status">Canceled</span>
+                                {% elif video_gen and video_gen.state == 'fail' %}
+                                {{ slot_fail_block(video_gen.error) }}
+                                {% elif scene.video.video_url %}
+                                <video src="{{ scene.video.video_url }}" class="slot-image" controls playsinline preload="metadata"></video>
+                                {% else %}
+                                <span class="slot-status">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}

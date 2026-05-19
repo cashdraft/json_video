@@ -19,19 +19,8 @@
         </svg>
     </span>
     {% endmacro %}
-    {% macro slot_fail_block(err) %}
-    <div class="slot-error-stack">
-        <span class="slot-status slot-status-error">{{ err or 'Generation failed' }}</span>
-        {% set el = (err or '')|lower %}
-        {% if 'policy' in el or 'prohibited' in el or 'filtered' in el or 'violated' in el %}
-        <p class="slot-status-error-hint">Провайдер (Google через Kie.ai) не вернул картинку: запрос или референсы нарушают правила безопасности. Смягчите промпт или шаблон изображений.</p>
-        {% elif 'no images' in el %}
-        <p class="slot-status-error-hint">В ответе нет изображения — чаще фильтр контента или сбой модели. Повторите генерацию или измените формулировки.</p>
-        {% else %}
-        <p class="slot-status-error-hint">Текст выше — ответ Kie.ai. Повторите позже или измените параметры генерации.</p>
-        {% endif %}
-    </div>
-    {% endmacro %}
+    {% from 'macros/scene_slots.html' import slot_fail_block %}
+
     {% macro job_template_placeholder_inner() %}
     <div class="job-template-ph" aria-hidden="true">
         <svg class="job-template-ph-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" focusable="false">
@@ -674,6 +663,87 @@
                 </div>
             </section>
 
+            {% set _vj_any_words = tts_words_available or whisper_words_available %}
+            {% set _vj_can_apply_timings = _json_has_scenes and _vj_any_words %}
+            {% set _vj_has_timings = (scenes_stripped_with_timing or '')|trim %}
+            <div class="video-json-scenes-row">
+                <article id="video-json-scenes-wrap" class="scene-card tts-word-timings-panel video-json-scenes-panel tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-video-json-scenes-collapse="1" data-has-scenes="{{ '1' if _json_has_scenes else '0' }}" data-has-words="{{ '1' if _vj_any_words else '0' }}">
+                    <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="video-json-scenes-header">
+                        <div class="tts-word-timings-panel__title-row tts-word-timings-panel__toggle rewrite-voiceover-final-title-row" id="video-json-scenes-toggle" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть" aria-controls="video-json-scenes-body">
+                            <span class="rewrite-stage-body-collapse-chevron video-json-scenes-chevron" aria-hidden="true"></span>
+                            <div class="scene-id rewrite-source-body-title rewrite-stage-title-text">Тайминги Scenes</div>
+                        </div>
+                        <div class="tts-word-timings-panel-compact rewrite-stages-compact rewrite-voiceover-final-card-compact" aria-live="polite">
+                            <span class="rewrite-stages-compact__pair">
+                                <span class="slot-badge badge-{{ 'yes' if _vj_has_timings else 'no' }} rewrite-stage-result-badge" id="video-json-scenes-compact-badge">Result</span>
+                            </span>
+                            <span class="tts-word-timings-panel-compact-meta">
+                                <span class="rewrite-source-counts video-json-scenes-compact-counts" id="video-json-scenes-compact-counts"></span>
+                                <span class="tts-template-status video-json-scenes-apply-status hidden" id="video-json-scenes-apply-status" aria-live="polite"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <div id="video-json-scenes-body" class="tts-word-timings-panel__body tts-word-timings-panel-collapsible-inner" hidden>
+                        <div class="video-json-scenes-panel__split">
+                            <div class="video-json-scenes-col video-json-scenes-col--data">
+                                <div class="slot-header rewrite-stage-result-toolbar video-json-scenes-col__head">
+                                    <span class="slot-badge badge-{{ 'yes' if _vj_has_timings else 'no' }} rewrite-stage-result-badge" id="video-json-scenes-result-badge">Result</span>
+                                    <button
+                                        type="button"
+                                        class="btn-regenerate rewrite-stage-run video-json-scenes-run-btn"
+                                        id="video-json-scenes-run-btn"
+                                        title="{% if not _json_has_scenes %}Сначала добавьте сцены в проект.{% elif not _vj_any_words %}Сначала сгенерируйте пословные тайминги (ElevenLabs .words.json или локальный Whisper).{% else %}Сгенерировать JSON-код сцен с таймингами{% endif %}"
+                                        aria-label="Сгенерировать JSON-код сцен с таймингами"
+                                        {% if not _vj_can_apply_timings %}hidden{% endif %}
+                                    >↻</button>
+                                    <span
+                                        class="rewrite-stage-run-blocked video-json-scenes-run-blocked"
+                                        id="video-json-scenes-run-blocked"
+                                        role="img"
+                                        aria-label="{% if not _json_has_scenes %}Сначала добавьте сцены в проект{% elif not _vj_any_words %}Сначала сгенерируйте пословные тайминги{% else %}Недоступно{% endif %}"
+                                        title="{% if not _json_has_scenes %}Сначала добавьте сцены в проект.{% elif not _vj_any_words %}Сначала сгенерируйте пословные тайминги (ElevenLabs .words.json или локальный Whisper).{% else %}Недоступно{% endif %}"
+                                        {% if _vj_can_apply_timings %}hidden{% endif %}
+                                    >✕</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" id="video-json-scenes-edit-toggle" title="Редактировать" aria-label="Редактировать">
+                                        <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                        <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                    </button>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" id="video-json-scenes-copy-btn" title="Копировать" aria-label="Копировать">
+                                        <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                    </button>
+                                </div>
+                                <div id="video-json-scenes-result-slot" class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result tts-words-result-slot video-json-scenes-col__body" data-status="{{ 'done' if _vj_has_timings else 'pending' }}">
+                                    <div class="slot-status-row tts-words-status-row video-json-scenes-status-row{% if _vj_has_timings %} hidden{% endif %}" id="video-json-scenes-status-row">
+                                        <span class="slot-status tts-words-status-text video-json-scenes-status-text" id="video-json-scenes-status-text">{% if not _vj_has_timings %}Pending{% endif %}</span>
+                                    </div>
+                                    <textarea
+                                        id="video-json-scenes-json"
+                                        class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked video-json-scenes-json"
+                                        rows="10"
+                                        spellcheck="false"
+                                        placeholder=""
+                                        aria-label="JSON-код сцен с таймингами"
+                                        readonly
+                                    >{{ scenes_stripped_with_timing or '' }}</textarea>
+                                </div>
+                            </div>
+                            <div class="video-json-scenes-col video-json-scenes-col--check" aria-live="polite">
+                                <div class="video-json-scenes-col__head video-json-scenes-col__head--spacer" aria-hidden="true"></div>
+                                <div class="rewrite-scene-writer-check tts-word-timings-check video-json-scenes-check" id="video-json-scenes-check" data-scenes-ok="" aria-live="polite">
+                                    <div class="tts-word-timings-check__title">Проверка <span class="tts-word-timings-check-scenes-status rewrite-scene-writer-check__wait" id="video-json-scenes-check-status" aria-live="polite">—</span></div>
+                                    <div class="tts-word-timings-check-section tts-word-timings-check-section--scenes tts-word-timings-check-section--first" id="video-json-scenes-check-section">
+                                        <div class="tts-word-timings-check-text tts-word-timings-scenes-check-tree tts-word-timings-scenes-check-reasons hidden" id="video-json-scenes-check-tree"></div>
+                                    </div>
+                                    <div class="tts-word-timings-check-text tts-word-timings-check-summary" id="video-json-scenes-check-summary">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+
+            <hr class="tts-divider video-json-panel-actions-divider" aria-hidden="true">
             <section class="buttons-section">
                 <button type="submit" class="btn btn-primary btn-sm">Добавить сцены</button>
             </section>
@@ -682,38 +752,6 @@
                 <button type="button" class="btn btn-secondary btn-sm" id="video-parse-unlock-btn">Редактировать</button>
             </div>
         </form>
-
-        {% if scenes|length > 0 %}
-        {% set _any_words = tts_words_available or whisper_words_available %}
-        <div class="scenes-apply-timings">
-            <button
-                type="button"
-                class="btn btn-secondary btn-sm"
-                id="scenes-apply-timings-btn"
-                {% if not _any_words %}disabled title="Сначала сгенерируйте пословные тайминги (ElevenLabs .words.json или локальный Whisper)."{% else %}title="Применить тайминги выбранного источника к существующим сценам и обновить блок ниже."{% endif %}
-            >Сгенерировать JSON-код сцен с таймингами</button>
-            <span class="scenes-apply-timings-status tts-template-status hidden" id="scenes-apply-timings-status" aria-live="polite"></span>
-        </div>
-        {% endif %}
-
-        <div
-            id="scenes-stripped-wrap"
-            class="scenes-stripped-wrap{% if not scenes_stripped_with_timing %} hidden{% endif %}"
-            aria-expanded="false"
-        >
-            <button type="button" id="scenes-stripped-toggle" class="scenes-stripped-toggle" aria-controls="scenes-stripped-body">
-                <span class="scenes-stripped-chevron" aria-hidden="true">▸</span>
-                <span class="scenes-stripped-title">JSON-код сцен с таймингами</span>
-                <span class="scenes-stripped-summary" id="scenes-stripped-summary"></span>
-            </button>
-            <div id="scenes-stripped-body" class="scenes-stripped-body" hidden>
-                <div class="scenes-stripped-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" id="scenes-stripped-copy">Скопировать</button>
-                    <span id="scenes-stripped-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
-                </div>
-                <pre id="scenes-stripped-text" class="scenes-stripped-text" aria-label="JSON-код сцен с таймингами">{{ scenes_stripped_with_timing or '' }}</pre>
-            </div>
-        </div>
 
         <section class="generation-section scene-card rewrite-pipeline-runner video-panel" aria-label="Пакетная генерация изображений и видео">
             <div class="rewrite-pipeline-runner__head generation-runner__head">
@@ -735,212 +773,7 @@
             style="--slot-aspect-ratio: 16/9;"
         >
             <div class="scenes-grid">
-                {% for scene in scenes %}
-                {% set has_start_prompt = scene.start.prompt|default('', true) %}
-                {% set has_end_prompt = scene.end.prompt|default('', true) %}
-                {% set has_video_prompt = scene.video.prompt|default('', true) %}
-                {% set start_ready = scene.start.image_url|default('', true) %}
-                {% set end_ready = scene.end.image_url|default('', true) %}
-                {% set video_ready = (not has_start_prompt or start_ready) and (not has_end_prompt or end_ready) %}
-                <div
-                    class="scene-card"
-                    data-scene-index="{{ loop.index0 }}"
-                    data-scene-id="{{ scene.scene_id }}"
-                    data-has-start-prompt="{{ '1' if has_start_prompt else '0' }}"
-                    data-has-end-prompt="{{ '1' if has_end_prompt else '0' }}"
-                >
-                    <div class="scene-header">
-                        <div class="scene-id">{{ scene.scene_id }}</div>
-                        {% set at = scene.audio_timing if scene.audio_timing is mapping else {} %}
-                        {% if at.get('badge') %}
-                        <span
-                            class="scene-audio-timing-badge{% if at.get('low_confidence') %} scene-audio-timing-badge--warn{% endif %}"
-                            title="Интервал в озвучке (по словам ElevenLabs)"
-                        >{{ at.badge }}</span>
-                        {% endif %}
-                        {% if scene.text_ru %}
-                        <div class="scene-text scene-text--ru" title="{{ scene.text_ru }}">{{ scene.text_ru }}</div>
-                        {% endif %}
-                        <div class="scene-text" title="{{ scene.text }}">{{ scene.text }}</div>
-                    </div>
-                    <div class="scene-slots">
-                        <div class="scene-slot" data-slot="start">
-                            <div class="slot-header">
-                                <span class="slot-badge-wrap">
-                                    <span class="slot-badge badge-{{ 'yes' if scene.start.prompt else 'no' }}">Start: {{ 'YES' if scene.start.prompt else 'NO' }}</span>
-                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.start.prompt or '—' }}</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
-                                    title="Редактировать"
-                                    aria-label="Редактировать"
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="start"
-                                >
-                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                </button>
-                                <button type="button" class="btn-regenerate btn-generate {{ '' if scene.start.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="start" title="Generate" {{ '' if scene.start.prompt else 'disabled' }}>↻</button>
-                                <span class="slot-header-trailing"><span class="slot-header-meta" title="{{ scene_slot_image_header_meta }}">{{ scene_slot_image_header_meta }}</span></span>
-                            </div>
-                            <div class="slot-prompt-editor-wrap">
-                                <textarea
-                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
-                                    rows="4"
-                                    readonly
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="start"
-                                    placeholder="Start prompt…"
-                                >{{ scene.start.prompt or '' }}</textarea>
-                            </div>
-                            {% set start_gen = scene.start.generation if scene.start and scene.start.generation else none %}
-                            {% set start_active = start_gen and start_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not start_gen.canceled %}
-                            <div
-                                class="slot-placeholder"
-                                data-status="{{ (start_gen.state if start_gen else ('done' if scene.start.image_url else 'pending')) }}"
-                                data-task-id="{{ start_gen.task_id if start_gen else '' }}"
-                                data-started-at="{{ start_gen.started_at if start_gen else '' }}"
-                            >
-                                {% if start_active %}
-                                <span class="slot-status slot-status-with-spinner">{{ start_gen.state|capitalize }}…</span>
-                                {% elif start_gen and start_gen.state == 'canceled' %}
-                                <span class="slot-status">Canceled</span>
-                                {% elif start_gen and start_gen.state == 'fail' %}
-                                {{ slot_fail_block(start_gen.error) }}
-                                {% elif scene.start.image_url %}
-                                <img src="{{ scene.start.image_url }}" alt="Start" class="slot-image">
-                                {% else %}
-                                <span class="slot-status">Pending</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="scene-slot" data-slot="end">
-                            <div class="slot-header">
-                                <span class="slot-badge-wrap">
-                                    <span class="slot-badge badge-{{ 'yes' if scene.end.prompt else 'no' }}">End: {{ 'YES' if scene.end.prompt else 'NO' }}</span>
-                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.end.prompt or '—' }}</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
-                                    title="Редактировать"
-                                    aria-label="Редактировать"
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="end"
-                                >
-                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                </button>
-                                <button type="button" class="btn-regenerate btn-generate {{ '' if scene.end.prompt else 'is-hidden' }}" data-scene-index="{{ loop.index0 }}" data-slot="end" title="Generate" {{ '' if scene.end.prompt else 'disabled' }}>↻</button>
-                                <span class="slot-header-trailing"><span class="slot-header-meta" title="{{ scene_slot_image_header_meta }}">{{ scene_slot_image_header_meta }}</span></span>
-                            </div>
-                            <div class="slot-prompt-editor-wrap">
-                                <textarea
-                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
-                                    rows="4"
-                                    readonly
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="end"
-                                    placeholder="End prompt…"
-                                >{{ scene.end.prompt or '' }}</textarea>
-                            </div>
-                            {% set end_gen = scene.end.generation if scene.end and scene.end.generation else none %}
-                            {% set end_active = end_gen and end_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not end_gen.canceled %}
-                            <div
-                                class="slot-placeholder"
-                                data-status="{{ (end_gen.state if end_gen else ('done' if scene.end.image_url else 'pending')) }}"
-                                data-task-id="{{ end_gen.task_id if end_gen else '' }}"
-                                data-started-at="{{ end_gen.started_at if end_gen else '' }}"
-                            >
-                                {% if end_active %}
-                                <span class="slot-status slot-status-with-spinner">{{ end_gen.state|capitalize }}…</span>
-                                {% elif end_gen and end_gen.state == 'canceled' %}
-                                <span class="slot-status">Canceled</span>
-                                {% elif end_gen and end_gen.state == 'fail' %}
-                                {{ slot_fail_block(end_gen.error) }}
-                                {% elif scene.end.image_url %}
-                                <img src="{{ scene.end.image_url }}" alt="End" class="slot-image">
-                                {% else %}
-                                <span class="slot-status">Pending</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="scene-slot" data-slot="video">
-                            {% set video_gen = scene.video.generation if scene.video and scene.video.generation else none %}
-                            {% set video_active = video_gen and video_gen.state in ['submitted', 'waiting', 'queuing', 'generating'] and not video_gen.canceled %}
-                            {% set video_quality = scene.video['video_quality'] if scene.video and 'video_quality' in scene.video else none %}
-                            {% set show_hd_done = (video_gen and video_gen.hd_state == 'done') or (video_quality == '1080p') %}
-                            {% set show_hd_wait = video_gen and video_gen.hd_state == 'waiting' %}
-                            <div class="slot-header">
-                                <span class="slot-badge-wrap">
-                                    <span class="slot-badge badge-{{ 'yes' if scene.video.prompt else 'no' }}">Video: {{ 'YES' if scene.video.prompt else 'NO' }}</span>
-                                    <span class="slot-prompt-tooltip" data-slot-prompt-tooltip>{{ scene.video.prompt or '—' }}</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    class="rewrite-lock-toggle btn-icon slot-prompt-toggle rewrite-lock-toggle--locked"
-                                    title="Редактировать"
-                                    aria-label="Редактировать"
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="video"
-                                >
-                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
-                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="btn-regenerate btn-generate {{ '' if scene.video.prompt else 'is-hidden' }} {{ '' if video_ready else 'btn-video-locked' }}"
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="video"
-                                    title="{{ 'Generate video' if video_ready else 'Generate required start/end images first' }}"
-                                    {{ '' if (has_video_prompt and video_ready) else 'disabled' }}
-                                ><span class="btn-icon">{{ '↻' if video_ready else '×' }}</span></button>
-                                <span class="slot-header-trailing">
-                                <span class="video-hd-status {{ 'active' if show_hd_done or show_hd_wait else '' }}" data-video-hd-status>
-                                    {% if show_hd_done %}
-                                    1080p - done
-                                    {% elif show_hd_wait %}
-                                    720p waiting 1080p
-                                    {% elif video_quality == '720p' and scene.video and scene.video.video_url %}
-                                    720p
-                                    {% endif %}
-                                </span>
-                                <span class="slot-header-meta" title="{{ scene_slot_video_header_meta }}">{{ scene_slot_video_header_meta }}</span>
-                                </span>
-                            </div>
-                            <div class="slot-prompt-editor-wrap">
-                                <textarea
-                                    class="rewrite-slot-textarea slot-prompt-editor rewrite-source-textarea--locked"
-                                    rows="4"
-                                    readonly
-                                    data-scene-index="{{ loop.index0 }}"
-                                    data-slot="video"
-                                    placeholder="Video prompt…"
-                                >{{ scene.video.prompt or '' }}</textarea>
-                            </div>
-                            <div
-                                class="slot-placeholder"
-                                data-status="{{ (video_gen.state if video_gen else ('done' if scene.video.video_url else 'pending')) }}"
-                                data-task-id="{{ video_gen.task_id if video_gen else '' }}"
-                                data-started-at="{{ video_gen.started_at if video_gen else '' }}"
-                            >
-                                {% if video_active %}
-                                <span class="slot-status slot-status-with-spinner">{{ video_gen.state|capitalize }}…</span>
-                                {% elif video_gen and video_gen.state == 'canceled' %}
-                                <span class="slot-status">Canceled</span>
-                                {% elif video_gen and video_gen.state == 'fail' %}
-                                {{ slot_fail_block(video_gen.error) }}
-                                {% elif scene.video.video_url %}
-                                <video src="{{ scene.video.video_url }}" class="slot-image" controls playsinline preload="metadata"></video>
-                                {% else %}
-                                <span class="slot-status">Pending</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
+                {% include 'partials/scenes_grid.html' %}
             </div>
         </section>
 
@@ -1198,6 +1031,7 @@
         </div>
     </div>
 
+    <script type="application/json" id="video-json-scenes-check-initial">{{ scenes_timings_validation | tojson }}</script>
     <script>
     let galleryImages = [];
     let currentImageIndex = 0;
@@ -1961,10 +1795,24 @@
         const parseLocked = jsonParseForm && jsonParseForm.dataset.parseLocked === '1';
         const locked = parseLocked || jsonSceneTextLocked;
         jsonInputEl.readOnly = locked;
+        if (locked) {
+            jsonInputEl.setAttribute('readonly', 'readonly');
+            jsonInputEl.tabIndex = -1;
+        } else {
+            jsonInputEl.removeAttribute('readonly');
+            jsonInputEl.tabIndex = 0;
+        }
         jsonInputEl.classList.toggle('rewrite-source-textarea--locked', locked);
         styleJsonSceneLockToggleBtn(jsonSceneTextLocked);
         if (jsonSceneTextToggleBtn) jsonSceneTextToggleBtn.disabled = !!parseLocked;
         if (jsonSceneTextCopyBtn) jsonSceneTextCopyBtn.disabled = false;
+    };
+    const blockJsonSceneTextEditWhenLocked = (e) => {
+        if (!jsonInputEl) return;
+        const parseLocked = jsonParseForm && jsonParseForm.dataset.parseLocked === '1';
+        if (parseLocked || jsonSceneTextLocked) {
+            e.preventDefault();
+        }
     };
     const formatJsonSceneCounts = (s) => (
         'Всего сцен: ' + s.total
@@ -1990,6 +1838,10 @@
     };
     if (jsonInputEl) {
         jsonInputEl.addEventListener('input', updateJsonStats);
+        jsonInputEl.addEventListener('keydown', blockJsonSceneTextEditWhenLocked);
+        jsonInputEl.addEventListener('beforeinput', blockJsonSceneTextEditWhenLocked);
+        jsonInputEl.addEventListener('paste', blockJsonSceneTextEditWhenLocked);
+        jsonInputEl.addEventListener('drop', blockJsonSceneTextEditWhenLocked);
     }
     if (jsonSceneTextToggleBtn && jsonInputEl) {
         jsonSceneTextToggleBtn.addEventListener('click', () => {
@@ -2286,19 +2138,15 @@
         const ok = await openJsonEditConfirm();
         if (!ok) return;
         setParsePanelLocked(false);
-        jsonSceneTextLocked = false;
+        jsonSceneTextLocked = true;
         applyJsonSceneTextLockUi();
-        jsonInputEl?.focus();
     });
 
+    let submitParseScenesAjax = null;
     if (jsonParseForm) {
         jsonParseForm.addEventListener('submit', async (e) => {
-            const existingScenesCount = parseInt(jsonParseForm.dataset.existingScenesCount || '0', 10) || 0;
-            if (jsonParseForm.dataset.confirmed === '1') {
-                jsonParseForm.dataset.confirmed = '';
-                return;
-            }
             e.preventDefault();
+            const existingScenesCount = parseInt(jsonParseForm.dataset.existingScenesCount || '0', 10) || 0;
             const stats = computeJsonPromptStats(jsonInputEl?.value || '');
             const existingStart = parseInt(jsonParseForm.dataset.existingStartCount || '0', 10) || 0;
             const existingEnd = parseInt(jsonParseForm.dataset.existingEndCount || '0', 10) || 0;
@@ -2331,8 +2179,9 @@
                 ].join('\n');
             const ok = await openJsonConfirm(msg);
             if (!ok) return;
-            jsonParseForm.dataset.confirmed = '1';
-            jsonParseForm.submit();
+            if (typeof submitParseScenesAjax === 'function') {
+                await submitParseScenesAjax();
+            }
         });
     }
 
@@ -2531,6 +2380,86 @@
             return JSON.parse(text);
         } catch (_) {
             throw new Error(`${label}: невалидный JSON (HTTP ${resp.status})`);
+        }
+    };
+
+    submitParseScenesAjax = async () => {
+        if (!jsonParseForm) return;
+        const submitBtn = jsonParseForm.querySelector('button[type="submit"]');
+        const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+        const applyStatus = document.getElementById('video-json-scenes-apply-status');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.classList.add('btn-regenerate--busy');
+        }
+        const setParseStatus = (text, isError) => {
+            if (!applyStatus) return;
+            applyStatus.textContent = text || '';
+            applyStatus.classList.toggle('hidden', !text);
+            applyStatus.style.color = isError ? 'var(--danger, #ff6b6b)' : '';
+        };
+        setParseStatus('Сохраняем сцены…');
+        try {
+            const fd = new FormData(jsonParseForm);
+            const r = await fetch(`${ROOT}/job/${jobId}/parse`, {
+                method: 'POST',
+                headers: { 'X-Json-Video-Ajax': '1', Accept: 'application/json' },
+                body: fd,
+                credentials: 'same-origin',
+            });
+            const data = await parseJsonOrThrow(r, 'parse');
+            if (!data.ok) {
+                const err = (Array.isArray(data.errors) && data.errors.length)
+                    ? data.errors.join('\n')
+                    : (data.error || `HTTP ${r.status}`);
+                throw new Error(err);
+            }
+            const grid = document.querySelector('.scenes-grid');
+            if (grid && data.scenes_html != null) {
+                grid.innerHTML = data.scenes_html;
+            }
+            const sum = data.summary || {};
+            jsonParseForm.dataset.existingScenesCount = String(sum.total || 0);
+            jsonParseForm.dataset.existingStartCount = String(sum.with_start_prompt || 0);
+            jsonParseForm.dataset.existingEndCount = String(sum.with_end_prompt || 0);
+            jsonParseForm.dataset.existingVideoCount = String(sum.with_video_prompt || 0);
+            setParsePanelLocked(true);
+            const scenesWrap = document.getElementById('video-json-scenes-wrap');
+            if (scenesWrap) scenesWrap.dataset.hasScenes = (sum.total > 0) ? '1' : '0';
+            const rows = Array.isArray(data.scene_audio_timings) ? data.scene_audio_timings : [];
+            if (rows.length && typeof window.applySceneAudioTimings === 'function') {
+                window.applySceneAudioTimings(rows);
+            } else if (data.scenes_stripped_text != null && typeof window.setVideoJsonScenesTimingsText === 'function') {
+                window.setVideoJsonScenesTimingsText(String(data.scenes_stripped_text || ''));
+            }
+            if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
+                window.__updateApplyTimingsBtnTitle();
+            }
+            if (typeof window.reinitScenesSectionUi === 'function') {
+                window.reinitScenesSectionUi();
+            }
+            if (typeof refreshGallery === 'function') {
+                try { refreshGallery(); } catch (_) { /* ignore */ }
+            }
+            const genLead = document.querySelector('.generation-section .generation-runner__lead');
+            if (genLead && data.image_model_label && data.video_model_label) {
+                genLead.textContent = `Kie.ai: ${data.image_model_label} (image) и ${data.video_model_label} (video). Нажми ↻ у слота с prompt.`;
+            }
+            updateJsonStats();
+            setParseStatus(data.message || 'Сцены обновлены.', false);
+            if (data.timings_validation && typeof window.renderScenesTimingsValidation === 'function') {
+                window.renderScenesTimingsValidation(data.timings_validation);
+            }
+        } catch (e) {
+            setParseStatus('Ошибка: ' + (e?.message || String(e)), true);
+            if (typeof openJobErrorModal === 'function') {
+                openJobErrorModal(e?.message || String(e));
+            }
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('btn-regenerate--busy');
+            }
         }
     };
 
@@ -3045,7 +2974,9 @@
         }
     };
 
-    document.querySelectorAll('.slot-prompt-toggle').forEach((toggleBtn) => {
+    const bindSlotPromptToggle = (toggleBtn) => {
+        if (toggleBtn.dataset.scenesUiBound === '1') return;
+        toggleBtn.dataset.scenesUiBound = '1';
         toggleBtn.addEventListener('click', async () => {
             const sceneIndex = toggleBtn.dataset.sceneIndex;
             const slot = toggleBtn.dataset.slot;
@@ -3094,7 +3025,8 @@
             const slotEl = toggleBtn.closest('.scene-slot');
             if (slotEl) slotEl.classList.remove('scene-slot--editing');
         });
-    });
+    };
+
 
     const updateVideoButtonState = (sceneCard) => {
         if (!sceneCard) return;
@@ -3133,7 +3065,6 @@
         statusEl.classList.toggle('active', Boolean(text));
     };
 
-    document.querySelectorAll('.scenes-section .scene-card').forEach(updateVideoButtonState);
 
     const renderStatus = (placeholder, text, elapsed, withSpinner = false, taskId = '') => {
         const safe = `${text} (${elapsed}s)`;
@@ -3325,11 +3256,15 @@
         }
     };
 
-    document.querySelectorAll('.btn-generate').forEach(btn => {
+    const bindSceneGenerateButton = (btn) => {
+        if (btn.dataset.scenesUiBound === '1') return;
+        btn.dataset.scenesUiBound = '1';
         btn.addEventListener('click', async function() {
             await startGenerationForButton(this);
         });
-    });
+    };
+
+
 
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
     const BULK_START_INTERVAL_MS = {
@@ -3475,15 +3410,17 @@
         appendBulkLog(`Остановка: cancel для ${ids.length} задач (опрос на клиенте остановлен).`);
     });
 
-    // Resume polling after page refresh for active tasks.
-    document.querySelectorAll('.scenes-section .scene-slot[data-slot="start"], .scenes-section .scene-slot[data-slot="end"], .scenes-section .scene-slot[data-slot="video"]').forEach(slotEl => {
+    const resumeScenesSectionPolling = () => {
+        document.querySelectorAll('.scenes-section .scene-slot[data-slot="start"], .scenes-section .scene-slot[data-slot="end"], .scenes-section .scene-slot[data-slot="video"]').forEach((slotEl) => {
         const placeholder = slotEl.querySelector('.slot-placeholder');
         const taskId = placeholder?.dataset?.taskId;
         const slot = slotEl.dataset.slot;
-        if (!taskId) return;
+        if (!taskId || !placeholder) return;
+        if (placeholder.dataset.pollingResumed === '1') return;
         if (placeholder.dataset.status === 'waiting' || placeholder.dataset.status === 'queuing' || placeholder.dataset.status === 'generating' || placeholder.dataset.status === 'submitted') {
             const btn = slotEl.querySelector('.btn-generate');
             if (btn) {
+                placeholder.dataset.pollingResumed = '1';
                 renderStatus(placeholder, 'Resuming task tracking', 0, true, taskId);
                 btn.disabled = true;
                 pollTask(btn, placeholder, slot, taskId).catch((e) => {
@@ -3494,6 +3431,18 @@
             }
         }
     });
+    };
+
+    const reinitScenesSectionUi = () => {
+        document.querySelectorAll('.scenes-section .slot-prompt-toggle').forEach(bindSlotPromptToggle);
+        document.querySelectorAll('.scenes-section .btn-generate').forEach(bindSceneGenerateButton);
+        document.querySelectorAll('.scenes-section .scene-card').forEach(updateVideoButtonState);
+        resumeScenesSectionPolling();
+    };
+    window.reinitScenesSectionUi = reinitScenesSectionUi;
+    reinitScenesSectionUi();
+
+
     (function setupVideoJsonPanelCollapse() {
         const jobId = {{ job_id | tojson }};
         const VIDEO_JSON_PANEL_COLLAPSE_LS = 'json-video-job-video-json-panel-collapse';
@@ -3544,6 +3493,56 @@
                 });
             }
             try { window.__syncVideoJsonPanelCompactCounts(); } catch (e) {}
+        }
+    })();
+    (function setupVideoJsonScenesPanelCollapse() {
+        const jobId = {{ job_id | tojson }};
+        const LS_KEY = 'json-video-job-video-json-scenes-collapse';
+        const wrapEl = document.getElementById('video-json-scenes-wrap');
+        const bodyEl = document.getElementById('video-json-scenes-body');
+        const headerEl = document.getElementById('video-json-scenes-header');
+        const toggleEl = document.getElementById('video-json-scenes-toggle');
+        if (!wrapEl || !bodyEl || !headerEl) return;
+        function loadCollapsed() {
+            try {
+                const all = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+                if (Object.prototype.hasOwnProperty.call(all, jobId)) return !!all[jobId];
+            } catch (e) {}
+            return true;
+        }
+        function saveCollapsed(collapsed) {
+            try {
+                const all = JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {};
+                all[jobId] = !!collapsed;
+                localStorage.setItem(LS_KEY, JSON.stringify(all));
+            } catch (e) {}
+        }
+        function applyCollapsed(collapsed) {
+            wrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            bodyEl.hidden = !!collapsed;
+            wrapEl.classList.toggle('tts-word-timings-panel--body-collapsed', !!collapsed);
+        }
+        applyCollapsed(loadCollapsed());
+        const onToggle = () => {
+            const expanded = wrapEl.getAttribute('aria-expanded') === 'true';
+            saveCollapsed(expanded);
+            applyCollapsed(expanded);
+        };
+        headerEl.addEventListener('click', (e) => {
+            if (e.target.closest('button, a, input, label')) return;
+            onToggle();
+        });
+        headerEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onToggle();
+            }
+        });
+        if (toggleEl && toggleEl !== headerEl) {
+            toggleEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onToggle();
+            });
         }
     })();
     (function setupTtsSectionCollapse() {
@@ -4527,6 +4526,9 @@
             if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
                 window.__updateApplyTimingsBtnTitle();
             }
+            if (typeof window.__scheduleAutoApplyScenesTimings === 'function') {
+                window.__scheduleAutoApplyScenesTimings();
+            }
         }
 
         function bindTimingsSourceDotClicks(root) {
@@ -4558,6 +4560,9 @@
                     if (picked) persistTimingsSourcePreference(picked.value);
                     if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
                         window.__updateApplyTimingsBtnTitle();
+                    }
+                    if (typeof window.__scheduleAutoApplyScenesTimings === 'function') {
+                        window.__scheduleAutoApplyScenesTimings();
                     }
                 });
             });
@@ -4798,6 +4803,12 @@
             syncWordTimingsPanelCompact(wordsCompactBadge, wordsCompactDuration, wordsResultBadge, doc, { durationOnly: true });
             if (timingsSourceEleven) timingsSourceEleven.disabled = !doc;
             ensureTimingsSourceSelected(doc ? timingsSourceEleven : null);
+            if (typeof window.__refreshVideoJsonScenesWordsAvailability === 'function') {
+                window.__refreshVideoJsonScenesWordsAvailability();
+            }
+            if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
+                window.__updateApplyTimingsBtnTitle();
+            }
         }
 
         function setElevenWordsPendingUi(isPending) {
@@ -4873,6 +4884,12 @@
 
         function applySceneAudioTimings(rows) {
             if (!Array.isArray(rows) || !rows.length) return;
+            const src = (typeof window.__readTimingsSource === 'function')
+                ? window.__readTimingsSource()
+                : 'elevenlabs';
+            const badgeTitle = src === 'whisper'
+                ? 'Интервал в озвучке (по словам Whisper)'
+                : 'Интервал в озвучке (по словам ElevenLabs)';
             rows.forEach((row) => {
                 if (!row || typeof row !== 'object') return;
                 const sid = row.scene_id;
@@ -4887,7 +4904,7 @@
                 span.className = 'scene-audio-timing-badge'
                     + (row.low_confidence ? ' scene-audio-timing-badge--warn' : '');
                 span.textContent = String(badge);
-                span.title = 'Интервал в озвучке (по словам ElevenLabs)';
+                span.title = badgeTitle;
                 const header = card.querySelector('.scene-header');
                 const sceneIdEl = card.querySelector('.scene-id');
                 if (header && sceneIdEl) {
@@ -4900,6 +4917,7 @@
                 window.rebuildScenesStrippedBlock(rows);
             }
         }
+        window.applySceneAudioTimings = applySceneAudioTimings;
 
         bindWordTimingsPanel(wordsWrapEl, wordsBodyEl, wordsToggleEl || wordsHeaderEl, setTtsWordsCollapsed);
         (function bindWordTimingsExceptionsCollapse() {
@@ -5120,6 +5138,12 @@
             );
             if (timingsSourceWhisper) timingsSourceWhisper.disabled = !hasData;
             ensureTimingsSourceSelected(hasData ? timingsSourceWhisper : null);
+            if (typeof window.__refreshVideoJsonScenesWordsAvailability === 'function') {
+                window.__refreshVideoJsonScenesWordsAvailability();
+            }
+            if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
+                window.__updateApplyTimingsBtnTitle();
+            }
         }
 
         function applyWhisperWordsDoc(meta, doc) {
@@ -5137,6 +5161,9 @@
             renderWordTimingsCheck(whisperCheckEls, merged);
             syncWhisperWordsResultUi(meta || whisperInitialMeta, doc);
             setWhisperWordsCollapsed(true);
+            if (typeof window.__notifyWordsSourceReady === 'function') {
+                window.__notifyWordsSourceReady('whisper');
+            }
         }
 
         function hydrateWhisperWordsFromTextarea() {
@@ -6194,39 +6221,278 @@
     })();
     {% endif %}
 
-    (function scenesStrippedBlockInit() {
-        const wrapEl     = document.getElementById('scenes-stripped-wrap');
-        const toggleBtn  = document.getElementById('scenes-stripped-toggle');
-        const bodyEl     = document.getElementById('scenes-stripped-body');
-        const textEl     = document.getElementById('scenes-stripped-text');
-        const summaryEl  = document.getElementById('scenes-stripped-summary');
-        const copyBtn    = document.getElementById('scenes-stripped-copy');
-        const copyStatus = document.getElementById('scenes-stripped-copy-status');
-        if (!wrapEl) return;
+    (function videoJsonScenesTimingsInit() {
+        const panelWrap = document.getElementById('video-json-scenes-wrap');
+        const panelBody = document.getElementById('video-json-scenes-body');
+        const resultSlot = document.getElementById('video-json-scenes-result-slot');
+        const textEl = document.getElementById('video-json-scenes-json');
+        const statusRow = document.getElementById('video-json-scenes-status-row');
+        const compactCountsEl = document.getElementById('video-json-scenes-compact-counts');
+        const resultBadgeEl = document.getElementById('video-json-scenes-result-badge');
+        const compactBadgeEl = document.getElementById('video-json-scenes-compact-badge');
+        const applyStatus = document.getElementById('video-json-scenes-apply-status');
+        const scenesRunBtn = document.getElementById('video-json-scenes-run-btn');
+        const scenesRunBlockedEl = document.getElementById('video-json-scenes-run-blocked');
+        const editToggleBtn = document.getElementById('video-json-scenes-edit-toggle');
+        const copyBtn = document.getElementById('video-json-scenes-copy-btn');
+        if (!panelWrap || !textEl) return;
 
-        function setCollapsed(collapsed) {
-            wrapEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-            if (bodyEl) bodyEl.hidden = !!collapsed;
+        const checkWrapEl = document.getElementById('video-json-scenes-check');
+        const checkStatusEl = document.getElementById('video-json-scenes-check-status');
+        const checkSectionEl = document.getElementById('video-json-scenes-check-section');
+        const checkTreeEl = document.getElementById('video-json-scenes-check-tree');
+        const checkSummaryEl = document.getElementById('video-json-scenes-check-summary');
+        const SCENES_CHECK_LABEL_W = 22;
+
+        const escScenesTimingsCheck = (s) => String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        const buildScenesTimingsCheckTreeHtml = (v) => {
+            const checks = (v && v.checks) || [];
+            if (!checks.length) return '';
+            return checks.map((c, i) => {
+                const branch = i === checks.length - 1 ? '└─' : '├─';
+                const label = String(c.label || '').padEnd(SCENES_CHECK_LABEL_W, ' ');
+                let status = 'OK';
+                if (!c.ok) status = 'FAIL';
+                else if (c.severity === 'warn') status = 'WARN';
+                let main = `${branch} ${label} ${status}`;
+                if (c.detail) main += ` — ${c.detail}`;
+                const mainCls = status === 'FAIL'
+                    ? 'tts-word-timings-scenes-check-row__main tts-word-timings-scenes-check-row__main--fail'
+                    : (status === 'WARN'
+                        ? 'tts-word-timings-scenes-check-row__main tts-word-timings-scenes-check-row__main--warn'
+                        : 'tts-word-timings-scenes-check-row__main');
+                const mainHtml = `<div class="${mainCls}">${escScenesTimingsCheck(main)}</div>`;
+                let items = '';
+                if (c.failItems && c.failItems.length) {
+                    const rows = c.failItems.map((line) => (
+                        `<div class="tts-word-timings-scenes-check-row__item">${escScenesTimingsCheck(line)}</div>`
+                    )).join('');
+                    items = `<div class="tts-word-timings-scenes-check-row__items">${rows}</div>`;
+                }
+                return `<div class="tts-word-timings-scenes-check-row">${mainHtml}${items}</div>`;
+            }).join('');
+        };
+
+        const renderScenesTimingsValidation = (v) => {
+            if (!checkStatusEl) return null;
+            if (!v || typeof v !== 'object') {
+                checkStatusEl.textContent = '—';
+                checkStatusEl.className = 'tts-word-timings-check-scenes-status rewrite-scene-writer-check__wait';
+                if (checkTreeEl) {
+                    checkTreeEl.innerHTML = '';
+                    checkTreeEl.classList.add('hidden');
+                }
+                if (checkSummaryEl) checkSummaryEl.textContent = '—';
+                if (checkWrapEl) checkWrapEl.dataset.scenesOk = '';
+                if (checkSectionEl) checkSectionEl.dataset.scenesOk = '';
+                return null;
+            }
+            const ok = !!v.ok;
+            checkStatusEl.textContent = ok ? 'OK' : 'NO';
+            checkStatusEl.className = 'tts-word-timings-check-scenes-status '
+                + (ok ? 'rewrite-scene-writer-check__ok' : 'rewrite-scene-writer-check__no');
+            if (checkSummaryEl) {
+                checkSummaryEl.textContent = String(v.summary || '').trim() || '—';
+            }
+            if (checkTreeEl) {
+                const treeHtml = buildScenesTimingsCheckTreeHtml(v);
+                let warnHtml = '';
+                if (v.warns && v.warns.length) {
+                    warnHtml = '<div class="tts-word-timings-scenes-check-warns">' + v.warns.map((w) => (
+                        '<div class="tts-word-timings-scenes-check-warns__line">• ' + escScenesTimingsCheck(w) + '</div>'
+                    )).join('') + '</div>'
+                }
+                checkTreeEl.innerHTML = (treeHtml || '') + warnHtml;
+                checkTreeEl.classList.toggle('hidden', !treeHtml && !warnHtml);
+            }
+            if (checkWrapEl) checkWrapEl.dataset.scenesOk = ok ? '1' : '0';
+            if (checkSectionEl) checkSectionEl.dataset.scenesOk = ok ? '1' : '0';
+            return v;
+        };
+        window.renderScenesTimingsValidation = renderScenesTimingsValidation;
+
+        try {
+            const initialCheckEl = document.getElementById('video-json-scenes-check-initial');
+            if (initialCheckEl && initialCheckEl.textContent.trim()) {
+                const initialV = JSON.parse(initialCheckEl.textContent);
+                if (initialV) renderScenesTimingsValidation(initialV);
+            }
+        } catch (e) {
+            console.warn('video-json-scenes-check initial:', e);
         }
 
-        function formatMsClock(ms) {
+        let timingsJsonLocked = true;
+
+        const hasScenes = () => panelWrap.dataset.hasScenes === '1';
+        const selectedSourceHasWords = () => {
+            const checked = document.querySelector('input[name="timings-source"]:checked');
+            return !!(checked && !checked.disabled);
+        };
+        const refreshHasWordsDataset = () => {
+            const eleven = document.getElementById('timings-source-elevenlabs');
+            const whisper = document.getElementById('timings-source-whisper');
+            const any = (eleven && !eleven.disabled) || (whisper && !whisper.disabled);
+            panelWrap.dataset.hasWords = any ? '1' : '0';
+        };
+        const canApplyTimings = () => hasScenes() && selectedSourceHasWords();
+
+        const formatMsClock = (ms) => {
             const n = Math.max(0, Math.floor(Number(ms || 0)));
             const m = Math.floor(n / 60000);
             const sec = Math.floor((n % 60000) / 1000);
             const centi = Math.floor((n % 1000) / 10);
             return `${m}:${String(sec).padStart(2, '0')}.${String(centi).padStart(2, '0')}`;
-        }
+        };
 
-        function updateSummary() {
-            if (!summaryEl || !textEl) return;
-            const txt = textEl.textContent || '';
+        const updateCounts = () => {
+            const txt = textEl.value || '';
             const sceneCount = (txt.match(/^\{"scene_id":/gm) || []).length;
-            summaryEl.textContent = sceneCount ? `· сцен: ${sceneCount}` : '';
-        }
+            const label = sceneCount ? `${sceneCount} сцен` : '';
+            if (compactCountsEl) compactCountsEl.textContent = label;
+        };
+
+        const setApplyStatus = (text, isError) => {
+            if (!applyStatus) return;
+            applyStatus.textContent = text || '';
+            applyStatus.classList.toggle('hidden', !text);
+            applyStatus.style.color = isError ? 'var(--danger, #ff6b6b)' : '';
+        };
+
+        const styleTimingsEditToggleBtn = (locked) => {
+            if (!editToggleBtn) return;
+            editToggleBtn.classList.toggle('rewrite-lock-toggle--locked', locked);
+            editToggleBtn.setAttribute('aria-label', locked ? 'Редактировать' : 'Сохранить');
+            editToggleBtn.title = locked ? 'Редактировать' : 'Сохранить';
+        };
+
+        const applyTimingsJsonLockUi = () => {
+            textEl.readOnly = timingsJsonLocked;
+            if (timingsJsonLocked) {
+                textEl.setAttribute('readonly', 'readonly');
+                textEl.tabIndex = -1;
+            } else {
+                textEl.removeAttribute('readonly');
+                textEl.tabIndex = 0;
+            }
+            textEl.classList.toggle('rewrite-source-textarea--locked', timingsJsonLocked);
+            styleTimingsEditToggleBtn(timingsJsonLocked);
+        };
+
+        const setVideoJsonScenesTimingsText = (txt) => {
+            const value = String(txt || '');
+            const has = !!value.trim();
+            textEl.value = value;
+            if (resultSlot) resultSlot.setAttribute('data-status', has ? 'done' : 'pending');
+            if (statusRow) statusRow.classList.toggle('hidden', has);
+            [resultBadgeEl, compactBadgeEl].forEach((el) => {
+                if (!el) return;
+                el.classList.toggle('badge-yes', has);
+                el.classList.toggle('badge-no', !has);
+            });
+            updateCounts();
+        };
+        window.setVideoJsonScenesTimingsText = setVideoJsonScenesTimingsText;
+
+        const expandVideoJsonScenesPanel = () => {
+            panelWrap.classList.remove('tts-word-timings-panel--body-collapsed');
+            panelWrap.setAttribute('aria-expanded', 'true');
+            if (panelBody) panelBody.hidden = false;
+        };
+
+        const readTimingsSource = () => {
+            const checked = document.querySelector('input[name="timings-source"]:checked');
+            const val = checked ? String(checked.value || '').toLowerCase() : '';
+            return val === 'whisper' ? 'whisper' : 'elevenlabs';
+        };
+        window.__readTimingsSource = readTimingsSource;
+
+        const updateVideoJsonScenesRunTitle = () => {
+            if (!scenesRunBtn || !canApplyTimings()) return;
+            const src = readTimingsSource();
+            scenesRunBtn.title = src === 'whisper'
+                ? 'Применить тайминги Whisper к сценам'
+                : 'Применить тайминги ElevenLabs к сценам';
+            scenesRunBtn.setAttribute('aria-label', scenesRunBtn.title);
+        };
+
+        const isVideoJsonScenesRunPrereqOk = () => {
+            if (scenesRunBtn?.classList.contains('btn-regenerate--busy')) return true;
+            return canApplyTimings();
+        };
+
+        const syncVideoJsonScenesRunBtn = () => {
+            if (!scenesRunBtn) return;
+            const ready = isVideoJsonScenesRunPrereqOk();
+            let blockedTitle = 'Сначала добавьте сцены в проект.';
+            if (!hasScenes()) {
+                blockedTitle = 'Сначала добавьте сцены в проект.';
+            } else if (!selectedSourceHasWords()) {
+                const src = readTimingsSource();
+                blockedTitle = src === 'whisper'
+                    ? 'Сначала сгенерируйте пословные тайминги Whisper (.whisper.words.json).'
+                    : 'Сначала сгенерируйте пословные тайминги ElevenLabs (.words.json).';
+            }
+            if (ready) {
+                scenesRunBtn.removeAttribute('hidden');
+                scenesRunBtn.disabled = !!scenesRunBtn.classList.contains('btn-regenerate--busy');
+                updateVideoJsonScenesRunTitle();
+                if (scenesRunBlockedEl) {
+                    scenesRunBlockedEl.setAttribute('hidden', '');
+                    scenesRunBlockedEl.setAttribute('aria-hidden', 'true');
+                }
+            } else {
+                scenesRunBtn.setAttribute('hidden', '');
+                scenesRunBtn.disabled = true;
+                scenesRunBtn.classList.remove('btn-regenerate--busy');
+                if (scenesRunBlockedEl) {
+                    scenesRunBlockedEl.removeAttribute('hidden');
+                    scenesRunBlockedEl.removeAttribute('aria-hidden');
+                    scenesRunBlockedEl.setAttribute('title', blockedTitle);
+                    scenesRunBlockedEl.setAttribute('aria-label', blockedTitle);
+                }
+            }
+        };
+        window.__syncVideoJsonScenesRunBtn = syncVideoJsonScenesRunBtn;
+        window.__updateApplyTimingsBtnTitle = () => {
+            refreshHasWordsDataset();
+            updateVideoJsonScenesRunTitle();
+            syncVideoJsonScenesRunBtn();
+        };
+        window.__refreshVideoJsonScenesWordsAvailability = refreshHasWordsDataset;
+        window.__updateApplyTimingsBtnTitle();
+
+        let autoApplyScenesTimingsTimer = null;
+        window.__scheduleAutoApplyScenesTimings = () => {
+            if (autoApplyScenesTimingsTimer) clearTimeout(autoApplyScenesTimingsTimer);
+            autoApplyScenesTimingsTimer = setTimeout(() => {
+                autoApplyScenesTimingsTimer = null;
+                if (!canApplyTimings()) return;
+                runApplyScenesTimings({ auto: true });
+            }, 350);
+        };
+        window.__notifyWordsSourceReady = (sourceValue) => {
+            refreshHasWordsDataset();
+            if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
+                window.__updateApplyTimingsBtnTitle();
+            }
+            const src = String(sourceValue || '').toLowerCase();
+            const checked = document.querySelector('input[name="timings-source"]:checked');
+            const active = checked && !checked.disabled
+                ? String(checked.value || '').toLowerCase()
+                : '';
+            if (!hasScenes() || active !== src) return;
+            window.__scheduleAutoApplyScenesTimings();
+        };
 
         window.rebuildScenesStrippedBlock = function (rows) {
-            if (!textEl) return;
-            if (!Array.isArray(rows) || !rows.length) return;
+            if (!Array.isArray(rows) || !rows.length) {
+                setVideoJsonScenesTimingsText('');
+                return;
+            }
             const byId = new Map();
             rows.forEach((r) => {
                 if (r && r.scene_id != null) byId.set(String(r.scene_id), r);
@@ -6237,16 +6503,16 @@
                 if (!sid) return;
                 const t = byId.get(sid);
                 if (!t) return;
-                const textElCard = card.querySelector('.scene-text:not(.scene-text--ru)');
-                const textRuEl   = card.querySelector('.scene-text--ru');
-                const text   = textElCard ? (textElCard.getAttribute('title') || textElCard.textContent || '') : '';
-                const textRu = textRuEl   ? (textRuEl.getAttribute('title')   || textRuEl.textContent   || '') : '';
+                const textCard = card.querySelector('.scene-text:not(.scene-text--ru)');
+                const textRuCard = card.querySelector('.scene-text--ru');
+                const text = textCard ? (textCard.getAttribute('title') || textCard.textContent || '') : '';
+                const textRu = textRuCard ? (textRuCard.getAttribute('title') || textRuCard.textContent || '') : '';
                 const sm = (t.start_ms != null) ? String(t.start_ms) : '';
-                const em = (t.end_ms   != null) ? String(t.end_ms)   : '';
+                const em = (t.end_ms != null) ? String(t.end_ms) : '';
                 const dm = (t.duration_ms != null) ? Number(t.duration_ms) : null;
                 const startTime = t.start_time || (t.start_ms != null ? formatMsClock(t.start_ms) : '');
-                const startEnd  = t.start_end  || (t.end_ms   != null ? formatMsClock(t.end_ms)   : '');
-                const dur       = t.duration_s || (dm != null ? (dm / 1000).toFixed(2) : '');
+                const startEnd = t.start_end || (t.end_ms != null ? formatMsClock(t.end_ms) : '');
+                const dur = t.duration_s || (dm != null ? (dm / 1000).toFixed(2) : '');
                 const J = (v) => JSON.stringify(String(v));
                 lines.push(`{"scene_id": ${J(sid)}}`);
                 lines.push(`{"text": ${J(text.trim())}}`);
@@ -6259,136 +6525,138 @@
                 lines.push('');
             });
             while (lines.length && lines[lines.length - 1] === '') lines.pop();
-            textEl.textContent = lines.join('\n');
-            wrapEl.classList.remove('hidden');
-            updateSummary();
+            setVideoJsonScenesTimingsText(lines.join('\n'));
+            expandVideoJsonScenesPanel();
         };
 
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                const expanded = wrapEl.getAttribute('aria-expanded') === 'true';
-                setCollapsed(expanded);
-            });
-        }
-
-        const applyBtn    = document.getElementById('scenes-apply-timings-btn');
-        const applyStatus = document.getElementById('scenes-apply-timings-status');
-        const setApplyStatus = (text, isError) => {
-            if (!applyStatus) return;
-            applyStatus.textContent = text || '';
-            applyStatus.classList.toggle('hidden', !text);
-            applyStatus.style.color = isError ? 'var(--danger, #ff6b6b)' : '';
-        };
-        // --- Источник пословных таймингов: ElevenLabs / Whisper ---
-        const readTimingsSource = () => {
-            const checked = document.querySelector('input[name="timings-source"]:checked');
-            const val = checked ? String(checked.value || '').toLowerCase() : '';
-            return val === 'whisper' ? 'whisper' : 'elevenlabs';
-        };
-        window.__readTimingsSource = readTimingsSource;
-        const updateApplyBtnTitle = () => {
-            if (!applyBtn || applyBtn.disabled) return;
+        const runApplyScenesTimings = async (opts) => {
+            const auto = !!(opts && opts.auto);
+            if (!canApplyTimings()) return;
+            if (scenesRunBtn?.classList.contains('btn-regenerate--busy')) return;
+            if (scenesRunBtn) {
+                scenesRunBtn.disabled = true;
+                scenesRunBtn.classList.add('btn-regenerate--busy');
+            }
             const src = readTimingsSource();
-            applyBtn.title = src === 'whisper'
-                ? 'Применить тайминги от локального Whisper (.whisper.words.json) к существующим сценам.'
-                : 'Применить тайминги от ElevenLabs (.words.json) к существующим сценам.';
-        };
-        window.__updateApplyTimingsBtnTitle = updateApplyBtnTitle;
-        updateApplyBtnTitle();
-        if (applyBtn) {
-            applyBtn.addEventListener('click', async () => {
-                if (applyBtn.disabled) return;
-                applyBtn.disabled = true;
-                const src = readTimingsSource();
-                const srcLabel = src === 'whisper' ? 'Whisper' : 'ElevenLabs';
-                const scenesGate = src === 'whisper'
-                    ? {
-                        sectionId: 'whisper-words-check-scenes-section',
-                        reasonsId: 'whisper-words-scenes-check-reasons',
-                        label: 'Whisper',
-                        alt: 'Eleven',
-                    }
-                    : {
-                        sectionId: 'tts-words-check-scenes-section',
-                        reasonsId: 'tts-words-scenes-check-reasons',
-                        label: 'Eleven',
-                        alt: 'Whisper',
-                    };
-                const scenesSec = document.getElementById(scenesGate.sectionId);
-                if (scenesSec && scenesSec.dataset.scenesOk === '0') {
-                    const reasonsEl = document.getElementById(scenesGate.reasonsId);
-                    const hint = (reasonsEl && reasonsEl.textContent.trim())
-                        ? '\n' + reasonsEl.textContent.trim().slice(0, 400)
-                        : '';
-                    const proceed = window.confirm(
-                        `Тайминги ${scenesGate.label} не прошли проверку для сцен (NO).`
-                        + ' Сцены могут получить неверные тайминги.'
-                        + hint
-                        + `\n\nВсё равно применить ${scenesGate.label}?`,
-                    );
-                    if (!proceed) {
-                        applyBtn.disabled = false;
-                        setApplyStatus(
-                            `Отменено: сначала исправьте тайминги ${scenesGate.label} или выберите ${scenesGate.alt}.`,
-                            true,
-                        );
-                        return;
-                    }
+            const srcLabel = src === 'whisper' ? 'Whisper' : 'ElevenLabs';
+            const scenesGate = src === 'whisper'
+                ? {
+                    sectionId: 'whisper-words-check-scenes-section',
+                    reasonsId: 'whisper-words-scenes-check-reasons',
+                    label: 'Whisper',
+                    alt: 'Eleven',
                 }
-                setApplyStatus(`Сопоставляем тайминги (${srcLabel})…`);
-                try {
-                    const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
-                    const r = await fetch(`${ROOT}/job/${jobId}/scenes/apply-tts-timings`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
-                        body: JSON.stringify({ source: src }),
-                    });
-                    const data = await parseJsonOrThrow(r, 'apply-tts-timings');
-                    if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
-                    if (textEl) {
-                        textEl.textContent = String(data.scenes_stripped_text || '');
+                : {
+                    sectionId: 'tts-words-check-scenes-section',
+                    reasonsId: 'tts-words-scenes-check-reasons',
+                    label: 'Eleven',
+                    alt: 'Whisper',
+                };
+            const scenesSec = document.getElementById(scenesGate.sectionId);
+            if (!auto && scenesSec && scenesSec.dataset.scenesOk === '0') {
+                const reasonsEl = document.getElementById(scenesGate.reasonsId);
+                const hint = (reasonsEl && reasonsEl.textContent.trim())
+                    ? '\n' + reasonsEl.textContent.trim().slice(0, 400)
+                    : '';
+                const proceed = window.confirm(
+                    `Тайминги ${scenesGate.label} не прошли проверку для сцен (NO).`
+                    + ' Сцены могут получить неверные тайминги.'
+                    + hint
+                    + `\n\nВсё равно применить ${scenesGate.label}?`,
+                );
+                if (!proceed) {
+                    if (scenesRunBtn) {
+                        scenesRunBtn.classList.remove('btn-regenerate--busy');
+                        syncVideoJsonScenesRunBtn();
                     }
-                    wrapEl.classList.remove('hidden');
-                    setCollapsed(false);
-                    updateSummary();
-                    const usedLabel = (data.source === 'whisper') ? 'Whisper' : 'ElevenLabs';
                     setApplyStatus(
-                        `Готово: ${data.timings_applied || 0}/${data.scenes_count || 0} сцен. `
-                        + `Источник: ${usedLabel} (${data.words_filename || ''}).`,
+                        `Отменено: сначала исправьте тайминги ${scenesGate.label} или выберите ${scenesGate.alt}.`,
+                        true,
                     );
-                } catch (e) {
-                    setApplyStatus('Ошибка: ' + (e?.message || String(e)), true);
-                    if (typeof openJobErrorModal === 'function') {
-                        openJobErrorModal(e?.message || String(e));
-                    }
-                } finally {
-                    applyBtn.disabled = false;
+                    return;
                 }
+            }
+            setApplyStatus(`Сопоставляем тайминги (${srcLabel})…`);
+            try {
+                const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+                const r = await fetch(`${ROOT}/job/${jobId}/scenes/apply-tts-timings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ source: src }),
+                });
+                const data = await parseJsonOrThrow(r, 'apply-tts-timings');
+                if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                const rows = Array.isArray(data.scene_audio_timings) ? data.scene_audio_timings : [];
+                if (rows.length && typeof window.applySceneAudioTimings === 'function') {
+                    window.applySceneAudioTimings(rows);
+                } else {
+                    setVideoJsonScenesTimingsText(String(data.scenes_stripped_text || ''));
+                    expandVideoJsonScenesPanel();
+                }
+                const usedLabel = (data.source === 'whisper') ? 'Whisper' : 'ElevenLabs';
+                const prefix = auto ? 'Обновлено' : 'Готово';
+                setApplyStatus(
+                    `${prefix}: ${data.timings_applied || 0}/${data.scenes_count || 0} сцен. `
+                    + `Источник: ${usedLabel} (${data.words_filename || ''}).`,
+                );
+                if (data.timings_validation) {
+                    renderScenesTimingsValidation(data.timings_validation);
+                }
+            } catch (e) {
+                setApplyStatus('Ошибка: ' + (e?.message || String(e)), true);
+                if (typeof openJobErrorModal === 'function') {
+                    openJobErrorModal(e?.message || String(e));
+                }
+            } finally {
+                if (scenesRunBtn) {
+                    scenesRunBtn.classList.remove('btn-regenerate--busy');
+                    syncVideoJsonScenesRunBtn();
+                }
+            }
+        };
+        window.__runApplyScenesTimings = runApplyScenesTimings;
+
+        if (scenesRunBtn) {
+            scenesRunBtn.addEventListener('click', () => { runApplyScenesTimings({ auto: false }); });
+            syncVideoJsonScenesRunBtn();
+        }
+        if (editToggleBtn) {
+            editToggleBtn.addEventListener('click', () => {
+                timingsJsonLocked = !timingsJsonLocked;
+                applyTimingsJsonLockUi();
+                if (!timingsJsonLocked) textEl.focus();
             });
         }
         if (copyBtn) {
-            copyBtn.addEventListener('click', async () => {
-                const txt = textEl?.textContent || '';
-                if (!txt) return;
+            copyBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const raw = textEl.value || '';
+                if (!raw) return;
+                const prevTitle = copyBtn.getAttribute('title') || 'Копировать';
+                const flashTitle = (t) => {
+                    copyBtn.setAttribute('title', t);
+                    setTimeout(() => copyBtn.setAttribute('title', prevTitle), 1200);
+                };
                 try {
-                    await navigator.clipboard.writeText(txt);
-                    if (copyStatus) {
-                        copyStatus.textContent = 'Скопировано';
-                        copyStatus.classList.remove('hidden');
-                        setTimeout(() => copyStatus.classList.add('hidden'), 1800);
-                    }
-                } catch (e) {
-                    if (copyStatus) {
-                        copyStatus.textContent = 'Не удалось скопировать';
-                        copyStatus.classList.remove('hidden');
-                        setTimeout(() => copyStatus.classList.add('hidden'), 1800);
+                    await navigator.clipboard.writeText(raw);
+                    flashTitle('Скопировано');
+                } catch (_) {
+                    try {
+                        textEl.focus();
+                        textEl.select();
+                        if (document.execCommand('copy')) flashTitle('Скопировано');
+                        else flashTitle('Не удалось скопировать');
+                    } catch (__) {
+                        flashTitle('Не удалось скопировать');
                     }
                 }
             });
         }
-        updateSummary();
+        applyTimingsJsonLockUi();
+        updateCounts();
     })();
+
     </script>
     <div class="confirm-modal hidden" id="image-template-editor-modal" aria-hidden="true">
         <div class="confirm-modal__backdrop" data-image-template-modal-close></div>

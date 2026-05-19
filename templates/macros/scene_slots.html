@@ -1,0 +1,13 @@
+    {% macro slot_fail_block(err) %}
+    <div class="slot-error-stack">
+        <span class="slot-status slot-status-error">{{ err or 'Generation failed' }}</span>
+        {% set el = (err or '')|lower %}
+        {% if 'policy' in el or 'prohibited' in el or 'filtered' in el or 'violated' in el %}
+        <p class="slot-status-error-hint">Провайдер (Google через Kie.ai) не вернул картинку: запрос или референсы нарушают правила безопасности. Смягчите промпт или шаблон изображений.</p>
+        {% elif 'no images' in el %}
+        <p class="slot-status-error-hint">В ответе нет изображения — чаще фильтр контента или сбой модели. Повторите генерацию или измените формулировки.</p>
+        {% else %}
+        <p class="slot-status-error-hint">Текст выше — ответ Kie.ai. Повторите позже или измените параметры генерации.</p>
+        {% endif %}
+    </div>
+    {% endmacro %}

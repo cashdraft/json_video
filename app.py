@@ -94,6 +94,7 @@ from elevenlabs_client import (
     text_to_speech_with_timestamps,
 )
 from job_scene_audio_align import align_scenes_to_word_timings, merge_audio_timing_into_scenes
+from job_scene_timings_validation import validate_scene_timings
 from kie_client import (
     create_grok_image_to_video_task,
     create_image_task,
@@ -398,21 +399,23 @@ def _apply_tts_word_timings_to_scenes(
     job_id: str,
     scenes: list[dict],
     source: str = "elevenlabs",
-) -> None:
+) -> list[dict[str, Any]]:
     """Если у выбранного источника есть words.json — выравнивает сцены и пишет audio_timing.
 
     `source` ∈ {"elevenlabs", "whisper"} — какой файл слов использовать
     (см. `_latest_tts_words_doc_for_job`). По умолчанию — ElevenLabs, чтобы не ломать
     существующее поведение в worker'ах рендера.
+
+    Возвращает строки `scene_audio_timings` для UI (бейджи на карточках сцен).
     """
     if not scenes:
-        return
+        return []
     words_doc, audio_fname = _latest_tts_words_doc_for_job(job_id, source=source)
     if not words_doc or not audio_fname:
-        return
+        return []
     words = words_doc.get("words")
     if not isinstance(words, list) or not words:
-        return
+        return []
     try:
         total_ms = int(words_doc.get("total_duration_ms") or 0)
     except (TypeError, ValueError):
@@ -424,7 +427,7 @@ def _apply_tts_word_timings_to_scenes(
         except (TypeError, ValueError, IndexError):
             total_ms = 0
     if total_ms <= 0:
-        return
+        return []
     try:
         timings = align_scenes_to_word_timings(
             scenes,
@@ -432,11 +435,20 @@ def _apply_tts_word_timings_to_scenes(
             total_duration_ms=total_ms,
         )
         merge_audio_timing_into_scenes(scenes, timings, audio_filename=audio_fname)
+        out: list[dict[str, Any]] = []
+        for i, t in enumerate(timings):
+            sc_i = scenes[i] if i < len(scenes) else None
+            sid = (sc_i or {}).get("scene_id") if isinstance(sc_i, dict) else None
+            row = dict(t)
+            row["scene_id"] = sid
+            out.append(row)
+        return out
     except Exception as exc:  # noqa: BLE001
         try:
             app.logger.warning("apply TTS timings to scenes job=%s: %s", job_id, exc)
         except Exception:
             pass
+        return []
 
 
 def _safe_job_audio_filename(name: str) -> bool:
@@ -6235,8 +6247,52 @@ def save():
     return redirect(url_for("video_index"))
 
 
+def _json_video_wants_ajax() -> bool:
+    return request.headers.get("X-Json-Video-Ajax") == "1"
+
+
+def _audio_timing_badge_title(source: str) -> str:
+    if _timings_source_normalize(source) == "whisper":
+        return "Интервал в озвучке (по словам Whisper)"
+    return "Интервал в озвучке (по словам ElevenLabs)"
+
+
+def _scene_slot_header_meta_from_job(job: dict) -> tuple[str, str]:
+    meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
+    res_display = meta.get("resolution") or job.get("selected_resolution") or "2K"
+    img_label = meta.get("image_model_label") or image_model_label(meta.get("image_model"))
+    vid_label = meta.get("video_model_label") or video_model_label(meta.get("video_model"))
+    return f"{res_display} · {img_label}", vid_label
+
+
+def _scenes_timings_validation_payload(
+    job_id: str,
+    scenes: list[dict],
+    *,
+    source: str,
+    scene_audio_timings: list[dict[str, Any]] | None = None,
+    words_doc: dict | None = None,
+    audio_filename: str = "",
+) -> dict[str, Any]:
+    src = _timings_source_normalize(source)
+    doc = words_doc if isinstance(words_doc, dict) and words_doc else None
+    audio_fn = audio_filename or ""
+    if doc is None:
+        doc, fname = _latest_tts_words_doc_for_job(job_id, source=src)
+        if not audio_fn:
+            audio_fn = fname or ""
+    return validate_scene_timings(
+        scenes,
+        timings_rows=scene_audio_timings,
+        words_doc=doc,
+        source=src,
+        audio_filename=audio_fn,
+    )
+
+
 @app.route("/job/<job_id>/parse", methods=["POST"])
 def parse_for_job(job_id: str):
+    wants_ajax = _json_video_wants_ajax()
     raw_text = request.form.get("json_input", "")
     aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
     resolution = request.form.get("resolution", "2K")
@@ -6244,19 +6300,29 @@ def parse_for_job(job_id: str):
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
     image_template = request.form.get("image_template", "").strip()
     if image_template and not safe_template_dir(IMAGE_TEMPLATES_DIR, image_template):
-        flash("Выбранный шаблон не найден в image_templates/.", "error")
+        msg = "Выбранный шаблон не найден в image_templates/."
+        if wants_ajax:
+            return jsonify({"ok": False, "error": msg}), 400
+        flash(msg, "error")
         return redirect(url_for("job_page", job_id=job_id))
 
     scenes, errors = parse_scene_blocks(raw_text)
     if errors:
+        if wants_ajax:
+            return jsonify({"ok": False, "errors": errors}), 400
         for err in errors:
             flash(err, "error")
         return redirect(url_for("job_page", job_id=job_id))
 
     timings_applied = False
+    scene_audio_timings: list[dict[str, Any]] = []
+    apply_source = "elevenlabs"
+    job_after: dict | None = None
     with _job_file_lock(job_id):
         job = load_job(job_id)
         if job is None:
+            if wants_ajax:
+                return jsonify({"ok": False, "error": "Проект не найден."}), 404
             flash("Проект не найден.", "error")
             return redirect(url_for("video_index"))
 
@@ -6313,19 +6379,60 @@ def parse_for_job(job_id: str):
         job["selected_image_template"] = image_template
         job["job_meta"] = meta
         job["status"] = "ready" if scenes else "draft"
-        _src_parse = _timings_source_normalize(job.get("apply_timings_source"))
-        if _src_parse == "whisper" and not _job_has_words_for_source(job_id, "whisper"):
-            _src_parse = "elevenlabs"
-        _apply_tts_word_timings_to_scenes(job_id, scenes, source=_src_parse)
+        apply_source = _timings_source_normalize(job.get("apply_timings_source"))
+        if apply_source == "whisper" and not _job_has_words_for_source(job_id, "whisper"):
+            apply_source = "elevenlabs"
+        scene_audio_timings = _apply_tts_word_timings_to_scenes(
+            job_id, scenes, source=apply_source
+        )
         timings_applied = any(
             isinstance(s, dict) and isinstance(s.get("audio_timing"), dict) and (s["audio_timing"].get("badge"))
             for s in scenes
         )
         save_job(job_id, job)
+        job_after = job
 
     flash_ok = f"Сцены обновлены: {len(scenes)}."
     if timings_applied:
         flash_ok += " Тайминги сопоставлены с последней озвучкой (.words.json)."
+
+    if wants_ajax and job_after is not None:
+        summary = compute_summary(scenes)
+        img_meta, vid_meta = _scene_slot_header_meta_from_job(job_after)
+        scenes_html = render_template(
+            "partials/scenes_grid.html",
+            scenes=scenes,
+            scene_slot_image_header_meta=img_meta,
+            scene_slot_video_header_meta=vid_meta,
+            audio_timing_badge_title=_audio_timing_badge_title(apply_source),
+        )
+        timings_validation = _scenes_timings_validation_payload(
+            job_id,
+            scenes,
+            source=apply_source,
+            scene_audio_timings=scene_audio_timings,
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "message": flash_ok,
+                "scenes_count": len(scenes),
+                "summary": summary,
+                "timings_applied": timings_applied,
+                "apply_timings_source": apply_source,
+                "scenes_stripped_text": _render_scenes_stripped_with_timing(scenes),
+                "scene_audio_timings": scene_audio_timings,
+                "scenes_html": scenes_html,
+                "timings_validation": timings_validation,
+                "image_model_label": job_after.get("job_meta", {}).get("image_model_label")
+                if isinstance(job_after.get("job_meta"), dict)
+                else image_model_label(image_model),
+                "video_model_label": job_after.get("job_meta", {}).get("video_model_label")
+                if isinstance(job_after.get("job_meta"), dict)
+                else video_model_label(video_model),
+            }
+        )
+
     flash(flash_ok, "success")
     return redirect(url_for("job_page", job_id=job_id))
 
@@ -6404,7 +6511,9 @@ def job_scenes_apply_tts_timings(job_id: str):
                 }
             ), 400
 
-        _apply_tts_word_timings_to_scenes(job_id, scenes, source=source)
+        scene_audio_timings = _apply_tts_word_timings_to_scenes(
+            job_id, scenes, source=source
+        )
         timings_applied = sum(
             1
             for s in scenes
@@ -6428,6 +6537,13 @@ def job_scenes_apply_tts_timings(job_id: str):
         job["apply_timings_source"] = source
         save_job(job_id, job)
         rendered = _render_scenes_stripped_with_timing(scenes)
+        timings_validation = _scenes_timings_validation_payload(
+            job_id,
+            scenes,
+            source=source,
+            scene_audio_timings=scene_audio_timings,
+            audio_filename=audio_fname,
+        )
 
     return jsonify(
         {
@@ -6436,6 +6552,8 @@ def job_scenes_apply_tts_timings(job_id: str):
             "scenes_count": len(scenes),
             "timings_applied": timings_applied,
             "scenes_stripped_text": rendered,
+            "scene_audio_timings": scene_audio_timings,
+            "timings_validation": timings_validation,
             "audio_filename": audio_fname,
             "words_filename": audio_fname.replace(".mp3", words_suffix),
             "message": (
@@ -9199,6 +9317,27 @@ def job_page(job_id: str):
                 montage_active_render_task_id = _tid
                 break
     rewrite_ctx = _rewrite_template_context(job_id)
+    apply_timings_source_val = (
+        _timings_source_normalize(job.get("apply_timings_source"))
+        if (
+            (
+                _timings_source_normalize(job.get("apply_timings_source")) == "elevenlabs"
+                and bool(tts_last_words_href)
+            )
+            or (
+                _timings_source_normalize(job.get("apply_timings_source")) == "whisper"
+                and bool(whisper_last_words_href)
+            )
+        )
+        else ("whisper" if whisper_last_words_href else "elevenlabs")
+    )
+    scenes_timings_validation = (
+        _scenes_timings_validation_payload(
+            job_id, scenes_for_template, source=apply_timings_source_val
+        )
+        if scenes_for_template
+        else None
+    )
     html = render_template(
         "job.html",
         job_id=job_id,
@@ -9207,6 +9346,7 @@ def job_page(job_id: str):
         rewrite_id_allowed=rewrite_id_ok(job_id),
         scenes=scenes_for_template,
         scenes_stripped_with_timing=_render_scenes_stripped_with_timing(scenes_for_template),
+        scenes_timings_validation=scenes_timings_validation,
         tts_words_available=bool(tts_last_words_href),
         whisper_words_available=bool(whisper_last_words_href),
         whisper_last_words_href=whisper_last_words_href,
