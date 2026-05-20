@@ -3076,7 +3076,7 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "hero_prompt": "",
         "chars_per_minute": 344,
         "rewrite_template": "",
-        "rewrite_pipeline_language": "ru",
+        "rewrite_pipeline_language": "en",
         "hero_prompt_locked": False,
         "audio_timing_locked": False,
         "youtube_url": "",
@@ -8930,6 +8930,89 @@ def _remotion_studio_url_from_env() -> str | None:
     return raw
 
 
+_REMOTION_STUDIO_UNIT = "remotion-studio.service"
+
+
+def _remotion_studio_status_dict() -> dict[str, Any]:
+    """Состояние systemd-юнита remotion-studio (предпросмотр в браузере)."""
+    running = False
+    state = "unknown"
+    err: str | None = None
+    try:
+        proc = subprocess.run(
+            ["systemctl", "is-active", _REMOTION_STUDIO_UNIT],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+        state = (proc.stdout or proc.stderr or "").strip() or "unknown"
+        running = state == "active"
+    except (OSError, subprocess.SubprocessError) as exc:
+        err = str(exc)
+        state = "error"
+    return {
+        "ok": err is None,
+        "running": running,
+        "state": state,
+        "studio_url": _remotion_studio_url_from_env(),
+        "unit": _REMOTION_STUDIO_UNIT,
+        "error": err,
+    }
+
+
+def _remotion_studio_set_enabled(enabled: bool) -> dict[str, Any]:
+    action = "start" if enabled else "stop"
+    try:
+        proc = subprocess.run(
+            ["systemctl", action, _REMOTION_STUDIO_UNIT],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip()[:400]
+            return {
+                "ok": False,
+                "error": f"systemctl_{action}_failed",
+                "message": detail or f"systemctl {action} exit {proc.returncode}",
+                **_remotion_studio_status_dict(),
+            }
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {
+            "ok": False,
+            "error": "systemctl_failed",
+            "message": str(exc),
+            **_remotion_studio_status_dict(),
+        }
+    time.sleep(0.6)
+    out = _remotion_studio_status_dict()
+    out["ok"] = True
+    out["message"] = "Запущено" if out.get("running") else "Остановлено"
+    if enabled and not out.get("running"):
+        out["ok"] = False
+        out["error"] = "start_pending"
+        out["message"] = f"Запуск… (systemd: {out.get('state')})"
+    return out
+
+
+@app.route("/remotion-studio/status", methods=["GET"])
+def remotion_studio_status():
+    return jsonify(_remotion_studio_status_dict())
+
+
+@app.route("/remotion-studio/control", methods=["POST"])
+def remotion_studio_control():
+    data = request.get_json(silent=True) or {}
+    if "enabled" not in data:
+        return jsonify({"ok": False, "error": "enabled_required"}), 400
+    enabled = _montage_bool_clamp(data.get("enabled"))
+    result = _remotion_studio_set_enabled(enabled)
+    code = 200 if result.get("ok") else 500
+    return jsonify(result), code
+
+
 def _latest_audio_path_for_job(job_id: str) -> Path | None:
     audio_dir = JOB_AUDIO_DIR / job_id
     if not audio_dir.is_dir():
@@ -9252,6 +9335,12 @@ _REMOTION_NODE = shutil.which("node") or "/usr/bin/node"
 _montage_render_lock = threading.Lock()
 _montage_render_tasks: dict[str, dict[str, Any]] = {}
 
+# Без прогресса столько секунд → state=stuck (процесс ещё жив).
+_MONTAGE_RENDER_STUCK_SEC = max(
+    60,
+    int(os.environ.get("MONTAGE_RENDER_STUCK_SEC", "300") or 300),
+)
+
 
 def _montage_render_state_path(job_id: str) -> Path:
     return _job_remotion_dir(job_id) / "render_status.json"
@@ -9289,11 +9378,17 @@ def _persist_montage_render_state(st: dict[str, Any]) -> None:
             "started_at": st.get("started_at"),
             "finished_at": st.get("finished_at"),
             "error": st.get("error"),
+            "error_detail": st.get("error_detail"),
+            "exit_code": st.get("exit_code"),
             "output_url": st.get("output_url"),
             "output_filename": st.get("output_filename"),
             "pid": st.get("pid"),
             "frames_done": st.get("frames_done"),
             "frames_total": st.get("frames_total"),
+            "last_progress_at": st.get("last_progress_at"),
+            "last_log_line": st.get("last_log_line"),
+            "stuck_at": st.get("stuck_at"),
+            "stuck_reason": st.get("stuck_reason"),
             "updated_at": time.time(),
         }
         path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
@@ -9323,8 +9418,15 @@ def _montage_render_view(st: dict[str, Any]) -> dict[str, Any]:
         "started_at": st.get("started_at"),
         "finished_at": st.get("finished_at"),
         "error": st.get("error"),
+        "error_detail": st.get("error_detail"),
+        "exit_code": st.get("exit_code"),
         "output_url": st.get("output_url"),
         "output_filename": st.get("output_filename"),
+        "last_progress_at": st.get("last_progress_at"),
+        "last_log_line": st.get("last_log_line"),
+        "stuck_at": st.get("stuck_at"),
+        "stuck_reason": st.get("stuck_reason"),
+        "updated_at": st.get("updated_at"),
     }
     fd = st.get("frames_done")
     ft = st.get("frames_total")
@@ -9337,11 +9439,87 @@ def _montage_render_view(st: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _montage_render_touch_progress(st: dict[str, Any], **fields: Any) -> None:
+    """Обновляет last_progress_at при реальном движении прогресса."""
+    sig_before = (
+        st.get("progress_pct"),
+        st.get("frames_done"),
+        st.get("frames_total"),
+        st.get("stage"),
+    )
+    progressish = any(
+        k in fields
+        for k in ("progress_pct", "frames_done", "frames_total", "stage", "message")
+    )
+    if not progressish:
+        return
+    sig_after = (
+        fields.get("progress_pct", st.get("progress_pct")),
+        fields.get("frames_done", st.get("frames_done")),
+        fields.get("frames_total", st.get("frames_total")),
+        fields.get("stage", st.get("stage")),
+    )
+    if sig_after != sig_before:
+        st["last_progress_at"] = time.time()
+        st.pop("stuck_at", None)
+        st.pop("stuck_reason", None)
+        if st.get("state") == "stuck":
+            st["state"] = "running"
+
+
+def _montage_render_reconcile(st: dict[str, Any]) -> dict[str, Any]:
+    """Проверка «завис» / «процесс умер» для running|queued|stuck; пишет причину на диск."""
+    state = str(st.get("state") or "")
+    if state not in ("queued", "running", "stuck"):
+        return st
+    now = time.time()
+    pid = st.get("pid")
+    if pid is not None and not _pid_is_alive(pid):
+        st.update({
+            "state": "error",
+            "error": "process_died",
+            "error_detail": (
+                "Процесс Remotion на сервере завершился (PID не отвечает). "
+                "Возможны нехватка RAM, kill или падение npx."
+            ),
+            "finished_at": st.get("finished_at") or now,
+            "message": st.get("message") or "Процесс рендера не найден",
+        })
+        return st
+    last_prog = float(st.get("last_progress_at") or st.get("started_at") or now)
+    idle_sec = max(0.0, now - last_prog)
+    if idle_sec >= _MONTAGE_RENDER_STUCK_SEC:
+        if not st.get("stuck_at"):
+            st["stuck_at"] = now
+            last_msg = str(st.get("last_log_line") or st.get("message") or "").strip()
+            st["stuck_reason"] = (
+                f"Нет прогресса {int(idle_sec)} с · этап «{st.get('stage') or '?'}» · "
+                f"{int(st.get('progress_pct') or 0)}% · кадры "
+                f"{st.get('frames_done') if st.get('frames_done') is not None else '?'}/"
+                f"{st.get('frames_total') if st.get('frames_total') is not None else '?'}"
+                + (f" · лог: {last_msg[:200]}" if last_msg else "")
+            )
+        st["state"] = "stuck"
+    elif state == "stuck" and idle_sec < _MONTAGE_RENDER_STUCK_SEC:
+        st["state"] = "running"
+    return st
+
+
+def _montage_render_sync_disk(st: dict[str, Any]) -> dict[str, Any]:
+    st = _montage_render_reconcile(st)
+    _persist_montage_render_state(st)
+    return st
+
+
 def _montage_render_update(task_id: str, **fields: Any) -> None:
     with _montage_render_lock:
         st = _montage_render_tasks.get(task_id)
         if not st:
             return
+        if "message" in fields and fields["message"]:
+            fields = dict(fields)
+            fields["last_log_line"] = str(fields["message"])[:500]
+        _montage_render_touch_progress(st, **fields)
         st.update(fields)
         _persist_montage_render_state(st)
 
@@ -9379,7 +9557,13 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
         "--log=info",
     ]
 
-    _montage_render_update(task_id, state="running", stage="bundle", message="Запуск Remotion render…")
+    _montage_render_update(
+        task_id,
+        state="running",
+        stage="bundle",
+        message="Запуск Remotion render…",
+        last_progress_at=time.time(),
+    )
 
     try:
         proc = subprocess.Popen(
@@ -9396,6 +9580,7 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
             task_id,
             state="error",
             error="spawn_failed",
+            error_detail=f"Не удалось запустить npx remotion: {exc}",
             message=f"Не удалось запустить npx remotion: {exc}",
             finished_at=time.time(),
         )
@@ -9487,12 +9672,16 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
         with _montage_render_lock:
             st = _montage_render_tasks.get(task_id)
             prev_stage = (st or {}).get("stage") or "error"
+        err_msg = ("Ошибка рендера: " + (last_line[:240] if last_line else "")) or "Ошибка рендера"
         _montage_render_update(
             task_id,
             state="error",
             stage=prev_stage,
             error=f"exit_code={rc}",
-            message=("Ошибка рендера: " + (last_line[:240] if last_line else "")) or "Ошибка рендера",
+            exit_code=rc,
+            error_detail=err_msg,
+            last_log_line=last_line[:500] if last_line else None,
+            message=err_msg,
             finished_at=time.time(),
         )
 
@@ -9510,6 +9699,7 @@ def job_montage_render(job_id: str):
             if st.get("job_id") == job_id and st.get("state") in ("queued", "running"):
                 return jsonify({"ok": True, **_montage_render_view(st)})
         task_id = uuid.uuid4().hex
+        _now = time.time()
         _montage_render_tasks[task_id] = {
             "task_id": task_id,
             "job_id": job_id,
@@ -9517,12 +9707,18 @@ def job_montage_render(job_id: str):
             "progress_pct": 0,
             "stage": "queued",
             "message": "Поставлено в очередь",
-            "started_at": time.time(),
+            "started_at": _now,
+            "last_progress_at": _now,
             "finished_at": None,
             "error": None,
+            "error_detail": None,
+            "exit_code": None,
             "output_url": None,
             "output_filename": None,
             "pid": None,
+            "last_log_line": None,
+            "stuck_at": None,
+            "stuck_reason": None,
         }
         st = _montage_render_tasks[task_id]
         _persist_montage_render_state(st)
@@ -9534,46 +9730,56 @@ def job_montage_render(job_id: str):
 @app.route("/job/<job_id>/montage/render/status")
 def job_montage_render_status(job_id: str):
     task_id = (request.args.get("task_id") or "").strip()
+    st: dict[str, Any] | None = None
     with _montage_render_lock:
-        st = _montage_render_tasks.get(task_id)
-        if not st or st.get("job_id") != job_id:
+        cand = _montage_render_tasks.get(task_id)
+        if cand and cand.get("job_id") == job_id:
+            st = dict(cand)
+        else:
             for tid, candidate in _montage_render_tasks.items():
                 if candidate.get("job_id") == job_id and (
-                    candidate.get("state") in ("queued", "running") or not task_id
+                    candidate.get("state") in ("queued", "running", "stuck") or not task_id
                 ):
-                    st = candidate
+                    st = dict(candidate)
                     break
-        if not st:
-            disk = _load_montage_render_state(job_id)
-            if disk and disk.get("job_id") == job_id:
-                dstate = str(disk.get("state") or "")
-                if dstate in ("queued", "running") and _pid_is_alive(disk.get("pid")):
-                    tid = str(disk.get("task_id") or "")
-                    if tid:
-                        with _montage_render_lock:
-                            _montage_render_tasks[tid] = dict(disk)
-                    return jsonify({"ok": True, **_montage_render_view(disk)})
-                if dstate in ("done", "cancelled", "error"):
-                    return jsonify({"ok": True, **_montage_render_view(disk)})
-            out_path = _job_remotion_dir(job_id) / "out.mp4"
-            if out_path.is_file():
-                return jsonify({
-                    "ok": True,
-                    "task_id": None,
-                    "job_id": job_id,
-                    "state": "done",
-                    "progress_pct": 100,
-                    "stage": "done",
-                    "message": "MP4 уже готов.",
-                    "started_at": None,
-                    "finished_at": out_path.stat().st_mtime,
-                    "error": None,
-                    "output_url": url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
-                    "output_filename": "out.mp4",
-                })
-            return jsonify({"ok": False, "error": "not_found"}), 404
-        view = _montage_render_view(st)
-    return jsonify({"ok": True, **view})
+
+    if not st:
+        disk = _load_montage_render_state(job_id)
+        if disk and disk.get("job_id") == job_id:
+            disk = _montage_render_sync_disk(disk)
+            dstate = str(disk.get("state") or "")
+            if dstate in ("queued", "running", "stuck") and _pid_is_alive(disk.get("pid")):
+                tid = str(disk.get("task_id") or "")
+                if tid:
+                    with _montage_render_lock:
+                        _montage_render_tasks[tid] = dict(disk)
+                return jsonify({"ok": True, **_montage_render_view(disk)})
+            if dstate in ("done", "cancelled", "error", "stuck"):
+                return jsonify({"ok": True, **_montage_render_view(disk)})
+        out_path = _job_remotion_dir(job_id) / "out.mp4"
+        if out_path.is_file():
+            return jsonify({
+                "ok": True,
+                "task_id": None,
+                "job_id": job_id,
+                "state": "done",
+                "progress_pct": 100,
+                "stage": "done",
+                "message": "MP4 уже готов.",
+                "started_at": None,
+                "finished_at": out_path.stat().st_mtime,
+                "error": None,
+                "output_url": url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
+                "output_filename": "out.mp4",
+            })
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    st = _montage_render_sync_disk(st)
+    with _montage_render_lock:
+        tid = str(st.get("task_id") or "")
+        if tid and tid in _montage_render_tasks:
+            _montage_render_tasks[tid] = st
+    return jsonify({"ok": True, **_montage_render_view(st)})
 
 
 @app.route("/job/<job_id>/montage/render/cancel", methods=["POST"])
@@ -9800,16 +10006,20 @@ def job_page(job_id: str):
     # Активный рендер: если в памяти процесса есть running/queued — пробросим task_id,
     # чтобы UI сам подцепился к прогрессу через /montage/render/status.
     montage_active_render_task_id = ""
+    montage_render_snapshot: dict[str, Any] | None = None
+    remotion_studio_status = _remotion_studio_status_dict()
+    disk_render = _load_montage_render_state(job_id)
+    if disk_render and disk_render.get("job_id") == job_id:
+        disk_render = _montage_render_sync_disk(disk_render)
+        montage_render_snapshot = _montage_render_view(disk_render)
     with _montage_render_lock:
         for _tid, _cand in _montage_render_tasks.items():
-            if _cand.get("job_id") == job_id and _cand.get("state") in ("queued", "running"):
+            if _cand.get("job_id") == job_id and _cand.get("state") in ("queued", "running", "stuck"):
                 montage_active_render_task_id = _tid
                 break
-    if not montage_active_render_task_id:
-        disk_render = _load_montage_render_state(job_id)
+    if not montage_active_render_task_id and disk_render:
         if (
-            disk_render
-            and str(disk_render.get("state") or "") in ("queued", "running")
+            str(disk_render.get("state") or "") in ("queued", "running", "stuck")
             and _pid_is_alive(disk_render.get("pid"))
         ):
             montage_active_render_task_id = str(disk_render.get("task_id") or "")
@@ -9904,6 +10114,8 @@ def job_page(job_id: str):
         montage_mp4_url=montage_mp4_url,
         montage_remotion_open_url=montage_remotion_open_url,
         montage_active_render_task_id=montage_active_render_task_id,
+        montage_render_snapshot=montage_render_snapshot,
+        remotion_studio_status=remotion_studio_status,
     )
     # Запрещаем браузерный кеш страницы /job/<id>: HTML+inline-JS меняются часто
     # (rewrite-блок, тайминги слов и т.д.), при кешировании старая копия страницы

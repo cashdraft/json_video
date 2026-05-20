@@ -436,7 +436,7 @@
                 {% for m in rewrite_models %}
                 {% if cur_model == m.id %}{% set ns_gm.d = m.label %}{% endif %}
                 {% endfor %}
-                {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
+                {% set _plang_raw = (rw.rewrite_pipeline_language or 'en')|trim|lower %}
                 {% if _plang_raw in ['en', 'english', 'англ'] %}
                     {% set _plang = 'en' %}
                 {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
@@ -446,7 +446,7 @@
                 {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
                     {% set _plang = _plang_raw %}
                 {% else %}
-                    {% set _plang = 'ru' %}
+                    {% set _plang = 'en' %}
                 {% endif %}
                 <div class="rewrite-project-settings-card-header scene-header" role="button" tabindex="0" title="Нажмите, чтобы развернуть или свернуть блок">
                     <div class="rewrite-project-settings-title-row">
@@ -570,10 +570,10 @@
                         {% set _ct_model_openai = (cur_model not in claude_rewrite_model_ids) %}
                         <div class="rewrite-prompts-duration-row__duration-block" id="rewrite-chat-temperature-block">
                             <h3 class="rewrite-source-subtitle">Temperature</h3>
-                            <p class="rewrite-source-subhint">Только для моделей OpenAI (Chat Completions). Для Claude через Kie.ai поле отключено.</p>
+                            <p class="rewrite-source-subhint">Зафиксировано 0 для OpenAI (Chat Completions). Для Claude через Kie.ai не применяется.</p>
                             <div class="tts-slider-block rewrite-source-duration">
-                                <label class="tts-slider-label" for="rewrite-chat-temperature">Значение <span class="tts-slider-val" id="rewrite-chat-temperature-val">{{ '%.2f'|format(_ct_saved|float) }}</span></label>
-                                <input type="range" id="rewrite-chat-temperature" name="chat_temperature" min="0" max="2" step="0.05" value="{{ '%.2f'|format(_ct_saved|float) }}" class="tts-range" {% if not openai_key_set or not _ct_model_openai %}disabled{% endif %} aria-valuemin="0" aria-valuemax="2">
+                                <label class="tts-slider-label" for="rewrite-chat-temperature">Значение <span class="tts-slider-val" id="rewrite-chat-temperature-val">0.00</span></label>
+                                <input type="range" id="rewrite-chat-temperature" name="chat_temperature" min="0" max="2" step="0.05" value="0" class="tts-range" disabled aria-valuemin="0" aria-valuemax="2">
                                 <div class="tts-slider-ends">
                                     <span>0</span>
                                     <span>2</span>
@@ -840,6 +840,19 @@
                     <div class="rewrite-stage-stack">
                         {% if stage_key != 'inbox' %}
                         <div class="rewrite-stage-row rewrite-stage-row--controls">
+                            {% if stage_key == 'scene_writer' %}
+                            {% set _sw_model = (cell.model or '')|trim %}
+                            {% if not _sw_model %}{% set _sw_model = rewrite_default_model|default('gpt-5.4') %}{% endif %}
+                            <div class="rewrite-stage-model-cell rewrite-stage-scene-writer-model-cell">
+                                <h3 class="rewrite-source-subtitle">Model</h3>
+                                <p class="rewrite-source-subhint">Модель OpenAI для Scene Writer (только этот этап).</p>
+                                <select id="rewrite-stage-{{ stage_key }}-model" class="tts-select rewrite-stage-model rewrite-stage-scene-writer-model-select" {% if not openai_key_set %}disabled{% endif %}>
+                                    {% for m in rewrite_models %}
+                                    <option value="{{ m.id }}" {% if _sw_model == m.id %}selected{% endif %}>{{ m.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% else %}
                             <div class="rewrite-stage-model-cell">
                                 <div class="slot-header rewrite-stage-compact-header">
                                     <span class="slot-badge badge-yes">Model</span>
@@ -850,6 +863,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
+                            {% endif %}
                             {% if stage_key == 'rewrite' %}
                             {% set _rsr_lp = (locked_prompts_state|default({}, true)).get('rewrite_system_rules') or {} %}
                             {% set has_rewrite_system_rules = _rsr_lp.get('present')|default(false) %}

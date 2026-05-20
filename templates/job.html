@@ -973,6 +973,25 @@
                     </div>
                     <span class="job-montage-value job-montage-value--mode" id="montage-prefer-video-hint" aria-live="polite"></span>
                 </div>
+                <div class="job-montage-row job-montage-row--studio">
+                    <label class="job-montage-label" for="montage-studio-toggle" title="Предпросмотр JobMontage в браузере (systemd remotion-studio). На время рендера MP4 лучше выключить — освобождает RAM.">Remotion Studio</label>
+                    <div class="job-montage-studio-controls">
+                        <label class="job-montage-switch" title="Включить или выключить remotion-studio на сервере">
+                            <input type="checkbox" id="montage-studio-toggle" aria-describedby="montage-studio-indicator-text">
+                            <span class="job-montage-switch__track" aria-hidden="true"></span>
+                        </label>
+                        <span
+                            class="job-montage-studio-indicator"
+                            id="montage-studio-indicator"
+                            data-state="unknown"
+                            aria-live="polite"
+                        >
+                            <span class="job-montage-studio-indicator__dot" aria-hidden="true"></span>
+                            <span id="montage-studio-indicator-text">Проверка…</span>
+                        </span>
+                    </div>
+                    <span class="job-montage-value job-montage-value--mode" id="montage-studio-hint" aria-live="polite">Предпросмотр в браузере. Выключайте на время рендера MP4.</span>
+                </div>
             </div>
             <div class="job-montage-actions">
                 <button type="button" class="btn btn-primary btn-sm" id="montage-assemble-btn">Смонтировать видео</button>
@@ -1002,7 +1021,20 @@
                     </div>
                     <div class="download-all-progress-meta job-montage-live__meta" id="montage-live-meta">—</div>
                 </div>
-                <pre class="job-montage-live__log download-all-modal-log" id="montage-live-log" aria-label="Журнал монтажа"></pre>
+                <div class="job-montage-live__log-field" id="montage-live-log-wrap">
+                    <h3 class="rewrite-source-subtitle">Журнал на сервере</h3>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result job-montage-render-log-slot">
+                        <textarea
+                            id="montage-live-incident"
+                            class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked job-montage-render-log"
+                            rows="6"
+                            readonly
+                            spellcheck="false"
+                            placeholder="Старт, прогресс, зависание или ошибка рендера появятся здесь…"
+                            aria-label="Журнал рендера на сервере"
+                        ></textarea>
+                    </div>
+                </div>
                 <div class="job-montage-live__actions">
                     <button type="button" class="btn btn-danger btn-sm hidden" id="montage-live-stop">Остановить рендер</button>
                     <a class="btn btn-secondary btn-sm hidden" id="montage-live-mp4-link" href="#" target="_blank" rel="noopener" download>Скачать MP4</a>
@@ -2661,7 +2693,6 @@
         const progMeta    = document.getElementById('montage-progress-meta');
         const livePanel   = document.getElementById('job-montage-live');
         const liveStatus  = document.getElementById('montage-live-status');
-        const liveLog     = document.getElementById('montage-live-log');
         const liveWrap    = document.getElementById('montage-live-progress-wrap');
         const liveFill    = document.getElementById('montage-live-progress-fill');
         const liveBar     = document.getElementById('montage-live-progress');
@@ -2669,8 +2700,10 @@
         const liveStop    = document.getElementById('montage-live-stop');
         const liveMp4Link = document.getElementById('montage-live-mp4-link');
         const liveDetailsBtn = document.getElementById('montage-live-details-btn');
+        const liveIncident = document.getElementById('montage-live-incident');
         const initialActiveRenderTaskId = {{ (montage_active_render_task_id or '') | tojson }};
         const initialMp4Url = {{ (montage_mp4_url or '') | tojson }};
+        const initialMontageRender = {{ (montage_render_snapshot or none) | tojson }};
         if (!zoomInput || !fadeInput) return;
 
         const MONTAGE_ZOOM_MIN = 1;
@@ -2792,6 +2825,82 @@
         const setLiveState = (state) => {
             if (livePanel) livePanel.dataset.state = state || 'idle';
         };
+        const formatMontageTs = (unix) => {
+            const n = Number(unix);
+            if (!Number.isFinite(n) || n <= 0) return '—';
+            try {
+                return new Date(n * 1000).toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                });
+            } catch (_) {
+                return '—';
+            }
+        };
+        const setMontageRenderLogValue = (text) => {
+            if (!liveIncident) return;
+            liveIncident.value = String(text || '');
+        };
+        const applyMontageRenderIncident = (data) => {
+            if (!liveIncident) return;
+            if (!data) {
+                setMontageRenderLogValue('');
+                return;
+            }
+            const lines = [];
+            const st = String(data.state || '');
+            if (data.started_at) lines.push('Старт на сервере: ' + formatMontageTs(data.started_at));
+            if (data.last_progress_at && st !== 'done') {
+                lines.push('Последний прогресс: ' + formatMontageTs(data.last_progress_at));
+            }
+            if (st === 'stuck' || data.stuck_at) {
+                lines.push('Зависание зафиксировано: ' + formatMontageTs(data.stuck_at));
+                if (data.stuck_reason) lines.push(String(data.stuck_reason));
+            }
+            if (st === 'error' || data.error) {
+                if (data.finished_at) lines.push('Ошибка / останов: ' + formatMontageTs(data.finished_at));
+                if (data.error) lines.push('Код: ' + String(data.error));
+                if (data.exit_code != null && data.exit_code !== '') {
+                    lines.push('Код выхода процесса: ' + String(data.exit_code));
+                }
+                if (data.error_detail) lines.push(String(data.error_detail));
+                else if (data.message) lines.push(String(data.message));
+            }
+            if (st === 'cancelled') {
+                if (data.finished_at) lines.push('Отменено: ' + formatMontageTs(data.finished_at));
+                if (data.message) lines.push(String(data.message));
+            }
+            if (data.last_log_line) lines.push('Последняя строка лога: ' + String(data.last_log_line));
+            if (data.updated_at) lines.push('Обновлено на сервере: ' + formatMontageTs(data.updated_at));
+            setMontageRenderLogValue(lines.join('\n'));
+        };
+        const applyMontageRenderPoll = (data) => {
+            if (!data) return;
+            let pct = Number(data.progress_pct || 0);
+            const stage = String(data.stage || '');
+            const fd = Number(data.frames_done);
+            const ft = Number(data.frames_total);
+            if (Number.isFinite(fd) && Number.isFinite(ft) && ft > 0) {
+                pct = Math.min(100, Math.max(pct, Math.round((fd / ft) * 100)));
+            }
+            const framesHint = (Number.isFinite(fd) && Number.isFinite(ft) && ft > 0)
+                ? ` · ${fd}/${ft} кадров`
+                : '';
+            const st = String(data.state || '');
+            if (st === 'stuck') {
+                setMontageHeadline(`Рендер: зависание (${pct}%)${framesHint}`);
+                setLiveState('stuck');
+            } else if (st === 'running' || st === 'queued') {
+                setMontageHeadline(`Рендер MP4: ${stage || 'идёт'} (${pct}%)${framesHint}`);
+                setLiveState('busy');
+            }
+            setProg(pct, data.message || '');
+            applyMontageRenderIncident(data);
+        };
         const setMontageHeadline = (text) => {
             const t = text || '';
             if (modalStatus) modalStatus.textContent = t;
@@ -2800,11 +2909,14 @@
         const appendMontageLog = (line) => {
             const t = String(line || '').trim();
             if (!t) return;
-            [modalLog, liveLog].forEach((el) => {
-                if (!el) return;
-                el.textContent = (el.textContent ? el.textContent + '\n' : '') + t;
-                el.scrollTop = el.scrollHeight;
-            });
+            if (modalLog) {
+                modalLog.textContent = (modalLog.textContent ? modalLog.textContent + '\n' : '') + t;
+                modalLog.scrollTop = modalLog.scrollHeight;
+            }
+            if (liveIncident) {
+                liveIncident.value = (liveIncident.value ? liveIncident.value + '\n' : '') + t;
+                liveIncident.scrollTop = liveIncident.scrollHeight;
+            }
             liveDetailsBtn?.classList.remove('hidden');
         };
         const setMontageProg = (pct, metaText) => {
@@ -2824,7 +2936,7 @@
             modalBusy = true;
             setMontageHeadline(titleText || 'Подготовка…');
             if (modalLog) modalLog.textContent = '';
-            if (liveLog) liveLog.textContent = '';
+            setMontageRenderLogValue('');
             resetMontageProgress();
             if (modalMp4Link) modalMp4Link.classList.add('hidden');
             if (liveMp4Link) liveMp4Link.classList.add('hidden');
@@ -2836,8 +2948,8 @@
             if (liveStatus && modalStatus && !modalStatus.textContent) {
                 modalStatus.textContent = liveStatus.textContent;
             }
-            if (liveLog && modalLog && liveLog.textContent && !modalLog.textContent) {
-                modalLog.textContent = liveLog.textContent;
+            if (liveIncident && modalLog && liveIncident.value && !modalLog.textContent) {
+                modalLog.textContent = liveIncident.value;
             }
             modalClose?.classList.remove('hidden');
             modal.classList.remove('hidden');
@@ -3061,20 +3173,10 @@
                 const data = await parseJsonOrThrow(r, 'Статус рендера');
                 if (!data.ok) throw new Error(data.error || 'no status');
                 renderPollFailCount = 0;
-                let pct = Number(data.progress_pct || 0);
-                const stage = String(data.stage || '');
-                const fd = Number(data.frames_done);
-                const ft = Number(data.frames_total);
-                if (Number.isFinite(fd) && Number.isFinite(ft) && ft > 0) {
-                    pct = Math.min(100, Math.max(pct, Math.round((fd / ft) * 100)));
-                }
-                const framesHint = (Number.isFinite(fd) && Number.isFinite(ft) && ft > 0)
-                    ? ` · ${fd}/${ft} кадров`
-                    : '';
-                setMontageHeadline(`Рендер MP4: ${stage || 'идёт'} (${pct}%)${framesHint}`);
-                setProg(pct, data.message || '');
+                applyMontageRenderPoll(data);
                 if (data.state === 'done') {
                     finishMontageTask('Готово. MP4 собран.', 'done');
+                    applyMontageRenderIncident(data);
                     showFinishedMp4(data.output_url);
                     if (renderBtn) { renderBtn.disabled = false; }
                     currentRenderTaskId = '';
@@ -3082,14 +3184,14 @@
                 }
                 if (data.state === 'cancelled') {
                     finishMontageTask('Рендер остановлен пользователем.', 'idle');
-                    appendLog(String(data.message || ''));
+                    applyMontageRenderIncident(data);
                     if (renderBtn) renderBtn.disabled = false;
                     currentRenderTaskId = '';
                     return;
                 }
                 if (data.state === 'error') {
                     finishMontageTask('Ошибка рендера', 'error');
-                    appendLog(String(data.error || '') + ' ' + String(data.message || ''));
+                    applyMontageRenderIncident(data);
                     if (renderBtn) { renderBtn.disabled = false; }
                     currentRenderTaskId = '';
                     return;
@@ -3125,6 +3227,7 @@
                 const data = await parseJsonOrThrow(r, 'Рендер MP4');
                 if (!data.ok) throw new Error(data.error || data.message || 'Не удалось запустить');
                 renderBtn.dataset.taskId = String(data.task_id || '');
+                applyMontageRenderPoll(data);
                 setMontageStop(cancelRender);
                 pollRender(data.task_id);
             } catch (e) {
@@ -3138,11 +3241,132 @@
             beginMontageTask('Подключаюсь к активному рендеру…');
             if (renderBtn) renderBtn.disabled = true;
             setMontageStop(cancelRender);
+            if (initialMontageRender) applyMontageRenderPoll(initialMontageRender);
             pollRender(initialActiveRenderTaskId);
+        } else if (initialMontageRender) {
+            const ir = initialMontageRender;
+            const irState = String(ir.state || '');
+            if (irState === 'error') {
+                finishMontageTask('Ошибка рендера (сохранено на сервере)', 'error');
+                applyMontageRenderIncident(ir);
+                if (renderBtn) renderBtn.disabled = false;
+            } else if (irState === 'stuck') {
+                finishMontageTask('Рендер завис (сохранено на сервере)', 'stuck');
+                applyMontageRenderPoll(ir);
+                if (renderBtn) renderBtn.disabled = false;
+            } else if (irState === 'cancelled') {
+                finishMontageTask('Рендер был отменён', 'idle');
+                applyMontageRenderIncident(ir);
+            } else if (irState === 'done') {
+                if (initialMp4Url) showFinishedMp4(initialMp4Url);
+                setMontageHeadline('MP4 готов — можно скачать');
+                setLiveState('done');
+                applyMontageRenderIncident(ir);
+            }
         } else if (initialMp4Url) {
             showFinishedMp4(initialMp4Url);
             setMontageHeadline('MP4 готов — можно скачать');
             setLiveState('done');
+        }
+
+        // Remotion Studio: ползунок + индикатор (systemd remotion-studio.service)
+        const studioToggle = document.getElementById('montage-studio-toggle');
+        const studioIndicator = document.getElementById('montage-studio-indicator');
+        const studioIndicatorText = document.getElementById('montage-studio-indicator-text');
+        const studioHint = document.getElementById('montage-studio-hint');
+        const initialRemotionStudio = {{ remotion_studio_status | tojson }};
+        let studioPollTimer = null;
+        let studioBusy = false;
+
+        const studioStateLabel = (st) => {
+            const s = String(st || '').toLowerCase();
+            if (s === 'active') return 'Работает';
+            if (s === 'inactive' || s === 'dead') return 'Остановлен';
+            if (s === 'activating' || s === 'reloading') return 'Запускается…';
+            if (s === 'deactivating' || s === 'stopping') return 'Останавливается…';
+            if (s === 'failed') return 'Ошибка (failed)';
+            return s || 'Неизвестно';
+        };
+
+        const applyRemotionStudioStatus = (data) => {
+            if (!data) return;
+            const running = !!data.running;
+            const st = String(data.state || (running ? 'active' : 'inactive'));
+            if (studioToggle && !studioBusy) studioToggle.checked = running;
+            if (studioIndicator) {
+                let uiState = 'stopped';
+                if (running) uiState = 'running';
+                else if (/activat|reload/i.test(st)) uiState = 'pending';
+                else if (st === 'failed' || st === 'error') uiState = 'error';
+                studioIndicator.dataset.state = uiState;
+            }
+            if (studioIndicatorText) {
+                studioIndicatorText.textContent = studioStateLabel(st);
+            }
+            if (studioHint) {
+                const url = data.studio_url ? String(data.studio_url) : '';
+                studioHint.textContent = running
+                    ? (url ? `Предпросмотр: ${url}` : 'Предпросмотр в браузере.')
+                    : 'Studio выключен — больше RAM для рендера MP4. «Открыть в Remotion» заработает после включения.';
+            }
+        };
+
+        const fetchRemotionStudioStatus = async () => {
+            const r = await fetch(`${ROOT}/remotion-studio/status`, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+            });
+            return parseJsonOrThrow(r, 'Статус Remotion Studio');
+        };
+
+        const pollRemotionStudio = async () => {
+            try {
+                const data = await fetchRemotionStudioStatus();
+                applyRemotionStudioStatus(data);
+            } catch (_) { /* ignore background poll */ }
+        };
+
+        const setRemotionStudioEnabled = async (enabled) => {
+            if (!studioToggle || studioBusy) return;
+            studioBusy = true;
+            studioToggle.disabled = true;
+            if (studioIndicatorText) {
+                studioIndicatorText.textContent = enabled ? 'Запуск…' : 'Остановка…';
+            }
+            if (studioIndicator) studioIndicator.dataset.state = 'pending';
+            try {
+                const r = await fetch(`${ROOT}/remotion-studio/control`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ enabled: !!enabled }),
+                });
+                const data = await parseJsonOrThrow(r, 'Remotion Studio');
+                applyRemotionStudioStatus(data);
+                if (!data.ok) {
+                    openJobErrorModal(data.message || data.error || 'Не удалось переключить Studio');
+                    if (studioToggle) studioToggle.checked = !enabled;
+                }
+            } catch (e) {
+                openJobErrorModal(e.message || String(e));
+                try {
+                    const data = await fetchRemotionStudioStatus();
+                    applyRemotionStudioStatus(data);
+                } catch (_) {
+                    if (studioToggle) studioToggle.checked = !enabled;
+                }
+            } finally {
+                studioBusy = false;
+                if (studioToggle) studioToggle.disabled = false;
+            }
+        };
+
+        if (studioToggle) {
+            applyRemotionStudioStatus(initialRemotionStudio);
+            studioToggle.addEventListener('change', () => {
+                setRemotionStudioEnabled(studioToggle.checked);
+            });
+            studioPollTimer = setInterval(pollRemotionStudio, 12000);
         }
     })();
 
@@ -4148,9 +4372,10 @@
         function loadTtsSectionCollapsed() {
             try {
                 const all = JSON.parse(localStorage.getItem(TTS_SECTION_COLLAPSE_LS) || '{}');
+                if (!Object.prototype.hasOwnProperty.call(all, jobId)) return true;
                 return !!all[jobId];
             } catch (e) {
-                return false;
+                return true;
             }
         }
         function saveTtsSectionCollapsed(collapsed) {
@@ -6848,7 +7073,7 @@
                         rewrite_pipeline_language: (function () {
                             const el = document.getElementById('rewrite-pipeline-language');
                             const v = el ? String(el.value || '').trim().toLowerCase() : '';
-                            return v || 'ru';
+                            return v || 'en';
                         })(),
                         speed_pct: parseInt(document.getElementById('tts-speed').value, 10),
                         stability_pct: parseInt(document.getElementById('tts-stability').value, 10),

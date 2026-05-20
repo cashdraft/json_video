@@ -303,7 +303,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        {% set _plang_raw = (rw.rewrite_pipeline_language or 'ru')|trim|lower %}
+                        {% set _plang_raw = (rw.rewrite_pipeline_language or 'en')|trim|lower %}
                         {% if _plang_raw in ['en', 'english', 'англ'] %}
                             {% set _plang = 'en' %}
                         {% elif _plang_raw in ['es', 'spa', 'spanish', 'espanol'] %}
@@ -313,7 +313,7 @@
                         {% elif _plang_raw in ['ru', 'en', 'es', 'ja'] %}
                             {% set _plang = _plang_raw %}
                         {% else %}
-                            {% set _plang = 'ru' %}
+                            {% set _plang = 'en' %}
                         {% endif %}
                         <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-pipeline-language-field="1">
                             <h3 class="rewrite-source-subtitle">Язык</h3>
@@ -507,6 +507,19 @@
                     <div class="rewrite-stage-stack">
                         {% if stage_key != 'inbox' %}
                         <div class="rewrite-stage-row rewrite-stage-row--controls">
+                            {% if stage_key == 'scene_writer' %}
+                            {% set _sw_model = (cell.model or '')|trim %}
+                            {% if not _sw_model %}{% set _sw_model = rewrite_default_model|default('gpt-5.4') %}{% endif %}
+                            <div class="rewrite-stage-model-cell rewrite-stage-scene-writer-model-cell">
+                                <h3 class="rewrite-source-subtitle">Model</h3>
+                                <p class="rewrite-source-subhint">Модель OpenAI для Scene Writer (только этот этап).</p>
+                                <select id="rewrite-stage-{{ stage_key }}-model" class="tts-select rewrite-stage-model rewrite-stage-scene-writer-model-select" {% if not openai_key_set %}disabled{% endif %}>
+                                    {% for m in rewrite_models %}
+                                    <option value="{{ m.id }}" {% if _sw_model == m.id %}selected{% endif %}>{{ m.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% else %}
                             <div class="rewrite-stage-model-cell">
                                 <div class="slot-header rewrite-stage-compact-header">
                                     <span class="slot-badge badge-yes">Model</span>
@@ -517,6 +530,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
+                            {% endif %}
                             <div class="rewrite-stage-prompt-cell">
                                 <div class="rewrite-stage-json-export-row">
                                     <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
@@ -3677,7 +3691,7 @@ function syncSceneWriterStructureSplitterWaitOverlay() {
                     var v = String(pipelineLanguageEl.value || '').trim().toLowerCase();
                     if (v === 'en' || v === 'es' || v === 'ja' || v === 'ru') return v;
                 }
-                return 'ru';
+                return 'en';
             })(),
             stages: stages
         };

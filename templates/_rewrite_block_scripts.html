@@ -254,12 +254,7 @@
         return !REWRITE_CLAUDE_MODEL_IDS.has(m);
     }
     function readChatTemperatureFromUi() {
-        if (!chatTemperatureRangeEl) return defaultChatTemperature;
-        var v = parseFloat(String(chatTemperatureRangeEl.value), 10);
-        if (!isFinite(v)) return defaultChatTemperature;
-        if (v < 0) return 0;
-        if (v > 2) return 2;
-        return v;
+        return 0;
     }
     function syncChatTemperatureValDisplay() {
         if (!chatTemperatureValEl || !chatTemperatureRangeEl) return;
@@ -267,7 +262,9 @@
     }
     function applyChatTemperatureAvailability() {
         if (!chatTemperatureRangeEl) return;
-        chatTemperatureRangeEl.disabled = !openaiOk || rewriteStageBusy || !selectedRewriteModelIsOpenAI();
+        chatTemperatureRangeEl.value = '0';
+        chatTemperatureRangeEl.disabled = true;
+        syncChatTemperatureValDisplay();
     }
     const templateListUrl = {{ url_for('rewrite_api_templates_list') | tojson }};
     const rewriteDeleteConfirmModal = document.getElementById('rewrite-delete-confirm-modal');
@@ -4404,8 +4401,15 @@
             const key = block.getAttribute('data-stage-key');
             const promptEl = block.querySelector('.rewrite-stage-prompt');
             const resEl = block.querySelector('.rewrite-stage-result');
+            var modelSel = block.querySelector('.rewrite-stage-model');
+            var stageModel = modelSel ? String(modelSel.value || '').trim() : '';
+            if (key === 'scene_writer') {
+                stageModel = stageModel || 'gpt-5.4';
+            } else {
+                stageModel = globalModel;
+            }
             stages[key] = {
-                model: globalModel,
+                model: stageModel,
                 prompt: promptEl ? promptEl.value : '',
                 style_prompt: ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || ''),
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
@@ -4457,7 +4461,7 @@
                     var v = String(pipelineLanguageEl.value || '').trim().toLowerCase();
                     if (v === 'en' || v === 'es' || v === 'ja' || v === 'ru') return v;
                 }
-                return 'ru';
+                return 'en';
             })(),
             russian_semantic_model: langStagesModelEl ? ((langStagesModelEl.value || '').trim()) : '',
             stages: stages
@@ -5244,6 +5248,13 @@
     mountYoutubePackagingAtJobDock();
 
     document.querySelectorAll('.rewrite-stage-card').forEach(function (block) {
+        var modelEl = block.querySelector('.rewrite-stage-model');
+        if (modelEl) {
+            modelEl.addEventListener('change', function () {
+                if (!openaiOk || modelEl.disabled) return;
+                scheduleAutosave(0);
+            });
+        }
         var pe = block.querySelector('.rewrite-stage-prompt');
         if (pe) {
             syncPromptBadge(block);

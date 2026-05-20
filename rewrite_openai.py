@@ -40,7 +40,7 @@ REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}
 REWRITE_DEFAULT_MODEL = "gpt-5.4"
 
 # Единый формат POST /v1/chat/completions (OpenAI): model, temperature, messages[system,user].
-REWRITE_CHAT_TEMPERATURE = 0.7
+REWRITE_CHAT_TEMPERATURE = 0.0
 
 # Маркер конца ответа в тексте ассистента (Rewrite): System Promt просит модель
 # завершать каждый фрагмент или весь ответ этим токеном; HTTP-стрим обрываем
@@ -119,16 +119,9 @@ def strip_rewrite_stream_terminator_suffix(text: str, marker: str) -> str:
 
 
 def clamp_chat_temperature(val: Any) -> float:
-    """Диапазон 0…2 (шаг не фиксируем — UI может слать 0.05). Невалидное → дефолт конвейера."""
-    try:
-        x = float(val)
-    except (TypeError, ValueError):
-        return float(REWRITE_CHAT_TEMPERATURE)
-    if x < 0.0:
-        return 0.0
-    if x > 2.0:
-        return 2.0
-    return round(x, 4)
+    """Конвейер всегда с temperature=0 (значение из UI/project.json не используется)."""
+    del val
+    return 0.0
 
 
 def normalize_rewrite_model(model: str) -> str:

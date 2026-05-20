@@ -662,7 +662,7 @@ def normalize_rewrite_pipeline_language(value: Any) -> str:
         return "ja"
     if v in ("ru", "en", "es", "ja"):
         return v
-    return "ru"
+    return "en"
 
 
 def stages_for_preset(preset: str) -> list[str]:
@@ -1611,7 +1611,7 @@ def snapshot_rewrite_pipeline_language_from_body(
         return normalize_rewrite_pipeline_language(body.get("rewrite_pipeline_language"))
     if isinstance(job, dict):
         return normalize_rewrite_pipeline_language(job.get("rewrite_pipeline_language"))
-    return normalize_rewrite_pipeline_language("ru")
+    return normalize_rewrite_pipeline_language("en")
 
 
 def rewrite_placeholder_apply_from_request(
