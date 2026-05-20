@@ -2,7 +2,7 @@
 Подготовка ассетов и props.json для Remotion-композиции `JobMontage`.
 
 Каталог: data/job_remotion/<job_id>/
-  voiceover.mp3
+  voiceover.mp3   (по умолчанию; быстрее в Studio) или voiceover.wav (MONTAGE_VOICEOVER_WAV=1)
   media/scene_001.<ext>            (видео > start image)
   media/scene_001.kind              ("video" | "image")
   props.json
@@ -305,19 +305,43 @@ def _image_optimize_for_studio(src: Path, target_w: int, target_h: int) -> bool:
     return True
 
 
-def _transcode_voiceover_for_studio(src: Path, dst: Path) -> bool:
-    """Конвертирует озвучку в WAV PCM s16le 44.1 kHz stereo.
+def _prepare_voiceover_mp3_for_studio(src: Path, dst: Path) -> bool:
+    """Озвучка для Remotion Studio: MP3 (копия или 128k), без тяжёлого WAV.
 
-    Studio (`mediabunny`) для отрисовки волны на таймлайне вызывает
-    `AudioDecoder.isConfigSupported(...)`. В части браузеров `codec: 'mp3'` не
-    поддерживается и Studio показывает ошибку
-    "This audio track cannot be decoded by this browser". WAV PCM mediabunny
-    декодирует сам (см. `input-track.ts`: `codec.startsWith('pcm-') → true`),
-    поэтому такой формат работает везде. На рендер влияния нет — Remotion
-    подаёт wav в ffmpeg как обычно.
-
-    Возвращает True при успехе. На ошибку — оставляет dst пустым, False.
+    Длинный ролик (~20+ мин) в PCM WAV даёт сотни МБ — Studio долго строит
+    waveform на таймлайне. Исходный MP3 (~20 МБ) грузится в разы быстрее;
+    Remotion render тоже принимает MP3 через ffmpeg.
     """
+    if src.suffix.lower() == ".mp3":
+        try:
+            shutil.copyfile(src, dst)
+            return dst.is_file() and dst.stat().st_size > 0
+        except OSError:
+            pass
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i", str(src),
+        "-vn",
+        "-ac", "2",
+        "-ar", "44100",
+        "-c:a", "libmp3lame",
+        "-b:a", "128k",
+        "-map_metadata", "-1",
+        str(dst),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and dst.is_file() and dst.stat().st_size > 0
+
+
+def _transcode_voiceover_wav_pcm(src: Path, dst: Path) -> bool:
+    """WAV PCM только если явно нужен (MONTAGE_VOICEOVER_WAV=1 в .env)."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return False
@@ -382,26 +406,27 @@ def prepare_montage(
     audio_duration_ms = 0
     if isinstance(audio_src, Path) and audio_src.is_file():
         src_name = audio_src.name
-        push(
-            "audio_prepare",
-            source=src_name,
-            target="voiceover.wav",
-            detail="ffmpeg: PCM s16le, 44.1 kHz, stereo (для Remotion Studio и рендера)",
+        use_wav = (os.getenv("MONTAGE_VOICEOVER_WAV") or "").strip().lower() in (
+            "1", "true", "yes", "on",
         )
-        audio_target = base_dir / "voiceover.wav"
-        ok = _transcode_voiceover_for_studio(audio_src, audio_target)
-        if not ok:
+        if use_wav:
             push(
-                "audio_fallback",
+                "audio_prepare",
+                source=src_name,
+                target="voiceover.wav",
+                detail="MONTAGE_VOICEOVER_WAV=1: PCM WAV (медленная загрузка в Studio на длинных роликах)",
+            )
+            audio_target = base_dir / "voiceover.wav"
+            ok = _transcode_voiceover_wav_pcm(audio_src, audio_target)
+        else:
+            push(
+                "audio_prepare",
                 source=src_name,
                 target="voiceover.mp3",
-                detail="ffmpeg недоступен или ошибка — копирую исходный MP3 без перекодирования",
+                detail="MP3 для Studio (быстрая дорожка на таймлайне; рендер MP4 тоже через ffmpeg)",
             )
             audio_target = base_dir / "voiceover.mp3"
-            try:
-                shutil.copyfile(audio_src, audio_target)
-            except OSError:
-                audio_target = None
+            ok = _prepare_voiceover_mp3_for_studio(audio_src, audio_target)
         if audio_target and audio_target.is_file():
             audio_duration_ms = _audio_duration_ms_ffprobe(audio_target)
             push(
@@ -413,7 +438,7 @@ def prepare_montage(
                 format=("wav" if audio_target.suffix.lower() == ".wav" else "mp3"),
             )
         else:
-            push("audio_missing", source=src_name, detail="не удалось записать voiceover.wav / voiceover.mp3")
+            push("audio_missing", source=src_name, detail="не удалось записать voiceover.mp3 / voiceover.wav")
     else:
         push("audio_missing", source=None, detail="нет файла озвучки в data/job_audio/<job_id>/")
 

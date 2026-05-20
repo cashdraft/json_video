@@ -4750,11 +4750,35 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 
 .rewrite-scene-writer-check__block-item {
     display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
+    grid-template-columns: auto auto auto auto auto auto;
     gap: 0.45rem;
-    align-items: baseline;
+    align-items: center;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+.rewrite-scene-writer-check__block-regen {
+    padding: 0.1rem 0.35rem;
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.rewrite-scene-writer-check__block-regen:hover:not(:disabled) {
+    color: var(--accent, #6ad09d);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.rewrite-scene-writer-check__block-regen:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.rewrite-scene-writer-check__block-regen--busy {
+    animation: spin 0.9s linear infinite;
+    opacity: 0.85;
 }
 
 .rewrite-scene-writer-check__ok {
@@ -5398,14 +5422,9 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
     pointer-events: none;
 }
 
-.video-parse-panel--locked .video-json-panel-card-header {
-    position: relative;
-    z-index: 6;
-    pointer-events: auto;
-}
-
-/* Свернуто: вся шапка (заголовок + compact) под lock-оверлеем */
+/* Свернуто + заблокировано: заголовок и compact под оверлеем (клик только «Редактировать») */
 .video-json-panel--collapsible.video-json-panel--body-collapsed.video-parse-panel--locked .video-json-panel-card-header {
+    position: relative;
     z-index: auto;
     pointer-events: none;
 }
@@ -5413,6 +5432,13 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .video-json-panel--collapsible.video-json-panel--body-collapsed.video-parse-panel--locked .video-json-panel-title-row,
 .video-json-panel--collapsible.video-json-panel--body-collapsed.video-parse-panel--locked .video-json-panel-card-compact {
     pointer-events: none;
+}
+
+/* Развёрнуто + заблокировано: шапка кликабельна для сворачивания */
+.video-json-panel--collapsible:not(.video-json-panel--body-collapsed).video-parse-panel--locked .video-json-panel-card-header {
+    position: relative;
+    z-index: 6;
+    pointer-events: auto;
 }
 
 /* JSON-код сцен — источник данных (как «Источник текста» в Озвучке) */
@@ -5435,6 +5461,10 @@ button.rewrite-json-export-btn.rewrite-aux-api-export:disabled {
 .video-json-panel .settings-section {
     --vj-setting-control-h: calc(0.42rem * 2 + 1.2 * 0.9rem + 2px);
     margin-top: 1.5rem;
+}
+
+.video-json-panel .settings-section.video-json-panel-settings-first {
+    margin-top: 0;
 }
 
 .video-json-panel .settings-section .settings-grid {
@@ -7706,6 +7736,95 @@ button.job-download-all-link {
     margin: 0;
     min-height: 1.25em;
     color: var(--text-muted);
+}
+
+.job-page-bottom {
+    margin-top: 0.5rem;
+    padding-bottom: 2.5rem;
+}
+
+.job-montage-panel--page-bottom {
+    margin-top: 0.75rem;
+}
+
+.job-montage-live {
+    margin-top: 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.22);
+}
+
+.job-montage-live__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.65rem;
+}
+
+.job-montage-live__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.job-montage-live__status {
+    flex: 1 1 12rem;
+    font-size: 0.88rem;
+    line-height: 1.35;
+    color: var(--text);
+}
+
+.job-montage-live__details {
+    margin-left: auto;
+}
+
+.job-montage-live__progress {
+    margin-bottom: 0.5rem;
+}
+
+.job-montage-live__meta {
+    font-size: 0.78rem;
+}
+
+.job-montage-live__log {
+    max-height: 7rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+}
+
+.job-montage-live__log:empty {
+    display: none;
+}
+
+.job-montage-live__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.job-montage-live[data-state="idle"] .job-montage-live__progress .download-all-progress__fill {
+    opacity: 0.35;
+}
+
+.job-montage-live[data-state="busy"] {
+    border-color: color-mix(in srgb, var(--accent, #7eb8ff) 45%, var(--border));
+}
+
+.job-montage-live[data-state="done"] {
+    border-color: color-mix(in srgb, #5cb85c 35%, var(--border));
+}
+
+.job-montage-live[data-state="error"] {
+    border-color: color-mix(in srgb, #e74c3c 40%, var(--border));
 }
 
 @media (max-width: 520px) {

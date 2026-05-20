@@ -340,14 +340,14 @@
                         <span class="slot-badge badge-{{ 'yes' if tts_last_audio_href else 'no' }}" id="tts-result-badge">Voiceover</span>
                         <span class="rewrite-source-counts tts-result-duration hidden" id="tts-result-duration" aria-live="polite"></span>
                     </div>
-                    <div id="tts-result-slot" class="slot-placeholder rewrite-slot-placeholder tts-result-slot" data-status="{% if tts_last_audio_href %}done{% else %}pending{% endif %}">
+                    <div id="tts-result-slot" class="slot-placeholder rewrite-slot-placeholder tts-result-slot" data-status="{% if tts_last_audio_href %}done{% else %}pending{% endif %}"{% if tts_last_audio_href %} data-persisted-audio-url="{{ tts_last_audio_href }}" data-persisted-audio-filename="{{ tts_last_audio_name or '' }}"{% endif %}>
                         <div class="slot-status-row tts-result-status-row{% if tts_last_audio_href %} hidden{% endif %}" id="tts-result-status-row">
                             <span class="slot-status tts-result-status-text" id="tts-result-status-text">{% if not tts_last_audio_href %}Pending{% endif %}</span>
                             <button type="button" class="btn-cancel-generation hidden" id="tts-result-cancel-btn">Cancel</button>
                         </div>
                         <div id="tts-player-body" class="tts-player-body{% if not tts_last_audio_href %} tts-player-body--empty{% endif %}">
                             <div class="tts-player-bar{% if not tts_last_audio_href %} tts-player-bar--empty{% endif %}" id="tts-player-bar">
-                        <audio id="tts-player" class="tts-player-native" preload="metadata"></audio>
+                        <audio id="tts-player" class="tts-player-native" preload="metadata"{% if tts_last_audio_href %} src="{{ tts_last_audio_href }}"{% endif %}></audio>
                         <button type="button" class="tts-play-btn" id="tts-play-toggle" aria-label="Воспроизвести">
                             <svg class="tts-ic tts-ic-play" viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
                                 <path fill="currentColor" d="M8 5v14l11-7L8 5z"/>
@@ -407,11 +407,11 @@
                                     <span class="rewrite-source-counts rewrite-stage-result-counts tts-word-timings-expanded-duration" id="tts-words-counts" aria-live="polite"></span>
                                     <span id="tts-words-copy-status" class="tts-template-status hidden" aria-live="polite"></span>
                                 </div>
-                                <div id="tts-words-result-slot" class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result tts-words-result-slot" data-status="{% if tts_words_available %}done{% else %}pending{% endif %}">
+                                <div id="tts-words-result-slot" class="slot-placeholder rewrite-slot-placeholder rewrite-slot--stage-result tts-words-result-slot" data-status="{% if tts_words_available %}done{% else %}pending{% endif %}"{% if tts_last_words_href %} data-persisted-words-url="{{ tts_last_words_href }}" data-persisted-words-filename="{{ tts_last_words_name or '' }}"{% endif %}>
                                     <div class="slot-status-row tts-words-status-row whisper-words-status-row{% if tts_words_available %} hidden{% endif %}" id="tts-words-status-row">
                                         <span class="slot-status tts-words-status-text whisper-words-status-text" id="tts-words-status-text">{% if not tts_words_available %}Pending{% endif %}</span>
                                     </div>
-                                    <textarea id="tts-words-json" class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="10" spellcheck="false" placeholder="" aria-label="Тайминги Eleven (JSON)" readonly></textarea>
+                                    <textarea id="tts-words-json" class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="10" spellcheck="false" placeholder="" aria-label="Тайминги Eleven (JSON)" readonly>{% if tts_words_body %}{% autoescape false %}{{ tts_words_body | replace('</textarea>', '</te' ~ 'xtarea>') }}{% endautoescape %}{% endif %}</textarea>
                                 </div>
                             </div>
                             <div class="rewrite-scene-writer-check tts-word-timings-check" id="tts-words-check" data-word-timings-check="elevenlabs" aria-live="polite">
@@ -548,14 +548,15 @@
             <div class="video-json-panel-collapsible-inner">
             <section class="input-section">
                 {% set _json_src = json_script_source|default('scene_writer') %}
+                {% set _sw_json_result = ((rw.stages.scene_writer.last_result or '')|trim) if rw else '' %}
                 <div class="tts-script-source-block{% if not rw %} tts-script-source-block--disabled{% endif %}" id="video-json-script-source-block">
                     <h3 class="rewrite-source-subtitle">Источник текста</h3>
                     <div class="tts-script-source-options tts-script-source-options--single" role="radiogroup" aria-label="Источник JSON-кода сцен">
-                        <label class="tts-script-source-option" for="json-src-scene-writer" data-json-stage="scene_writer">
-                            <input type="radio" class="tts-script-source-option__radio" id="json-src-scene-writer" name="json_script_source" value="scene_writer" {{ 'checked' if _json_src == 'scene_writer' else '' }}{% if not rw %} disabled{% endif %}>
+                        <label class="tts-script-source-option{% if not _sw_json_result %} tts-script-source-option--no-result{% endif %}" for="json-src-scene-writer" data-json-stage="scene_writer" aria-disabled="{{ 'false' if _sw_json_result else 'true' }}">
+                            <input type="radio" class="tts-script-source-option__radio" id="json-src-scene-writer" name="json_script_source" value="scene_writer" {{ 'checked' if _json_src == 'scene_writer' else '' }}{% if not rw or not _sw_json_result %} disabled{% endif %}>
                             <span class="tts-script-source-option__main">
                                 <span class="tts-script-source-option__name">Scene Writer</span>
-                                <span class="slot-badge badge-no rewrite-stage-result-badge tts-script-source-result-badge" id="json-src-badge-scene-writer" data-json-stage="scene_writer">Result</span>
+                                <span class="slot-badge badge-{{ 'yes' if _sw_json_result else 'no' }} rewrite-stage-result-badge tts-script-source-result-badge" id="json-src-badge-scene-writer" data-json-stage="scene_writer">Result</span>
                             </span>
                         </label>
                     </div>
@@ -618,7 +619,7 @@
                     </div>
                     <div class="setting">
                         <h3 class="rewrite-source-subtitle">Resolution</h3>
-                        {% set _res = job.job_meta.resolution or '2K' %}
+                        {% set _res = job.job_meta.resolution or '1K' %}
                         <div class="resolution-toggle">
                             <input type="radio" id="res_1k" name="resolution" value="1K" {{ 'checked' if _res == '1K' else '' }}>
                             <label for="res_1k">1K</label>
@@ -629,13 +630,13 @@
                         </div>
                     </div>
                     <div class="setting setting-model-dropdown">
-                        {% set _im = job.job_meta.image_model or job.selected_image_model or 'nano-banana-pro' %}
-                        {% if _im in ['wan/2-7-image', 'qwen2/image-edit', 'gpt-image-2-image-to-image', 'grok-imagine/image-to-image'] %}{% set _im = 'nano-banana-pro' %}{% endif %}
+                        {% set _im = job.job_meta.image_model or job.selected_image_model or 'nano-banana-2' %}
+                        {% if _im in ['wan/2-7-image', 'qwen2/image-edit', 'gpt-image-2-image-to-image', 'grok-imagine/image-to-image'] %}{% set _im = 'nano-banana-2' %}{% endif %}
                         {% set _image_models = [
                             ('nano-banana-pro', 'Nano Banana Pro'),
                             ('nano-banana-2', 'Google - Nano Banana 2'),
                         ] %}
-                        {% set ns_im_lbl = namespace(d='Nano Banana Pro') %}
+                        {% set ns_im_lbl = namespace(d='Google - Nano Banana 2') %}
                         {% for mid, mlbl in _image_models %}
                         {% if _im == mid %}{% set ns_im_lbl.d = mlbl %}{% endif %}
                         {% endfor %}
@@ -831,7 +832,6 @@
                 </article>
             </div>
 
-
             <hr class="tts-divider video-json-panel-actions-divider" aria-hidden="true">
             <section class="buttons-section">
                 <button type="submit" class="btn btn-primary btn-sm">Добавить сцены</button>
@@ -894,7 +894,10 @@
         {% if rw %}
         <div id="rewrite-youtube-packaging-dock" class="rewrite-youtube-packaging-dock" aria-label="YouTube packaging engine"></div>
         {% endif %}
-        <section class="video-panel job-montage-panel" id="job-montage-panel" aria-label="Монтаж видео">
+        <hr class="rewrite-preset-section-divider job-section-divider--before-montage" aria-hidden="true">
+
+        <div class="job-page-bottom" id="job-page-bottom">
+        <section class="video-panel job-montage-panel job-montage-panel--page-bottom" id="job-montage-panel" aria-label="Монтаж видео">
             <div class="job-montage-panel__head">
                 <div class="scene-id rewrite-pipeline-runner__title job-montage-panel__title">Монтаж видео</div>
                 <p class="job-montage-panel__lead scene-text">Параметры для сборки финального ролика (озвучка + сцены). Zoom: за время сцены кадр плавно 100% → выбранный пик → 100% (Ken Burns). Fade In: в начале каждой сцены кадр появляется из чёрного за долю длительности сцены (скорость разная у коротких и длинных сцен).</p>
@@ -979,7 +982,34 @@
                 <a class="btn btn-secondary btn-sm {% if not montage_props_ready %}hidden{% endif %}" id="montage-remotion-link" href="{{ montage_remotion_open_url or '#' }}" target="_blank" rel="noopener">Открыть в Remotion</a>
             </div>
             <p class="job-montage-status scene-text" id="montage-assemble-status" aria-live="polite"></p>
+
+            <div class="job-montage-live" id="job-montage-live" data-state="idle" aria-live="polite">
+                <div class="job-montage-live__head">
+                    <span class="job-montage-live__label">Статус</span>
+                    <span class="job-montage-live__status" id="montage-live-status">Готов к сборке и рендеру</span>
+                    <button type="button" class="btn btn-secondary btn-sm job-montage-live__details hidden" id="montage-live-details-btn" title="Открыть подробный журнал в окне">Журнал</button>
+                </div>
+                <div class="download-all-progress-wrap job-montage-live__progress" id="montage-live-progress-wrap">
+                    <div
+                        class="download-all-progress"
+                        role="progressbar"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="0"
+                        id="montage-live-progress"
+                    >
+                        <div class="download-all-progress__fill" id="montage-live-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="download-all-progress-meta job-montage-live__meta" id="montage-live-meta">—</div>
+                </div>
+                <pre class="job-montage-live__log download-all-modal-log" id="montage-live-log" aria-label="Журнал монтажа"></pre>
+                <div class="job-montage-live__actions">
+                    <button type="button" class="btn btn-danger btn-sm hidden" id="montage-live-stop">Остановить рендер</button>
+                    <a class="btn btn-secondary btn-sm hidden" id="montage-live-mp4-link" href="#" target="_blank" rel="noopener" download>Скачать MP4</a>
+                </div>
+            </div>
         </section>
+        </div>
 
         <div class="confirm-modal hidden" id="montage-modal" aria-hidden="true">
             <div class="confirm-modal__backdrop" data-montage-close></div>
@@ -1995,7 +2025,8 @@
         const formatNumRu = (n) => String(Math.max(0, parseInt(n, 10) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
 
         const readSceneWriterResult = () => {
-            const ta = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-result');
+            const ta = document.getElementById('rewrite-stage-scene_writer-result')
+                || document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-result');
             if (!ta) return '';
             const v = String(ta.value || '').trim();
             if (!v || v === 'Pending' || v === 'Генерация…') return '';
@@ -2083,6 +2114,21 @@
         };
         window.__updateJsonScriptSourceBadges = updateJsonScriptSourceBadges;
 
+        window.__syncJsonScriptFromSceneWriter = function (opts) {
+            updateJsonScriptSourceBadges();
+            if (!rewritePresent || !jsonInputEl) return;
+            const fresh = readSceneWriterResult();
+            if (!fresh) return;
+            const active = getCheckedJsonScriptSource();
+            const linked = jsonScriptLinkedSource || jsonScriptSourceInitial;
+            const shouldApply = !!(opts && opts.forceApply)
+                || active === 'scene_writer'
+                || (linked === 'scene_writer' && !String(jsonInputEl.value || '').trim());
+            if (shouldApply) {
+                applyJsonScriptFromSource('scene_writer', opts && opts.hintOnly ? { hintOnly: true } : undefined);
+            }
+        };
+
         const applyJsonScriptFromSource = (source, opts) => {
             if (!rewritePresent || !jsonInputEl) return;
             const src = source || getCheckedJsonScriptSource() || jsonScriptSourceInitial;
@@ -2112,7 +2158,11 @@
             jsonScriptSyncTimer = setTimeout(() => applyJsonScriptFromSource(source), 200);
         };
 
-        updateJsonScriptSourceBadges();
+        if (typeof window.__syncJsonScriptFromSceneWriter === 'function') {
+            window.__syncJsonScriptFromSceneWriter();
+        } else {
+            updateJsonScriptSourceBadges();
+        }
         if (rewritePresent) {
             document.querySelectorAll('input[name="json_script_source"]').forEach((inp) => {
                 inp.addEventListener('change', () => {
@@ -2140,18 +2190,20 @@
                     }
                 });
             });
-            const swTa = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-result');
+            const swTa = document.getElementById('rewrite-stage-scene_writer-result')
+                || document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"] .rewrite-stage-result');
             if (swTa) {
-                swTa.addEventListener('input', () => {
-                    updateJsonScriptSourceBadges();
-                    const active = getCheckedJsonScriptSource();
-                    if (active === 'scene_writer') scheduleJsonScriptSync('scene_writer');
-                });
-                swTa.addEventListener('change', () => {
-                    updateJsonScriptSourceBadges();
-                    const active = getCheckedJsonScriptSource();
-                    if (active === 'scene_writer') scheduleJsonScriptSync('scene_writer');
-                });
+                const onSceneWriterResultEdit = () => {
+                    if (typeof window.__syncJsonScriptFromSceneWriter === 'function') {
+                        window.__syncJsonScriptFromSceneWriter();
+                    } else {
+                        updateJsonScriptSourceBadges();
+                        const active = getCheckedJsonScriptSource();
+                        if (active === 'scene_writer') scheduleJsonScriptSync('scene_writer');
+                    }
+                };
+                swTa.addEventListener('input', onSceneWriterResultEdit);
+                swTa.addEventListener('change', onSceneWriterResultEdit);
             }
             const initialChecked = getCheckedJsonScriptSource();
             const initialSrc = initialChecked || (jsonScriptSourceInitial !== 'manual' ? jsonScriptSourceInitial : null);
@@ -2494,15 +2546,9 @@
         }
     };
 
-    let parseScenesAndTimingsTimer = null;
+    /** Подстановка JSON из Scene Writer — без автоматического parse; сцены только по «Добавить сцены». */
     window.__scheduleParseScenesAndTimings = () => {
-        if (parseScenesAndTimingsTimer) clearTimeout(parseScenesAndTimingsTimer);
-        parseScenesAndTimingsTimer = setTimeout(() => {
-            parseScenesAndTimingsTimer = null;
-            const raw = jsonInputEl ? String(jsonInputEl.value || '').trim() : '';
-            if (!raw || typeof submitParseScenesAjax !== 'function') return;
-            submitParseScenesAjax({ skipConfirm: true });
-        }, 280);
+        if (typeof updateJsonStats === 'function') updateJsonStats();
     };
 
     submitParseScenesAjax = async (opts) => {
@@ -2536,9 +2582,11 @@
                     : (data.error || `HTTP ${r.status}`);
                 throw new Error(err);
             }
-            const grid = document.querySelector('.scenes-grid');
+            const grid = document.getElementById('job-scenes-grid');
             if (grid && data.scenes_html != null) {
                 grid.innerHTML = data.scenes_html;
+            } else if (data.scenes_html != null && !grid) {
+                console.warn('parse: #job-scenes-grid не найден — HTML сцен не подставлен');
             }
             const sum = data.summary || {};
             jsonParseForm.dataset.existingScenesCount = String(sum.total || 0);
@@ -2611,6 +2659,16 @@
         const progFill    = document.getElementById('montage-progress-fill');
         const progBar     = document.getElementById('montage-progress');
         const progMeta    = document.getElementById('montage-progress-meta');
+        const livePanel   = document.getElementById('job-montage-live');
+        const liveStatus  = document.getElementById('montage-live-status');
+        const liveLog     = document.getElementById('montage-live-log');
+        const liveWrap    = document.getElementById('montage-live-progress-wrap');
+        const liveFill    = document.getElementById('montage-live-progress-fill');
+        const liveBar     = document.getElementById('montage-live-progress');
+        const liveMeta    = document.getElementById('montage-live-meta');
+        const liveStop    = document.getElementById('montage-live-stop');
+        const liveMp4Link = document.getElementById('montage-live-mp4-link');
+        const liveDetailsBtn = document.getElementById('montage-live-details-btn');
         const initialActiveRenderTaskId = {{ (montage_active_render_task_id or '') | tojson }};
         const initialMp4Url = {{ (montage_mp4_url or '') | tojson }};
         if (!zoomInput || !fadeInput) return;
@@ -2717,30 +2775,70 @@
         syncLabels();
 
         let modalBusy = false;
-        let modalStopHandler = null;
-        const setModalStop = (handler) => {
-            modalStopHandler = handler || null;
-            if (!modalStop) return;
-            if (modalStopHandler) {
-                modalStop.classList.remove('hidden');
-                modalStop.disabled = false;
-            } else {
-                modalStop.classList.add('hidden');
-                modalStop.disabled = true;
-            }
+        let montageStopHandler = null;
+        const setMontageStop = (handler) => {
+            montageStopHandler = handler || null;
+            [modalStop, liveStop].forEach((btn) => {
+                if (!btn) return;
+                if (montageStopHandler) {
+                    btn.classList.remove('hidden');
+                    btn.disabled = false;
+                } else {
+                    btn.classList.add('hidden');
+                    btn.disabled = true;
+                }
+            });
         };
-        const openModal = (titleText) => {
-            if (!modal) return;
-            modalBusy = true;
-            if (modalStatus) modalStatus.textContent = titleText || 'Подготовка…';
-            if (modalLog) modalLog.textContent = '';
-            if (progFill) progFill.style.width = '0%';
-            if (progMeta) progMeta.textContent = '';
-            if (progBar) progBar.setAttribute('aria-valuenow', '0');
+        const setLiveState = (state) => {
+            if (livePanel) livePanel.dataset.state = state || 'idle';
+        };
+        const setMontageHeadline = (text) => {
+            const t = text || '';
+            if (modalStatus) modalStatus.textContent = t;
+            if (liveStatus) liveStatus.textContent = t;
+        };
+        const appendMontageLog = (line) => {
+            const t = String(line || '').trim();
+            if (!t) return;
+            [modalLog, liveLog].forEach((el) => {
+                if (!el) return;
+                el.textContent = (el.textContent ? el.textContent + '\n' : '') + t;
+                el.scrollTop = el.scrollHeight;
+            });
+            liveDetailsBtn?.classList.remove('hidden');
+        };
+        const setMontageProg = (pct, metaText) => {
+            const p = Math.max(0, Math.min(100, Math.round(pct)));
+            [progFill, liveFill].forEach((el) => { if (el) el.style.width = p + '%'; });
+            [progBar, liveBar].forEach((el) => { if (el) el.setAttribute('aria-valuenow', String(p)); });
+            if (progMeta && metaText != null) progMeta.textContent = metaText;
+            if (liveMeta && metaText != null) liveMeta.textContent = metaText;
             if (progWrap) progWrap.hidden = false;
+            if (liveWrap) liveWrap.hidden = false;
+            setLiveState('busy');
+        };
+        const resetMontageProgress = () => {
+            setMontageProg(0, '—');
+        };
+        const beginMontageTask = (titleText) => {
+            modalBusy = true;
+            setMontageHeadline(titleText || 'Подготовка…');
+            if (modalLog) modalLog.textContent = '';
+            if (liveLog) liveLog.textContent = '';
+            resetMontageProgress();
             if (modalMp4Link) modalMp4Link.classList.add('hidden');
-            setModalStop(null);
-            // Кнопка «Закрыть» доступна всегда — рендер/сборка продолжатся в фоне.
+            if (liveMp4Link) liveMp4Link.classList.add('hidden');
+            setMontageStop(null);
+            liveDetailsBtn?.classList.add('hidden');
+        };
+        const openModal = () => {
+            if (!modal) return;
+            if (liveStatus && modalStatus && !modalStatus.textContent) {
+                modalStatus.textContent = liveStatus.textContent;
+            }
+            if (liveLog && modalLog && liveLog.textContent && !modalLog.textContent) {
+                modalLog.textContent = liveLog.textContent;
+            }
             modalClose?.classList.remove('hidden');
             modal.classList.remove('hidden');
             modal.setAttribute('aria-hidden', 'false');
@@ -2750,34 +2848,28 @@
             modal.classList.add('hidden');
             modal.setAttribute('aria-hidden', 'true');
         };
-        const finishModal = (statusText) => {
+        const finishMontageTask = (statusText, state) => {
             modalBusy = false;
-            if (modalStatus) modalStatus.textContent = statusText || '';
-            setModalStop(null);
+            setMontageHeadline(statusText || '');
+            setMontageStop(null);
+            setLiveState(state || 'done');
             modalClose?.classList.remove('hidden');
         };
-        const appendLog = (line) => {
-            if (!modalLog) return;
-            const t = String(line || '').trim();
-            if (!t) return;
-            modalLog.textContent = (modalLog.textContent ? modalLog.textContent + '\n' : '') + t;
-            modalLog.scrollTop = modalLog.scrollHeight;
-        };
-        const setProg = (pct, metaText) => {
-            const p = Math.max(0, Math.min(100, Math.round(pct)));
-            if (progFill) progFill.style.width = p + '%';
-            if (progBar) progBar.setAttribute('aria-valuenow', String(p));
-            if (progMeta && metaText != null) progMeta.textContent = metaText;
-        };
+        const appendLog = appendMontageLog;
+        const setProg = setMontageProg;
+        const finishModal = (statusText) => finishMontageTask(statusText, 'done');
         modalClose?.addEventListener('click', closeModal);
         modal?.addEventListener('click', (e) => {
             if (e.target && e.target.hasAttribute('data-montage-close')) closeModal();
         });
-        modalStop?.addEventListener('click', () => {
-            if (modalStopHandler) {
-                try { modalStopHandler(); } catch (_) { /* ignore */ }
+        const onMontageStopClick = () => {
+            if (montageStopHandler) {
+                try { montageStopHandler(); } catch (_) { /* ignore */ }
             }
-        });
+        };
+        modalStop?.addEventListener('click', onMontageStopClick);
+        liveStop?.addEventListener('click', onMontageStopClick);
+        liveDetailsBtn?.addEventListener('click', openModal);
 
         const showResultButtons = (data) => {
             if (mp4Link) mp4Link.classList.add('hidden');
@@ -2820,7 +2912,7 @@
             }
 
             assembleBtn.disabled = true;
-            openModal('Запрос отправлен. Готовим ассеты для Remotion…');
+            beginMontageTask('Запрос отправлен. Готовим ассеты для Remotion…');
             try {
                 const resp = await fetch(`${ROOT}/job/${jobId}/montage/assemble`, {
                     method: 'POST',
@@ -2845,7 +2937,7 @@
                     if (ev.type === 'status') {
                         const phase = String(ev.phase || '');
                         const msg = String(ev.message || phase);
-                        if (modalStatus) modalStatus.textContent = msg;
+                        setMontageHeadline(msg);
                         appendLog(msg);
                         if (phase === 'scene_start' && typeof ev.total === 'number') {
                             scenesTotal = ev.total;
@@ -2866,7 +2958,7 @@
                         throw new Error(String(ev.error || 'Ошибка'));
                     } else if (ev.type === 'result') {
                         finalData = ev;
-                        if (modalStatus) modalStatus.textContent = String(ev.message || 'Готово.');
+                        setMontageHeadline(String(ev.message || 'Готово.'));
                         setProg(100, `Сцен с медиа: ${ev.scenes_with_media || 0} / ${ev.scenes_total || 0}`);
                     }
                 };
@@ -2907,26 +2999,27 @@
 
         let renderPollTimer = null;
         let currentRenderTaskId = '';
+        let renderPollFailCount = 0;
+        const RENDER_POLL_FAIL_MAX = 30;
         const stopRenderPoll = () => {
             if (renderPollTimer != null) { clearTimeout(renderPollTimer); renderPollTimer = null; }
+            renderPollFailCount = 0;
         };
 
         const showFinishedMp4 = (url) => {
             if (!url) return;
-            if (mp4Link) {
-                mp4Link.href = url;
-                mp4Link.classList.remove('hidden');
-            }
-            if (modalMp4Link) {
-                modalMp4Link.href = url;
-                modalMp4Link.classList.remove('hidden');
-            }
+            [mp4Link, modalMp4Link, liveMp4Link].forEach((el) => {
+                if (!el) return;
+                el.href = url;
+                el.classList.remove('hidden');
+            });
         };
 
         const cancelRender = async () => {
             if (!currentRenderTaskId && !confirm('Остановить рендер MP4?')) return;
             try {
                 if (modalStop) modalStop.disabled = true;
+                if (liveStop) liveStop.disabled = true;
                 appendLog('Остановка рендера по запросу пользователя…');
                 const q = currentRenderTaskId ? `?task_id=${encodeURIComponent(currentRenderTaskId)}` : '';
                 const r = await fetch(`${ROOT}/job/${jobId}/montage/render/cancel${q}`, {
@@ -2947,45 +3040,73 @@
                 currentRenderTaskId = taskId || '';
                 const r = await fetch(`${ROOT}/job/${jobId}/montage/render/status?task_id=${encodeURIComponent(taskId || '')}`, {
                     credentials: 'same-origin',
+                    cache: 'no-store',
                 });
                 if (r.status === 404) {
-                    // Активной задачи нет, и MP4 на диске тоже не нашли.
-                    setModalStop(null);
+                    const outProbe = await fetch(`${ROOT}/job/${jobId}/montage/file/out.mp4`, {
+                        method: 'HEAD',
+                        credentials: 'same-origin',
+                    }).catch(() => null);
+                    if (outProbe && outProbe.ok) {
+                        finishModal('Готово. MP4 уже на сервере.');
+                        showFinishedMp4(`${ROOT}/job/${jobId}/montage/file/out.mp4`);
+                        if (renderBtn) renderBtn.disabled = false;
+                        currentRenderTaskId = '';
+                        return;
+                    }
+                    setMontageStop(null);
                     if (renderBtn) renderBtn.disabled = false;
                     return;
                 }
                 const data = await parseJsonOrThrow(r, 'Статус рендера');
                 if (!data.ok) throw new Error(data.error || 'no status');
-                const pct = Number(data.progress_pct || 0);
+                renderPollFailCount = 0;
+                let pct = Number(data.progress_pct || 0);
                 const stage = String(data.stage || '');
-                if (modalStatus) modalStatus.textContent = `Рендер MP4: ${stage || 'идёт'} (${pct}%)`;
+                const fd = Number(data.frames_done);
+                const ft = Number(data.frames_total);
+                if (Number.isFinite(fd) && Number.isFinite(ft) && ft > 0) {
+                    pct = Math.min(100, Math.max(pct, Math.round((fd / ft) * 100)));
+                }
+                const framesHint = (Number.isFinite(fd) && Number.isFinite(ft) && ft > 0)
+                    ? ` · ${fd}/${ft} кадров`
+                    : '';
+                setMontageHeadline(`Рендер MP4: ${stage || 'идёт'} (${pct}%)${framesHint}`);
                 setProg(pct, data.message || '');
                 if (data.state === 'done') {
-                    finishModal('Готово. MP4 собран.');
+                    finishMontageTask('Готово. MP4 собран.', 'done');
                     showFinishedMp4(data.output_url);
                     if (renderBtn) { renderBtn.disabled = false; }
                     currentRenderTaskId = '';
                     return;
                 }
                 if (data.state === 'cancelled') {
-                    finishModal('Рендер остановлен пользователем.');
+                    finishMontageTask('Рендер остановлен пользователем.', 'idle');
                     appendLog(String(data.message || ''));
                     if (renderBtn) renderBtn.disabled = false;
                     currentRenderTaskId = '';
                     return;
                 }
                 if (data.state === 'error') {
-                    finishModal('Ошибка рендера');
+                    finishMontageTask('Ошибка рендера', 'error');
                     appendLog(String(data.error || '') + ' ' + String(data.message || ''));
                     if (renderBtn) { renderBtn.disabled = false; }
                     currentRenderTaskId = '';
                     return;
                 }
-                setModalStop(cancelRender);
+                setMontageStop(cancelRender);
                 renderPollTimer = setTimeout(() => pollRender(taskId), 1500);
             } catch (e) {
-                finishModal('Сбой опроса статуса рендера');
-                appendLog(e.message || String(e));
+                renderPollFailCount += 1;
+                const msg = e && e.message ? e.message : String(e);
+                if (renderPollFailCount < RENDER_POLL_FAIL_MAX) {
+                    appendLog(`Сбой связи (${renderPollFailCount}/${RENDER_POLL_FAIL_MAX}): ${msg} — рендер в фоне продолжается, повтор…`);
+                    setMontageHeadline(`Рендер MP4: краткий сбой опроса, повтор (${renderPollFailCount})…`);
+                    renderPollTimer = setTimeout(() => pollRender(taskId), 2500);
+                    return;
+                }
+                finishMontageTask('Сбой опроса статуса рендера', 'error');
+                appendLog(msg + ' — проверьте, идёт ли процесс на сервере (journalctl -u json-video). Обновите страницу: прогресс подтянется с диска.');
                 if (renderBtn) { renderBtn.disabled = false; }
             }
         };
@@ -2993,7 +3114,7 @@
         renderBtn?.addEventListener('click', async () => {
             renderBtn.disabled = true;
             stopRenderPoll();
-            openModal('Запрос рендера MP4 отправлен…');
+            beginMontageTask('Запрос рендера MP4 отправлен…');
             try {
                 const r = await fetch(`${ROOT}/job/${jobId}/montage/render`, {
                     method: 'POST',
@@ -3004,24 +3125,24 @@
                 const data = await parseJsonOrThrow(r, 'Рендер MP4');
                 if (!data.ok) throw new Error(data.error || data.message || 'Не удалось запустить');
                 renderBtn.dataset.taskId = String(data.task_id || '');
-                setModalStop(cancelRender);
+                setMontageStop(cancelRender);
                 pollRender(data.task_id);
             } catch (e) {
-                finishModal('Ошибка: ' + (e.message || String(e)));
+                finishMontageTask('Ошибка: ' + (e.message || String(e)), 'error');
                 renderBtn.disabled = false;
             }
         });
 
-        // Восстановление состояния после перезагрузки страницы:
-        // 1) если в памяти процесса есть активный рендер для этого job_id —
-        //    открываем модалку и подключаемся к его прогрессу;
-        // 2) иначе если на диске уже лежит готовый out.mp4 — сразу проставляем
-        //    ссылки «Скачать MP4» (на панели и в модалке, если её откроют).
+        // После F5: подключаемся к активному рендеру без модалки; готовый MP4 — ссылки внизу.
         if (initialActiveRenderTaskId) {
-            openModal('Подключаюсь к активному рендеру…');
+            beginMontageTask('Подключаюсь к активному рендеру…');
+            if (renderBtn) renderBtn.disabled = true;
+            setMontageStop(cancelRender);
             pollRender(initialActiveRenderTaskId);
         } else if (initialMp4Url) {
             showFinishedMp4(initialMp4Url);
+            setMontageHeadline('MP4 готов — можно скачать');
+            setLiveState('done');
         }
     })();
 
@@ -4168,7 +4289,15 @@
             playToggle.setAttribute('aria-label', playing ? 'Пауза' : 'Воспроизвести');
         };
 
-        const ttsHasAudioSrc = () => !!(player && String(player.currentSrc || player.src || '').trim());
+        const ttsPersistedAudioUrl = () => {
+            const fromSlot = ttsResultSlot?.getAttribute('data-persisted-audio-url') || '';
+            const fromVar = ttsLastAudioUrl || '';
+            return String(fromSlot || fromVar).trim();
+        };
+        const ttsHasAudioSrc = () => {
+            if (player && String(player.currentSrc || player.src || '').trim()) return true;
+            return !!ttsPersistedAudioUrl();
+        };
 
         const syncTtsResultBadge = () => {
             if (!ttsResultBadge) return;
@@ -4276,6 +4405,10 @@
         };
 
         const resetTtsResultUi = () => {
+            ttsResultSlot?.removeAttribute('data-persisted-audio-url');
+            ttsResultSlot?.removeAttribute('data-persisted-audio-filename');
+            wordsResultSlot?.removeAttribute('data-persisted-words-url');
+            wordsResultSlot?.removeAttribute('data-persisted-words-filename');
             if (player) {
                 try { player.pause(); } catch (_) { /* ignore */ }
                 player.removeAttribute('src');
@@ -5339,23 +5472,47 @@
             wordsWrapEl.classList.toggle('tts-word-timings-panel--body-collapsed', !!collapsed);
         }
 
-        async function renderTtsWordsFromUrl(finalData) {
-            if (!wordsWrapEl) return;
-            const url = finalData.words_url;
-            const r = await fetch(url, { headers: { Accept: 'application/json' } });
-            if (!r.ok) throw new Error(`words.json HTTP ${r.status}`);
-            const doc = await r.json();
+        function applyElevenWordsDoc(finalData, doc) {
+            if (!wordsWrapEl || !doc) return;
+            const url = (finalData && finalData.words_url) || ttsLastWordsUrl || '';
             lastWordsDoc = doc;
-            lastWordsFilename = finalData.words_filename || 'voiceover.words.json';
+            lastWordsFilename = (finalData && finalData.words_filename) || ttsLastWordsFilename || 'voiceover.words.json';
             lastWordsUrl = url;
-
             setElevenWordsPendingUi(false);
             setWordTimingsJsonField(wordsJsonEl, JSON.stringify(doc, null, 2));
-            lastWordsDoc = doc;
             wordsResultSlot?.setAttribute('data-status', 'done');
             renderWordTimingsCheck(elevenCheckEls, doc);
             syncElevenWordsResultUi(doc);
             setTtsWordsCollapsed(true);
+            if (typeof window.__notifyWordsSourceReady === 'function') {
+                window.__notifyWordsSourceReady('elevenlabs');
+            }
+        }
+
+        function hydrateElevenWordsFromTextarea() {
+            if (!wordsJsonEl) return false;
+            const raw = (wordsJsonEl.value || '').trim();
+            if (!raw || raw === 'Pending' || raw.startsWith('Загрузка') || !raw.startsWith('{')) return false;
+            try {
+                const doc = JSON.parse(raw);
+                applyElevenWordsDoc({
+                    words_url: ttsLastWordsUrl,
+                    words_filename: ttsLastWordsFilename,
+                }, doc);
+                return true;
+            } catch (e) {
+                console.warn('eleven textarea JSON parse failed:', e);
+                return false;
+            }
+        }
+
+        async function renderTtsWordsFromUrl(finalData) {
+            if (!wordsWrapEl) return;
+            const url = finalData.words_url;
+            const r = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+            if (!r.ok) throw new Error(`words.json HTTP ${r.status}`);
+            const doc = await r.json();
+            applyElevenWordsDoc(finalData, doc);
         }
 
         function applySceneAudioTimings(rows) {
@@ -6535,28 +6692,58 @@
             updateCharUi();
         }
 
-        const initLastTtsPlayer = () => {
-            if (!player || !playerWrap) return;
-            if (ttsLastAudioUrl) {
-                ttsDownloadFilename = ttsLastAudioFilename || 'voiceover.mp3';
-                currentAudioFilename = ttsLastAudioFilename || '';
-                player.src = ttsLastAudioUrl;
-                player.load();
-                if (seekEl) seekEl.value = '0';
-                if (timeCurrent) timeCurrent.textContent = '0:00';
-                if (timeTotal) timeTotal.textContent = '0:00';
-                player.pause();
-                syncTtsPlayingUi();
-                setTtsPlayerEmptyState(false);
-                setTtsPendingUi(false);
-            } else {
-                setTtsPlayerEmptyState(true);
-                setTtsPendingUi(true);
+        const restorePersistedElevenlabsFromServer = () => {
+            const audioUrl = ttsPersistedAudioUrl();
+            const audioFn = (ttsResultSlot?.getAttribute('data-persisted-audio-filename') || ttsLastAudioFilename || '').trim();
+            if (audioUrl) {
+                ttsLastAudioUrl = audioUrl;
+                ttsDownloadFilename = audioFn || 'voiceover.mp3';
+                currentAudioFilename = audioFn || '';
+                if (player) {
+                    const cur = String(player.currentSrc || player.src || '').trim();
+                    if (!cur || cur !== audioUrl) {
+                        player.src = audioUrl;
+                        player.load();
+                    }
+                    if (seekEl) seekEl.value = '0';
+                    if (timeCurrent) timeCurrent.textContent = '0:00';
+                    if (timeTotal) timeTotal.textContent = '0:00';
+                    try { player.pause(); } catch (_) { /* ignore */ }
+                    syncTtsPlayingUi();
+                    setTtsPlayerEmptyState(false);
+                    ttsResultSlot?.setAttribute('data-status', 'done');
+                    ttsResultStatusRow?.classList.add('hidden');
+                    setTtsPendingUi(false);
+                }
+            }
+            const wordsUrl = String(
+                wordsResultSlot?.getAttribute('data-persisted-words-url') || ttsLastWordsUrl || ''
+            ).trim();
+            if (wordsUrl) ttsLastWordsUrl = wordsUrl;
+            if (!hydrateElevenWordsFromTextarea() && wordsUrl) {
+                renderTtsWordsFromUrl({
+                    words_url: wordsUrl,
+                    words_filename: (wordsResultSlot?.getAttribute('data-persisted-words-filename') || ttsLastWordsFilename || ''),
+                }).catch((e) => {
+                    console.warn('restore eleven words.json failed:', e);
+                });
             }
             setTtsResultGenerating(false);
             syncTtsResultBadge();
+            syncTtsResultDuration();
+        };
+        window.__restoreJobElevenlabsFromServer = restorePersistedElevenlabsFromServer;
+
+        const initLastTtsPlayer = () => {
+            if (!player || !playerWrap) return;
+            restorePersistedElevenlabsFromServer();
+            if (!ttsHasAudioSrc()) {
+                setTtsPlayerEmptyState(true);
+                setTtsPendingUi(true);
+            }
         };
         initLastTtsPlayer();
+        setTimeout(restorePersistedElevenlabsFromServer, 0);
         if (typeof syncTtsSectionCompactSummary === 'function') {
             syncTtsSectionCompactSummary();
         }
@@ -6786,19 +6973,21 @@
             }
         });
 
-        // Авто-подгрузка тайминговго JSON при загрузке страницы, если рядом
-        // с последним MP3 на диске есть парный <stem>.words.json. Не открываем
-        // блок (остаётся свёрнутым), только заполняем summary + JSON.
-        if (ttsLastWordsUrl) {
+        // Тайминги Eleven: JSON в textarea с сервера + fetch как запасной путь (как у Whisper).
+        if (ttsLastWordsUrl || (wordsJsonEl && String(wordsJsonEl.value || '').trim().startsWith('{'))) {
             (async () => {
                 try {
-                    await renderTtsWordsFromUrl({
-                        words_url: ttsLastWordsUrl,
-                        words_filename: ttsLastWordsFilename,
-                    });
+                    if (!hydrateElevenWordsFromTextarea()) {
+                        const wUrl = ttsLastWordsUrl || wordsResultSlot?.getAttribute('data-persisted-words-url') || '';
+                        if (!wUrl) return;
+                        await renderTtsWordsFromUrl({
+                            words_url: wUrl,
+                            words_filename: ttsLastWordsFilename || wordsResultSlot?.getAttribute('data-persisted-words-filename') || '',
+                        });
+                    }
                 } catch (e) {
                     console.warn('initial words.json autoload failed:', e);
-                    hideTtsWords();
+                    if (!hydrateElevenWordsFromTextarea()) hideTtsWords();
                 }
             })();
         }

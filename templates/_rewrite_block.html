@@ -428,14 +428,11 @@
                 {% set hero_locked = rw.hero_prompt_locked|default(false) %}
                 {% set _hero_has_text = (rw.hero_prompt or '')|trim %}
                 {% set _master_has_text = (rw.master_prompt or '')|trim %}
-                {% set cur_model = (rw.stages.analysis.model or '')|trim %}
-                {% if not cur_model and rewrite_models %}
-                    {% set cur_model = rewrite_models[0].id %}
+                {% set cur_model = (rw.stages.analysis.model or rw.model or '')|trim %}
+                {% if not cur_model %}
+                    {% set cur_model = rewrite_default_model|default('gpt-5.4') %}
                 {% endif %}
                 {% set ns_gm = namespace(d='—') %}
-                {% if rewrite_models %}
-                {% set ns_gm.d = rewrite_models[0].label %}
-                {% endif %}
                 {% for m in rewrite_models %}
                 {% if cur_model == m.id %}{% set ns_gm.d = m.label %}{% endif %}
                 {% endfor %}

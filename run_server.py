@@ -17,4 +17,4 @@ if __name__ == "__main__":
     args, _unknown = pr.parse_known_args()
     if args.cookies:
         os.environ["YT_COOKIES_PATH"] = str(Path(args.cookies).expanduser().resolve())
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False, threaded=True)

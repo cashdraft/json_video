@@ -68,16 +68,16 @@ def normalize_aspect_ratio(value: str | None, default: str = "16:9") -> str:
 def create_image_task(
     prompt: str,
     aspect_ratio: str = "16:9",
-    resolution: str = "2K",
+    resolution: str = "1K",
     output_format: str = "jpg",
     image_input: list[str] | None = None,
-    model: str = "nano-banana-pro",
+    model: str = "nano-banana-2",
 ) -> Tuple[str, str]:
     """Create image generation task. Returns (taskId, model field sent in JSON body)."""
     api_key = _get_api_key()
     mid_raw = (model or "").strip().lower()
     if mid_raw not in {"nano-banana-pro", "nano-banana-2"}:
-        mid_raw = "nano-banana-pro"
+        mid_raw = "nano-banana-2"
 
     ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
     inp: dict[str, Any] = {
@@ -270,11 +270,11 @@ def get_video_1080p_result(task_id: str, index: int = 0) -> dict[str, Any]:
 def generate_image(
     prompt: str,
     aspect_ratio: str = "16:9",
-    resolution: str = "2K",
+    resolution: str = "1K",
     output_format: str = "jpg",
     poll_interval: float = 2.0,
     max_wait: float = 120.0,
-    model: str = "nano-banana-pro",
+    model: str = "nano-banana-2",
 ) -> str:
     """
     Create task, poll until done, return first result URL.

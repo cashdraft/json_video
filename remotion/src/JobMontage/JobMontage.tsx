@@ -209,6 +209,37 @@ function useScenesImagePrefetch(
   return resolved;
 }
 
+/** Предзагрузка озвучки в blob: URL — быстрее появляется дорожка в Studio. */
+function useAudioPrefetch(src: string | null | undefined): string | undefined {
+  const [resolved, setResolved] = React.useState<string | undefined>();
+  React.useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    let handle: { free: () => void } | null = null;
+    (async () => {
+      try {
+        const h = prefetch(staticFile(src), { method: "blob-url" });
+        handle = h;
+        const blobUrl = await h.waitUntilDone();
+        if (!cancelled && typeof blobUrl === "string" && blobUrl) {
+          setResolved(blobUrl);
+        }
+      } catch {
+        /* fallback: прямой staticFile */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      try {
+        handle?.free();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [src]);
+  return resolved;
+}
+
 // Если включён «плавный зум» — для коротких сцен уменьшаем пик так,
 // чтобы скорость зума совпадала с «эталоном»: peak_ref достигается за zoom_ref_seconds.
 // Для сцен ≥ zoom_ref_seconds peak остаётся полным (peak_ref).
@@ -260,6 +291,7 @@ export const JobMontage: React.FC<JobMontageProps> = ({
   );
   const seedKey = String(job_id || "job") + "::" + String(scenes.length);
   const prefetchedByRel = useScenesImagePrefetch(scenes);
+  const prefetchedAudioSrc = useAudioPrefetch(audio?.src ?? null);
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
       {scenes.map((scene, idx) => {
@@ -297,7 +329,9 @@ export const JobMontage: React.FC<JobMontageProps> = ({
           </Sequence>
         );
       })}
-      {audio?.src ? <Audio src={staticFile(audio.src)} /> : null}
+      {audio?.src ? (
+        <Audio src={prefetchedAudioSrc || staticFile(audio.src)} />
+      ) : null}
     </AbsoluteFill>
   );
 };

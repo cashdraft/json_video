@@ -37,7 +37,7 @@ REWRITE_MODELS: list[dict[str, str]] = [
 
 REWRITE_MODEL_IDS = {m["id"] for m in REWRITE_MODELS}
 
-REWRITE_DEFAULT_MODEL = "gpt-4.1"
+REWRITE_DEFAULT_MODEL = "gpt-5.4"
 
 # Единый формат POST /v1/chat/completions (OpenAI): model, temperature, messages[system,user].
 REWRITE_CHAT_TEMPERATURE = 0.7

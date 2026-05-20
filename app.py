@@ -42,6 +42,9 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env", override=True)
 
+DEFAULT_JOB_RESOLUTION = "1K"
+DEFAULT_JOB_IMAGE_MODEL = "nano-banana-2"
+
 from flask import (
     Flask,
     Response,
@@ -1061,6 +1064,19 @@ def _build_block_writer_check(completed_blocks: list[dict[str, Any]]) -> dict[st
     }
 
 
+def _scene_writer_text_match_pct(block_text: str, merged_scene_text: str) -> float:
+    """Доля совпадения текста блока Structure Splitter со склейкой text сцен (0…100)."""
+    a = _norm_ws(block_text)
+    b = _norm_ws(merged_scene_text)
+    if not a and not b:
+        return 100.0
+    if not b:
+        return 0.0
+    if a == b:
+        return 100.0
+    return round(difflib.SequenceMatcher(None, a, b).ratio() * 1000) / 10
+
+
 def _scene_writer_block_check(block: dict[str, Any], part_text: str, idx: int) -> dict[str, Any]:
     block_text = str(block.get("text") or block.get("block_text") or "")
     scenes, _ = parse_scene_blocks(part_text or "")
@@ -1079,15 +1095,18 @@ def _scene_writer_block_check(block: dict[str, Any], part_text: str, idx: int) -
             video_count += 1
     merged_scene_text = "\n".join(str(s.get("text") or "") for s in scenes)
     ok = _norm_ws(merged_scene_text) == _norm_ws(block_text)
+    match_pct = _scene_writer_text_match_pct(block_text, merged_scene_text)
     avg_chars = (char_total / len(scenes)) if scenes else 0.0
     return {
         "index": idx,
         "block_chars": len(block_text),
+        "merged_chars": len(merged_scene_text),
         "scenes": len(scenes),
         "with_start": start_count,
         "with_end": end_count,
         "with_video": video_count,
         "avg_scene_chars": round(avg_chars, 1),
+        "match_pct": match_pct,
         "ok": ok,
     }
 
@@ -1358,7 +1377,7 @@ def build_job_payload(
     video_duration: int,
     image_model: str,
     video_model: str,
-    resolution: str = "2K",
+    resolution: str = DEFAULT_JOB_RESOLUTION,
     project_name: str = "",
     image_template: str = "",
 ) -> dict:
@@ -1392,8 +1411,8 @@ def build_job_payload(
 def new_video_job_payload(project_name: str) -> dict:
     """Создает пустой video-проект (настройки и JSON редактируются на странице проекта)."""
     aspect_ratio = "16:9"
-    resolution = "2K"
-    image_model = "nano-banana-pro"
+    resolution = DEFAULT_JOB_RESOLUTION
+    image_model = DEFAULT_JOB_IMAGE_MODEL
     video_model = "veo3_fast"
     image_template = ""
     return {
@@ -3488,7 +3507,7 @@ def normalize_image_model(value: str | None) -> str:
         "qwen2/image-edit",
     ):
         return "nano-banana-pro"
-    return "nano-banana-pro"
+    return DEFAULT_JOB_IMAGE_MODEL
 
 
 def image_model_label(value: str | None) -> str:
@@ -3501,7 +3520,7 @@ def image_model_label(value: str | None) -> str:
         return "Google - Nano Banana 2"
     if mid in ("gpt-image-2-image-to-image", "grok-imagine/image-to-image", "wan/2-7-image", "qwen2/image-edit"):
         return "Nano Banana Pro"
-    return (value or "").strip() or "Nano Banana Pro"
+    return (value or "").strip() or image_model_label(DEFAULT_JOB_IMAGE_MODEL)
 
 
 # --- Routes ---
@@ -3651,6 +3670,7 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         "rewrite_preset_stage_keys": REWRITE_PRESET_STAGE_KEYS,
         "rewrite_preset_default": REWRITE_PRESET_DEFAULT,
         "rewrite_models": REWRITE_MODELS,
+        "rewrite_default_model": REWRITE_DEFAULT_MODEL,
         "claude_rewrite_model_ids": sorted(CLAUDE_MODEL_IDS),
         "default_chat_temperature": REWRITE_CHAT_TEMPERATURE,
         "rewrite_template_names": list_rewrite_template_names(),
@@ -3721,6 +3741,7 @@ def _rewrite_project_page_legacy_unused(rewrite_id: str):
                 rewrite_preset_stage_keys=REWRITE_PRESET_STAGE_KEYS,
                 rewrite_preset_default=REWRITE_PRESET_DEFAULT,
                 rewrite_models=REWRITE_MODELS,
+                rewrite_default_model=REWRITE_DEFAULT_MODEL,
                 rewrite_template_names=list_rewrite_template_names(),
                 openai_key_set=key_set,
                 voiceover_final_text=voiceover_final_text,
@@ -5840,9 +5861,30 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 ) + "\n"
                 return
             total = len(blocks)
+            only_block: int | None = None
+            only_block_raw = body.get("scene_block_index")
+            if only_block_raw is not None and str(only_block_raw).strip() != "":
+                try:
+                    only_block = int(only_block_raw)
+                except (TypeError, ValueError):
+                    only_block = None
+            if only_block is not None and (only_block < 1 or only_block > total):
+                yield json.dumps(
+                    {
+                        "type": "error",
+                        "message": f"Некорректный номер блока: {only_block} (всего {total}).",
+                    },
+                    ensure_ascii=False,
+                ) + "\n"
+                return
             acc_parts: list[str] = []
             block_checks: list[dict[str, Any]] = []
-            for i, block in enumerate(blocks, start=1):
+            block_items = (
+                [(only_block, blocks[only_block - 1])]
+                if only_block is not None
+                else list(enumerate(blocks, start=1))
+            )
+            for i, block in block_items:
                 step_user = json.dumps(
                     {
                         "scene_index": i,
@@ -5868,6 +5910,19 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                         yield json.dumps({"type": "status", "message": f"[{i}/{total}] {str(item.get('message') or '')}"}, ensure_ascii=False) + "\n"
                 acc_parts.append(part)
                 block_checks.append(_scene_writer_block_check(block, part, i))
+            if only_block is not None:
+                part_one = acc_parts[0] if acc_parts else ""
+                chk_one = block_checks[0] if block_checks else {}
+                yield json.dumps(
+                    {
+                        "type": "scene_writer_block_regen",
+                        "index": only_block,
+                        "content": part_one,
+                        "block_check": chk_one,
+                    },
+                    ensure_ascii=False,
+                ) + "\n"
+                return
             full = "\n\n".join([p for p in acc_parts if p]).strip()
             # Сохраняем переносы между блоками, но scene_id делаем сквозными: scene_001..scene_N.
             scene_idx = [0]
@@ -5883,6 +5938,21 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             total_scene_chars = sum((float(x.get("avg_scene_chars") or 0.0) * int(x.get("scenes") or 0)) for x in block_checks)
             avg_scene_chars = round((total_scene_chars / total_scenes), 1) if total_scenes else 0.0
             all_ok = (responses == total) and all(bool(x.get("ok")) for x in block_checks)
+            _match_weight = sum(
+                int(x.get("block_chars") or 0) for x in block_checks
+            )
+            if _match_weight > 0:
+                _match_pct = round(
+                    sum(
+                        float(x.get("match_pct") or 0.0)
+                        * int(x.get("block_chars") or 0)
+                        for x in block_checks
+                    )
+                    / _match_weight,
+                    1,
+                )
+            else:
+                _match_pct = 100.0 if all_ok else 0.0
             yield json.dumps(
                 {
                     "type": "scene_writer_check",
@@ -5890,6 +5960,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                         "blocks": total,
                         "responses": responses,
                         "ok": all_ok,
+                        "match_pct": _match_pct,
                         "scenes": total_scenes,
                         "with_start": total_with_start,
                         "with_end": total_with_end,
@@ -6381,7 +6452,7 @@ def _audio_timing_badge_title(source: str) -> str:
 
 def _scene_slot_header_meta_from_job(job: dict) -> tuple[str, str]:
     meta = job.get("job_meta") if isinstance(job.get("job_meta"), dict) else {}
-    res_display = meta.get("resolution") or job.get("selected_resolution") or "2K"
+    res_display = meta.get("resolution") or job.get("selected_resolution") or DEFAULT_JOB_RESOLUTION
     img_label = meta.get("image_model_label") or image_model_label(meta.get("image_model"))
     vid_label = meta.get("video_model_label") or video_model_label(meta.get("video_model"))
     return f"{res_display} · {img_label}", vid_label
@@ -6426,7 +6497,7 @@ def parse_for_job(job_id: str):
     wants_ajax = _json_video_wants_ajax()
     raw_text = request.form.get("json_input", "")
     aspect_ratio = normalize_aspect_ratio(request.form.get("aspect_ratio", "16:9"), "16:9")
-    resolution = request.form.get("resolution", "2K")
+    resolution = request.form.get("resolution", DEFAULT_JOB_RESOLUTION)
     image_model = normalize_image_model(request.form.get("image_model"))
     video_model = normalize_video_model(request.form.get("video_model", "veo3_fast"))
     image_template = request.form.get("image_template", "").strip()
@@ -6867,7 +6938,7 @@ def generate_slot_start(job_id: str):
         scene_id_key = str(scene.get("scene_id") or "").strip()
         meta = job.get("job_meta", {}) if isinstance(job.get("job_meta"), dict) else {}
         aspect_ratio = normalize_aspect_ratio(meta.get("aspect_ratio", "16:9"), "16:9")
-        resolution = meta.get("resolution", "2K")
+        resolution = meta.get("resolution", DEFAULT_JOB_RESOLUTION)
         output_format = meta.get("output_format", "jpg")
         # Выбор из выпадающих списков на странице (fetch ниже); иначе последнее сохранённое в job JSON.
         body_im = data.get("image_model")
@@ -8014,6 +8085,8 @@ def job_elevenlabs_tts_stream(job_id: str):
                 "language_code": language_code,
             }
             job["tts_last_text"] = text
+            job["tts_last_audio_name"] = fname
+            job["tts_last_words_name"] = words_filename if words_path.is_file() else ""
             scene_audio_timings: list[dict[str, Any]] = []
             scenes_list = job.get("scenes")
             if isinstance(scenes_list, list) and scenes_list and all_words:
@@ -9000,7 +9073,7 @@ def job_montage_assemble(job_id: str):
             payload.update({k: v for k, v in ev.items() if k not in ("stage",)})
             if stage == "audio_prepare":
                 payload["message"] = (
-                    f"Озвучка: из «{ev.get('source') or '?'}» → «{ev.get('target') or 'voiceover.wav'}» — "
+                    f"Озвучка: из «{ev.get('source') or '?'}» → «{ev.get('target') or 'voiceover.mp3'}» — "
                     f"{ev.get('detail') or 'подготовка…'}"
                 )
             elif stage == "audio_fallback":
@@ -9180,8 +9253,67 @@ _montage_render_lock = threading.Lock()
 _montage_render_tasks: dict[str, dict[str, Any]] = {}
 
 
+def _montage_render_state_path(job_id: str) -> Path:
+    return _job_remotion_dir(job_id) / "render_status.json"
+
+
+def _pid_is_alive(pid: Any) -> bool:
+    try:
+        p = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if p <= 0:
+        return False
+    try:
+        os.kill(p, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _persist_montage_render_state(st: dict[str, Any]) -> None:
+    """Пишет прогресс на диск — опрос статуса переживает краткие сбои сети и рестарт Flask."""
+    job_id = str(st.get("job_id") or "").strip()
+    if not job_id:
+        return
+    path = _montage_render_state_path(job_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "task_id": st.get("task_id"),
+            "job_id": job_id,
+            "state": st.get("state"),
+            "progress_pct": int(st.get("progress_pct") or 0),
+            "stage": st.get("stage"),
+            "message": st.get("message"),
+            "started_at": st.get("started_at"),
+            "finished_at": st.get("finished_at"),
+            "error": st.get("error"),
+            "output_url": st.get("output_url"),
+            "output_filename": st.get("output_filename"),
+            "pid": st.get("pid"),
+            "frames_done": st.get("frames_done"),
+            "frames_total": st.get("frames_total"),
+            "updated_at": time.time(),
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _load_montage_render_state(job_id: str) -> dict[str, Any] | None:
+    path = _montage_render_state_path(job_id)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _montage_render_view(st: dict[str, Any]) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "task_id": st.get("task_id"),
         "job_id": st.get("job_id"),
         "state": st.get("state"),
@@ -9194,16 +9326,37 @@ def _montage_render_view(st: dict[str, Any]) -> dict[str, Any]:
         "output_url": st.get("output_url"),
         "output_filename": st.get("output_filename"),
     }
+    fd = st.get("frames_done")
+    ft = st.get("frames_total")
+    if fd is not None and ft is not None:
+        try:
+            out["frames_done"] = int(fd)
+            out["frames_total"] = int(ft)
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _montage_render_update(task_id: str, **fields: Any) -> None:
+    with _montage_render_lock:
+        st = _montage_render_tasks.get(task_id)
+        if not st:
+            return
+        st.update(fields)
+        _persist_montage_render_state(st)
 
 
 def _montage_render_worker(task_id: str, job_id: str) -> None:
     props_path = _job_remotion_dir(job_id) / "props.json"
     out_path = _job_remotion_dir(job_id) / "out.mp4"
     if not props_path.is_file():
-        with _montage_render_lock:
-            st = _montage_render_tasks.get(task_id)
-            if st:
-                st.update(state="error", error="no_props", message="props.json не найден", finished_at=time.time())
+        _montage_render_update(
+            task_id,
+            state="error",
+            error="no_props",
+            message="props.json не найден",
+            finished_at=time.time(),
+        )
         return
     if out_path.exists():
         try:
@@ -9226,10 +9379,7 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
         "--log=info",
     ]
 
-    with _montage_render_lock:
-        st = _montage_render_tasks.get(task_id)
-        if st:
-            st.update(state="running", stage="bundle", message="Запуск Remotion render…")
+    _montage_render_update(task_id, state="running", stage="bundle", message="Запуск Remotion render…")
 
     try:
         proc = subprocess.Popen(
@@ -9242,23 +9392,19 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
             bufsize=1,
         )
     except OSError as exc:
-        with _montage_render_lock:
-            st = _montage_render_tasks.get(task_id)
-            if st:
-                st.update(
-                    state="error",
-                    error="spawn_failed",
-                    message=f"Не удалось запустить npx remotion: {exc}",
-                    finished_at=time.time(),
-                )
+        _montage_render_update(
+            task_id,
+            state="error",
+            error="spawn_failed",
+            message=f"Не удалось запустить npx remotion: {exc}",
+            finished_at=time.time(),
+        )
         return
 
     pct_re = re.compile(r"(\d{1,3})\s*%")
+    frames_re = re.compile(r"Rendered\s+(\d+)\s*/\s*(\d+)", re.IGNORECASE)
     last_line = ""
-    with _montage_render_lock:
-        st = _montage_render_tasks.get(task_id)
-        if st:
-            st["pid"] = proc.pid
+    _montage_render_update(task_id, pid=proc.pid)
 
     if proc.stdout is not None:
         for raw in proc.stdout:
@@ -9266,6 +9412,8 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
             last_line = line
             stage = None
             pct = None
+            frames_done = None
+            frames_total = None
             lo = line.lower()
             if "bundl" in lo:
                 stage = "bundle"
@@ -9285,14 +9433,28 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
                         pct = p
                 except ValueError:
                     pct = None
-            with _montage_render_lock:
-                st = _montage_render_tasks.get(task_id)
-                if st:
-                    if stage:
-                        st["stage"] = stage
-                    if pct is not None:
-                        st["progress_pct"] = pct
-                    st["message"] = line[:240]
+            mf = frames_re.search(line)
+            if mf:
+                try:
+                    cur_f = int(mf.group(1))
+                    tot_f = int(mf.group(2))
+                    if tot_f > 0 and cur_f >= 0:
+                        frames_done = cur_f
+                        frames_total = tot_f
+                        pct = min(100, max(0, int(round(100.0 * cur_f / tot_f))))
+                        stage = stage or "rendering"
+                except ValueError:
+                    pass
+            upd: dict[str, Any] = {"message": line[:240]}
+            if stage:
+                upd["stage"] = stage
+            if pct is not None:
+                upd["progress_pct"] = pct
+            if frames_done is not None:
+                upd["frames_done"] = frames_done
+            if frames_total is not None:
+                upd["frames_total"] = frames_total
+            _montage_render_update(task_id, **upd)
 
     rc = proc.wait()
 
@@ -9301,32 +9463,38 @@ def _montage_render_worker(task_id: str, job_id: str) -> None:
         if not st:
             return
         cancelled = bool(st.get("cancel_requested"))
-        if cancelled:
-            st.update(
-                state="cancelled",
-                stage="cancelled",
-                error="cancelled",
-                message="Рендер остановлен пользователем.",
-                finished_at=time.time(),
-            )
-        elif rc == 0 and out_path.is_file():
-            st.update(
-                state="done",
-                progress_pct=100,
-                stage="done",
-                message="Рендер MP4 завершён.",
-                finished_at=time.time(),
-                output_filename="out.mp4",
-                output_url=url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
-            )
-        else:
-            st.update(
-                state="error",
-                stage=st.get("stage") or "error",
-                error=f"exit_code={rc}",
-                message=("Ошибка рендера: " + (last_line[:240] if last_line else "")) or "Ошибка рендера",
-                finished_at=time.time(),
-            )
+    if cancelled:
+        _montage_render_update(
+            task_id,
+            state="cancelled",
+            stage="cancelled",
+            error="cancelled",
+            message="Рендер остановлен пользователем.",
+            finished_at=time.time(),
+        )
+    elif rc == 0 and out_path.is_file():
+        _montage_render_update(
+            task_id,
+            state="done",
+            progress_pct=100,
+            stage="done",
+            message="Рендер MP4 завершён.",
+            finished_at=time.time(),
+            output_filename="out.mp4",
+            output_url=url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
+        )
+    else:
+        with _montage_render_lock:
+            st = _montage_render_tasks.get(task_id)
+            prev_stage = (st or {}).get("stage") or "error"
+        _montage_render_update(
+            task_id,
+            state="error",
+            stage=prev_stage,
+            error=f"exit_code={rc}",
+            message=("Ошибка рендера: " + (last_line[:240] if last_line else "")) or "Ошибка рендера",
+            finished_at=time.time(),
+        )
 
 
 @app.route("/job/<job_id>/montage/render", methods=["POST"])
@@ -9357,6 +9525,7 @@ def job_montage_render(job_id: str):
             "pid": None,
         }
         st = _montage_render_tasks[task_id]
+        _persist_montage_render_state(st)
 
     threading.Thread(target=_montage_render_worker, args=(task_id, job_id), daemon=True).start()
     return jsonify({"ok": True, **_montage_render_view(st)})
@@ -9375,8 +9544,17 @@ def job_montage_render_status(job_id: str):
                     st = candidate
                     break
         if not st:
-            # Активной/недавней задачи нет, но MP4 уже мог быть отрендерен ранее
-            # (сервис мог быть перезапущен — память _montage_render_tasks теряется).
+            disk = _load_montage_render_state(job_id)
+            if disk and disk.get("job_id") == job_id:
+                dstate = str(disk.get("state") or "")
+                if dstate in ("queued", "running") and _pid_is_alive(disk.get("pid")):
+                    tid = str(disk.get("task_id") or "")
+                    if tid:
+                        with _montage_render_lock:
+                            _montage_render_tasks[tid] = dict(disk)
+                    return jsonify({"ok": True, **_montage_render_view(disk)})
+                if dstate in ("done", "cancelled", "error"):
+                    return jsonify({"ok": True, **_montage_render_view(disk)})
             out_path = _job_remotion_dir(job_id) / "out.mp4"
             if out_path.is_file():
                 return jsonify({
@@ -9494,13 +9672,13 @@ def job_page(job_id: str):
         meta = job["job_meta"]
         meta.setdefault("aspect_ratio", job.get("selected_aspect_ratio", "16:9"))
         meta.setdefault("video_duration", job.get("selected_video_duration", 10))
-        meta.setdefault("image_model", job.get("selected_image_model", "nano-banana-pro"))
+        meta.setdefault("image_model", job.get("selected_image_model", DEFAULT_JOB_IMAGE_MODEL))
         meta["image_model"] = normalize_image_model(meta.get("image_model"))
         meta["image_model_label"] = image_model_label(meta.get("image_model"))
         meta.setdefault("video_model", job.get("selected_video_model", "veo3_fast"))
         meta["video_model"] = normalize_video_model(meta.get("video_model"))
         meta["video_model_label"] = video_model_label(meta.get("video_model"))
-        meta.setdefault("resolution", job.get("selected_resolution", "2K"))
+        meta.setdefault("resolution", job.get("selected_resolution", DEFAULT_JOB_RESOLUTION))
         meta.setdefault("output_format", "jpg")
         meta.setdefault("image_template", job.get("selected_image_template", ""))
 
@@ -9516,7 +9694,7 @@ def job_page(job_id: str):
     template_display = job_template_display(meta.get("image_template", ""))
     elevenlabs_key_set = bool((os.getenv("ELEVENLABS_API_KEY") or "").strip())
     openai_key_set = bool((os.getenv("OPENAI_API_KEY") or "").strip())
-    res_display = meta.get("resolution") or job.get("selected_resolution") or "2K"
+    res_display = meta.get("resolution") or job.get("selected_resolution") or DEFAULT_JOB_RESOLUTION
     img_label = meta.get("image_model_label") or image_model_label(meta.get("image_model"))
     vid_label = meta.get("video_model_label") or video_model_label(meta.get("video_model"))
     scene_slot_image_header_meta = f"{res_display} · {img_label}"
@@ -9531,8 +9709,14 @@ def job_page(job_id: str):
     whisper_last_words_name: str | None = None
     whisper_initial_final_ev: dict[str, Any] | None = None
     whisper_words_body: str | None = None
+    tts_words_body: str | None = None
     if job_has_audio and audio_dir.is_dir():
         mp3s = sorted(audio_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+        meta_audio = str(job.get("tts_last_audio_name") or "").strip()
+        if meta_audio and _safe_job_audio_filename(meta_audio):
+            meta_path = audio_dir / meta_audio
+            if meta_path.is_file() and all(p.name != meta_audio for p in mp3s):
+                mp3s = [meta_path] + list(mp3s)
         if mp3s:
             tts_last_audio_name = mp3s[0].name
             tts_last_audio_href = url_for("job_audio_file", job_id=job_id, filename=mp3s[0].name)
@@ -9543,6 +9727,10 @@ def job_page(job_id: str):
             if words_path.is_file():
                 tts_last_words_name = words_candidate
                 tts_last_words_href = url_for("job_audio_file", job_id=job_id, filename=words_candidate)
+                try:
+                    tts_words_body = words_path.read_text(encoding="utf-8")
+                except OSError:
+                    tts_words_body = None
             # Whisper-результат (если есть) — авто-восстановление блока после рефреша.
             whisper_candidate = base_stem + ".whisper.words.json"
             whisper_path = audio_dir / whisper_candidate
@@ -9617,6 +9805,14 @@ def job_page(job_id: str):
             if _cand.get("job_id") == job_id and _cand.get("state") in ("queued", "running"):
                 montage_active_render_task_id = _tid
                 break
+    if not montage_active_render_task_id:
+        disk_render = _load_montage_render_state(job_id)
+        if (
+            disk_render
+            and str(disk_render.get("state") or "") in ("queued", "running")
+            and _pid_is_alive(disk_render.get("pid"))
+        ):
+            montage_active_render_task_id = str(disk_render.get("task_id") or "")
     rewrite_ctx = _rewrite_template_context(job_id)
     apply_timings_source_val = (
         _timings_source_normalize(job.get("apply_timings_source"))
@@ -9663,6 +9859,7 @@ def job_page(job_id: str):
         whisper_last_words_name=whisper_last_words_name,
         whisper_initial_final_ev=whisper_initial_final_ev,
         whisper_words_body=whisper_words_body,
+        tts_words_body=tts_words_body,
         apply_timings_source=(
             # Источник, выбранный пользователем ранее (если до сих пор валиден),
             # иначе — лучший доступный (Whisper при наличии, иначе ElevenLabs).
