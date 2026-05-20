@@ -706,6 +706,25 @@
         if (rw) rw.value = (st.rewrite && st.rewrite.prompt) || '';
         if (sw) sw.value = (st.scene_writer && st.scene_writer.prompt) || '';
         if (swStyle) swStyle.value = (st.scene_writer && st.scene_writer.style_prompt) || '';
+        var applyMode = window.applyRewriteModeForSelect || window.applySceneLengthModeForSelect;
+        var sceneLenSel = document.getElementById('rte-scene-length-mode');
+        if (sceneLenSel && applyMode) {
+            applyMode(sceneLenSel, data.scene_length_mode || 'standard');
+        } else if (sceneLenSel) {
+            sceneLenSel.value = data.scene_length_mode || 'standard';
+        }
+        var imageStyleSel = document.getElementById('rte-image-style-mode');
+        if (imageStyleSel && applyMode) {
+            applyMode(imageStyleSel, data.image_style_mode || 'hero_everywhere');
+        } else if (imageStyleSel) {
+            imageStyleSel.value = data.image_style_mode || 'hero_everywhere';
+        }
+        var videoStyleSel = document.getElementById('rte-video-style-mode');
+        if (videoStyleSel && applyMode) {
+            applyMode(videoStyleSel, data.video_style_mode || 'manual');
+        } else if (videoStyleSel) {
+            videoStyleSel.value = data.video_style_mode || 'manual';
+        }
 
         modal.querySelectorAll('[data-rte-prompt]').forEach(function (block) {
             var ta = block.querySelector('[data-rte-field]');
@@ -863,6 +882,9 @@
                 description: descEl ? descEl.value : '',
                 hero_prompt: (document.getElementById('rte-hero') || {}).value || '',
                 master_prompt: (document.getElementById('rte-master') || {}).value || '',
+                scene_length_mode: (document.getElementById('rte-scene-length-mode') || {}).value || 'standard',
+                image_style_mode: (document.getElementById('rte-image-style-mode') || {}).value || 'hero_everywhere',
+                video_style_mode: (document.getElementById('rte-video-style-mode') || {}).value || 'manual',
                 stages: readStagesPayload(),
                 tts_defaults: readTtsPayload(),
             };
@@ -1014,6 +1036,14 @@
         if (!modal.contains(ev.target)) return;
         if (ev.target.closest('[data-rte-model-field="tts-voice"]')) return;
         closeRteVoicePanelsExcept(null);
+    });
+
+    ['rte-scene-length-mode', 'rte-image-style-mode', 'rte-video-style-mode'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', function () {
+            void queueSaveTemplateAndNotify();
+        });
     });
 
     window.openRewriteTemplateEditor = openModal;

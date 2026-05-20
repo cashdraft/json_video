@@ -24,6 +24,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -41,6 +42,16 @@ from dotenv import load_dotenv
 # Загружаем .env из каталога приложения (не из cwd): systemd/uwsgi могут иметь другой cwd.
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env", override=True)
+
+from montage_render_shared import (
+    load_render_state as _load_montage_render_state,
+    persist_render_state as _persist_montage_render_state,
+    pid_is_alive as _pid_is_alive,
+    reconcile_render_state as _montage_render_reconcile,
+    render_state_view as _montage_render_view,
+    sync_render_state_disk as _montage_render_sync_disk,
+    tail_render_log as _tail_montage_render_log,
+)
 
 DEFAULT_JOB_RESOLUTION = "1K"
 DEFAULT_JOB_IMAGE_MODEL = "nano-banana-2"
@@ -156,6 +167,9 @@ from rewrite_pipeline import (
     normalize_rewrite_job_data,
     rewrite_placeholder_apply_from_request,
     snapshot_master_prompt_from_body,
+    snapshot_image_style_mode_from_body,
+    snapshot_scene_length_mode_from_body,
+    snapshot_video_style_mode_from_body,
     snapshot_original_title_from_body,
     snapshot_pipeline_extras_from_body,
     snapshot_rewrite_pipeline_language_from_body,
@@ -163,6 +177,9 @@ from rewrite_pipeline import (
     stage_run_prerequisites_met,
     _stage_user_prompt_text,
 )
+from image_style_modes import image_style_modes_for_ui
+from scene_length_modes import scene_length_modes_for_ui
+from video_style_modes import video_style_modes_for_ui
 from rewrite_templates import (
     REWRITE_TEMPLATES_DIR,
     REWRITE_TEMPLATE_SCOPE_STAGE_KEYS,
@@ -3074,6 +3091,9 @@ def new_rewrite_payload(rewrite_id: str, project_name: str) -> dict:
         "target_chars": clamp_target_chars(5 * 344),
         "duration_minutes": 5,
         "hero_prompt": "",
+        "scene_length_mode": "standard",
+        "image_style_mode": "hero_everywhere",
+        "video_style_mode": "manual",
         "chars_per_minute": 344,
         "rewrite_template": "",
         "rewrite_pipeline_language": "en",
@@ -3608,14 +3628,19 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
     (не валидный ID или папка отсутствует) — возвращает `{"rw": None}`,
     `{% if rw %}` в `job.html` сам обрабатывает пустой случай.
     """
+    _mode_opts = {
+        "rewrite_scene_length_modes": scene_length_modes_for_ui(),
+        "rewrite_image_style_modes": image_style_modes_for_ui(),
+        "rewrite_video_style_modes": video_style_modes_for_ui(),
+    }
     if not rewrite_id_ok(rewrite_id):
-        return {"rw": None}
+        return {"rw": None, **_mode_opts}
     rw = load_rewrite_job(rewrite_id)
     if rw is None:
         _ensure_rewrite_project_for_unified_id(rewrite_id)
         rw = load_rewrite_job(rewrite_id)
     if rw is None:
-        return {"rw": None}
+        return {"rw": None, **_mode_opts}
     st = rw.get("stages")
     if not isinstance(st, dict):
         st = {}
@@ -3684,6 +3709,9 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
             name: locked_prompt_public_state(name)
             for name in LOCKED_PROMPTS_REGISTRY.keys()
         },
+        "rewrite_scene_length_modes": scene_length_modes_for_ui(),
+        "rewrite_image_style_modes": image_style_modes_for_ui(),
+        "rewrite_video_style_modes": video_style_modes_for_ui(),
     }
 
 
@@ -3952,6 +3980,11 @@ def rewrite_api_template_put(name: str):
         name_key,
         hero_prompt=str(body.get("hero_prompt") or ""),
         master_prompt=str(body.get("master_prompt") or ""),
+        scene_length_mode=str(body.get("scene_length_mode") or existing.get("scene_length_mode") or "standard"),
+        image_style_mode=str(
+            body.get("image_style_mode") or existing.get("image_style_mode") or "hero_everywhere"
+        ),
+        video_style_mode=str(body.get("video_style_mode") or existing.get("video_style_mode") or "manual"),
         target_chars=None,
         stages=stages,
         description=str(body.get("description") or ""),
@@ -4072,6 +4105,12 @@ def rewrite_project_save(rewrite_id: str):
         rw["hero_prompt"] = str(body.get("hero_prompt") or "")
     if h_lock_in is not None:
         rw["hero_prompt_locked"] = bool(h_lock_in)
+    if "scene_length_mode" in body:
+        rw["scene_length_mode"] = snapshot_scene_length_mode_from_body(body, rw)
+    if "image_style_mode" in body:
+        rw["image_style_mode"] = snapshot_image_style_mode_from_body(body, rw)
+    if "video_style_mode" in body:
+        rw["video_style_mode"] = snapshot_video_style_mode_from_body(body, rw)
 
     at_lock_in = body.get("audio_timing_locked") if "audio_timing_locked" in body else None
     if "target_chars" in body and body.get("target_chars") is not None and str(body.get("target_chars", "")).strip() != "":
@@ -5717,6 +5756,9 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
             preset=preset,
             pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
             chat_temperature=chat_temp,
+            scene_length_mode=snapshot_scene_length_mode_from_body(body, rw_job),
+            image_style_mode=snapshot_image_style_mode_from_body(body, rw_job),
+            video_style_mode=snapshot_video_style_mode_from_body(body, rw_job),
         )
         if compose_err:
             yield json.dumps({"type": "error", "message": compose_err}, ensure_ascii=False) + "\n"
@@ -6316,6 +6358,9 @@ def rewrite_project_api_payload(rewrite_id: str):
         preset=preset_ap,
         pipeline_language=snapshot_rewrite_pipeline_language_from_body(body, rw_job),
         chat_temperature=chat_temp,
+        scene_length_mode=snapshot_scene_length_mode_from_body(body, rw_job),
+        image_style_mode=snapshot_image_style_mode_from_body(body, rw_job),
+        video_style_mode=snapshot_video_style_mode_from_body(body, rw_job),
     )
     if err:
         return jsonify({"ok": False, "message": err}), 400
@@ -9332,358 +9377,71 @@ _REMOTION_NPX = shutil.which("npx") or "/usr/bin/npx"
 _REMOTION_NODE = shutil.which("node") or "/usr/bin/node"
 
 
-_montage_render_lock = threading.Lock()
-_montage_render_tasks: dict[str, dict[str, Any]] = {}
-
-# Без прогресса столько секунд → state=stuck (процесс ещё жив).
-_MONTAGE_RENDER_STUCK_SEC = max(
-    60,
-    int(os.environ.get("MONTAGE_RENDER_STUCK_SEC", "300") or 300),
-)
+_MONTAGE_RENDER_WORKER = BASE_DIR / "montage_render_worker.py"
 
 
 def _montage_render_state_path(job_id: str) -> Path:
     return _job_remotion_dir(job_id) / "render_status.json"
 
 
-def _pid_is_alive(pid: Any) -> bool:
-    try:
-        p = int(pid)
-    except (TypeError, ValueError):
-        return False
-    if p <= 0:
-        return False
-    try:
-        os.kill(p, 0)
-        return True
-    except OSError:
-        return False
-
-
-def _persist_montage_render_state(st: dict[str, Any]) -> None:
-    """Пишет прогресс на диск — опрос статуса переживает краткие сбои сети и рестарт Flask."""
+def _montage_render_enrich_view(st: dict[str, Any]) -> dict[str, Any]:
+    """Добавляет URL для API/UI поверх disk-only состояния."""
+    out = _montage_render_view(st)
     job_id = str(st.get("job_id") or "").strip()
-    if not job_id:
-        return
-    path = _montage_render_state_path(job_id)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "task_id": st.get("task_id"),
-            "job_id": job_id,
-            "state": st.get("state"),
-            "progress_pct": int(st.get("progress_pct") or 0),
-            "stage": st.get("stage"),
-            "message": st.get("message"),
-            "started_at": st.get("started_at"),
-            "finished_at": st.get("finished_at"),
-            "error": st.get("error"),
-            "error_detail": st.get("error_detail"),
-            "exit_code": st.get("exit_code"),
-            "output_url": st.get("output_url"),
-            "output_filename": st.get("output_filename"),
-            "pid": st.get("pid"),
-            "frames_done": st.get("frames_done"),
-            "frames_total": st.get("frames_total"),
-            "last_progress_at": st.get("last_progress_at"),
-            "last_log_line": st.get("last_log_line"),
-            "stuck_at": st.get("stuck_at"),
-            "stuck_reason": st.get("stuck_reason"),
-            "updated_at": time.time(),
-        }
-        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    except OSError:
-        pass
-
-
-def _load_montage_render_state(job_id: str) -> dict[str, Any] | None:
-    path = _montage_render_state_path(job_id)
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, TypeError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def _montage_render_view(st: dict[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = {
-        "task_id": st.get("task_id"),
-        "job_id": st.get("job_id"),
-        "state": st.get("state"),
-        "progress_pct": int(st.get("progress_pct") or 0),
-        "stage": st.get("stage"),
-        "message": st.get("message"),
-        "started_at": st.get("started_at"),
-        "finished_at": st.get("finished_at"),
-        "error": st.get("error"),
-        "error_detail": st.get("error_detail"),
-        "exit_code": st.get("exit_code"),
-        "output_url": st.get("output_url"),
-        "output_filename": st.get("output_filename"),
-        "last_progress_at": st.get("last_progress_at"),
-        "last_log_line": st.get("last_log_line"),
-        "stuck_at": st.get("stuck_at"),
-        "stuck_reason": st.get("stuck_reason"),
-        "updated_at": st.get("updated_at"),
-    }
-    fd = st.get("frames_done")
-    ft = st.get("frames_total")
-    if fd is not None and ft is not None:
-        try:
-            out["frames_done"] = int(fd)
-            out["frames_total"] = int(ft)
-        except (TypeError, ValueError):
-            pass
+    if st.get("state") == "done" and st.get("output_filename"):
+        out["output_url"] = url_for(
+            "job_montage_file", job_id=job_id, filename=str(st.get("output_filename"))
+        )
+    if job_id:
+        out["log_url"] = url_for("job_montage_render_log", job_id=job_id)
     return out
 
 
-def _montage_render_touch_progress(st: dict[str, Any], **fields: Any) -> None:
-    """Обновляет last_progress_at при реальном движении прогресса."""
-    sig_before = (
-        st.get("progress_pct"),
-        st.get("frames_done"),
-        st.get("frames_total"),
-        st.get("stage"),
-    )
-    progressish = any(
-        k in fields
-        for k in ("progress_pct", "frames_done", "frames_total", "stage", "message")
-    )
-    if not progressish:
-        return
-    sig_after = (
-        fields.get("progress_pct", st.get("progress_pct")),
-        fields.get("frames_done", st.get("frames_done")),
-        fields.get("frames_total", st.get("frames_total")),
-        fields.get("stage", st.get("stage")),
-    )
-    if sig_after != sig_before:
-        st["last_progress_at"] = time.time()
-        st.pop("stuck_at", None)
-        st.pop("stuck_reason", None)
-        if st.get("state") == "stuck":
-            st["state"] = "running"
-
-
-def _montage_render_reconcile(st: dict[str, Any]) -> dict[str, Any]:
-    """Проверка «завис» / «процесс умер» для running|queued|stuck; пишет причину на диск."""
-    state = str(st.get("state") or "")
-    if state not in ("queued", "running", "stuck"):
-        return st
-    now = time.time()
+def _montage_render_supervisor_alive(st: dict[str, Any]) -> bool:
+    sup = st.get("supervisor_pid")
+    if sup is not None and _pid_is_alive(sup):
+        return True
     pid = st.get("pid")
-    if pid is not None and not _pid_is_alive(pid):
-        st.update({
-            "state": "error",
-            "error": "process_died",
-            "error_detail": (
-                "Процесс Remotion на сервере завершился (PID не отвечает). "
-                "Возможны нехватка RAM, kill или падение npx."
-            ),
-            "finished_at": st.get("finished_at") or now,
-            "message": st.get("message") or "Процесс рендера не найден",
-        })
-        return st
-    last_prog = float(st.get("last_progress_at") or st.get("started_at") or now)
-    idle_sec = max(0.0, now - last_prog)
-    if idle_sec >= _MONTAGE_RENDER_STUCK_SEC:
-        if not st.get("stuck_at"):
-            st["stuck_at"] = now
-            last_msg = str(st.get("last_log_line") or st.get("message") or "").strip()
-            st["stuck_reason"] = (
-                f"Нет прогресса {int(idle_sec)} с · этап «{st.get('stage') or '?'}» · "
-                f"{int(st.get('progress_pct') or 0)}% · кадры "
-                f"{st.get('frames_done') if st.get('frames_done') is not None else '?'}/"
-                f"{st.get('frames_total') if st.get('frames_total') is not None else '?'}"
-                + (f" · лог: {last_msg[:200]}" if last_msg else "")
-            )
-        st["state"] = "stuck"
-    elif state == "stuck" and idle_sec < _MONTAGE_RENDER_STUCK_SEC:
-        st["state"] = "running"
-    return st
+    return pid is not None and _pid_is_alive(pid)
 
 
-def _montage_render_sync_disk(st: dict[str, Any]) -> dict[str, Any]:
-    st = _montage_render_reconcile(st)
-    _persist_montage_render_state(st)
-    return st
+def _montage_render_active_disk(job_id: str) -> dict[str, Any] | None:
+    disk = _load_montage_render_state(job_id)
+    if not disk or disk.get("job_id") != job_id:
+        return None
+    disk = _montage_render_sync_disk(disk)
+    if str(disk.get("state") or "") in ("queued", "running", "stuck") and _montage_render_supervisor_alive(
+        disk
+    ):
+        return disk
+    return None
 
 
-def _montage_render_update(task_id: str, **fields: Any) -> None:
-    with _montage_render_lock:
-        st = _montage_render_tasks.get(task_id)
-        if not st:
-            return
-        if "message" in fields and fields["message"]:
-            fields = dict(fields)
-            fields["last_log_line"] = str(fields["message"])[:500]
-        _montage_render_touch_progress(st, **fields)
-        st.update(fields)
-        _persist_montage_render_state(st)
-
-
-def _montage_render_worker(task_id: str, job_id: str) -> None:
-    props_path = _job_remotion_dir(job_id) / "props.json"
-    out_path = _job_remotion_dir(job_id) / "out.mp4"
-    if not props_path.is_file():
-        _montage_render_update(
-            task_id,
-            state="error",
-            error="no_props",
-            message="props.json не найден",
-            finished_at=time.time(),
-        )
-        return
-    if out_path.exists():
-        try:
-            out_path.unlink()
-        except OSError:
-            pass
-
+def _spawn_montage_render_supervisor(job_id: str, task_id: str) -> int | None:
+    """Отдельный процесс воркера (не daemon-поток Flask)."""
+    cmd = [
+        sys.executable,
+        str(_MONTAGE_RENDER_WORKER),
+        "--job-id",
+        job_id,
+        "--task-id",
+        task_id,
+    ]
     env = dict(os.environ)
     env["PATH"] = "/usr/bin:" + env.get("PATH", "")
-
-    cmd = [
-        _REMOTION_NPX,
-        "--no",
-        "remotion",
-        "render",
-        "src/index.ts",
-        "JobMontage",
-        str(out_path),
-        f"--props={props_path.resolve()}",
-        "--log=info",
-    ]
-
-    _montage_render_update(
-        task_id,
-        state="running",
-        stage="bundle",
-        message="Запуск Remotion render…",
-        last_progress_at=time.time(),
-    )
-
     try:
         proc = subprocess.Popen(
             cmd,
-            cwd=str(_REMOTION_DIR),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
+            cwd=str(BASE_DIR),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             env=env,
-            bufsize=1,
+            start_new_session=True,
         )
-    except OSError as exc:
-        _montage_render_update(
-            task_id,
-            state="error",
-            error="spawn_failed",
-            error_detail=f"Не удалось запустить npx remotion: {exc}",
-            message=f"Не удалось запустить npx remotion: {exc}",
-            finished_at=time.time(),
-        )
-        return
-
-    pct_re = re.compile(r"(\d{1,3})\s*%")
-    frames_re = re.compile(r"Rendered\s+(\d+)\s*/\s*(\d+)", re.IGNORECASE)
-    last_line = ""
-    _montage_render_update(task_id, pid=proc.pid)
-
-    if proc.stdout is not None:
-        for raw in proc.stdout:
-            line = raw.rstrip("\n")
-            last_line = line
-            stage = None
-            pct = None
-            frames_done = None
-            frames_total = None
-            lo = line.lower()
-            if "bundl" in lo:
-                stage = "bundle"
-            elif "rendering frames" in lo or "rendering" in lo:
-                stage = "rendering"
-            elif "encoding" in lo:
-                stage = "encoding"
-            elif "muxing" in lo or "stitching" in lo:
-                stage = "muxing"
-            elif "done" in lo and "ms" in lo:
-                stage = "done"
-            m = pct_re.search(line)
-            if m:
-                try:
-                    p = int(m.group(1))
-                    if 0 <= p <= 100:
-                        pct = p
-                except ValueError:
-                    pct = None
-            mf = frames_re.search(line)
-            if mf:
-                try:
-                    cur_f = int(mf.group(1))
-                    tot_f = int(mf.group(2))
-                    if tot_f > 0 and cur_f >= 0:
-                        frames_done = cur_f
-                        frames_total = tot_f
-                        pct = min(100, max(0, int(round(100.0 * cur_f / tot_f))))
-                        stage = stage or "rendering"
-                except ValueError:
-                    pass
-            upd: dict[str, Any] = {"message": line[:240]}
-            if stage:
-                upd["stage"] = stage
-            if pct is not None:
-                upd["progress_pct"] = pct
-            if frames_done is not None:
-                upd["frames_done"] = frames_done
-            if frames_total is not None:
-                upd["frames_total"] = frames_total
-            _montage_render_update(task_id, **upd)
-
-    rc = proc.wait()
-
-    with _montage_render_lock:
-        st = _montage_render_tasks.get(task_id)
-        if not st:
-            return
-        cancelled = bool(st.get("cancel_requested"))
-    if cancelled:
-        _montage_render_update(
-            task_id,
-            state="cancelled",
-            stage="cancelled",
-            error="cancelled",
-            message="Рендер остановлен пользователем.",
-            finished_at=time.time(),
-        )
-    elif rc == 0 and out_path.is_file():
-        _montage_render_update(
-            task_id,
-            state="done",
-            progress_pct=100,
-            stage="done",
-            message="Рендер MP4 завершён.",
-            finished_at=time.time(),
-            output_filename="out.mp4",
-            output_url=url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
-        )
-    else:
-        with _montage_render_lock:
-            st = _montage_render_tasks.get(task_id)
-            prev_stage = (st or {}).get("stage") or "error"
-        err_msg = ("Ошибка рендера: " + (last_line[:240] if last_line else "")) or "Ошибка рендера"
-        _montage_render_update(
-            task_id,
-            state="error",
-            stage=prev_stage,
-            error=f"exit_code={rc}",
-            exit_code=rc,
-            error_detail=err_msg,
-            last_log_line=last_line[:500] if last_line else None,
-            message=err_msg,
-            finished_at=time.time(),
-        )
+        return int(proc.pid)
+    except OSError:
+        return None
 
 
 @app.route("/job/<job_id>/montage/render", methods=["POST"])
@@ -9694,127 +9452,142 @@ def job_montage_render(job_id: str):
     if not props_path.is_file():
         return jsonify({"ok": False, "error": "no_props", "message": "Сначала запустите подготовку («Смонтировать видео»)."}), 400
 
-    with _montage_render_lock:
-        for tid, st in _montage_render_tasks.items():
-            if st.get("job_id") == job_id and st.get("state") in ("queued", "running"):
-                return jsonify({"ok": True, **_montage_render_view(st)})
-        task_id = uuid.uuid4().hex
-        _now = time.time()
-        _montage_render_tasks[task_id] = {
-            "task_id": task_id,
-            "job_id": job_id,
-            "state": "queued",
-            "progress_pct": 0,
-            "stage": "queued",
-            "message": "Поставлено в очередь",
-            "started_at": _now,
-            "last_progress_at": _now,
-            "finished_at": None,
-            "error": None,
-            "error_detail": None,
-            "exit_code": None,
-            "output_url": None,
-            "output_filename": None,
-            "pid": None,
-            "last_log_line": None,
-            "stuck_at": None,
-            "stuck_reason": None,
-        }
-        st = _montage_render_tasks[task_id]
-        _persist_montage_render_state(st)
+    active = _montage_render_active_disk(job_id)
+    if active:
+        return jsonify({"ok": True, **_montage_render_enrich_view(active)})
 
-    threading.Thread(target=_montage_render_worker, args=(task_id, job_id), daemon=True).start()
-    return jsonify({"ok": True, **_montage_render_view(st)})
+    task_id = uuid.uuid4().hex
+    _now = time.time()
+    st: dict[str, Any] = {
+        "task_id": task_id,
+        "job_id": job_id,
+        "state": "queued",
+        "progress_pct": 0,
+        "stage": "queued",
+        "message": "Запуск воркера рендера…",
+        "started_at": _now,
+        "last_progress_at": _now,
+        "finished_at": None,
+        "error": None,
+        "error_detail": None,
+        "exit_code": None,
+        "output_url": None,
+        "output_filename": None,
+        "pid": None,
+        "supervisor_pid": None,
+        "last_log_line": None,
+        "stuck_at": None,
+        "stuck_reason": None,
+        "cancel_requested": False,
+    }
+    _persist_montage_render_state(st)
+
+    sup_pid = _spawn_montage_render_supervisor(job_id, task_id)
+    if sup_pid is None:
+        st.update({
+            "state": "error",
+            "error": "spawn_failed",
+            "error_detail": "Не удалось запустить montage_render_worker.py",
+            "message": "Не удалось запустить воркер рендера",
+            "finished_at": time.time(),
+        })
+        _persist_montage_render_state(st)
+        return jsonify({"ok": False, "error": "spawn_failed", "message": st["message"]}), 500
+
+    st["supervisor_pid"] = sup_pid
+    st["state"] = "running"
+    st["stage"] = "starting"
+    st["message"] = f"Воркер рендера запущен (pid {sup_pid})"
+    _persist_montage_render_state(st)
+    return jsonify({"ok": True, **_montage_render_enrich_view(st)})
 
 
 @app.route("/job/<job_id>/montage/render/status")
 def job_montage_render_status(job_id: str):
     task_id = (request.args.get("task_id") or "").strip()
-    st: dict[str, Any] | None = None
-    with _montage_render_lock:
-        cand = _montage_render_tasks.get(task_id)
-        if cand and cand.get("job_id") == job_id:
-            st = dict(cand)
-        else:
-            for tid, candidate in _montage_render_tasks.items():
-                if candidate.get("job_id") == job_id and (
-                    candidate.get("state") in ("queued", "running", "stuck") or not task_id
-                ):
-                    st = dict(candidate)
-                    break
+    disk = _load_montage_render_state(job_id)
+    if disk and disk.get("job_id") == job_id:
+        if task_id and str(disk.get("task_id") or "") != task_id:
+            disk = None
+    if disk and disk.get("job_id") == job_id:
+        disk = _montage_render_sync_disk(disk)
+        dstate = str(disk.get("state") or "")
+        if dstate in ("done", "cancelled", "error", "stuck"):
+            if dstate == "done" and not disk.get("output_url"):
+                disk = dict(disk)
+                disk["output_filename"] = disk.get("output_filename") or "out.mp4"
+            return jsonify({"ok": True, **_montage_render_enrich_view(disk)})
+        if dstate in ("queued", "running", "stuck"):
+            return jsonify({"ok": True, **_montage_render_enrich_view(disk)})
 
-    if not st:
-        disk = _load_montage_render_state(job_id)
-        if disk and disk.get("job_id") == job_id:
-            disk = _montage_render_sync_disk(disk)
-            dstate = str(disk.get("state") or "")
-            if dstate in ("queued", "running", "stuck") and _pid_is_alive(disk.get("pid")):
-                tid = str(disk.get("task_id") or "")
-                if tid:
-                    with _montage_render_lock:
-                        _montage_render_tasks[tid] = dict(disk)
-                return jsonify({"ok": True, **_montage_render_view(disk)})
-            if dstate in ("done", "cancelled", "error", "stuck"):
-                return jsonify({"ok": True, **_montage_render_view(disk)})
-        out_path = _job_remotion_dir(job_id) / "out.mp4"
-        if out_path.is_file():
-            return jsonify({
-                "ok": True,
-                "task_id": None,
-                "job_id": job_id,
-                "state": "done",
-                "progress_pct": 100,
-                "stage": "done",
-                "message": "MP4 уже готов.",
-                "started_at": None,
-                "finished_at": out_path.stat().st_mtime,
-                "error": None,
-                "output_url": url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
-                "output_filename": "out.mp4",
-            })
-        return jsonify({"ok": False, "error": "not_found"}), 404
+    out_path = _job_remotion_dir(job_id) / "out.mp4"
+    if out_path.is_file():
+        return jsonify({
+            "ok": True,
+            "task_id": None,
+            "job_id": job_id,
+            "state": "done",
+            "progress_pct": 100,
+            "stage": "done",
+            "message": "MP4 уже готов.",
+            "started_at": None,
+            "finished_at": out_path.stat().st_mtime,
+            "error": None,
+            "output_url": url_for("job_montage_file", job_id=job_id, filename="out.mp4"),
+            "output_filename": "out.mp4",
+            "log_url": url_for("job_montage_render_log", job_id=job_id),
+        })
+    return jsonify({"ok": False, "error": "not_found"}), 404
 
-    st = _montage_render_sync_disk(st)
-    with _montage_render_lock:
-        tid = str(st.get("task_id") or "")
-        if tid and tid in _montage_render_tasks:
-            _montage_render_tasks[tid] = st
-    return jsonify({"ok": True, **_montage_render_view(st)})
+
+@app.route("/job/<job_id>/montage/render/log")
+def job_montage_render_log(job_id: str):
+    """Хвост render.log — источник правды для UI, не зависит от процесса Flask."""
+    if load_job(job_id) is None:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+    max_bytes = 96_000
+    try:
+        max_bytes = max(4000, min(512_000, int(request.args.get("max_bytes", max_bytes))))
+    except (TypeError, ValueError):
+        pass
+    log_text = _tail_montage_render_log(job_id, max_bytes=max_bytes)
+    return jsonify({
+        "ok": True,
+        "job_id": job_id,
+        "log": log_text,
+        "has_log": bool(log_text),
+    })
 
 
 @app.route("/job/<job_id>/montage/render/cancel", methods=["POST"])
 def job_montage_render_cancel(job_id: str):
-    """Останавливает активный рендер Remotion для job_id (kill -TERM по PID)."""
+    """Останавливает воркер рендера (SIGTERM supervisor → воркер гасит npx)."""
     if load_job(job_id) is None:
         return jsonify({"ok": False, "error": "Job not found"}), 404
     task_id = (request.args.get("task_id") or "").strip()
-    target = None
-    with _montage_render_lock:
-        if task_id:
-            cand = _montage_render_tasks.get(task_id)
-            if cand and cand.get("job_id") == job_id:
-                target = cand
-        if target is None:
-            for _tid, cand in _montage_render_tasks.items():
-                if cand.get("job_id") == job_id and cand.get("state") in ("queued", "running"):
-                    target = cand
-                    break
-        if target is None:
-            return jsonify({"ok": False, "error": "not_found"}), 404
-        pid = target.get("pid")
-        target["cancel_requested"] = True
-        target["message"] = "Остановка по запросу пользователя…"
+    target = _load_montage_render_state(job_id)
+    if not target or target.get("job_id") != job_id:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if task_id and str(target.get("task_id") or "") != task_id:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if str(target.get("state") or "") not in ("queued", "running", "stuck"):
+        return jsonify({"ok": False, "error": "not_running"}), 400
 
-    if pid:
+    target = dict(target)
+    target["cancel_requested"] = True
+    target["message"] = "Остановка по запросу пользователя…"
+    _persist_montage_render_state(target)
+
+    sup = target.get("supervisor_pid")
+    if sup is not None:
         try:
-            os.kill(int(pid), signal.SIGTERM)
+            os.kill(int(sup), signal.SIGTERM)
         except (ProcessLookupError, PermissionError, ValueError, OSError) as exc:
-            with _montage_render_lock:
-                target["message"] = f"Не удалось остановить процесс: {exc}"
+            target["message"] = f"Не удалось остановить воркер: {exc}"
+            _persist_montage_render_state(target)
             return jsonify({"ok": False, "error": str(exc)}), 500
 
-    with _montage_render_lock:
-        return jsonify({"ok": True, **_montage_render_view(target)})
+    return jsonify({"ok": True, **_montage_render_enrich_view(target)})
 
 
 @app.route("/job/<job_id>/download-all")
@@ -10011,16 +9784,11 @@ def job_page(job_id: str):
     disk_render = _load_montage_render_state(job_id)
     if disk_render and disk_render.get("job_id") == job_id:
         disk_render = _montage_render_sync_disk(disk_render)
-        montage_render_snapshot = _montage_render_view(disk_render)
-    with _montage_render_lock:
-        for _tid, _cand in _montage_render_tasks.items():
-            if _cand.get("job_id") == job_id and _cand.get("state") in ("queued", "running", "stuck"):
-                montage_active_render_task_id = _tid
-                break
-    if not montage_active_render_task_id and disk_render:
+        montage_render_snapshot = _montage_render_enrich_view(disk_render)
+    if disk_render:
         if (
             str(disk_render.get("state") or "") in ("queued", "running", "stuck")
-            and _pid_is_alive(disk_render.get("pid"))
+            and _montage_render_supervisor_alive(disk_render)
         ):
             montage_active_render_task_id = str(disk_render.get("task_id") or "")
     rewrite_ctx = _rewrite_template_context(job_id)

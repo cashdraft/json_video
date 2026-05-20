@@ -239,6 +239,11 @@
         return !!document.querySelector('.rewrite-stage-card .rewrite-stage-status-row:not(.hidden)');
     }
     const REWRITE_TEMPLATE_NAMES_ON_DISK = {{ rewrite_template_names | tojson }};
+    const REWRITE_WRITER_MODE_OPTIONS = {
+        scene_length: {{ rewrite_scene_length_modes | default([]) | tojson }},
+        image_style: {{ rewrite_image_style_modes | default([]) | tojson }},
+        video_style: {{ rewrite_video_style_modes | default([]) | tojson }}
+    };
     const globalModelEl = document.getElementById('rewrite-global-model');
     const pipelineLanguageEl = document.getElementById('rewrite-pipeline-language');
     const langStagesModelEl = document.getElementById('rewrite-stages-lang-model');
@@ -1181,12 +1186,61 @@
         return {
             hero_prompt: snap.hero_prompt,
             master_prompt: snap.master_prompt,
+            scene_length_mode: snap.scene_length_mode || 'standard',
+            image_style_mode: snap.image_style_mode || 'hero_everywhere',
+            video_style_mode: snap.video_style_mode || 'manual',
             stages: collectTemplateScopeStages(snap.stages)
         };
     }
 
+    function modeOptionsListForWrap(wrap) {
+        if (!wrap) return [];
+        var key = wrap.getAttribute('data-mode-options-key') || '';
+        if (typeof REWRITE_WRITER_MODE_OPTIONS !== 'undefined' && key && REWRITE_WRITER_MODE_OPTIONS[key]) {
+            return REWRITE_WRITER_MODE_OPTIONS[key];
+        }
+        return [];
+    }
+
+    function applyRewriteModeForSelect(select, mode) {
+        if (!select) return;
+        var m = String(mode || '').trim().toLowerCase();
+        if (!m) return;
+        select.value = m;
+        var wrap = select.closest('.rewrite-mode-dropdown-field');
+        var field = wrap && wrap.querySelector('[data-rewrite-mode-field]');
+        if (!field) return;
+        field.querySelectorAll('input.rewrite-mode-dropdown-radio').forEach(function (r) {
+            r.checked = r.value === m;
+        });
+        var rb = field.querySelector('input.rewrite-mode-dropdown-radio:checked');
+        var lbl = field.querySelector('[data-rewrite-mode-label]');
+        if (!lbl) return;
+        var lab = rb && rb.closest('label');
+        var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
+        if (title) {
+            lbl.textContent = String(title.textContent || '').trim();
+            return;
+        }
+        var opts = modeOptionsListForWrap(wrap);
+        for (var i = 0; i < opts.length; i++) {
+            if (opts[i].id === m) {
+                lbl.textContent = opts[i].label;
+                break;
+            }
+        }
+    }
+    window.applyRewriteModeForSelect = applyRewriteModeForSelect;
+    window.applySceneLengthModeForSelect = applyRewriteModeForSelect;
+
     function populateRewriteFormFromTemplateData(data) {
         if (!data) return;
+        var sceneLenSel = document.getElementById('rewrite-scene-length-mode');
+        if (sceneLenSel) applyRewriteModeForSelect(sceneLenSel, data.scene_length_mode || 'standard');
+        var imageStyleSel = document.getElementById('rewrite-image-style-mode');
+        if (imageStyleSel) applyRewriteModeForSelect(imageStyleSel, data.image_style_mode || 'hero_everywhere');
+        var videoStyleSel = document.getElementById('rewrite-video-style-mode');
+        if (videoStyleSel) applyRewriteModeForSelect(videoStyleSel, data.video_style_mode || 'manual');
         if (heroPromptEl) heroPromptEl.value = data.hero_prompt || '';
         refreshHeroBadge();
         if (masterEl) masterEl.value = data.master_prompt || '';
@@ -4453,6 +4507,18 @@
             chat_temperature: readChatTemperatureFromUi(),
             hero_prompt: heroPromptEl ? heroPromptEl.value : '',
             hero_prompt_locked: heroLocked,
+            scene_length_mode: (function () {
+                var el = document.getElementById('rewrite-scene-length-mode');
+                return el ? String(el.value || '').trim() : 'standard';
+            })(),
+            image_style_mode: (function () {
+                var el = document.getElementById('rewrite-image-style-mode');
+                return el ? String(el.value || '').trim() : 'hero_everywhere';
+            })(),
+            video_style_mode: (function () {
+                var el = document.getElementById('rewrite-video-style-mode');
+                return el ? String(el.value || '').trim() : 'manual';
+            })(),
             audio_timing_locked: false,
             rewrite_template: templateSelectEl ? (templateSelectEl.value || '').trim() : '',
             rewrite_preset: currentRewritePreset || 'deep',
@@ -6119,6 +6185,15 @@
     }
 
     applyAllLockUIs();
+    (function () {
+        ['rewrite-scene-length-mode', 'rewrite-image-style-mode', 'rewrite-video-style-mode'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', function () {
+                scheduleAutosave(0);
+            });
+        });
+    })();
     ytBootstrapFromServer();
     refreshYtCookiesStatusFromServer();
     refreshYtProxyStatusFromServer();
@@ -6809,6 +6884,66 @@
                 closeAllPanelsExcept(null);
                 scheduleAutosave(0);
             });
+        });
+    })();
+
+    (function initRewriteModeDropdowns() {
+        function closeAllPanelsExcept(except) {
+            document.querySelectorAll('.rewrite-anim-dropdown__panel').forEach(function (p) {
+                if (p === except) return;
+                p.hidden = true;
+                var b = p.parentElement && p.parentElement.querySelector('.rewrite-anim-dropdown__btn');
+                if (b) b.setAttribute('aria-expanded', 'false');
+            });
+        }
+        document.querySelectorAll('[data-rewrite-mode-field]').forEach(function (field) {
+            var wrap = field.closest('.rewrite-mode-dropdown-field');
+            var select = wrap && wrap.querySelector('.rewrite-mode-dropdown-select-hidden');
+            var fall = {};
+            modeOptionsListForWrap(wrap).forEach(function (x) {
+                fall[x.id] = x.label;
+            });
+            var btn = field.querySelector('.rewrite-anim-dropdown__btn');
+            var panel = field.querySelector('.rewrite-anim-dropdown__panel');
+            function syncSelectFromRadios() {
+                var checked = field.querySelector('input.rewrite-mode-dropdown-radio:checked');
+                if (checked && select) select.value = checked.value;
+            }
+            function updateBtnLabel() {
+                var checked = field.querySelector('input.rewrite-mode-dropdown-radio:checked');
+                var lbl = field.querySelector('[data-rewrite-mode-label]');
+                if (!lbl || !checked) return;
+                var lab = checked.closest('label');
+                var title = lab ? lab.querySelector('.rewrite-anim-option__title') : null;
+                lbl.textContent = title ? String(title.textContent || '').trim() : (fall[checked.value] || checked.value);
+            }
+            function closePanel() {
+                if (panel) panel.hidden = true;
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+            if (btn && panel) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var open = !panel.hidden;
+                    if (open) {
+                        closePanel();
+                    } else {
+                        closeAllPanelsExcept(panel);
+                        panel.hidden = false;
+                        btn.setAttribute('aria-expanded', 'true');
+                    }
+                });
+            }
+            field.querySelectorAll('input.rewrite-mode-dropdown-radio').forEach(function (rb) {
+                rb.addEventListener('change', function () {
+                    syncSelectFromRadios();
+                    updateBtnLabel();
+                    closeAllPanelsExcept(null);
+                    if (select) select.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+            syncSelectFromRadios();
+            updateBtnLabel();
         });
     })();
 

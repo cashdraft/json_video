@@ -1,0 +1,3 @@
+{% with field_title='Стиль Image', mode_options=rewrite_image_style_modes|default([]), mode_value=image_style_value, default_mode_id='hero_everywhere', mode_valid_ids=['hero_everywhere', 'data_infographic', 'hybrid'], mode_select_id=image_style_select_id|default('rewrite-image-style-mode'), mode_radio_name=image_style_radio_name|default('rewrite-image-style-radio'), mode_options_key='image_style', macro_token='IMAGE_STYLE_RULES', macro_subhint='правила start.prompt для выбранного стиля', extra_class=extra_class|default('') %}
+{% include '_rewrite_mode_dropdown_field.html' %}
+{% endwith %}

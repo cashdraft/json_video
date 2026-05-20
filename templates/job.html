@@ -2845,15 +2845,12 @@
             if (!liveIncident) return;
             liveIncident.value = String(text || '');
         };
-        const applyMontageRenderIncident = (data) => {
-            if (!liveIncident) return;
-            if (!data) {
-                setMontageRenderLogValue('');
-                return;
-            }
+        const buildMontageRenderIncidentSummary = (data) => {
+            if (!data) return '';
             const lines = [];
             const st = String(data.state || '');
             if (data.started_at) lines.push('Старт на сервере: ' + formatMontageTs(data.started_at));
+            if (data.supervisor_pid) lines.push('Воркер (supervisor_pid): ' + String(data.supervisor_pid));
             if (data.last_progress_at && st !== 'done') {
                 lines.push('Последний прогресс: ' + formatMontageTs(data.last_progress_at));
             }
@@ -2874,9 +2871,38 @@
                 if (data.finished_at) lines.push('Отменено: ' + formatMontageTs(data.finished_at));
                 if (data.message) lines.push(String(data.message));
             }
-            if (data.last_log_line) lines.push('Последняя строка лога: ' + String(data.last_log_line));
+            if (data.last_log_line) lines.push('Последняя строка: ' + String(data.last_log_line));
             if (data.updated_at) lines.push('Обновлено на сервере: ' + formatMontageTs(data.updated_at));
-            setMontageRenderLogValue(lines.join('\n'));
+            return lines.join('\n');
+        };
+        const applyMontageRenderIncident = (data, logTail) => {
+            if (!liveIncident) return;
+            if (!data) {
+                setMontageRenderLogValue('');
+                return;
+            }
+            const summary = buildMontageRenderIncidentSummary(data);
+            const tail = String(logTail || '').trim();
+            if (tail) {
+                setMontageRenderLogValue(
+                    (summary ? summary + '\n\n--- render.log (воркер, не Flask) ---\n' : '--- render.log ---\n') + tail
+                );
+            } else {
+                setMontageRenderLogValue(summary);
+            }
+        };
+        const fetchMontageRenderLog = async () => {
+            try {
+                const r = await fetch(`${ROOT}/job/${jobId}/montage/render/log`, {
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                });
+                if (!r.ok) return '';
+                const data = await r.json().catch(() => ({}));
+                return data.ok ? String(data.log || '') : '';
+            } catch (_) {
+                return '';
+            }
         };
         const applyMontageRenderPoll = (data) => {
             if (!data) return;
@@ -2899,7 +2925,7 @@
                 setLiveState('busy');
             }
             setProg(pct, data.message || '');
-            applyMontageRenderIncident(data);
+            applyMontageRenderIncident(data, null);
         };
         const setMontageHeadline = (text) => {
             const t = text || '';
@@ -3173,10 +3199,11 @@
                 const data = await parseJsonOrThrow(r, 'Статус рендера');
                 if (!data.ok) throw new Error(data.error || 'no status');
                 renderPollFailCount = 0;
+                const logTail = await fetchMontageRenderLog();
                 applyMontageRenderPoll(data);
+                applyMontageRenderIncident(data, logTail);
                 if (data.state === 'done') {
                     finishMontageTask('Готово. MP4 собран.', 'done');
-                    applyMontageRenderIncident(data);
                     showFinishedMp4(data.output_url);
                     if (renderBtn) { renderBtn.disabled = false; }
                     currentRenderTaskId = '';
@@ -3184,14 +3211,12 @@
                 }
                 if (data.state === 'cancelled') {
                     finishMontageTask('Рендер остановлен пользователем.', 'idle');
-                    applyMontageRenderIncident(data);
                     if (renderBtn) renderBtn.disabled = false;
                     currentRenderTaskId = '';
                     return;
                 }
                 if (data.state === 'error') {
                     finishMontageTask('Ошибка рендера', 'error');
-                    applyMontageRenderIncident(data);
                     if (renderBtn) { renderBtn.disabled = false; }
                     currentRenderTaskId = '';
                     return;
@@ -3208,7 +3233,7 @@
                     return;
                 }
                 finishMontageTask('Сбой опроса статуса рендера', 'error');
-                appendLog(msg + ' — проверьте, идёт ли процесс на сервере (journalctl -u json-video). Обновите страницу: прогресс подтянется с диска.');
+                appendLog(msg + ' — рендер в отдельном воркере: data/job_remotion/' + jobId + '/render.log и render_status.json. Обновите страницу.');
                 if (renderBtn) { renderBtn.disabled = false; }
             }
         };
@@ -3241,14 +3266,17 @@
             beginMontageTask('Подключаюсь к активному рендеру…');
             if (renderBtn) renderBtn.disabled = true;
             setMontageStop(cancelRender);
-            if (initialMontageRender) applyMontageRenderPoll(initialMontageRender);
+            if (initialMontageRender) {
+                applyMontageRenderPoll(initialMontageRender);
+                fetchMontageRenderLog().then((tail) => applyMontageRenderIncident(initialMontageRender, tail));
+            }
             pollRender(initialActiveRenderTaskId);
         } else if (initialMontageRender) {
             const ir = initialMontageRender;
             const irState = String(ir.state || '');
+            fetchMontageRenderLog().then((tail) => applyMontageRenderIncident(ir, tail));
             if (irState === 'error') {
                 finishMontageTask('Ошибка рендера (сохранено на сервере)', 'error');
-                applyMontageRenderIncident(ir);
                 if (renderBtn) renderBtn.disabled = false;
             } else if (irState === 'stuck') {
                 finishMontageTask('Рендер завис (сохранено на сервере)', 'stuck');
@@ -3256,12 +3284,10 @@
                 if (renderBtn) renderBtn.disabled = false;
             } else if (irState === 'cancelled') {
                 finishMontageTask('Рендер был отменён', 'idle');
-                applyMontageRenderIncident(ir);
             } else if (irState === 'done') {
                 if (initialMp4Url) showFinishedMp4(initialMp4Url);
                 setMontageHeadline('MP4 готов — можно скачать');
                 setLiveState('done');
-                applyMontageRenderIncident(ir);
             }
         } else if (initialMp4Url) {
             showFinishedMp4(initialMp4Url);

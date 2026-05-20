@@ -1,0 +1,3 @@
+{% with field_title='Стиль Video', mode_options=rewrite_video_style_modes|default([]), mode_value=video_style_value, default_mode_id='manual', mode_valid_ids=['manual', 'cinematic', 'by_intensity'], mode_select_id=video_style_select_id|default('rewrite-video-style-mode'), mode_radio_name=video_style_radio_name|default('rewrite-video-style-radio'), mode_options_key='video_style', macro_token='VIDEO_STYLE_RULES', macro_subhint='правила video.prompt для выбранного стиля', extra_class=extra_class|default('') %}
+{% include '_rewrite_mode_dropdown_field.html' %}
+{% endwith %}

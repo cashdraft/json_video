@@ -10,6 +10,9 @@
 - {{ORIGINAL_TITLE}} — исходное название ролика (одна строка)
 - {{MASTER_PROMT}} — Master Promt (вставка с двойным переноса \\n\\n вокруг непустого текста)
 - {{HERO_PROMT}} — Hero Promt (аналогично)
+- {{SCENE_LENGTH_RULES}} — правила длины сцены Scene Writer (режим из настроек job/шаблона)
+- {{IMAGE_STYLE_RULES}} — правила start.prompt (стиль Image)
+- {{VIDEO_STYLE_RULES}} — правила video.prompt (стиль Video)
 """
 
 from __future__ import annotations
@@ -17,12 +20,19 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from image_style_modes import PH_IMAGE_STYLE_RULES, image_style_rules_text
+from scene_length_modes import PH_SCENE_LENGTH_RULES, scene_length_rules_text
+from video_style_modes import PH_VIDEO_STYLE_RULES, video_style_rules_text
+
 PH_LANGUAGE = "{{LANGUAGE}}"
 PH_DURATION = "{{DURATION}}"
 PH_TARGET_CHARS = "{{TARGET_CHARS}}"
 PH_ORIGINAL_TITLE = "{{ORIGINAL_TITLE}}"
 PH_MASTER = "{{MASTER_PROMT}}"
 PH_HERO = "{{HERO_PROMT}}"
+PH_SCENE_LENGTH = PH_SCENE_LENGTH_RULES
+PH_IMAGE_STYLE = PH_IMAGE_STYLE_RULES
+PH_VIDEO_STYLE = PH_VIDEO_STYLE_RULES
 
 
 _WS_RE = re.compile(r"\s+")
@@ -103,6 +113,9 @@ def apply_prompt_placeholders(
     original_title: str = "",
     master_prompt: str = "",
     hero_prompt: str = "",
+    scene_length_mode: str = "",
+    image_style_mode: str = "",
+    video_style_mode: str = "",
     allow_nested_master_hero: bool = True,
 ) -> str:
     """Заменить известные плейсхолдеры. При allow_nested_master_hero=False
@@ -124,6 +137,9 @@ def apply_prompt_placeholders(
     s = s.replace(PH_DURATION, dur)
     s = s.replace(PH_TARGET_CHARS, dur)
     s = s.replace(PH_ORIGINAL_TITLE, title)
+    s = s.replace(PH_SCENE_LENGTH, scene_length_rules_text(scene_length_mode))
+    s = s.replace(PH_IMAGE_STYLE, image_style_rules_text(image_style_mode))
+    s = s.replace(PH_VIDEO_STYLE, video_style_rules_text(video_style_mode))
 
     if allow_nested_master_hero:
         m_inner = apply_prompt_placeholders(
@@ -135,6 +151,9 @@ def apply_prompt_placeholders(
             original_title=original_title,
             master_prompt="",
             hero_prompt="",
+            scene_length_mode=scene_length_mode,
+            image_style_mode=image_style_mode,
+            video_style_mode=video_style_mode,
             allow_nested_master_hero=False,
         )
         h_inner = apply_prompt_placeholders(
@@ -146,6 +165,9 @@ def apply_prompt_placeholders(
             original_title=original_title,
             master_prompt="",
             hero_prompt="",
+            scene_length_mode=scene_length_mode,
+            image_style_mode=image_style_mode,
+            video_style_mode=video_style_mode,
             allow_nested_master_hero=False,
         )
         s = s.replace(PH_MASTER, _block_wrap(m_inner))

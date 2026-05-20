@@ -837,6 +837,19 @@
                     {% if stage_collapsible %}
                     <div class="rewrite-stage-collapsible-inner">
                     {% endif %}
+                    {% if stage_key == 'scene_writer' %}
+                    <div class="rewrite-scene-writer-settings-row">
+                        {% with scene_length_value=rw.scene_length_mode|default('standard'), scene_length_select_id='rewrite-scene-length-mode', scene_length_radio_name='rewrite-scene-length-radio', extra_class='rewrite-scene-writer-setting--scene-length' %}
+                        {% include '_scene_length_field.html' %}
+                        {% endwith %}
+                        {% with image_style_value=rw.image_style_mode|default('hero_everywhere'), image_style_select_id='rewrite-image-style-mode', image_style_radio_name='rewrite-image-style-radio', extra_class='rewrite-scene-writer-setting--image-style' %}
+                        {% include '_image_style_field.html' %}
+                        {% endwith %}
+                        {% with video_style_value=rw.video_style_mode|default('manual'), video_style_select_id='rewrite-video-style-mode', video_style_radio_name='rewrite-video-style-radio', extra_class='rewrite-scene-writer-setting--video-style' %}
+                        {% include '_video_style_field.html' %}
+                        {% endwith %}
+                    </div>
+                    {% endif %}
                     <div class="rewrite-stage-stack">
                         {% if stage_key != 'inbox' %}
                         <div class="rewrite-stage-row rewrite-stage-row--controls">

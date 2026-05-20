@@ -33,6 +33,9 @@ from image_templates import (
     validate_template_name,
 )
 from rewrite_pipeline import REWRITE_STAGE_KEYS, clamp_target_chars
+from image_style_modes import DEFAULT_IMAGE_STYLE_MODE, normalize_image_style_mode
+from scene_length_modes import DEFAULT_SCENE_LENGTH_MODE, normalize_scene_length_mode
+from video_style_modes import DEFAULT_VIDEO_STYLE_MODE, normalize_video_style_mode
 
 META_FILENAME = "template_meta.json"
 DEFAULT_REWRITE_TEMPLATE_NAME = "Template"
@@ -176,6 +179,15 @@ _STEM_TO_TARGET: dict[str, str] = {
     "scene writer style prompt": "stage_style:scene_writer",
     "scene writer past promt": "stage_past:scene_writer",
     "scene writer past prompt": "stage_past:scene_writer",
+    "scene writer scene length": "scene_length_mode",
+    "scene length": "scene_length_mode",
+    "длина сцены": "scene_length_mode",
+    "scene writer image style": "image_style_mode",
+    "image style": "image_style_mode",
+    "стиль image": "image_style_mode",
+    "scene writer video style": "video_style_mode",
+    "video style": "video_style_mode",
+    "стиль video": "video_style_mode",
     "youtube packaging prompt": "stage:youtube_packaging",
     "youtube packaging engine prompt": "stage:youtube_packaging",
     "youtube packaging system promt": "stage:youtube_packaging",
@@ -213,6 +225,9 @@ _TARGET_TO_FILENAME: dict[str, str] = {
     "stage_user:scene_writer": "Scene Writer User Promt.txt",
     "stage_style:scene_writer": "Scene Writer Style Promt.txt",
     "stage_past:scene_writer": "Scene Writer Past in Promt.txt",
+    "scene_length_mode": "Scene Writer Scene Length.txt",
+    "image_style_mode": "Scene Writer Image Style.txt",
+    "video_style_mode": "Scene Writer Video Style.txt",
     "stage:youtube_packaging": "YouTube packaging engine System Promt.txt",
     "stage_user:youtube_packaging": "YouTube packaging engine User Promt.txt",
 }
@@ -453,6 +468,9 @@ def load_rewrite_template(name: str) -> dict | None:
     out: dict = {
         "name": name,
         "hero_prompt": "",
+        "scene_length_mode": DEFAULT_SCENE_LENGTH_MODE,
+        "image_style_mode": DEFAULT_IMAGE_STYLE_MODE,
+        "video_style_mode": DEFAULT_VIDEO_STYLE_MODE,
         "target_chars": 1500,
         "chars_per_minute": 344,
         "master_prompt": "",
@@ -478,6 +496,12 @@ def load_rewrite_template(name: str) -> dict | None:
             continue
         if target == "hero_prompt":
             out["hero_prompt"] = raw.strip()
+        elif target == "scene_length_mode":
+            out["scene_length_mode"] = normalize_scene_length_mode(raw.strip())
+        elif target == "image_style_mode":
+            out["image_style_mode"] = normalize_image_style_mode(raw.strip())
+        elif target == "video_style_mode":
+            out["video_style_mode"] = normalize_video_style_mode(raw.strip())
         elif target == "master_prompt":
             out["master_prompt"] = raw.strip()
         elif target.startswith("stage:"):
@@ -530,6 +554,9 @@ def save_rewrite_template_to_disk(
     *,
     hero_prompt: str,
     master_prompt: str,
+    scene_length_mode: str = DEFAULT_SCENE_LENGTH_MODE,
+    image_style_mode: str = DEFAULT_IMAGE_STYLE_MODE,
+    video_style_mode: str = DEFAULT_VIDEO_STYLE_MODE,
     target_chars: int | None = None,
     stages: dict[str, Any],
     description: str | None = None,
@@ -557,6 +584,19 @@ def save_rewrite_template_to_disk(
     (d / _TARGET_TO_FILENAME["master_prompt"]).write_text(
         (master_prompt or "").rstrip() + "\n", encoding="utf-8"
     )
+    for mode_key, normalizer in (
+        ("scene_length_mode", normalize_scene_length_mode),
+        ("image_style_mode", normalize_image_style_mode),
+        ("video_style_mode", normalize_video_style_mode),
+    ):
+        fn = _TARGET_TO_FILENAME.get(mode_key)
+        if fn:
+            raw_mode = {
+                "scene_length_mode": scene_length_mode,
+                "image_style_mode": image_style_mode,
+                "video_style_mode": video_style_mode,
+            }.get(mode_key, "")
+            (d / fn).write_text(normalizer(raw_mode) + "\n", encoding="utf-8")
     scoped_stages = filter_stages_for_template_scope(stages)
     for sk in REWRITE_TEMPLATE_SCOPE_STAGE_KEYS:
         cell = scoped_stages.get(sk) if isinstance(scoped_stages.get(sk), dict) else {}

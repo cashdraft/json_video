@@ -118,7 +118,16 @@
                         </div>
                     </div>
                     <div class="rewrite-template-pisanina-panel__body" id="rte-scene-writer-body" hidden>
-                    <div class="rewrite-template-editor-scene-writer-row" aria-label="Промты Scene Writer">
+                    <div class="rewrite-template-editor-scene-writer-row rewrite-template-editor-scene-writer-modes-row" aria-label="Промты Scene Writer">
+                        {% with scene_length_value='standard', scene_length_select_id='rte-scene-length-mode', scene_length_radio_name='rte-scene-length-radio', extra_class='rewrite-template-scene-length-field' %}
+                        {% include '_scene_length_field.html' %}
+                        {% endwith %}
+                        {% with image_style_value='hero_everywhere', image_style_select_id='rte-image-style-mode', image_style_radio_name='rte-image-style-radio', extra_class='rewrite-template-image-style-field' %}
+                        {% include '_image_style_field.html' %}
+                        {% endwith %}
+                        {% with video_style_value='manual', video_style_select_id='rte-video-style-mode', video_style_radio_name='rte-video-style-radio', extra_class='rewrite-template-video-style-field' %}
+                        {% include '_video_style_field.html' %}
+                        {% endwith %}
                         <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="sw-system">
                             <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                 <span class="slot-badge template-prompt-badge template-prompt-badge--no rewrite-stage-prompt-badge" data-rte-badge>System Promt: NO</span>

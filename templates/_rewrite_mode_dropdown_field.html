@@ -1,0 +1,39 @@
+{# Универсальный dropdown режима Scene Writer (как «Язык»). #}
+{% set _modes = mode_options|default([]) %}
+{% set _val = (mode_value or default_mode_id or '')|trim|lower %}
+{% set _ids = mode_valid_ids|default([]) %}
+{% if _val not in _ids and _modes %}
+    {% set _val = (_modes[0].id if _modes else default_mode_id)|trim|lower %}
+{% endif %}
+{% set _sel_id = mode_select_id|default('rewrite-mode-select') %}
+{% set _radio_name = mode_radio_name|default('rewrite-mode-radio') %}
+{% set _opts_key = mode_options_key|default('') %}
+{% set ns_md = namespace(label='') %}
+{% for m in _modes %}{% if m.id == _val %}{% set ns_md.label = m.label %}{% endif %}{% endfor %}
+{% if not ns_md.label and _modes %}{% set ns_md.label = _modes[0].label %}{% endif %}
+<div class="rewrite-mode-dropdown-field {{ extra_class|default('') }}" data-mode-options-key="{{ _opts_key }}">
+    <h3 class="rewrite-source-subtitle">{{ field_title }}</h3>
+    <p class="rewrite-source-subhint">Макрос <code>{% raw %}{{{% endraw %}{{ macro_token }}{% raw %}}}{% endraw %}</code> — {{ macro_subhint }}</p>
+    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-rewrite-mode-field="1">
+        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not openai_key_set|default(true) %}disabled{% endif %} aria-label="{{ field_title }}">
+            <span class="rewrite-anim-dropdown__btn-label" data-rewrite-mode-label>{{ ns_md.label }}</span>
+            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel" hidden role="listbox">
+            {% for m in _modes %}
+            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-mode-dropdown-option">
+                <input type="radio" name="{{ _radio_name }}" class="rewrite-anim-radio rewrite-mode-dropdown-radio visually-hidden-input" value="{{ m.id }}" {% if _val == m.id %}checked{% endif %} {% if not openai_key_set|default(true) %}disabled{% endif %}>
+                <span class="rewrite-anim-option__body">
+                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                    <span class="rewrite-anim-option__desc">{{ m.hint }}</span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    <select id="{{ _sel_id }}" class="rewrite-global-model-select-hidden rewrite-mode-dropdown-select-hidden" {% if not openai_key_set|default(true) %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+        {% for m in _modes %}
+        <option value="{{ m.id }}" {% if _val == m.id %}selected{% endif %}>{{ m.label }}</option>
+        {% endfor %}
+    </select>
+</div>

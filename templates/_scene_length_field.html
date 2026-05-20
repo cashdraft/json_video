@@ -1,0 +1,3 @@
+{% with field_title='Длина сцены', mode_options=rewrite_scene_length_modes|default([]), mode_value=scene_length_value, default_mode_id='standard', mode_valid_ids=['standard', 'long', 'choppy', 'adaptive'], mode_select_id=scene_length_select_id|default('rewrite-scene-length-mode'), mode_radio_name=scene_length_radio_name|default('rewrite-scene-length-radio'), mode_options_key='scene_length', macro_token='SCENE_LENGTH_RULES', macro_subhint='правила длины сцены для выбранного режима', extra_class=extra_class|default('') %}
+{% include '_rewrite_mode_dropdown_field.html' %}
+{% endwith %}

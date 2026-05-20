@@ -21,6 +21,9 @@ from rewrite_openai import (
 from locked_prompts import get_locked_prompt
 
 from prompt_placeholders import apply_prompt_placeholders
+from image_style_modes import DEFAULT_IMAGE_STYLE_MODE, normalize_image_style_mode
+from scene_length_modes import DEFAULT_SCENE_LENGTH_MODE, normalize_scene_length_mode
+from video_style_modes import DEFAULT_VIDEO_STYLE_MODE, normalize_video_style_mode
 
 TARGET_CHARS_MIN = 500
 TARGET_CHARS_MAX = 40_000
@@ -1016,6 +1019,12 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
 
     job.setdefault("hero_prompt", "")
     job["hero_prompt"] = str(job.get("hero_prompt") or "")
+    job.setdefault("scene_length_mode", DEFAULT_SCENE_LENGTH_MODE)
+    job["scene_length_mode"] = normalize_scene_length_mode(job.get("scene_length_mode"))
+    job.setdefault("image_style_mode", DEFAULT_IMAGE_STYLE_MODE)
+    job["image_style_mode"] = normalize_image_style_mode(job.get("image_style_mode"))
+    job.setdefault("video_style_mode", DEFAULT_VIDEO_STYLE_MODE)
+    job["video_style_mode"] = normalize_video_style_mode(job.get("video_style_mode"))
     try:
         cpm = int(job.get("chars_per_minute", 344))
     except (TypeError, ValueError):
@@ -1288,6 +1297,9 @@ def compose_rewrite_openai_request_body(
     preset: str = REWRITE_PRESET_DEFAULT,
     pipeline_language: str = "ru",
     chat_temperature: float | None = None,
+    scene_length_mode: str = DEFAULT_SCENE_LENGTH_MODE,
+    image_style_mode: str = DEFAULT_IMAGE_STYLE_MODE,
+    video_style_mode: str = DEFAULT_VIDEO_STYLE_MODE,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Тело POST к OpenAI chat/completions — то же, что при запуске этапа. Ошибка → (None, текст)."""
     if stage_key not in REWRITE_STAGE_KEYS:
@@ -1318,6 +1330,9 @@ def compose_rewrite_openai_request_body(
     master_raw = str(master_prompt or "")
     hero_raw = str(hero_prompt or "")
     ot = str(original_title or "").strip()
+    scene_len = normalize_scene_length_mode(scene_length_mode)
+    image_style = normalize_image_style_mode(image_style_mode)
+    video_style = normalize_video_style_mode(video_style_mode)
 
     def _ph_kw(nested: bool) -> dict[str, Any]:
         return {
@@ -1328,6 +1343,9 @@ def compose_rewrite_openai_request_body(
             "original_title": ot,
             "master_prompt": master_raw,
             "hero_prompt": hero_raw,
+            "scene_length_mode": scene_len,
+            "image_style_mode": image_style,
+            "video_style_mode": video_style,
             "allow_nested_master_hero": nested,
         }
 
@@ -1629,6 +1647,9 @@ def rewrite_placeholder_apply_from_request(
     master_raw = snapshot_master_prompt_from_body(snap)
     hero_raw, target_chars, duration_minutes, chars_per_minute, _chat_temp_unused = snapshot_pipeline_extras_from_body(snap)
     hero_raw = str(hero_raw or "")
+    scene_len = snapshot_scene_length_mode_from_body(snap, job or {})
+    image_style = snapshot_image_style_mode_from_body(snap, job or {})
+    video_style = snapshot_video_style_mode_from_body(snap, job or {})
     ot = snapshot_original_title_from_body(snap, job or {})
     lang = snapshot_rewrite_pipeline_language_from_body(snap, job or {})
     return apply_prompt_placeholders(
@@ -1640,8 +1661,35 @@ def rewrite_placeholder_apply_from_request(
         original_title=ot,
         master_prompt=str(master_raw or ""),
         hero_prompt=hero_raw,
+        scene_length_mode=scene_len,
+        image_style_mode=image_style,
+        video_style_mode=video_style,
         allow_nested_master_hero=allow_nested_master_hero,
     )
+
+
+def snapshot_scene_length_mode_from_body(
+    body: dict[str, Any], job: dict[str, Any] | None = None
+) -> str:
+    if isinstance(body, dict) and "scene_length_mode" in body:
+        return normalize_scene_length_mode(body.get("scene_length_mode"))
+    return normalize_scene_length_mode((job or {}).get("scene_length_mode"))
+
+
+def snapshot_image_style_mode_from_body(
+    body: dict[str, Any], job: dict[str, Any] | None = None
+) -> str:
+    if isinstance(body, dict) and "image_style_mode" in body:
+        return normalize_image_style_mode(body.get("image_style_mode"))
+    return normalize_image_style_mode((job or {}).get("image_style_mode"))
+
+
+def snapshot_video_style_mode_from_body(
+    body: dict[str, Any], job: dict[str, Any] | None = None
+) -> str:
+    if isinstance(body, dict) and "video_style_mode" in body:
+        return normalize_video_style_mode(body.get("video_style_mode"))
+    return normalize_video_style_mode((job or {}).get("video_style_mode"))
 
 
 def snapshot_master_prompt_from_body(body: dict[str, Any]) -> str:
