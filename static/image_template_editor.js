@@ -36,11 +36,13 @@
         pendingLogoFile: null,
         dragRefFilename: null,
         orderSaving: false,
+        descSaving: false,
         openFolder: '',
         openName: '',
     };
 
     var closing = false;
+    var descSaveTimer = null;
 
     var DROPZONE_LOADING_RE = /^(Загрузка|Создание шаблона|Удаление|Сохранение)/;
     var DROPZONE_ERROR_RE = /(максимум|фото|изображен|загруз|файл|передан|не удалось|нет файлов|слот|шаблон|логотип)/i;
@@ -179,6 +181,78 @@
         }).then(function (r) { return parseJson(r); });
     }
 
+    function collectDescriptionsPayload() {
+        var out = {};
+        state.references.forEach(function (ref) {
+            if (ref && ref.filename) {
+                out[ref.filename] = String(ref.description || '').trim();
+            }
+        });
+        return out;
+    }
+
+    function saveReferenceDescriptions() {
+        if (!state.folder || !state.references.length) {
+            return Promise.resolve({ ok: true });
+        }
+        return fetch(apiUrl('/' + encodePath(state.folder) + '/references/descriptions'), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ descriptions: collectDescriptionsPayload() }),
+        }).then(function (r) { return parseJson(r); });
+    }
+
+    function scheduleDescriptionSave() {
+        if (!state.folder) return;
+        if (descSaveTimer) clearTimeout(descSaveTimer);
+        descSaveTimer = setTimeout(function () {
+            descSaveTimer = null;
+            if (!state.folder || state.descSaving) return;
+            state.descSaving = true;
+            saveReferenceDescriptions()
+                .then(function (data) {
+                    if (!data.ok) throw new Error(data.error || 'Не удалось сохранить описание');
+                    if (data.template) {
+                        state.references = (data.template.references || []).slice();
+                        renderReferences();
+                    }
+                })
+                .catch(function (e) {
+                    setStatus(String(e.message || e), true);
+                })
+                .finally(function () {
+                    state.descSaving = false;
+                });
+        }, 450);
+    }
+
+    function syncRefDescriptionBadge(block, textarea) {
+        if (!block || !textarea) return;
+        var badge = block.querySelector('[data-ref-desc-badge]');
+        if (!badge) return;
+        var has = (textarea.value || '').trim().length > 0;
+        badge.textContent = 'Description: ' + (has ? 'YES' : 'NO');
+        badge.classList.remove('template-prompt-badge--yes', 'template-prompt-badge--no', 'badge-yes', 'badge-no');
+        if (has) {
+            badge.classList.add('template-prompt-badge--yes');
+        } else {
+            badge.classList.add('badge-no');
+        }
+        block.classList.toggle('image-template-editor-ref-desc-block--has-text', has);
+    }
+
+    function lockRefDescriptionField(textarea, toggle, locked) {
+        if (!textarea || !toggle) return;
+        textarea.readOnly = !!locked;
+        textarea.classList.toggle('rewrite-source-textarea--locked', !!locked);
+        toggle.classList.toggle('rewrite-lock-toggle--locked', !!locked);
+        var block = textarea.closest('.image-template-editor-ref-desc-block');
+        if (block) {
+            block.classList.toggle('image-template-editor-ref-desc-block--collapsed', !!locked);
+        }
+    }
+
     async function persistReferenceOrder() {
         if (!state.folder || state.references.length < 2 || state.orderSaving) return;
         state.orderSaving = true;
@@ -202,9 +276,57 @@
         state.references.forEach(function (ref, idx) {
             var item = document.createElement('div');
             item.className = 'image-template-editor-ref-item';
-            var label = document.createElement('span');
-            label.className = 'image-template-editor-ref-label';
-            label.textContent = 'Image ' + (idx + 1);
+
+            var descBlock = document.createElement('div');
+            descBlock.className = 'image-template-editor-ref-desc-block image-template-editor-ref-desc-block--collapsed';
+            descBlock.dataset.filename = ref.filename;
+            var descToolbar = document.createElement('div');
+            descToolbar.className = 'slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar image-template-editor-ref-desc-toolbar';
+            var descPrefix = document.createElement('span');
+            descPrefix.className = 'image-template-editor-ref-desc-prefix';
+            descPrefix.textContent = 'Image ' + (idx + 1) + ' - ';
+            var descBadge = document.createElement('span');
+            descBadge.className = 'slot-badge template-prompt-badge badge-no image-template-editor-ref-desc-badge';
+            descBadge.setAttribute('data-ref-desc-badge', '1');
+            descBadge.textContent = 'Description: NO';
+            var descToggle = document.createElement('button');
+            descToggle.type = 'button';
+            descToggle.className = 'rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked';
+            descToggle.title = 'Редактировать';
+            descToggle.setAttribute('aria-label', 'Редактировать описание');
+            descToggle.innerHTML = '<span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>';
+            var descSlot = document.createElement('div');
+            descSlot.className = 'slot-placeholder rewrite-slot-placeholder image-template-editor-ref-desc-slot';
+            var descTa = document.createElement('textarea');
+            descTa.className = 'rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea image-template-editor-ref-desc-textarea';
+            descTa.rows = 2;
+            descTa.readOnly = true;
+            descTa.placeholder = 'Описание для Nano Banana…';
+            descTa.value = ref.description || '';
+            descToggle.addEventListener('click', function () {
+                var wasLocked = descTa.readOnly;
+                lockRefDescriptionField(descTa, descToggle, !wasLocked);
+                if (wasLocked) {
+                    descTa.focus();
+                } else {
+                    ref.description = (descTa.value || '').trim();
+                    syncRefDescriptionBadge(descBlock, descTa);
+                    scheduleDescriptionSave();
+                }
+            });
+            descTa.addEventListener('input', function () {
+                ref.description = descTa.value;
+                syncRefDescriptionBadge(descBlock, descTa);
+            });
+            descSlot.appendChild(descTa);
+            descToolbar.appendChild(descPrefix);
+            descToolbar.appendChild(descBadge);
+            descToolbar.appendChild(descToggle);
+            descBlock.appendChild(descToolbar);
+            descBlock.appendChild(descSlot);
+            syncRefDescriptionBadge(descBlock, descTa);
+            lockRefDescriptionField(descTa, descToggle, true);
+
             var cell = document.createElement('div');
             cell.className = 'image-template-editor-ref-thumb';
             cell.draggable = true;
@@ -271,7 +393,7 @@
             });
             cell.appendChild(img);
             cell.appendChild(del);
-            item.appendChild(label);
+            item.appendChild(descBlock);
             item.appendChild(cell);
             refGrid.appendChild(item);
         });
@@ -489,13 +611,35 @@
             if (!orderRes.ok) throw new Error(orderRes.error || 'Не удалось сохранить порядок');
         }
 
+        if (folder && state.references.length) {
+            if (descSaveTimer) {
+                clearTimeout(descSaveTimer);
+                descSaveTimer = null;
+            }
+            if (refGrid) {
+                refGrid.querySelectorAll('.image-template-editor-ref-desc-block').forEach(function (block) {
+                    var fname = block.dataset.filename;
+                    var ta = block.querySelector('.image-template-editor-ref-desc-textarea');
+                    if (!fname || !ta) return;
+                    for (var i = 0; i < state.references.length; i++) {
+                        if (state.references[i].filename === fname) {
+                            state.references[i].description = (ta.value || '').trim();
+                            break;
+                        }
+                    }
+                });
+            }
+            var descRes = await saveReferenceDescriptions();
+            if (!descRes.ok) throw new Error(descRes.error || 'Не удалось сохранить описания');
+        }
+
         if (wasNew && folder) needReload = true;
 
         return { needReload: needReload, folder: folder || '' };
     }
 
     async function requestCloseModal() {
-        if (closing || state.orderSaving) return;
+        if (closing || state.orderSaving || state.descSaving) return;
         closing = true;
         setDropzoneOverlay('Сохранение…', false);
         try {

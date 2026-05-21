@@ -78,6 +78,7 @@ from yt_dlp import YoutubeDL
 from image_templates import (
     IMAGE_TEMPLATES_DIR,
     add_reference_files,
+    build_image_generation_prompt,
     build_image_input_urls,
     collect_reference_and_logo,
     create_template_dir,
@@ -89,6 +90,7 @@ from image_templates import (
     safe_template_dir,
     save_logo_file,
     save_reference_order,
+    save_reference_descriptions,
     template_detail,
     validate_template_name,
 )
@@ -814,6 +816,7 @@ def _image_template_detail_json(folder_name: str) -> dict | None:
                 {
                     "filename": fname,
                     "url": _image_template_asset_url(fn, fname),
+                    "description": str(r.get("description") or ""),
                 }
             )
     detail["references"] = refs_out
@@ -929,6 +932,25 @@ def api_image_templates_reorder_references(folder_name: str):
     if not isinstance(order, list):
         return jsonify({"ok": False, "error": "Передайте массив order с именами файлов."}), 400
     err = save_reference_order(td, order)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    detail = _image_template_detail_json(td.name)
+    return jsonify({"ok": True, "template": detail})
+
+
+@app.route(
+    "/api/image-templates/<path:folder_name>/references/descriptions",
+    methods=["PUT"],
+)
+def api_image_templates_save_descriptions(folder_name: str):
+    td = safe_template_dir(IMAGE_TEMPLATES_DIR, folder_name)
+    if not td:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    descriptions = body.get("descriptions")
+    if not isinstance(descriptions, dict):
+        return jsonify({"ok": False, "error": "Передайте объект descriptions."}), 400
+    err = save_reference_descriptions(td, descriptions)
     if err:
         return jsonify({"ok": False, "error": err}), 400
     detail = _image_template_detail_json(td.name)
@@ -7064,6 +7086,7 @@ def generate_slot_start(job_id: str):
                             "error": "В шаблоне нет референс-изображений: добавьте 1–5 файлов .jpg/.png/.webp (logo.png не считается)"
                         }
                     ), 400
+                prompt = build_image_generation_prompt(prompt, td)
             task_id, kie_api_model = create_image_task(
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,

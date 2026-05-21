@@ -1427,7 +1427,7 @@ textarea::placeholder {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.55rem 0.5rem;
-    align-items: end;
+    align-items: start;
     margin-top: 0.35rem;
 }
 
@@ -1439,13 +1439,82 @@ textarea::placeholder {
     min-width: 0;
 }
 
-.image-template-editor-ref-label {
+.image-template-editor-ref-desc-prefix {
     font-size: 0.72rem;
     font-weight: 500;
     line-height: 1;
     color: var(--text-muted);
     letter-spacing: 0.02em;
-    text-align: center;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.image-template-editor-ref-desc-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+    min-width: 0;
+}
+
+.image-template-editor-ref-desc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    margin: 0;
+}
+
+.image-template-editor-ref-desc-badge {
+    margin-left: 0;
+    flex-shrink: 0;
+}
+
+.image-template-editor-ref-desc-block .rewrite-lock-toggle.btn-icon {
+    flex-shrink: 0;
+}
+
+.image-template-editor-ref-desc-slot {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 0;
+    min-height: 0;
+    transition: border-color 0.12s ease;
+}
+
+.image-template-editor-ref-desc-block--has-text .image-template-editor-ref-desc-slot {
+    border-color: var(--editable-prompt-border);
+}
+
+.image-template-editor-ref-desc-block--has-text .image-template-editor-ref-desc-slot:focus-within {
+    border-color: var(--editable-prompt-border-focus);
+}
+
+.image-template-editor-ref-desc-block--collapsed .image-template-editor-ref-desc-slot {
+    display: none;
+}
+
+.image-template-editor-ref-desc-textarea {
+    display: block;
+    width: 100%;
+    min-height: 2.35rem;
+    max-height: 5.5rem;
+    padding: 0.35rem 0.45rem;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    resize: vertical;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    box-sizing: border-box;
+}
+
+.image-template-editor-ref-desc-textarea::placeholder {
+    color: #55555c;
+}
+
+.image-template-editor-ref-desc-textarea.rewrite-source-textarea--locked {
+    cursor: default;
 }
 
 .image-template-editor-ref-thumb {
