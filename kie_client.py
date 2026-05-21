@@ -80,8 +80,10 @@ def create_image_task(
         mid_raw = "nano-banana-2"
 
     ratio = normalize_aspect_ratio(aspect_ratio, "16:9")
+    # Не полагаться только на API: промпт собирается в build_image_generation_prompt.
+    prompt_text = (prompt or "").strip()
     inp: dict[str, Any] = {
-        "prompt": prompt,
+        "prompt": prompt_text,
         "aspect_ratio": ratio,
         # Some Kie endpoints/examples use camelCase; send both for compatibility.
         "aspectRatio": ratio,

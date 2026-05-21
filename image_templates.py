@@ -482,33 +482,83 @@ def build_image_input_urls(base_url: str, folder_name: str, template_dir: Path) 
 
 
 _REF_PROMPT_BLOCK_SEP = "\n---\n"
+_ASPECT_OUTPUT_SECTION_HEADER = "=== OUTPUT FORMAT (обязательно, важнее ориентации референсов) ==="
 _REF_PROMPT_SECTION_HEADER = (
     "=== REFERENCE IMAGES (порядок совпадает с image_input: Image 1 = первый URL) ==="
 )
 _SCENE_PROMPT_SECTION_HEADER = "=== SCENE PROMPT (основной промпт генерации кадра) ==="
 
+_PORTRAIT_REF_NOTE = (
+    " [референс вертикальный — бери только персонажа/стиль; итоговый кадр всё равно "
+    "горизонтальный landscape, один кадр, без панелей столбиком]"
+)
 
-def build_image_generation_prompt(scene_prompt: str, template_dir: Path) -> str:
+
+def _reference_is_portrait(path: Path) -> bool:
+    try:
+        with Image.open(path) as im:
+            w, h = im.size
+        return h > w * 1.08
+    except OSError:
+        return False
+
+
+def format_kie_aspect_ratio_instructions(aspect_ratio: str) -> str:
+    """Жёсткие правила кадра для Nano Banana (дублируют API aspect_ratio)."""
+    ratio = (aspect_ratio or "16:9").strip() or "16:9"
+    landscape = ratio in ("16:9", "3:2", "4:3", "21:9", "5:4", "4:5")
+    if landscape or ratio == "16:9":
+        return (
+            f"Сгенерируй ровно ОДНО изображение в формате {ratio} landscape "
+            f"(ширина больше высоты).\n"
+            "Запрещено: портрет 9:16, вертикальные комикс-коллажи из нескольких панелей "
+            "столбиком, узкая полоса по центру с пустыми полями.\n"
+            f"Композиция горизонтальная; заполни весь кадр {ratio}."
+        )
+    if ratio in ("9:16", "1:4", "1:8", "2:3"):
+        return (
+            f"Сгенерируй ровно ОДНО изображение в формате {ratio} portrait "
+            f"(высота больше ширины).\n"
+            f"Заполни весь кадр {ratio}; без лишних полей."
+        )
+    return (
+        f"Сгенерируй ровно ОДНО изображение с aspect ratio {ratio}.\n"
+        "Один кадр, без много-панельных коллажей."
+    )
+
+
+def build_image_generation_prompt(
+    scene_prompt: str,
+    template_dir: Path | None = None,
+    *,
+    aspect_ratio: str = "16:9",
+) -> str:
     """
-    Промпт для Kie: сначала блоки референсов (Image N + Description), затем start.prompt.
-    Порядок блоков = collect_reference_and_logo / image_input.
+    Промпт для Kie: формат кадра → референсы (если есть) → start.prompt.
     """
-    refs, _ = collect_reference_and_logo(template_dir)
     scene = str(scene_prompt or "").strip()
-    if not refs:
-        return scene
-    desc_map = read_refs_descriptions(template_dir)
-    blocks: list[str] = []
-    for i, ref_path in enumerate(refs, start=1):
-        filename = ref_path.name
-        desc = str(desc_map.get(filename, "") or "").strip()
-        desc_line = desc if desc else "(описание не задано)"
-        blocks.append(f"Image {i} ({filename})\nDescription: {desc_line}")
-    ref_body = _REF_PROMPT_BLOCK_SEP.join(blocks)
-    parts = [
-        _REF_PROMPT_SECTION_HEADER,
-        ref_body,
-        _SCENE_PROMPT_SECTION_HEADER,
-        scene,
+    parts: list[str] = [
+        _ASPECT_OUTPUT_SECTION_HEADER,
+        format_kie_aspect_ratio_instructions(aspect_ratio),
     ]
+    if template_dir is not None:
+        refs, _ = collect_reference_and_logo(template_dir)
+        if refs:
+            desc_map = read_refs_descriptions(template_dir)
+            blocks: list[str] = []
+            for i, ref_path in enumerate(refs, start=1):
+                filename = ref_path.name
+                desc = str(desc_map.get(filename, "") or "").strip()
+                desc_line = desc if desc else "(описание не задано)"
+                if _reference_is_portrait(ref_path):
+                    desc_line += _PORTRAIT_REF_NOTE
+                blocks.append(f"Image {i} ({filename})\nDescription: {desc_line}")
+            parts.extend(
+                [
+                    _REF_PROMPT_SECTION_HEADER,
+                    _REF_PROMPT_BLOCK_SEP.join(blocks),
+                ]
+            )
+    if scene:
+        parts.extend([_SCENE_PROMPT_SECTION_HEADER, scene])
     return "\n\n".join(parts)

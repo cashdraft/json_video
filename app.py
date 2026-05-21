@@ -115,6 +115,7 @@ from job_scene_audio_align import (
     scene_timing_badge_duration_class,
 )
 from job_scene_timings_validation import validate_scene_timings
+from scene_writer_json import normalize_scene_blocks_raw_text, normalize_scene_writer_result
 from kie_client import (
     create_image_task,
     create_video_task,
@@ -1279,7 +1280,7 @@ def parse_scene_blocks(raw_text: str) -> tuple[list[dict], list[str]]:
     Поддерживаются как однострочные, так и многострочные JSON-объекты.
     Returns: (list of scene dicts, list of error messages)
     """
-    raw_text = _unwrap_json_array_of_objects(raw_text)
+    raw_text, _ = normalize_scene_blocks_raw_text(_unwrap_json_array_of_objects(raw_text))
     scenes: list[dict] = []
     errors: list[str] = []
     current_scene: dict | None = None
@@ -5972,6 +5973,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                         return
                     elif t == "status":
                         yield json.dumps({"type": "status", "message": f"[{i}/{total}] {str(item.get('message') or '')}"}, ensure_ascii=False) + "\n"
+                part, _ = normalize_scene_writer_result(part)
                 acc_parts.append(part)
                 block_checks.append(_scene_writer_block_check(block, part, i))
             if only_block is not None:
@@ -5988,6 +5990,7 @@ def _iter_stage_run_event_strings(rewrite_id: str, body: dict[str, Any]) -> Iter
                 ) + "\n"
                 return
             full = "\n\n".join([p for p in acc_parts if p]).strip()
+            full, _ = normalize_scene_writer_result(full)
             # Сохраняем переносы между блоками, но scene_id делаем сквозными: scene_001..scene_N.
             scene_idx = [0]
             def _renum_scene_id(m: re.Match[str]) -> str:
@@ -7086,7 +7089,13 @@ def generate_slot_start(job_id: str):
                             "error": "В шаблоне нет референс-изображений: добавьте 1–5 файлов .jpg/.png/.webp (logo.png не считается)"
                         }
                     ), 400
-                prompt = build_image_generation_prompt(prompt, td)
+                prompt = build_image_generation_prompt(
+                    prompt, td, aspect_ratio=aspect_ratio
+                )
+            else:
+                prompt = build_image_generation_prompt(
+                    prompt, None, aspect_ratio=aspect_ratio
+                )
             task_id, kie_api_model = create_image_task(
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
