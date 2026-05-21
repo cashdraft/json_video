@@ -1064,6 +1064,13 @@ def normalize_rewrite_job_data(job: dict[str, Any]) -> dict[str, Any]:
     if isinstance(voe_final, dict):
         job["voiceover_final_text"] = _extract_edited_text(str(voe_final.get("last_result") or ""))
 
+    try:
+        from rewrite_templates import backfill_empty_template_scope_fields
+
+        backfill_empty_template_scope_fields(job)
+    except Exception:
+        pass
+
     return job
 
 

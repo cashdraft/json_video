@@ -113,7 +113,6 @@
                             <div class="scene-id rewrite-source-body-title rewrite-stage-title-text rewrite-template-pisanina-panel__title">Scene Writer</div>
                         </div>
                         <div class="rewrite-template-pisanina-panel-compact" aria-live="polite">
-                            <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="sw-system">System Promt: NO</span>
                             <span class="slot-badge template-prompt-badge template-prompt-badge--no" data-rte-fold-compact="sw-style">Style Promt: NO</span>
                         </div>
                     </div>
@@ -128,15 +127,7 @@
                         {% with video_style_value='manual', video_style_select_id='rte-video-style-mode', video_style_radio_name='rte-video-style-radio', extra_class='rewrite-template-video-style-field' %}
                         {% include '_video_style_field.html' %}
                         {% endwith %}
-                        <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="sw-system">
-                            <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                <span class="slot-badge template-prompt-badge template-prompt-badge--no rewrite-stage-prompt-badge" data-rte-badge>System Promt: NO</span>
-                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rte-toggle title="Редактировать" aria-label="Редактировать"><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span><span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span></button>
-                            </div>
-                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline">
-                                <textarea id="rte-scene-writer-prompt" class="rewrite-source-textarea rewrite-source-textarea--locked rewrite-slot-textarea" rows="5" readonly data-rte-field placeholder="Системная инструкция Scene Writer…"></textarea>
-                            </div>
-                        </div>
+                        <p class="rewrite-template-editor-hint">System Promt Scene Writer — в <code>locked_prompt_files/</code> (пин-код на странице job), не в шаблон проекта.</p>
                         <div class="rewrite-stage-prompt-cell rewrite-template-prompt-block rewrite-template-prompt-block--collapsed" data-rte-prompt data-rte-collapsible="1" data-rte-fold-key="sw-style">
                             <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
                                 <span class="slot-badge template-prompt-badge template-prompt-badge--no rewrite-stage-style-prompt-badge" data-rte-badge>Style Promt: NO</span>

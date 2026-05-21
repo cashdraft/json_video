@@ -1,0 +1,13 @@
+{
+  "description": "",
+  "tts_defaults": {
+    "voice_id": "uYXf8XasLslADfZ2MB4u",
+    "voice_name": "Hope - Bubbly, Gossipy and Girly",
+    "model_id": "eleven_v3",
+    "stability_pct": 50,
+    "similarity_pct": 75,
+    "style_pct": 60,
+    "speed_pct": 20,
+    "use_speaker_boost": true
+  }
+}

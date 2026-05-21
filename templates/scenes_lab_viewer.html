@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG viewer — Later…</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='scenes_lab.css') }}?v={{ static_style_mtime }}">
+    <style>
+        .viewer-page { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+        .viewer-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+        .viewer-aspect select { padding: 0.35rem 0.5rem; border-radius: 6px; background: var(--bg-input); color: inherit; border: 1px solid var(--border); }
+        .viewer-stage {
+            background: #111;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+        .viewer-stage__frame {
+            width: 100%;
+            margin: 0 auto;
+            background: #0d0d10;
+        }
+        .viewer-stage__frame[data-ar="16:9"] { aspect-ratio: 16 / 9; max-width: 960px; }
+        .viewer-stage__frame[data-ar="9:16"] { aspect-ratio: 9 / 16; max-width: 360px; }
+        .viewer-stage__frame[data-ar="1:1"] { aspect-ratio: 1 / 1; max-width: 480px; }
+        .viewer-stage iframe { width: 100%; height: 100%; border: 0; display: block; }
+        .viewer-errors { color: #e0858f; font-size: 0.85rem; white-space: pre-wrap; }
+        .viewer-ok { color: var(--success); font-size: 0.85rem; }
+    </style>
+</head>
+<body class="scenes-lab-page viewer-page">
+    <h1>SVG viewer</h1>
+    <p class="later-lab__hint">Вставьте разметку из блока 1 ответа Later… — превью и проверка XML на месте.</p>
+    <div class="viewer-toolbar">
+        <label class="viewer-aspect">Формат
+            <select id="viewer-ar">
+                <option value="16:9" selected>16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+            </select>
+        </label>
+        <button type="button" class="btn btn-primary" id="viewer-render">Показать</button>
+        <button type="button" class="btn" id="viewer-validate-api">Проверить на сервере</button>
+        <a class="later-lab__file-label" href="/scenes-lab">← Later…</a>
+    </div>
+    <textarea class="rewrite-slot-textarea later-lab__prompt" id="viewer-svg-in" rows="14" placeholder="===SVG_START=== … или ```svg"></textarea>
+    <div id="viewer-msg"></div>
+    <div class="viewer-stage">
+        <div class="viewer-stage__frame" id="viewer-frame" data-ar="16:9">
+            <iframe id="viewer-iframe" title="SVG preview" sandbox="allow-scripts"></iframe>
+        </div>
+    </div>
+    <script>
+    (function () {
+        const ta = document.getElementById('viewer-svg-in');
+        const frame = document.getElementById('viewer-frame');
+        const iframe = document.getElementById('viewer-iframe');
+        const msg = document.getElementById('viewer-msg');
+        const arSel = document.getElementById('viewer-ar');
+
+        function extractSvg(raw) {
+            const t = (raw || '').trim();
+            const m1 = t.match(/===SVG_START===([\s\S]*?)===SVG_END===/i);
+            if (m1) return m1[1].trim();
+            const m2 = t.match(/```svg\s*([\s\S]*?)```/i);
+            if (m2) return m2[1].trim();
+            if (t.startsWith('<svg')) return t;
+            return '';
+        }
+
+        function clientXmlCheck(svg) {
+            const errs = [];
+            if (/^\s*id\s*=/m.test(svg)) errs.push('Строки с id=" без открывающего тега (<text> и т.д.).');
+            try {
+                const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+                const pe = doc.querySelector('parsererror');
+                if (pe) errs.push(pe.textContent || 'XML parser error');
+            } catch (e) {
+                errs.push(String(e.message || e));
+            }
+            return errs;
+        }
+
+        function render() {
+            const svg = extractSvg(ta.value);
+            frame.setAttribute('data-ar', arSel.value);
+            if (!svg) {
+                msg.innerHTML = '<p class="viewer-errors">SVG не найден.</p>';
+                iframe.srcdoc = '';
+                return;
+            }
+            const errs = clientXmlCheck(svg);
+            if (errs.length) {
+                msg.innerHTML = '<p class="viewer-errors">' + errs.join('\n') + '</p>';
+            } else {
+                msg.innerHTML = '<p class="viewer-ok">XML в браузере ок.</p>';
+            }
+            iframe.srcdoc = '<!DOCTYPE html><html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh">' + svg + '</body></html>';
+        }
+
+        document.getElementById('viewer-render').addEventListener('click', render);
+        arSel.addEventListener('change', render);
+        document.getElementById('viewer-validate-api').addEventListener('click', async function () {
+            const r = await fetch('/scenes-lab/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: ta.value }),
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok) {
+                msg.innerHTML = '<p class="viewer-errors">' + ((data && data.error) || 'Ошибка API') + '</p>';
+                return;
+            }
+            const v = data.validation || {};
+            const lines = (v.errors || []).join('\n') || 'Сервер: все проверки пройдены.';
+            msg.innerHTML = '<p class="' + (v.ok ? 'viewer-ok' : 'viewer-errors') + '">' + lines + '</p>';
+        });
+    })();
+    </script>
+</body>
+</html>

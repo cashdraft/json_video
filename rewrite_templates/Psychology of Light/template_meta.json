@@ -1,0 +1,13 @@
+{
+  "description": "Канал Иван",
+  "tts_defaults": {
+    "voice_id": "qA5SHJ9UjGlW2QwXWR7w",
+    "voice_name": "Joe - Confident Idiot",
+    "model_id": "eleven_v3",
+    "stability_pct": 50,
+    "similarity_pct": 75,
+    "style_pct": 100,
+    "speed_pct": 20,
+    "use_speaker_boost": true
+  }
+}

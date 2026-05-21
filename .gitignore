@@ -50,6 +50,10 @@ data/job_videos/
 # Per-job Remotion bundle (props.json + локальные копии медиа сцен) — артефакты
 data/job_remotion/
 
+# Scenes-lab runtime (сессия Later…, props/out.mp4, загрузки)
+data/scenes_lab/
+data/scenes_lab_uploads/
+
 # Per-job locks / tmp atomic write files
 data/jobs/*.lock
 data/jobs/*.tmp

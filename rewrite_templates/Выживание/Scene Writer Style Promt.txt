@@ -1,0 +1,34 @@
+Единый стиль для всех сцен:
+semi-realistic cinematic survival illustration style, gritty post-apocalyptic YouTube documentary aesthetic, detailed digital painting with clean readable composition, realistic but slightly stylized characters, rugged survival atmosphere, grounded realistic proportions, highly detailed environments, abandoned America scenery, cinematic lighting, realistic textures with painterly finish, muted earthy palette, dusty greens, cold blues, faded browns, warm sunlight mixed with cool shadows, atmospheric depth, environmental storytelling focus, detailed survival props, tactical gear aesthetic, modern survival documentary vibe, realistic wilderness environments, abandoned towns reclaimed by nature, premium AAA concept art quality, cinematic composition, soft volumetric light, realistic sky and weather, subtle film grain feeling, detailed architecture and vegetation, realistic wear and tear, immersive mood, readable YouTube-friendly layouts, visually dramatic but not horror, highly consistent art direction across all scenes.
+Стиль персонажей:
+rugged realistic survivalist characters, tactical clothing, layered jackets, hoodies, beanies, backpacks, realistic faces with strong readable expressions, slightly stylized anatomy, grounded human proportions, realistic hands and gear, cinematic poses, detailed fabric folds, survival equipment attached to clothing, natural skin tones, tired determined expressions, wilderness survivor look.
+Стиль окружения:
+abandoned suburbs, ruined gas stations, forest camps, prepper bunkers, empty highways, survival cabins, overgrown streets, garages converted into workshops, tunnels, watchtowers, rooftop lookout points, realistic forests and mountains, broken infrastructure, realistic clutter and survival equipment, lived-in environments, detailed storytelling props everywhere.
+Освещение:
+bright cinematic daylight, overcast survival mood, soft sunset lighting, warm campfire glow, realistic ambient lighting, subtle god rays, moody but readable shadows, natural outdoor lighting, cozy bunker lighting.
+Правила сцены:
+— каждая сцена новая локация
+— разные времена суток
+— разные weather conditions
+— cinematic camera angles
+— environments должны рассказывать историю без слов
+— consistent realistic survival universe
+— высокая детализация окружения
+— readable composition for YouTube storytelling
+— atmosphere of isolation and survival
+— cinematic but grounded realism
+Запрещено:
+— anime style
+— cel shading
+— flat vector look
+— hyper saturated colors
+— futuristic sci-fi
+— cyberpunk neon
+— horror monsters
+— low-detail backgrounds
+— cartoon stickman anatomy
+— unrealistic fantasy weapons
+— messy composition
+— blurry rendering
+Формат:
+wide cinematic storyboard panels, realistic survival documentary illustration, AAA concept art style, ultra detailed digital painting, cinematic YouTube survival universe aesthetic.

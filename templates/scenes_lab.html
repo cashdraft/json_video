@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Later… — Claude</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='scenes_lab.css') }}?v={{ static_style_mtime }}">
+</head>
+<body class="scenes-lab-page" data-claude-key="{{ '1' if claude_key_set else '0' }}">
+    <header class="scenes-lab-page__head">
+        <h1>Later…</h1>
+        <p>
+            Claude (Kie.ai): промпт + одно фото → три блока (SVG, JSON анимации, пояснение).
+            Сервер режет по маркерам <code>===SVG_START===</code> / фенсам <code>```svg</code> и валидирует XML, id и кадры.
+            <a href="/scenes-lab/viewer">SVG viewer</a>
+        </p>
+    </header>
+
+    <section class="scenes-lab-main" aria-label="Later">
+        <article class="later-lab later-lab--standalone" data-later-lab>
+            <div class="later-lab__header">
+                <span class="slot-badge badge-slot-prompt scene-slot-later-badge">Later…</span>
+                <select class="later-lab__model-select" data-later-model aria-label="Модель Claude">
+                    {% for m in claude_models %}
+                    <option value="{{ m.id }}"{% if loop.first %} selected{% endif %}>{{ m.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="later-lab__panel{% if not claude_key_set %} later-lab--disabled{% endif %}">
+                {% if not claude_key_set %}
+                <p class="later-lab__hint">Укажите <code>KEYAI_API_KEY</code> в <code>.env</code> (Kie.ai).</p>
+                {% endif %}
+                <textarea
+                    class="rewrite-slot-textarea later-lab__prompt"
+                    rows="8"
+                    placeholder="Запрос к модели…"
+                    data-later-prompt
+                ></textarea>
+                <div class="later-lab__row">
+                    <img class="later-lab__attach-preview is-hidden" data-later-preview src="" alt="Вложение">
+                    <label class="later-lab__file-label">
+                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-later-file>
+                        Прикрепить фото (1 файл)
+                    </label>
+                    <button type="button" class="btn btn-primary later-lab__send" data-later-send>Отправить</button>
+                    <button type="button" class="btn" data-later-reparse>Проверить ответ</button>
+                </div>
+                <p class="later-lab__hint">Kie.ai получит фото по публичному URL после загрузки.</p>
+                <div class="later-raw-answer is-hidden" data-later-raw-answer>
+                    <div class="later-raw-answer__label">Ответ модели (целиком)</div>
+                    <textarea
+                        class="rewrite-slot-textarea later-raw-answer__code"
+                        rows="18"
+                        readonly
+                        spellcheck="false"
+                        data-later-raw-out
+                    ></textarea>
+                </div>
+                <div class="slot-placeholder later-lab__status" data-later-status data-status="pending">
+                    <div class="later-status__body">
+                        <span class="slot-status later-status__line" data-later-status-text>Ожидание запроса</span>
+                        <span class="later-status__detail is-hidden" data-later-status-detail></span>
+                        <span class="later-status__timer is-hidden" data-later-status-timer aria-live="polite">0 с</span>
+                    </div>
+                </div>
+
+                <div class="later-pipeline is-hidden" data-later-pipeline>
+                    <div class="later-pipeline__banner" data-later-validation-banner></div>
+                    <div class="later-pipeline__tabs" role="tablist">
+                        <button type="button" class="later-pipeline__tab is-active" data-tab="svg" role="tab">SVG</button>
+                        <button type="button" class="later-pipeline__tab" data-tab="json" role="tab">Анимация</button>
+                        <button type="button" class="later-pipeline__tab" data-tab="notes" role="tab">Пояснение</button>
+                    </div>
+                    <div class="later-pipeline__panel is-active" data-panel="svg">
+                        <div class="later-svg-preview-wrap">
+                            <div class="later-svg-preview__label">Превью кадра 1920×1080 (16∶9)</div>
+                            <div class="later-svg-preview" data-later-svg-preview></div>
+                        </div>
+                        <textarea class="rewrite-slot-textarea later-pipeline__code" rows="8" readonly data-later-svg-out></textarea>
+                    </div>
+                    <div class="later-pipeline__panel" data-panel="json" hidden>
+                        <textarea class="rewrite-slot-textarea later-pipeline__code" rows="10" readonly data-later-json-out></textarea>
+                    </div>
+                    <div class="later-pipeline__panel" data-panel="notes" hidden>
+                        <textarea class="rewrite-slot-textarea later-pipeline__code" rows="6" readonly data-later-notes-out></textarea>
+                    </div>
+                </div>
+
+                <div class="later-remotion is-hidden" data-later-remotion>
+                    <div class="later-remotion__head">
+                        <span class="later-remotion__title">Remotion</span>
+                        <button type="button" class="btn btn-primary" data-later-props-write>Записать props.json</button>
+                        <button type="button" class="btn btn-primary" data-later-render-start>Рендер MP4</button>
+                        <button type="button" class="btn btn-secondary" data-later-studio-open>Studio</button>
+                        <button type="button" class="btn btn-secondary is-hidden" data-later-mp4-open>Скачать MP4</button>
+                    </div>
+                    <div class="later-remotion__props-hint is-hidden" data-later-props-hint></div>
+                    <div class="later-remotion__status" data-later-render-status>Сначала пройдите валидацию.</div>
+                    <div class="later-remotion__progress is-hidden" data-later-render-progress>
+                        <div class="later-remotion__bar" data-later-render-bar style="width:0%"></div>
+                    </div>
+                    <div class="later-remotion__preview is-hidden" data-later-mp4-preview>
+                        <div class="later-remotion__preview-label">Превью MP4</div>
+                        <video
+                            class="later-remotion__video"
+                            data-later-mp4-video
+                            controls
+                            playsinline
+                            preload="metadata"
+                        ></video>
+                    </div>
+                </div>
+            </div>
+        </article>
+    </section>
+    <script src="{{ url_for('static', filename='scenes_lab.js') }}?v={{ static_style_mtime }}"></script>
+</body>
+</html>

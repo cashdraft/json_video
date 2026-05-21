@@ -1,0 +1,20 @@
+{
+  "allowed": [
+    "none",
+    "fade-in",
+    "fade-out",
+    "fly-up",
+    "grow-y",
+    "grow-x",
+    "scale-in",
+    "draw-path",
+    "count-up"
+  ],
+  "backlog": [
+    "parallax-drift",
+    "pulse-glow",
+    "twinkle",
+    "kerning-spread"
+  ],
+  "notes": "allowed дублирует CANONICAL_ALLOWED в later_anim_dictionary.py — править только там."
+}

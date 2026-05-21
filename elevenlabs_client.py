@@ -396,8 +396,82 @@ def _voice_title_from_name(name: str) -> str:
     return n or "?"
 
 
-def list_voices() -> list[dict[str, Any]]:
-    """Список голосов аккаунта для UI (id, имя, короткий заголовок)."""
+# Категории ElevenLabs, которые показываем в UI (без стандартных premade).
+_CUSTOM_VOICE_CATEGORIES = frozenset({"cloned", "generated", "professional"})
+
+
+def _is_custom_voice(raw: dict[str, Any]) -> bool:
+    """Клон, Voice Design или голос, сохранённый из библиотеки — не premade."""
+    cat = str(raw.get("category") or raw.get("voice_type") or "").strip().lower()
+    if cat == "premade":
+        return False
+    if cat in _CUSTOM_VOICE_CATEGORIES:
+        return True
+    # saved / personal без category — оставляем, если явно не premade
+    return bool(cat) and cat not in ("default", "community")
+
+
+def _ingest_voice_row(
+    merged: dict[str, dict[str, Any]],
+    raw: dict[str, Any],
+) -> None:
+    if not isinstance(raw, dict) or not _is_custom_voice(raw):
+        return
+    vid = raw.get("voice_id") or raw.get("voiceId")
+    name = (raw.get("name") or vid or "?").strip()
+    if not vid:
+        return
+    category = str(raw.get("category") or raw.get("voice_type") or "").strip().lower()
+    merged[str(vid)] = {
+        "voice_id": str(vid),
+        "name": name,
+        "title": _voice_title_from_name(name),
+        "category": category,
+    }
+
+
+def _voice_list_sort_key(item: dict[str, Any]) -> str:
+    return str(item.get("name") or "").lower()
+
+
+def _fetch_v2_voices_by_type(
+    headers: dict[str, str],
+    voice_type: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    page_token: str | None = None
+    while True:
+        params: dict[str, Any] = {"page_size": 100, "voice_type": voice_type}
+        if page_token:
+            params["next_page_token"] = page_token
+        resp = requests.get(
+            f"{ELEVEN_BASE}/v2/voices",
+            headers=headers,
+            params=params,
+            timeout=45,
+        )
+        data = resp.json()
+        if resp.status_code != 200:
+            msg = (
+                data.get("detail", {}).get("message")
+                if isinstance(data.get("detail"), dict)
+                else None
+            )
+            raise RuntimeError(
+                msg or data.get("message") or resp.text or f"HTTP {resp.status_code}"
+            )
+        chunk = data.get("voices") or []
+        if isinstance(chunk, list):
+            rows.extend(v for v in chunk if isinstance(v, dict))
+        if not data.get("has_more"):
+            break
+        page_token = data.get("next_page_token")
+        if not page_token:
+            break
+    return rows
+
+
+def _list_voices_v1_custom_only() -> list[dict[str, Any]]:
     resp = requests.get(
         f"{ELEVEN_BASE}/v1/voices",
         headers={"xi-api-key": _api_key()},
@@ -407,24 +481,33 @@ def list_voices() -> list[dict[str, Any]]:
     if resp.status_code != 200:
         msg = data.get("detail", {}).get("message") if isinstance(data.get("detail"), dict) else None
         raise RuntimeError(msg or data.get("message") or resp.text or f"HTTP {resp.status_code}")
-    voices = data.get("voices") or []
-    out: list[dict[str, Any]] = []
-    for v in voices:
-        if not isinstance(v, dict):
-            continue
-        vid = v.get("voice_id") or v.get("voiceId")
-        name = (v.get("name") or vid or "?").strip()
-        if not vid:
-            continue
-        title = _voice_title_from_name(name)
-        out.append(
-            {
-                "voice_id": str(vid),
-                "name": name,
-                "title": title,
-            }
-        )
-    out.sort(key=lambda x: str(x.get("name") or "").lower())
+    merged: dict[str, dict[str, Any]] = {}
+    for v in data.get("voices") or []:
+        _ingest_voice_row(merged, v)
+    out = list(merged.values())
+    out.sort(key=_voice_list_sort_key)
+    return out
+
+
+def list_voices() -> list[dict[str, Any]]:
+    """Список пользовательских голосов для UI: клоны, дизайн, сохранённые из библиотеки.
+
+    Стандартные premade (Adam, Bella, …) не включаются.
+    """
+    headers = {"xi-api-key": _api_key()}
+    merged: dict[str, dict[str, Any]] = {}
+    try:
+        for voice_type in ("personal", "saved", "workspace"):
+            for v in _fetch_v2_voices_by_type(headers, voice_type):
+                _ingest_voice_row(merged, v)
+    except Exception:
+        return _list_voices_v1_custom_only()
+
+    if not merged:
+        return _list_voices_v1_custom_only()
+
+    out = list(merged.values())
+    out.sort(key=_voice_list_sort_key)
     return out
 
 

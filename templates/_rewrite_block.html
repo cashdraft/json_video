@@ -420,7 +420,13 @@
                 </select>
                 <span id="rewrite-template-op-status" class="tts-template-status hidden" aria-live="polite"></span>
                 <div class="rewrite-template-lock-overlay hidden" id="rewrite-template-lock-overlay">
-                    <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-unlock-btn">Редактировать</button>
+                    <div class="rewrite-template-lock-overlay__inner">
+                        <div class="rewrite-template-lock-active" id="rewrite-template-lock-active" aria-label="Текущий шаблон">
+                            <span class="rewrite-template-lock-active__frame" id="rewrite-template-lock-active-visual"></span>
+                            <span class="rewrite-template-lock-active__name" id="rewrite-template-lock-active-name"></span>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="rewrite-template-unlock-btn">Редактировать</button>
+                    </div>
                 </div>
             </div>
 
@@ -718,7 +724,11 @@
             {% for stage_key, stage_label in rewrite_stages %}
             {% set cell = rw.stages[stage_key] %}
             {% set _sys_lp_hdr = (locked_prompts_state|default({}, true)).get('system_prompt_' ~ stage_key) or {} %}
+            {% if stage_key == 'scene_writer' %}
+            {% set has_prompt = _sys_lp_hdr.get('present')|default(false) %}
+            {% else %}
             {% set has_prompt = (_sys_lp_hdr.get('present')|default(false)) or ((cell.prompt or '')|trim|length) > 0 %}
+            {% endif %}
             {% set has_style_prompt = ((cell.style_prompt or '')|trim|length) > 0 %}
             {% set has_result = ((cell.last_result or '')|trim|length) > 0 %}
             {% set prompt_locked = cell.prompt_locked|default(false) %}
@@ -1006,6 +1016,35 @@
                                     </div>
                                 </div>
                             </div>
+                            {% elif stage_key == 'scene_writer' %}
+                            {% set _sw_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_scene_writer') or {} %}
+                            {% set has_sw_system_prompt = _sw_sys_lp.get('present')|default(false) %}
+                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
+                            {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
+                            {% set _up_lock = 'user_prompt_' ~ stage_key %}
+                            {% set _sw_rsr_lp = (locked_prompts_state|default({}, true)).get('scene_writer_system_rules') or {} %}
+                            {% set has_sw_system_rules = _sw_rsr_lp.get('present')|default(false) %}
+                            <div class="rewrite-stage-prompt-cell rewrite-stage-rewrite-prompts-cluster">
+                                <div class="rewrite-stage-json-export-row{% if stage_collapsible %} rewrite-stage-json-export-row--compact-header{% endif %}">
+                                    {% if not stage_collapsible %}
+                                    <button type="button" class="rewrite-json-export-btn rewrite-stage-api-export" title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not openai_key_set or not can_run_stage %}disabled{% endif %}>J</button>
+                                    {% endif %}
+                                </div>
+                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_sw_system_prompt else 'no' }}" id="locked-prompt-badge-system_prompt_scene_writer" data-locked-prompt-badge="system_prompt_scene_writer" title="System Promt (под пин-кодом)">System Promt: {{ 'YES' if has_sw_system_prompt else 'NO' }}</span>
+                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="system_prompt_scene_writer" data-locked-prompt-label="Scene Writer — System Promt" title="Редактировать System Promt (пин-код)" aria-label="Редактировать System Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                </div>
+                                <div class="rewrite-stage-badges-toolbar-row rewrite-stage-rewrite-locked-badges-row">
+                                    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    </div>
+                                    <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                                        <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_sw_system_rules else 'no' }}" id="locked-prompt-badge-scene_writer_system_rules" data-locked-prompt-badge="scene_writer_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_sw_system_rules else 'NO' }}</span>
+                                        <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="scene_writer_system_rules" data-locked-prompt-label="Scene Writer — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
+                                    </div>
+                                </div>
+                            </div>
                             {% elif stage_key == 'youtube_packaging' %}
                             {% set _yt_sys_lp = (locked_prompts_state|default({}, true)).get('system_prompt_youtube_packaging') or {} %}
                             {% set has_yt_system_prompt = _yt_sys_lp.get('present')|default(false) %}
@@ -1045,25 +1084,6 @@
                                 </div>
                                 <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline">
                                     <textarea id="rewrite-stage-{{ stage_key }}-prompt" class="rewrite-stage-prompt rewrite-slot-textarea{% if prompt_locked %} rewrite-source-textarea--locked{% endif %}" rows="5" placeholder="Системная инструкция этапа…" {% if not openai_key_set %}disabled{% elif prompt_locked %}readonly{% endif %}>{{ cell.prompt or '' }}</textarea>
-                                </div>
-                            </div>
-                            {% endif %}
-                            {% if stage_key == 'scene_writer' %}
-                            {% set _up_lp = (locked_prompts_state|default({}, true)).get('user_prompt_' ~ stage_key) or {} %}
-                            {% set has_user_prompt = (_up_lp.get('present'))|default(false) %}
-                            {% set _up_lock = 'user_prompt_' ~ stage_key %}
-                            {% set _sw_rsr_lp = (locked_prompts_state|default({}, true)).get('scene_writer_system_rules') or {} %}
-                            {% set has_sw_system_rules = _sw_rsr_lp.get('present')|default(false) %}
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
-                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_user_prompt else 'no' }}" id="locked-prompt-badge-{{ _up_lock }}" data-locked-prompt-badge="{{ _up_lock }}" title="User Promt (под пин-кодом)">User Promt: {{ 'YES' if has_user_prompt else 'NO' }}</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="{{ _up_lock }}" data-locked-prompt-label="{{ stage_label|e }} — User Promt" title="Редактировать User Promt (пин-код)" aria-label="Редактировать User Promt" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
-                                </div>
-                            </div>
-                            <div class="rewrite-stage-prompt-cell rewrite-stage-scene-writer-system-rules-cell">
-                                <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
-                                    <span class="slot-badge locked-prompt-badge locked-prompt-badge--{{ 'yes' if has_sw_system_rules else 'no' }}" id="locked-prompt-badge-scene_writer_system_rules" data-locked-prompt-badge="scene_writer_system_rules" title="System Rules (под пин-кодом)">System Rules: {{ 'YES' if has_sw_system_rules else 'NO' }}</span>
-                                    <button type="button" class="rewrite-lock-toggle btn-icon locked-prompt-edit-btn" data-locked-prompt-edit="scene_writer_system_rules" data-locked-prompt-label="Scene Writer — System Rules" title="Редактировать System Rules (пин-код)" aria-label="Редактировать System Rules" {% if not openai_key_set %}disabled{% endif %}><span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span></button>
                                 </div>
                             </div>
                             {% endif %}

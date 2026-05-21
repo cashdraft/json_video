@@ -848,6 +848,46 @@
         return anyRewriteStageHasResult() && !templatePickerUserUnlocked;
     }
 
+    function syncTemplateLockOverlayPreview() {
+        var visualEl = document.getElementById('rewrite-template-lock-active-visual');
+        var nameEl = document.getElementById('rewrite-template-lock-active-name');
+        if (!visualEl || !nameEl || !templateSelectEl) return;
+        var name = String(templateSelectEl.value || '').trim();
+        if (!name) {
+            nameEl.textContent = '—';
+            visualEl.innerHTML = '<span class="template-option-visual template-option-visual--letter" aria-hidden="true">·</span>';
+            return;
+        }
+        var esc = name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var opt = document.querySelector('.rewrite-template-option[data-template-name="' + esc + '"]');
+        if (opt) {
+            var frame = opt.querySelector('.template-option-frame');
+            var nameSpan = opt.querySelector('.template-option-name');
+            visualEl.innerHTML = frame ? frame.innerHTML : '';
+            nameEl.textContent = nameSpan ? (nameSpan.textContent || '').trim() : name;
+            return;
+        }
+        nameEl.textContent = name.toLowerCase() === 'base template' ? 'Базовый' : name;
+        var logoUrl = rewriteTemplateLogoByName[name] || '';
+        if (logoUrl) {
+            var img = document.createElement('img');
+            img.src = logoUrl;
+            img.alt = '';
+            img.className = 'template-logo-preview';
+            img.loading = 'lazy';
+            var wrap = document.createElement('span');
+            wrap.className = 'template-option-visual';
+            wrap.appendChild(img);
+            visualEl.innerHTML = '';
+            visualEl.appendChild(wrap);
+        } else {
+            var letter = name.toLowerCase() === 'base template' ? 'Б' : ((name.charAt(0) || '·').toUpperCase());
+            var letterCls = 'template-option-visual template-option-visual--letter'
+                + (name.toLowerCase() === 'base template' ? ' template-option-visual--base' : '');
+            visualEl.innerHTML = '<span class="' + letterCls + '" aria-hidden="true">' + letter + '</span>';
+        }
+    }
+
     function applyTemplatePickerLockUi() {
         var locked = shouldLockTemplatePicker();
         if (templateSectionEl) {
@@ -855,6 +895,7 @@
             templateSectionEl.setAttribute('data-template-locked', locked ? '1' : '0');
         }
         if (templateLockOverlay) templateLockOverlay.classList.toggle('hidden', !locked);
+        if (locked) syncTemplateLockOverlayPreview();
         var pickerDis = locked || !openaiOk;
         if (templateSelectEl) templateSelectEl.disabled = pickerDis;
         if (templateSectionEl) {
@@ -1161,7 +1202,7 @@
         return templateListUrl + '/' + encodeURIComponent(name);
     }
 
-    var lastAutoAppliedTemplate = templateSelectEl ? (templateSelectEl.value || '').trim() : '';
+    var lastAutoAppliedTemplate = '';
     var rewriteTemplateLogoByName = {};
     var templateApplySeq = 0;
     var REWRITE_TEMPLATE_SCOPE_STAGE_KEYS = { rewrite: true, scene_writer: true };
@@ -1173,7 +1214,7 @@
             var cell = stagesIn[sk];
             if (!cell || typeof cell !== 'object') cell = {};
             out[sk] = {
-                prompt: cell.prompt || '',
+                prompt: sk === 'scene_writer' ? '' : (cell.prompt || ''),
                 user_prompt: '',
                 style_prompt: sk === 'scene_writer' ? (cell.style_prompt || '') : ''
             };
@@ -1183,7 +1224,7 @@
 
     function collectTemplateDiskPayload() {
         var snap = collectSnapshot();
-        return {
+        var payload = {
             hero_prompt: snap.hero_prompt,
             master_prompt: snap.master_prompt,
             scene_length_mode: snap.scene_length_mode || 'standard',
@@ -1191,7 +1232,32 @@
             video_style_mode: snap.video_style_mode || 'manual',
             stages: collectTemplateScopeStages(snap.stages)
         };
+        if (typeof window.readJobTtsDefaultsForTemplate === 'function') {
+            var tts = window.readJobTtsDefaultsForTemplate();
+            if (tts && typeof tts === 'object') payload.tts_defaults = tts;
+        }
+        return payload;
     }
+
+    async function applyRewriteTemplateDataToJobUi(templateName) {
+        templateName = String(templateName || '').trim();
+        if (!templateName || !templateSelectEl || !openaiOk) return false;
+        if ((templateSelectEl.value || '').trim() !== templateName) return false;
+        try {
+            var r = await fetch(rewriteTemplateFetchUrl(templateName), { cache: 'no-store' });
+            var data = await r.json();
+            if (!r.ok || !data.ok) return false;
+            populateRewriteFormFromTemplateData(data);
+            if (typeof window.applyJobTtsDefaultsFromTemplate === 'function') {
+                window.applyJobTtsDefaultsFromTemplate(data.tts_defaults || {}, { skipTemplateSync: true, skipJobPersist: false });
+            }
+            return true;
+        } catch (e) {
+            console.warn('applyRewriteTemplateDataToJobUi:', e);
+            return false;
+        }
+    }
+    window.applyRewriteTemplateDataToJobUi = applyRewriteTemplateDataToJobUi;
 
     function modeOptionsListForWrap(wrap) {
         if (!wrap) return [];
@@ -1250,7 +1316,7 @@
             var key = block.getAttribute('data-stage-key');
             if (!key || !REWRITE_TEMPLATE_SCOPE_STAGE_KEYS[key]) return;
             var cell = st[key];
-            if (cell && typeof cell.prompt === 'string') {
+            if (key !== 'scene_writer' && cell && typeof cell.prompt === 'string') {
                 var ta = block.querySelector('.rewrite-stage-prompt');
                 if (ta) {
                     ta.value = cell.prompt;
@@ -1293,6 +1359,9 @@
                 return false;
             }
             populateRewriteFormFromTemplateData(data);
+            if (typeof window.applyJobTtsDefaultsFromTemplate === 'function') {
+                window.applyJobTtsDefaultsFromTemplate(data.tts_defaults || {}, { skipTemplateSync: true, skipJobPersist: false });
+            }
             templateSelectEl.value = name;
             syncTemplatePickerUIFromSelect();
             lastAutoAppliedTemplate = name;
@@ -1306,6 +1375,34 @@
                 setTemplateOpStatus(String(e), true);
             }
             return false;
+        }
+    }
+
+    async function hydrateMissingTemplateScopeFieldsOnLoad() {
+        if (!templateSelectEl || !openaiOk) return;
+        var name = (templateSelectEl.value || '').trim();
+        if (!name) return;
+        var swBlock = document.querySelector('.rewrite-stage-card[data-stage-key="scene_writer"]');
+        var styleTa = swBlock && swBlock.querySelector('.rewrite-stage-style-prompt');
+        if (!styleTa || (styleTa.value || '').trim()) {
+            lastAutoAppliedTemplate = name;
+            return;
+        }
+        try {
+            var r = await fetch(rewriteTemplateFetchUrl(name));
+            var data = await r.json();
+            if (!r.ok || !data.ok) return;
+            var diskStyle = String((((data.stages || {}).scene_writer || {}).style_prompt) || '').trim();
+            if (!diskStyle) {
+                lastAutoAppliedTemplate = name;
+                return;
+            }
+            styleTa.value = diskStyle;
+            syncStylePromptBadge(swBlock);
+            lastAutoAppliedTemplate = name;
+            await saveToServer();
+        } catch (e) {
+            console.warn('hydrateMissingTemplateScopeFieldsOnLoad:', e);
         }
     }
 
@@ -1489,6 +1586,7 @@
         field.querySelectorAll('input.rewrite-template-radio').forEach(function (rb) {
             rb.checked = (rb.value === v);
         });
+        if (shouldLockTemplatePicker()) syncTemplateLockOverlayPreview();
     }
 
     function setTemplateOpStatus(msg, isError) {
@@ -1558,50 +1656,59 @@
     window.refreshRewriteTemplatePicker = reloadRewriteTemplateOptions;
 
     async function syncJobTtsToRewriteTemplateAndNotify(ttsPayload) {
-        if (!templateSelectEl || !openaiOk || !ttsPayload) return false;
-        var name = (templateSelectEl.value || '').trim();
-        if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) return false;
-        try {
-            var r0 = await fetch(rewriteTemplateFetchUrl(name), { cache: 'no-store' });
-            var existing = await r0.json().catch(function () { return {}; });
-            if (!r0.ok || !existing.ok) return false;
-            var r = await fetch(rewriteTemplateFetchUrl(name), {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    description: existing.description || '',
-                    hero_prompt: existing.hero_prompt || '',
-                    master_prompt: existing.master_prompt || '',
-                    stages: existing.stages || {},
-                    tts_defaults: ttsPayload
-                })
-            });
-            var data = await r.json().catch(function () { return {}; });
-            if (r.ok && data.ok) {
-                showRewriteTemplateChangedToast(name);
-                return true;
-            }
-            return false;
-        } catch (e) {
-            console.warn('syncJobTtsToRewriteTemplateAndNotify failed:', e);
-            return false;
-        }
+        if (!ttsPayload) return false;
+        return trySyncRewriteTemplateToDisk(ttsPayload);
     }
 
     window.syncJobTtsToRewriteTemplateAndNotify = syncJobTtsToRewriteTemplateAndNotify;
 
-    async function trySyncRewriteTemplateToDisk() {
+    var templateDiskSyncTimer = null;
+    var templateDiskSyncInFlight = false;
+    var templateDiskSyncPending = false;
+
+    function scheduleTemplateDiskSync(delayMs) {
+        if (!templateSelectEl || !openaiOk) return;
+        if (templateDiskSyncTimer) clearTimeout(templateDiskSyncTimer);
+        templateDiskSyncTimer = setTimeout(function () {
+            templateDiskSyncTimer = null;
+            trySyncRewriteTemplateToDisk().catch(function () { /* ignore */ });
+        }, Math.max(500, Number(delayMs) || 2500));
+    }
+    window.scheduleTemplateDiskSync = scheduleTemplateDiskSync;
+
+    async function trySyncRewriteTemplateToDisk(ttsOverride) {
         if (!templateSelectEl || !openaiOk) return true;
         var name = (templateSelectEl.value || '').trim();
         if (!name || REWRITE_TEMPLATE_NAMES_ON_DISK.indexOf(name) < 0) return true;
+        if (templateDiskSyncInFlight) {
+            templateDiskSyncPending = true;
+            return true;
+        }
+        templateDiskSyncInFlight = true;
         try {
+            var r0 = await fetch(rewriteTemplateFetchUrl(name), { cache: 'no-store' });
+            var existing = await r0.json().catch(function () { return {}; });
+            if (!r0.ok || !existing.ok) return false;
             var diskPayload = collectTemplateDiskPayload();
-            var r = await _fetchWithRetry(rewriteTemplateSaveDiskUrl(name), {
-                method: 'POST',
+            var tts = ttsOverride;
+            if (!tts && diskPayload.tts_defaults) tts = diskPayload.tts_defaults;
+            if (!tts) tts = existing.tts_defaults || null;
+            var body = {
+                name: name,
+                description: existing.description || '',
+                hero_prompt: diskPayload.hero_prompt,
+                master_prompt: diskPayload.master_prompt,
+                scene_length_mode: diskPayload.scene_length_mode,
+                image_style_mode: diskPayload.image_style_mode,
+                video_style_mode: diskPayload.video_style_mode,
+                stages: diskPayload.stages,
+                tts_defaults: tts
+            };
+            var r = await fetch(rewriteTemplateFetchUrl(name), {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(diskPayload)
-            }, 3);
+                body: JSON.stringify(body)
+            });
             var data = await r.json().catch(function () { return {}; });
             if (r.ok && !!data.ok) {
                 showRewriteTemplateChangedToast(name);
@@ -1611,6 +1718,12 @@
         } catch (e) {
             console.warn('trySyncRewriteTemplateToDisk failed:', e);
             return false;
+        } finally {
+            templateDiskSyncInFlight = false;
+            if (templateDiskSyncPending) {
+                templateDiskSyncPending = false;
+                scheduleTemplateDiskSync(1500);
+            }
         }
     }
 
@@ -4464,7 +4577,7 @@
             }
             stages[key] = {
                 model: stageModel,
-                prompt: promptEl ? promptEl.value : '',
+                prompt: (key === 'scene_writer' ? '' : (promptEl ? promptEl.value : '')),
                 style_prompt: ((block.querySelector('.rewrite-stage-style-prompt') || {}).value || ''),
                 scene_writer_check: (key === 'scene_writer' ? readSceneWriterCheckFromBlock(block) : null),
                 structure_splitter_check: (key === 'structure_splitter' ? readStructureSplitterCheckFromBlock(block) : null),
@@ -5329,7 +5442,13 @@
         var spe = block.querySelector('.rewrite-stage-style-prompt');
         if (spe) {
             syncStylePromptBadge(block);
-            spe.addEventListener('input', function () { syncStylePromptBadge(block); });
+            spe.addEventListener('input', function () {
+                syncStylePromptBadge(block);
+                if (block.getAttribute('data-stage-key') === 'scene_writer') {
+                    scheduleAutosave(500);
+                    scheduleTemplateDiskSync(3000);
+                }
+            });
         }
         applyPromptLockUI(block);
         applyStylePromptLockUI(block);
@@ -6191,6 +6310,7 @@
             if (!el) return;
             el.addEventListener('change', function () {
                 scheduleAutosave(0);
+                scheduleTemplateDiskSync(2500);
             });
         });
     })();
@@ -9454,5 +9574,6 @@
             try { window.__restoreJobElevenlabsFromServer(); } catch (_eRestoreTts2) { /* ignore */ }
         }, 0);
     }
+    hydrateMissingTemplateScopeFieldsOnLoad();
 })();
     </script>

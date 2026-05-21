@@ -755,7 +755,7 @@
 
             {% set _vj_any_words = tts_words_available or whisper_words_available %}
             {% set _vj_can_apply_timings = _json_has_scenes and _vj_any_words %}
-            {% set _vj_has_timings = _vj_any_words and (scenes_stripped_with_timing or '')|trim %}
+            {% set _vj_has_timings = (scenes_stripped_with_timing or '')|trim %}
             <div class="video-json-scenes-row">
                 <article id="video-json-scenes-wrap" class="scene-card tts-word-timings-panel video-json-scenes-panel tts-word-timings-panel--collapsible tts-word-timings-panel--body-collapsed" aria-expanded="false" data-video-json-scenes-collapse="1" data-has-scenes="{{ '1' if _json_has_scenes else '0' }}" data-has-words="{{ '1' if _vj_any_words else '0' }}">
                     <div class="tts-word-timings-panel__header scene-header rewrite-voiceover-final-card-header" id="video-json-scenes-header">
@@ -2424,24 +2424,32 @@
     };
 
     const refreshGallery = () => {
-        galleryImages = Array.from(document.querySelectorAll('.slot-image')).map(mediaEl => {
-            const sceneCard = mediaEl.closest('.scene-card');
-            const sceneSlot = mediaEl.closest('.scene-slot');
-            const sceneIndex = sceneCard ? parseInt(sceneCard.dataset.sceneIndex, 10) : 0;
-            const sceneIdEl = sceneCard ? sceneCard.querySelector('.scene-id') : null;
-            const sceneTextEl = sceneCard ? sceneCard.querySelector('.scene-text') : null;
-            const slotName = sceneSlot ? (sceneSlot.dataset.slot || '') : '';
-            const isVideo = mediaEl.tagName.toLowerCase() === 'video';
-            return {
-                el: mediaEl,
-                src: mediaEl.src,
-                sceneIndex,
-                sceneId: sceneIdEl ? sceneIdEl.textContent.trim() : '',
-                sceneText: sceneTextEl ? sceneTextEl.textContent.trim() : '',
-                slot: slotName,
-                mediaType: isVideo ? 'video' : 'image',
-            };
-        });
+        galleryImages = Array.from(document.querySelectorAll('.slot-image'))
+            .map((mediaEl) => {
+                const src = (
+                    mediaEl.getAttribute('src')
+                    || mediaEl.getAttribute('data-deferred-src')
+                    || ''
+                ).trim();
+                if (!src) return null;
+                const sceneCard = mediaEl.closest('.scene-card');
+                const sceneSlot = mediaEl.closest('.scene-slot');
+                const sceneIndex = sceneCard ? parseInt(sceneCard.dataset.sceneIndex, 10) : 0;
+                const sceneIdEl = sceneCard ? sceneCard.querySelector('.scene-id') : null;
+                const sceneTextEl = sceneCard ? sceneCard.querySelector('.scene-text') : null;
+                const slotName = sceneSlot ? (sceneSlot.dataset.slot || '') : '';
+                const isVideo = mediaEl.tagName.toLowerCase() === 'video';
+                return {
+                    el: mediaEl,
+                    src,
+                    sceneIndex,
+                    sceneId: sceneIdEl ? sceneIdEl.textContent.trim() : '',
+                    sceneText: sceneTextEl ? sceneTextEl.textContent.trim() : '',
+                    slot: slotName,
+                    mediaType: isVideo ? 'video' : 'image',
+                };
+            })
+            .filter(Boolean);
     };
 
     const renderLightboxMedia = () => {
@@ -2505,6 +2513,7 @@
     document.addEventListener('click', (e) => {
         const img = e.target.closest('.slot-image');
         if (img) {
+            window.__jobSceneDeferredMedia?.hydrateMedium?.(img);
             refreshGallery();
             const idx = galleryImages.findIndex(item => item.el === img);
             openLightbox(idx >= 0 ? idx : 0);
@@ -2557,6 +2566,22 @@
 
     const jobId = '{{ job_id }}';
     const canceledTasks = new Set();
+
+    const fetchWithRetry = async (url, init, attempts = 3) => {
+        let lastErr = null;
+        for (let i = 0; i < attempts; i += 1) {
+            try {
+                return await fetch(url, init);
+            } catch (e) {
+                lastErr = e;
+                if (i < attempts - 1) {
+                    await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+                    continue;
+                }
+            }
+        }
+        throw lastErr || new Error('fetch failed');
+    };
 
     /** Avoid "Unexpected token '<'" when server returns HTML (502 page, crash, proxy). */
     const parseJsonOrThrow = async (resp, label) => {
@@ -2636,6 +2661,9 @@
             }
             if (typeof window.__updateApplyTimingsBtnTitle === 'function') {
                 window.__updateApplyTimingsBtnTitle();
+            }
+            if (typeof window.__scheduleAutoApplyScenesTimings === 'function') {
+                window.__scheduleAutoApplyScenesTimings();
             }
             if (typeof window.reinitScenesSectionUi === 'function') {
                 window.reinitScenesSectionUi();
@@ -3441,6 +3469,80 @@
         }
     };
 
+    const isSceneCardExpanded = (card) => card && !card.classList.contains('scene-card--body-collapsed');
+
+    const hydrateDeferredMedium = (el) => {
+        if (!el) return;
+        const url = (el.getAttribute('data-deferred-src') || '').trim();
+        if (!url || el.getAttribute('data-deferred-loaded') === '1') return;
+        if (el.tagName === 'VIDEO') {
+            el.src = url;
+            el.preload = 'metadata';
+        } else {
+            el.src = url;
+            if (!el.decoding) el.decoding = 'async';
+        }
+        el.setAttribute('data-deferred-loaded', '1');
+    };
+
+    const hydrateSceneCardDeferredMedia = (card) => {
+        if (!card || !isSceneCardExpanded(card)) return;
+        card.querySelectorAll('.slot-image[data-deferred-src]:not([data-deferred-loaded="1"])')
+            .forEach(hydrateDeferredMedium);
+    };
+
+    const setSlotPlaceholderMedia = (placeholder, slot, url) => {
+        if (!placeholder || !url) return;
+        placeholder.setAttribute('data-status', 'done');
+        const card = placeholder.closest('.scene-card');
+        const expanded = isSceneCardExpanded(card);
+        if (slot === 'video') {
+            let v = placeholder.querySelector('video.slot-image');
+            if (!v) {
+                v = document.createElement('video');
+                v.className = 'slot-image slot-image--deferred';
+                v.controls = true;
+                v.playsInline = true;
+                v.setAttribute('playsinline', '');
+                v.preload = 'none';
+                placeholder.replaceChildren(v);
+            }
+            v.setAttribute('data-deferred-src', url);
+            v.classList.add('slot-image--deferred');
+            if (expanded) {
+                hydrateDeferredMedium(v);
+            } else {
+                v.removeAttribute('src');
+                v.removeAttribute('data-deferred-loaded');
+                v.preload = 'none';
+            }
+        } else {
+            let img = placeholder.querySelector('img.slot-image');
+            if (!img) {
+                img = document.createElement('img');
+                img.className = 'slot-image slot-image--deferred';
+                img.alt = slot || '';
+                img.decoding = 'async';
+                placeholder.replaceChildren(img);
+            }
+            img.setAttribute('data-deferred-src', url);
+            img.classList.add('slot-image--deferred');
+            if (expanded) {
+                hydrateDeferredMedium(img);
+            } else {
+                img.removeAttribute('src');
+                img.removeAttribute('data-deferred-loaded');
+            }
+        }
+    };
+
+    window.__jobSceneDeferredMedia = {
+        hydrateCard: hydrateSceneCardDeferredMedia,
+        hydrateMedium: hydrateDeferredMedium,
+        setPlaceholder: setSlotPlaceholderMedia,
+        isExpanded: isSceneCardExpanded,
+    };
+
     const applySceneSlotBadgeState = (badge, hasPrompt, hasResult) => {
         if (!badge) return;
         badge.classList.remove('badge-no', 'badge-yes', 'badge-slot-prompt', 'badge-slot-ready');
@@ -3457,8 +3559,8 @@
         const hasPrompt = Boolean((promptEl?.value || '').trim());
         const ph = slotEl.querySelector('.slot-placeholder');
         const hasResult = slot === 'start'
-            ? !!ph?.querySelector('img.slot-image')
-            : !!ph?.querySelector('video.slot-image');
+            ? !!ph?.querySelector('img.slot-image[data-deferred-src], img.slot-image[src]')
+            : !!ph?.querySelector('video.slot-image[data-deferred-src], video.slot-image[src]');
         const slotLabel = slot.charAt(0).toUpperCase() + slot.slice(1);
         const badgeLabel = `${slotLabel}: ${hasPrompt ? 'YES' : 'NO'}`;
         [slotEl.querySelector('.slot-badge'), sceneCard.querySelector(`[data-scene-compact-slot="${slot}"] .slot-badge`)]
@@ -3622,7 +3724,8 @@
         const hasStartPrompt = sceneCard.dataset.hasStartPrompt === '1';
         const videoPromptEl = sceneCard.querySelector('.slot-prompt-editor[data-slot="video"]');
         const hasVideoPrompt = Boolean((videoPromptEl?.value || '').trim());
-        const hasStartImage = !!sceneCard.querySelector('.scene-slot[data-slot="start"] .slot-image');
+        const startPh = getSceneSlotPlaceholder(sceneCard, 'start');
+        const hasStartImage = imageSlotHasFinishedPicture(startPh);
         const depsReady = !hasStartPrompt || hasStartImage;
         const canGenerateVideo = hasVideoPrompt && depsReady;
         const ph = getSceneSlotPlaceholder(sceneCard, 'video');
@@ -3692,7 +3795,7 @@
             if (canceledTasks.has(taskId)) break;
             await new Promise(r => setTimeout(r, 2000));
             if (canceledTasks.has(taskId)) break;
-            const statusResp = await fetch(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`);
+            const statusResp = await fetchWithRetry(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`, {}, 2);
             const statusData = await parseJsonOrThrow(statusResp, 'Status');
             if (!statusResp.ok) {
                 throw new Error(statusData.error || 'Status check failed');
@@ -3719,20 +3822,11 @@
             }
 
             if (state === 'success' && statusData.url) {
-                placeholder.setAttribute('data-status', 'done');
+                setSlotPlaceholderMedia(placeholder, slot, statusData.url);
                 if (slot === 'video') {
-                    const existingVideo = placeholder.querySelector('video.slot-image');
-                    if (existingVideo) {
-                        if (existingVideo.src !== statusData.url) {
-                            existingVideo.src = statusData.url;
-                        }
-                    } else {
-                        placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
-                    }
                     // Non-upscale success: do not show stale "1080p - done" from previous runs.
                     updateVideoHdStatus(btn.closest('.scene-card'), statusData.hd_status_text || '');
                 } else {
-                    placeholder.innerHTML = `<img src="${statusData.url}" alt="${slot}" class="slot-image">`;
                     refreshGallery();
                 }
                 const sceneCardDone = btn.closest('.scene-card');
@@ -3743,15 +3837,7 @@
                 done = true;
             } else if (state === 'upgrading_1080' && slot === 'video') {
                 if (statusData.url) {
-                    placeholder.setAttribute('data-status', 'done');
-                    const existingVideo = placeholder.querySelector('video.slot-image');
-                    if (existingVideo) {
-                        if (existingVideo.src !== statusData.url) {
-                            existingVideo.src = statusData.url;
-                        }
-                    } else {
-                        placeholder.innerHTML = `<video src="${statusData.url}" class="slot-image" controls playsinline preload="metadata"></video>`;
-                    }
+                    setSlotPlaceholderMedia(placeholder, 'video', statusData.url);
                 }
                 const sceneCardHd = btn.closest('.scene-card');
                 if (sceneCardHd) updateSceneSlotBadge(sceneCardHd, 'video');
@@ -3800,7 +3886,25 @@
                 const imEl = document.getElementById('image_model');
                 if (slot === 'video' && vmEl?.value) genPayload.video_model = vmEl.value;
                 if (slot !== 'video' && imEl?.value) genPayload.image_model = imEl.value;
-                const startResp = await fetch(`/job/${jobId}/generate/start`, {
+                if (slot === 'video') {
+                    const startPhForVideo = getSceneSlotPlaceholder(sceneCard, 'start');
+                    const startImg = startPhForVideo?.querySelector('img.slot-image');
+                    const startUrl = (
+                        startImg?.getAttribute('src')
+                        || startImg?.getAttribute('data-deferred-src')
+                        || ''
+                    ).trim();
+                    if (startUrl) genPayload.start_image_url = startUrl;
+                    const endPhForVideo = getSceneSlotPlaceholder(sceneCard, 'end');
+                    const endImg = endPhForVideo?.querySelector('img.slot-image');
+                    const endUrl = (
+                        endImg?.getAttribute('src')
+                        || endImg?.getAttribute('data-deferred-src')
+                        || ''
+                    ).trim();
+                    if (endUrl) genPayload.end_image_url = endUrl;
+                }
+                const startResp = await fetchWithRetry(`/job/${jobId}/generate/start`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(genPayload)
@@ -3845,9 +3949,13 @@
             await pollTask(btn, placeholder, slot, taskId);
             if (options.bulk) appendBulkLog(`✓ ${sceneId} · ${slot}: завершено.`);
         } catch (e) {
-            showPlaceholderError(placeholder, e.message || String(e));
+            let errMsg = e.message || String(e);
+            if (/failed to fetch/i.test(errMsg)) {
+                errMsg = 'Сеть: запрос не дошёл до сервера (часто из‑за перегрузки вкладки). Подождите 2–3 с и нажмите ↻ снова.';
+            }
+            showPlaceholderError(placeholder, errMsg);
             syncSceneCardGenerateUi(sceneCard);
-            if (options.bulk) appendBulkLog(`✖ ${sceneId} · ${slot}: ${e.message || String(e)}`);
+            if (options.bulk) appendBulkLog(`✖ ${sceneId} · ${slot}: ${errMsg}`);
         }
     };
 
@@ -3875,7 +3983,9 @@
     const imageSlotHasFinishedPicture = (placeholder) => {
         if (!placeholder) return false;
         const img = placeholder.querySelector('img.slot-image');
-        const src = (img && img.getAttribute('src')) ? String(img.getAttribute('src')).trim() : '';
+        const src = img
+            ? String(img.getAttribute('src') || img.getAttribute('data-deferred-src') || '').trim()
+            : '';
         return Boolean(src);
     };
 
@@ -4125,6 +4235,9 @@
             const collapsed = !card.classList.contains('scene-card--body-collapsed');
             card.classList.toggle('scene-card--body-collapsed', collapsed);
             syncSceneCardCollapseAria(card);
+            if (!collapsed) {
+                window.__jobSceneDeferredMedia?.hydrateCard?.(card);
+            }
             syncJobScenesDisplayToggle();
         };
 
@@ -4173,7 +4286,11 @@
                     syncJobScenesDisplayToggle();
                     return;
                 }
-                applySceneCardsCollapsedBatch(cards.slice(i, i + SCENES_TOGGLE_BATCH), collapsed);
+                const batch = cards.slice(i, i + SCENES_TOGGLE_BATCH);
+                applySceneCardsCollapsedBatch(batch, collapsed);
+                if (!collapsed) {
+                    batch.forEach((card) => window.__jobSceneDeferredMedia?.hydrateCard?.(card));
+                }
                 if (i + SCENES_TOGGLE_BATCH < total) {
                     syncJobScenesDisplayToggle({
                         busy: true,
@@ -4216,6 +4333,9 @@
                 return;
             }
             applySceneCardsCollapsedBatch(cards, scenesCollapsedPref);
+            if (!scenesCollapsedPref) {
+                cards.forEach((card) => window.__jobSceneDeferredMedia?.hydrateCard?.(card));
+            }
             syncJobScenesDisplayToggle();
         };
         window.__applyJobScenesCollapseState = applyJobScenesCollapseState;
@@ -4370,8 +4490,13 @@
             const nowCollapsed = wasExpanded;
             saveCollapsed(nowCollapsed);
             applyCollapsed(nowCollapsed);
-            if (!nowCollapsed && typeof window.__refreshVideoJsonScenesPanel === 'function') {
-                window.__refreshVideoJsonScenesPanel();
+            if (!nowCollapsed) {
+                if (typeof window.__syncScenesTimingsPanelPrereqs === 'function') {
+                    window.__syncScenesTimingsPanelPrereqs();
+                }
+                if (typeof window.__refreshVideoJsonScenesPanel === 'function') {
+                    window.__refreshVideoJsonScenesPanel();
+                }
             }
         };
         headerEl.addEventListener('click', (e) => {
@@ -6167,6 +6292,7 @@
 
         bindWordTimingsPanel(whisperWrapEl, whisperBodyEl, whisperToggleEl || whisperHeaderEl, setWhisperWordsCollapsed);
         initTimingsSourceUi();
+        window.ensureTimingsSourceSelected = ensureTimingsSourceSelected;
         if (whisperDownloadBtn) {
             whisperDownloadBtn.addEventListener('click', () => {
                 if (!lastWhisperUrl) return;
@@ -6557,6 +6683,59 @@
                 use_speaker_boost: document.getElementById('tts-speaker-boost').checked,
             };
         };
+
+        const collectJobTtsDefaultsForTemplate = () => {
+            const cur = collectCurrentTtsSettings();
+            return {
+                model_id: cur.model_id || TTS_MODEL_ID,
+                voice_id: cur.voice_id || '',
+                voice_name: cur.voice_name || '',
+                speed_pct: cur.speed_pct,
+                stability_pct: cur.stability_pct,
+                similarity_pct: cur.similarity_pct,
+                style_pct: cur.style_pct,
+                use_speaker_boost: cur.use_speaker_boost,
+            };
+        };
+        window.readJobTtsDefaultsForTemplate = collectJobTtsDefaultsForTemplate;
+
+        const applyJobTtsDefaultsFromTemplate = (tts, opts) => {
+            const o = opts || {};
+            const t = tts && typeof tts === 'object' ? tts : {};
+            const speedEl = document.getElementById('tts-speed');
+            const stabEl = document.getElementById('tts-stability');
+            const simEl = document.getElementById('tts-similarity');
+            const styleEl = document.getElementById('tts-style');
+            const boostEl = document.getElementById('tts-speaker-boost');
+            if (speedEl && t.speed_pct != null) speedEl.value = String(t.speed_pct);
+            if (stabEl && t.stability_pct != null) stabEl.value = String(t.stability_pct);
+            if (simEl && t.similarity_pct != null) simEl.value = String(t.similarity_pct);
+            if (styleEl && t.style_pct != null) styleEl.value = String(t.style_pct);
+            if (boostEl) boostEl.checked = t.use_speaker_boost !== false;
+            ['tts-speed', 'tts-stability', 'tts-similarity', 'tts-style'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            const vid = String(t.voice_id || '').trim();
+            if (voiceSel && vid) {
+                let matched = false;
+                for (let i = 0; i < voiceSel.options.length; i++) {
+                    if (voiceSel.options[i].value === vid) {
+                        voiceSel.selectedIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) window.__pendingTemplateTtsVoiceId = vid;
+                else delete window.__pendingTemplateTtsVoiceId;
+                window.rebuildJobModelDropdown?.('tts-voice');
+                window.syncJobModelDropdownDisabled?.('tts-voice', 'tts-voice');
+            }
+            if (!o.skipJobPersist) {
+                schedulePersistTtsDefaults({ skipTemplateSync: !!o.skipTemplateSync });
+            }
+        };
+        window.applyJobTtsDefaultsFromTemplate = applyJobTtsDefaultsFromTemplate;
 
         let saveDefaultsTimer = null;
         const persistTtsDefaults = async (opts) => {
@@ -7050,6 +7229,18 @@
                     voiceSel.dataset.persistBound = '1';
                     voiceSel.addEventListener('change', schedulePersistTtsDefaults);
                 }
+                const pendingVid = window.__pendingTemplateTtsVoiceId;
+                if (pendingVid) {
+                    for (let i = 0; i < voiceSel.options.length; i++) {
+                        if (voiceSel.options[i].value === pendingVid) {
+                            voiceSel.selectedIndex = i;
+                            delete window.__pendingTemplateTtsVoiceId;
+                            window.rebuildJobModelDropdown?.('tts-voice');
+                            schedulePersistTtsDefaults({ skipTemplateSync: true });
+                            break;
+                        }
+                    }
+                }
             })
             .catch(() => {
                 voiceSel.innerHTML = '<option value="">Ошибка загрузки голосов</option>';
@@ -7476,10 +7667,26 @@
 
         let timingsJsonLocked = true;
 
-        const hasScenes = () => panelWrap.dataset.hasScenes === '1';
+        const syncHasScenesDataset = () => {
+            const parseForm = document.getElementById('job-parse-form');
+            const fromForm = parseForm && parseInt(parseForm.dataset.existingScenesCount || '0', 10) > 0;
+            const fromDom = document.querySelectorAll('#job-scenes-grid .scene-card[data-scene-id]').length > 0;
+            const fromAttr = panelWrap.dataset.hasScenes === '1';
+            panelWrap.dataset.hasScenes = (fromForm || fromDom || fromAttr) ? '1' : '0';
+        };
+        const hasScenes = () => {
+            syncHasScenesDataset();
+            return panelWrap.dataset.hasScenes === '1';
+        };
         const selectedSourceHasWords = () => {
+            if (typeof window.ensureTimingsSourceSelected === 'function') {
+                window.ensureTimingsSourceSelected();
+            }
             const checked = document.querySelector('input[name="timings-source"]:checked');
-            return !!(checked && !checked.disabled);
+            if (checked && !checked.disabled) return true;
+            const eleven = document.getElementById('timings-source-elevenlabs');
+            const whisper = document.getElementById('timings-source-whisper');
+            return !!((eleven && !eleven.disabled) || (whisper && !whisper.disabled));
         };
         const refreshHasWordsDataset = () => {
             const eleven = document.getElementById('timings-source-elevenlabs');
@@ -7609,6 +7816,15 @@
             }
         };
         window.__syncVideoJsonScenesRunBtn = syncVideoJsonScenesRunBtn;
+        const syncScenesTimingsPanelPrereqs = () => {
+            syncHasScenesDataset();
+            refreshHasWordsDataset();
+            if (typeof window.ensureTimingsSourceSelected === 'function') {
+                window.ensureTimingsSourceSelected();
+            }
+            syncVideoJsonScenesRunBtn();
+        };
+        window.__syncScenesTimingsPanelPrereqs = syncScenesTimingsPanelPrereqs;
         window.__updateApplyTimingsBtnTitle = () => {
             refreshHasWordsDataset();
             updateVideoJsonScenesRunTitle();
@@ -7886,13 +8102,49 @@
             setApplyStatus('');
         };
 
+        const refreshScenesTimingsFromServer = async () => {
+            const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+            const r = await fetch(`${ROOT}/job/${jobId}/scenes/timings-panel`, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+            });
+            const data = await parseJsonOrThrow(r, 'timings-panel');
+            if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+            if (data.scenes_stripped_text != null) {
+                setVideoJsonScenesTimingsText(String(data.scenes_stripped_text || ''));
+            }
+            if (data.timings_validation) {
+                renderScenesTimingsValidation(data.timings_validation);
+            }
+            setApplyStatus('');
+        };
+
         let refreshScenesPanelInFlight = false;
         window.__refreshVideoJsonScenesPanel = async () => {
             if (refreshScenesPanelInFlight) return;
             refreshScenesPanelInFlight = true;
             try {
+                syncScenesTimingsPanelPrereqs();
                 if (!canApplyTimings()) {
-                    clearVideoJsonScenesPanelNoWords();
+                    const hasText = !!(textEl.value || '').trim();
+                    if (!hasText) {
+                        clearVideoJsonScenesPanelNoWords();
+                    } else if (checkSummaryEl && checkSummaryEl.textContent === '—') {
+                        try {
+                            await refreshScenesTimingsFromServer();
+                        } catch (e) {
+                            console.warn('timings-panel refresh:', e);
+                        }
+                    }
+                    return;
+                }
+                const hasText = !!(textEl.value || '').trim();
+                if (hasText) {
+                    try {
+                        await refreshScenesTimingsFromServer();
+                    } catch (e) {
+                        console.warn('timings-panel refresh:', e);
+                    }
                     return;
                 }
                 setScenesCheckLoading();
@@ -7905,6 +8157,7 @@
 
         applyTimingsJsonLockUi();
         updateCounts();
+        syncScenesTimingsPanelPrereqs();
         if (panelWrap && panelWrap.getAttribute('aria-expanded') === 'true') {
             window.__refreshVideoJsonScenesPanel();
         }

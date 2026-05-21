@@ -139,7 +139,7 @@
                                 {% elif start_gen and start_gen.state == 'fail' %}
                                 {{ slot_fail_block(start_gen.error) }}
                                 {% elif scene.start.image_url %}
-                                <img src="{{ scene.start.image_url }}" alt="Start" class="slot-image">
+                                <img data-deferred-src="{{ scene.start.image_url }}" alt="Start" class="slot-image slot-image--deferred" decoding="async">
                                 {% else %}
                                 <span class="slot-status">Pending</span>
                                 {% endif %}
@@ -166,7 +166,7 @@
                                 {% elif end_gen and end_gen.state == 'fail' %}
                                 {{ slot_fail_block(end_gen.error) }}
                                 {% elif scene.end.image_url %}
-                                <img src="{{ scene.end.image_url }}" alt="Later" class="slot-image">
+                                <img data-deferred-src="{{ scene.end.image_url }}" alt="Later" class="slot-image slot-image--deferred" decoding="async">
                                 {% else %}
                                 <span class="slot-status">Pending</span>
                                 {% endif %}
@@ -242,7 +242,7 @@
                                 {% elif video_gen and video_gen.state == 'fail' %}
                                 {{ slot_fail_block(video_gen.error) }}
                                 {% elif scene.video.video_url %}
-                                <video src="{{ scene.video.video_url }}" class="slot-image" controls playsinline preload="metadata"></video>
+                                <video data-deferred-src="{{ scene.video.video_url }}" class="slot-image slot-image--deferred" controls playsinline preload="none"></video>
                                 {% else %}
                                 <span class="slot-status">Pending</span>
                                 {% endif %}

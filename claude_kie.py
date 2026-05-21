@@ -220,6 +220,32 @@ def _extract_text_from_content_blocks(content_blocks: Any) -> str:
     return "".join(parts)
 
 
+def claude_user_content_blocks(
+    user_text: str,
+    image_url: str | None = None,
+) -> list[dict[str, Any]]:
+    """Блоки user-сообщения для Kie Claude (текст + опционально одно изображение по URL).
+
+    Формат изображения — Anthropic Messages API (не OpenAI image_url):
+    {"type": "image", "source": {"type": "url", "url": "https://..."}}
+    """
+    blocks: list[dict[str, Any]] = []
+    url = str(image_url or "").strip()
+    if url:
+        blocks.append(
+            {
+                "type": "image",
+                "source": {"type": "url", "url": url},
+            }
+        )
+    text = (user_text or "").strip()
+    if text:
+        blocks.append({"type": "text", "text": _sanitize_for_json(text)})
+    if not blocks:
+        blocks.append({"type": "text", "text": " "})
+    return blocks
+
+
 def claude_messages_wire_payload(
     model: str,
     system_prompt: str,
@@ -227,15 +253,20 @@ def claude_messages_wire_payload(
     *,
     max_tokens: int | None = None,
     stream: bool = False,
+    image_url: str | None = None,
 ) -> dict[str, Any]:
     """Тело POST /claude/v1/messages — Anthropic-style."""
     model_id = (model or "").strip()
+    if image_url and str(image_url).strip():
+        user_msg_content: str | list[dict[str, Any]] = claude_user_content_blocks(
+            user_content, image_url
+        )
+    else:
+        user_msg_content = _sanitize_for_json((user_content or "").strip())
     payload: dict[str, Any] = {
         "model": model_id,
         "system": _sanitize_for_json((system_prompt or "").strip()),
-        "messages": [
-            {"role": "user", "content": _sanitize_for_json((user_content or "").strip())},
-        ],
+        "messages": [{"role": "user", "content": user_msg_content}],
         "max_tokens": int(max_tokens) if max_tokens else claude_max_tokens_for_model(model_id),
     }
     if stream:

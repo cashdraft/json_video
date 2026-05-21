@@ -72,6 +72,7 @@ from flask import (
     stream_with_context,
     url_for,
 )
+from werkzeug.utils import secure_filename
 import requests
 from yt_dlp import YoutubeDL
 
@@ -259,6 +260,18 @@ def _sanitize_job_scenes(job: dict[str, Any] | None) -> None:
     for s in scenes:
         if isinstance(s, dict):
             _sanitize_scene_deprecated(s)
+
+
+def _slot_media_url_from_body_or_scene(
+    scene: dict[str, Any],
+    slot: str,
+    body_url: Any,
+) -> str:
+    """URL кадра из job JSON или из тела запроса (UI уже показывает превью)."""
+    stored = str((scene.get(slot) or {}).get("image_url") or "").strip()
+    if stored:
+        return stored
+    return str(body_url or "").strip()
 
 
 def _strip_deprecated_job_fields(job: dict[str, Any] | None) -> None:
@@ -3604,6 +3617,378 @@ def index():
     return resp
 
 
+@app.route("/scenes-lab")
+def scenes_lab_page():
+    """Отдельная страница Later… — только запрос к Claude, без сцен проекта."""
+    from scenes_lab_later import claude_models_for_ui, kie_api_key_present as scenes_lab_kie_ok
+
+    return render_template(
+        "scenes_lab.html",
+        claude_models=claude_models_for_ui(),
+        claude_key_set=scenes_lab_kie_ok(),
+    )
+
+
+@app.route("/scenes-lab/media/<path:filename>")
+def scenes_lab_media(filename: str):
+    """Раздача загруженных для Later… фото (доступ Kie.ai по PUBLIC_BASE_URL)."""
+    from scenes_lab_later import SCENES_LAB_UPLOADS_DIR
+
+    safe = Path(secure_filename(Path(filename).name))
+    if not safe.name:
+        return "Not found", 404
+    path = (SCENES_LAB_UPLOADS_DIR / safe.name).resolve()
+    root = SCENES_LAB_UPLOADS_DIR.resolve()
+    if not str(path).startswith(str(root)) or not path.is_file():
+        return "Not found", 404
+    return send_from_directory(root, safe.name)
+
+
+@app.route("/scenes-lab/api/upload", methods=["POST"])
+def scenes_lab_api_upload():
+    from scenes_lab_later import save_scenes_lab_upload
+
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "Файл не передан."}), 400
+    data = f.read()
+    url, err = save_scenes_lab_upload(data, f.filename, public_base_url_for_kie())
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "image_url": url})
+
+
+@app.route("/scenes-lab/api/anim-dictionary", methods=["GET"])
+def scenes_lab_api_anim_dictionary():
+    """Рантайм-словарь anim (отладка: промт и валидатор читают одну константу)."""
+    from later_anim_dictionary import anim_dictionary_debug
+
+    return jsonify(anim_dictionary_debug())
+
+
+@app.route("/scenes-lab/api/state", methods=["GET"])
+def scenes_lab_api_state():
+    """Последний сохранённый ответ Later… (для восстановления после перезагрузки)."""
+    from scenes_lab_session import later_session_api_payload
+
+    return jsonify(later_session_api_payload())
+
+
+@app.route("/scenes-lab/api/claude", methods=["POST"])
+def scenes_lab_api_claude():
+    from later_response_parse import process_later_model_response
+    from scenes_lab_later import run_later_claude_request
+    from scenes_lab_session import clear_later_session, save_later_session
+
+    body = request.get_json(silent=True) or {}
+    model = str(body.get("model") or "").strip()
+    user_prompt = str(body.get("user_prompt") or body.get("prompt") or "")
+    image_url = str(body.get("image_url") or "").strip()
+    scene_text = str(body.get("scene_text") or "")
+    scene_text_ru = str(body.get("scene_text_ru") or "")
+    system_prompt = str(body.get("system_prompt") or "")
+    if not image_url:
+        return jsonify({"ok": False, "error": "Нужно фото (кадр Start или загрузка)."}), 400
+    clear_later_session()
+    text, err = run_later_claude_request(
+        model=model,
+        user_prompt=user_prompt,
+        image_url=image_url,
+        scene_text=scene_text,
+        scene_text_ru=scene_text_ru,
+        system_prompt=system_prompt,
+    )
+    if err:
+        return jsonify({"ok": False, "error": err}), 502
+    bundle = process_later_model_response(text or "")
+    validation = bundle["validation"]
+    pipeline_ok = bool(validation.get("ok", False))
+    save_later_session(
+        text=text or "",
+        parsed=bundle["parsed"],
+        validation=validation,
+        pipeline_ok=pipeline_ok,
+        model=model,
+        user_prompt=user_prompt,
+        image_url=image_url,
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "text": text or "",
+            "parsed": bundle["parsed"],
+            "validation": validation,
+            "pipeline_ok": pipeline_ok,
+        }
+    )
+
+
+@app.route("/scenes-lab/api/parse", methods=["POST"])
+def scenes_lab_api_parse():
+    """Разбор и валидация вставленного ответа без запроса к Claude."""
+    from later_response_parse import process_later_model_response
+
+    body = request.get_json(silent=True) or {}
+    raw = str(body.get("text") or body.get("response") or "")
+    if not raw.strip():
+        return jsonify({"ok": False, "error": "Пустой текст."}), 400
+    from scenes_lab_session import load_later_session, save_later_session
+
+    bundle = process_later_model_response(raw)
+    v = bundle["validation"]
+    pipeline_ok = bool(v.get("ok", False))
+    prev = load_later_session() or {}
+    save_later_session(
+        text=raw,
+        parsed=bundle["parsed"],
+        validation=v,
+        pipeline_ok=pipeline_ok,
+        model=str(body.get("model") or prev.get("model") or ""),
+        user_prompt=str(body.get("user_prompt") or prev.get("user_prompt") or ""),
+        image_url=str(body.get("image_url") or prev.get("image_url") or ""),
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "text": raw,
+            "parsed": bundle["parsed"],
+            "validation": v,
+            "pipeline_ok": pipeline_ok,
+        }
+    )
+
+
+@app.route("/scenes-lab/viewer")
+def scenes_lab_viewer_page():
+    """Мини-вьюер SVG: вставка разметки, превью, проверка XML."""
+    return render_template("scenes_lab_viewer.html")
+
+
+@app.route("/scenes-lab/api/remotion/info", methods=["GET"])
+def scenes_lab_api_remotion_info():
+    """Состояние props / mp4 / последний рендер (без запуска)."""
+    from scenes_lab_remotion import (
+        lab_render_state_view,
+        load_lab_render_state,
+        remotion_out_path,
+        remotion_props_path,
+        sync_lab_render_state,
+    )
+
+    props_path = remotion_props_path()
+    out_path = remotion_out_path()
+    info: dict[str, Any] = {
+        "ok": True,
+        "props_ready": props_path.is_file(),
+        "props_url": url_for("scenes_lab_remotion_file", filename="props.json") if props_path.is_file() else None,
+        "mp4_ready": out_path.is_file(),
+        "mp4_url": url_for("scenes_lab_remotion_file", filename="out.mp4") if out_path.is_file() else None,
+        "studio_url": url_for("scenes_lab_remotion_studio"),
+        "render": None,
+    }
+    if props_path.is_file():
+        try:
+            raw = json.loads(props_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                info["tracks_count"] = len((raw.get("animation") or {}).get("tracks") or [])
+                info["duration_frames"] = raw.get("duration_frames")
+                info["fps"] = raw.get("fps")
+        except (OSError, json.JSONDecodeError, TypeError):
+            pass
+    disk = load_lab_render_state()
+    if disk:
+        disk = sync_lab_render_state(disk)
+        view = lab_render_state_view(disk)
+        if view.get("state") == "done" and out_path.is_file():
+            view["output_url"] = url_for("scenes_lab_remotion_file", filename="out.mp4")
+        info["render"] = view
+    return jsonify(info)
+
+
+@app.route("/scenes-lab/api/remotion-props", methods=["POST"])
+def scenes_lab_api_remotion_props():
+    """Записать props.json из валидированной later_session."""
+    from scenes_lab_remotion import build_remotion_props_from_session, remotion_props_path, write_remotion_props
+
+    path, err = write_remotion_props()
+    if err or not path:
+        return jsonify({"ok": False, "error": err or "props_failed", "message": err}), 400
+    props, _ = build_remotion_props_from_session()
+    tracks_n = int((props or {}).get("tracks_count") or 0)
+    frames_n = int((props or {}).get("duration_frames") or 0)
+    msg = f"props.json записан ({tracks_n} треков, {frames_n} кадров)."
+    return jsonify({
+        "ok": True,
+        "props_path": str(path),
+        "props_url": url_for("scenes_lab_remotion_file", filename="props.json"),
+        "tracks_count": tracks_n,
+        "duration_frames": frames_n,
+        "message": msg,
+    })
+
+
+@app.route("/scenes-lab/remotion/file/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
+def scenes_lab_remotion_file(filename: str):
+    from scenes_lab_remotion import SCENES_LAB_REMOTION_DIR
+
+    if request.method == "OPTIONS":
+        return _montage_file_cors(make_response("", 204))
+    safe = Path(secure_filename(Path(filename).name))
+    if not safe.name:
+        return "Not found", 404
+    path = (SCENES_LAB_REMOTION_DIR / safe.name).resolve()
+    root = SCENES_LAB_REMOTION_DIR.resolve()
+    if not str(path).startswith(str(root)) or not path.is_file():
+        return "Not found", 404
+    if safe.suffix.lower() == ".json":
+        resp = send_from_directory(root, safe.name, mimetype="application/json")
+    elif safe.suffix.lower() == ".mp4":
+        resp = send_from_directory(root, safe.name, mimetype="video/mp4")
+        if request.args.get("download"):
+            resp.headers["Content-Disposition"] = 'attachment; filename="later_infographic.mp4"'
+    else:
+        resp = send_from_directory(root, safe.name)
+    return _montage_file_cors(resp)
+
+
+@app.route("/scenes-lab/api/remotion/render", methods=["POST"])
+def scenes_lab_api_remotion_render():
+    import time
+
+    from scenes_lab_remotion import (
+        lab_render_active,
+        lab_render_state_view,
+        load_lab_render_state,
+        new_render_task_id,
+        remotion_out_path,
+        remotion_props_path,
+        spawn_lab_render_supervisor,
+        sync_lab_render_state,
+        write_remotion_props,
+    )
+
+    path, err = write_remotion_props()
+    if err or not path:
+        return jsonify({"ok": False, "error": err or "no_props", "message": err}), 400
+    if not remotion_props_path().is_file():
+        return jsonify({"ok": False, "error": "no_props", "message": "props.json не найден."}), 400
+
+    active = lab_render_active()
+    if active:
+        view = lab_render_state_view(active)
+        view["output_url"] = url_for("scenes_lab_remotion_file", filename="out.mp4") if remotion_out_path().is_file() else None
+        view["props_url"] = url_for("scenes_lab_remotion_file", filename="props.json")
+        view["studio_url"] = "/scenes-lab/remotion/studio"
+        return jsonify({"ok": True, **view})
+
+    task_id = new_render_task_id()
+    _now = time.time()
+    st: dict[str, Any] = {
+        "task_id": task_id,
+        "job_id": "scenes_lab",
+        "state": "queued",
+        "progress_pct": 0,
+        "stage": "queued",
+        "message": "Запуск воркера рендера…",
+        "started_at": _now,
+        "last_progress_at": _now,
+        "finished_at": None,
+        "error": None,
+        "error_detail": None,
+        "exit_code": None,
+        "output_url": None,
+        "output_filename": None,
+        "pid": None,
+        "supervisor_pid": None,
+        "last_log_line": None,
+        "stuck_at": None,
+        "stuck_reason": None,
+        "cancel_requested": False,
+    }
+    from scenes_lab_remotion import persist_lab_render_state
+
+    persist_lab_render_state(st)
+
+    sup_pid = spawn_lab_render_supervisor(task_id)
+    if sup_pid is None:
+        st.update({
+            "state": "error",
+            "error": "spawn_failed",
+            "error_detail": "Не удалось запустить scenes_lab_render_worker.py",
+            "message": "Не удалось запустить воркер рендера",
+            "finished_at": time.time(),
+        })
+        persist_lab_render_state(st)
+        return jsonify({
+            "ok": False,
+            "error": "spawn_failed",
+            "message": st["message"],
+            "error_detail": st["error_detail"],
+            "state": "error",
+        }), 500
+
+    st["supervisor_pid"] = sup_pid
+    st["state"] = "running"
+    st["stage"] = "starting"
+    st["message"] = f"Воркер рендера запущен (pid {sup_pid})"
+    persist_lab_render_state(st)
+    view = lab_render_state_view(st)
+    view["props_url"] = url_for("scenes_lab_remotion_file", filename="props.json")
+    view["studio_url"] = "/scenes-lab/remotion/studio"
+    return jsonify({"ok": True, **view})
+
+
+@app.route("/scenes-lab/api/remotion/render/status")
+def scenes_lab_api_remotion_render_status():
+    from scenes_lab_remotion import (
+        lab_render_state_view,
+        load_lab_render_state,
+        remotion_out_path,
+        remotion_props_path,
+        sync_lab_render_state,
+    )
+
+    task_id = (request.args.get("task_id") or "").strip()
+    disk = load_lab_render_state()
+    if disk:
+        if task_id and str(disk.get("task_id") or "") != task_id:
+            disk = None
+    if disk:
+        disk = sync_lab_render_state(disk)
+        view = lab_render_state_view(disk)
+        dstate = str(disk.get("state") or "")
+        if dstate == "done" and not view.get("output_url") and remotion_out_path().is_file():
+            view["output_url"] = url_for("scenes_lab_remotion_file", filename="out.mp4")
+            view["output_filename"] = "out.mp4"
+        view["props_url"] = url_for("scenes_lab_remotion_file", filename="props.json") if remotion_props_path().is_file() else None
+        view["studio_url"] = "/scenes-lab/remotion/studio"
+        return jsonify({"ok": True, **view})
+
+    if remotion_out_path().is_file():
+        return jsonify({
+            "ok": True,
+            "task_id": None,
+            "job_id": "scenes_lab",
+            "state": "done",
+            "progress_pct": 100,
+            "stage": "done",
+            "message": "MP4 уже готов.",
+            "output_url": url_for("scenes_lab_remotion_file", filename="out.mp4"),
+            "output_filename": "out.mp4",
+            "props_url": url_for("scenes_lab_remotion_file", filename="props.json") if remotion_props_path().is_file() else None,
+            "studio_url": "/scenes-lab/remotion/studio",
+        })
+    return jsonify({"ok": False, "error": "not_found"}), 404
+
+
+@app.route("/scenes-lab/remotion/studio")
+def scenes_lab_remotion_studio():
+    """Редирект в Remotion Studio с подсказкой по query."""
+    host = request.host.split(":")[0]
+    port = os.environ.get("REMOTION_STUDIO_PORT", "3000")
+    return redirect(f"http://{host}:{port}/LaterInfographic?lab=1", code=302)
+
+
 @app.route("/video")
 def video_index():
     return redirect(url_for("index"))
@@ -3664,6 +4049,15 @@ def _rewrite_template_context(rewrite_id: str) -> dict:
         rw = load_rewrite_job(rewrite_id)
     if rw is None:
         return {"rw": None, **_mode_opts}
+    try:
+        from rewrite_templates import backfill_empty_template_scope_fields
+
+        if backfill_empty_template_scope_fields(rw):
+            save_rewrite_job(rewrite_id, rw)
+    except Exception:
+        app.logger.warning(
+            "backfill template scope fields failed for %s", rewrite_id, exc_info=True
+        )
     st = rw.get("stages")
     if not isinstance(st, dict):
         st = {}
@@ -4057,12 +4451,27 @@ def rewrite_api_template_save(name: str):
     if name.strip() not in known:
         return jsonify({"ok": False, "error": "not_found"}), 404
     stages = filter_stages_for_template_scope(body.get("stages"))
+    existing = load_rewrite_template(name.strip()) or {}
+    tts_defaults = body.get("tts_defaults")
+    if not isinstance(tts_defaults, dict):
+        tts_defaults = None
     ok, err = save_rewrite_template_to_disk(
         name.strip(),
         hero_prompt=str(body.get("hero_prompt") or ""),
         master_prompt=str(body.get("master_prompt") or ""),
+        scene_length_mode=str(
+            body.get("scene_length_mode") or existing.get("scene_length_mode") or "standard"
+        ),
+        image_style_mode=str(
+            body.get("image_style_mode") or existing.get("image_style_mode") or "hero_everywhere"
+        ),
+        video_style_mode=str(
+            body.get("video_style_mode") or existing.get("video_style_mode") or "manual"
+        ),
         target_chars=None,
         stages=stages,
+        description=str(body.get("description") or existing.get("description") or ""),
+        tts_defaults=tts_defaults,
     )
     if not ok:
         return jsonify({"ok": False, "error": err or "save_failed"}), 400
@@ -7039,11 +7448,28 @@ def generate_slot_start(job_id: str):
         video_generation_type = "TEXT_2_VIDEO"
         if slot == "video":
             start_prompt_exists = bool(scene.get("start", {}).get("prompt"))
-            start_image_url = scene.get("start", {}).get("image_url")
-            later_image_url = scene.get("end", {}).get("image_url")
+            start_image_url = _slot_media_url_from_body_or_scene(
+                scene, "start", data.get("start_image_url")
+            )
+            later_image_url = _slot_media_url_from_body_or_scene(
+                scene, "end", data.get("end_image_url")
+            )
 
             if start_prompt_exists and not start_image_url:
                 return jsonify({"error": "Generate Start image first"}), 400
+
+            if start_image_url:
+                start_blk = scene.setdefault("start", {})
+                if not str(start_blk.get("image_url") or "").strip():
+                    start_blk["image_url"] = start_image_url
+            if later_image_url:
+                end_blk = scene.setdefault("end", {})
+                if not str(end_blk.get("image_url") or "").strip():
+                    end_blk["image_url"] = later_image_url
+            if start_image_url or later_image_url:
+                scenes[scene_idx] = scene
+                job["scenes"] = scenes
+                save_job(job_id, job)
 
             if start_image_url:
                 video_image_urls.append(start_image_url)
@@ -9839,8 +10265,16 @@ def job_page(job_id: str):
         else ("whisper" if whisper_last_words_href else "elevenlabs")
     )
     _words_timings_available = bool(tts_last_words_href) or bool(whisper_last_words_href)
+    _has_saved_scene_timings = any(
+        isinstance(s, dict)
+        and isinstance(s.get("audio_timing"), dict)
+        and s["audio_timing"].get("start_ms") is not None
+        for s in scenes_for_template
+    )
     scenes_stripped_with_timing = (
-        _render_scenes_stripped_with_timing(scenes_for_template) if _words_timings_available else ""
+        _render_scenes_stripped_with_timing(scenes_for_template)
+        if (_words_timings_available or _has_saved_scene_timings)
+        else ""
     )
     scenes_for_timings_check = scenes_for_template
     if _words_timings_available and (scenes_stripped_with_timing or "").strip():

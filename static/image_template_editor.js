@@ -284,7 +284,9 @@
             descToolbar.className = 'slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar image-template-editor-ref-desc-toolbar';
             var descPrefix = document.createElement('span');
             descPrefix.className = 'image-template-editor-ref-desc-prefix';
-            descPrefix.textContent = 'Image ' + (idx + 1) + ' - ';
+            descPrefix.textContent = 'Image ' + (idx + 1) + ' -';
+            var descActions = document.createElement('span');
+            descActions.className = 'image-template-editor-ref-desc-actions';
             var descBadge = document.createElement('span');
             descBadge.className = 'slot-badge template-prompt-badge badge-no image-template-editor-ref-desc-badge';
             descBadge.setAttribute('data-ref-desc-badge', '1');
@@ -319,9 +321,10 @@
                 syncRefDescriptionBadge(descBlock, descTa);
             });
             descSlot.appendChild(descTa);
+            descActions.appendChild(descBadge);
+            descActions.appendChild(descToggle);
             descToolbar.appendChild(descPrefix);
-            descToolbar.appendChild(descBadge);
-            descToolbar.appendChild(descToggle);
+            descToolbar.appendChild(descActions);
             descBlock.appendChild(descToolbar);
             descBlock.appendChild(descSlot);
             syncRefDescriptionBadge(descBlock, descTa);

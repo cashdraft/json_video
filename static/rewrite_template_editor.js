@@ -531,7 +531,7 @@
         ensure('rewrite');
         stages.rewrite.prompt = (document.getElementById('rte-rewrite-prompt') || {}).value || '';
         ensure('scene_writer');
-        stages.scene_writer.prompt = (document.getElementById('rte-scene-writer-prompt') || {}).value || '';
+        stages.scene_writer.prompt = '';
         stages.scene_writer.style_prompt = (document.getElementById('rte-scene-writer-style') || {}).value || '';
         return stages;
     }
@@ -698,13 +698,11 @@
         var hero = document.getElementById('rte-hero');
         var master = document.getElementById('rte-master');
         var rw = document.getElementById('rte-rewrite-prompt');
-        var sw = document.getElementById('rte-scene-writer-prompt');
         var swStyle = document.getElementById('rte-scene-writer-style');
         if (hero) hero.value = data.hero_prompt || '';
         if (master) master.value = data.master_prompt || '';
         var st = state.initialStages;
         if (rw) rw.value = (st.rewrite && st.rewrite.prompt) || '';
-        if (sw) sw.value = (st.scene_writer && st.scene_writer.prompt) || '';
         if (swStyle) swStyle.value = (st.scene_writer && st.scene_writer.style_prompt) || '';
         var applyMode = window.applyRewriteModeForSelect || window.applySceneLengthModeForSelect;
         var sceneLenSel = document.getElementById('rte-scene-length-mode');
@@ -833,6 +831,7 @@
 
     async function closeModal() {
         if (modal.classList.contains('hidden')) return;
+        var savedName = state.name;
         try {
             lockAllEditableFields();
             await queueSaveTemplate();
@@ -843,6 +842,9 @@
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
         setStatus('', false);
+        if (savedName && typeof window.applyRewriteTemplateDataToJobUi === 'function') {
+            try { await window.applyRewriteTemplateDataToJobUi(savedName); } catch (_e) { /* ignore */ }
+        }
         state.name = '';
     }
 

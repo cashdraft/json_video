@@ -1447,6 +1447,15 @@ textarea::placeholder {
     letter-spacing: 0.02em;
     flex-shrink: 0;
     white-space: nowrap;
+    margin-right: auto;
+}
+
+.image-template-editor-ref-desc-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .image-template-editor-ref-desc-block {
@@ -1459,9 +1468,28 @@ textarea::placeholder {
 .image-template-editor-ref-desc-toolbar {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.35rem;
     flex-wrap: nowrap;
+    width: 100%;
     margin: 0;
+}
+
+.image-template-editor-ref-desc-toolbar.rewrite-stage-prompt-toolbar,
+.image-template-editor-ref-desc-toolbar.slot-header.rewrite-stage-compact-header {
+    justify-content: space-between;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.image-template-editor-ref-desc-actions .image-template-editor-ref-desc-badge,
+.image-template-editor-ref-desc-actions .template-prompt-badge {
+    margin-left: 0;
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .image-template-editor-ref-desc-badge {
@@ -2520,6 +2548,78 @@ textarea::placeholder {
     align-items: center;
     justify-content: center;
     z-index: 5;
+}
+
+.rewrite-template-lock-overlay__inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 0.75rem;
+    max-width: min(100%, 22rem);
+}
+
+.rewrite-template-lock-active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    pointer-events: none;
+    min-width: 0;
+}
+
+.rewrite-template-lock-active__frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rewrite-template-lock-active__frame .template-option-frame {
+    border-radius: 50%;
+    padding: 0.12rem;
+    border: 2px solid var(--accent, #3b82f6);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+
+.rewrite-template-lock-active__frame .template-option-visual {
+    width: clamp(3.25rem, 12vw, 4.5rem);
+    height: clamp(3.25rem, 12vw, 4.5rem);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.rewrite-template-lock-active__frame .template-logo-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.rewrite-template-lock-active__frame .template-option-visual--letter {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+}
+
+.rewrite-template-lock-active__frame .template-option-visual--base {
+    color: #e6b422;
+}
+
+.rewrite-template-lock-active__name {
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: center;
+    color: #fff;
+    max-width: 9rem;
+    word-break: break-word;
 }
 
 .rewrite-template-section--locked .rewrite-template-carousel,
@@ -9334,6 +9434,11 @@ body.job-page--booting {
     height: 100%;
     object-fit: contain;
     border-radius: 4px;
+}
+
+.slot-placeholder[data-status="done"] .slot-image--deferred:not([src]) {
+    opacity: 0.2;
+    pointer-events: none;
 }
 
 .slot-placeholder > video.slot-image {

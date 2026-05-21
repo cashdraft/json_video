@@ -153,6 +153,11 @@ LOCKED_PROMPTS: dict[str, dict] = {
         "filename": "voiceover_editor_system_rules.txt",
         "default": "",
     },
+    "system_prompt_scene_writer": {
+        "label": "Scene Writer — System Promt",
+        "filename": "system_prompt_scene_writer.txt",
+        "default": "",
+    },
     "scene_writer_system_rules": {
         "label": "Scene Writer — System Rules",
         "filename": "scene_writer_system_rules.txt",
@@ -261,8 +266,34 @@ def is_locked_prompt_present(name: str) -> bool:
     return bool(text.strip())
 
 
+def _migrate_scene_writer_system_from_templates_once() -> None:
+    """Один раз перенести System Promt из шаблона проекта в locked_prompt_files/."""
+    name = "system_prompt_scene_writer"
+    if is_locked_prompt_present(name):
+        return
+    templates_root = BASE_DIR / "rewrite_templates"
+    if not templates_root.is_dir():
+        return
+    for td in sorted(templates_root.iterdir(), key=lambda p: p.name.lower()):
+        if not td.is_dir():
+            continue
+        for fname in ("Scene Writer System Promt.txt", "Scene Writer Prompt.txt"):
+            src = td / fname
+            if not src.is_file():
+                continue
+            try:
+                text = src.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if text:
+                save_locked_prompt(name, text + "\n")
+                return
+
+
 def get_locked_prompt(name: str) -> str:
     """Вернуть текущий текст. Если файла нет — отдать `default` из реестра."""
+    if name == "system_prompt_scene_writer":
+        _migrate_scene_writer_system_from_templates_once()
     meta = LOCKED_PROMPTS.get(name)
     if not meta:
         raise KeyError(name)

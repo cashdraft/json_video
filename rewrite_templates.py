@@ -50,7 +50,9 @@ def filter_stages_for_template_scope(stages: dict[str, Any] | None) -> dict[str,
     for sk in REWRITE_TEMPLATE_SCOPE_STAGE_KEYS:
         cell = stages.get(sk) if isinstance(stages.get(sk), dict) else {}
         out[sk] = {
-            "prompt": str(cell.get("prompt") or ""),
+            "prompt": ""
+            if sk == "scene_writer"
+            else str(cell.get("prompt") or ""),
             "user_prompt": str(cell.get("user_prompt") or ""),
             "style_prompt": str(cell.get("style_prompt") or ""),
             "past_prompt": str(cell.get("past_prompt") or ""),
@@ -506,7 +508,7 @@ def load_rewrite_template(name: str) -> dict | None:
             out["master_prompt"] = raw.strip()
         elif target.startswith("stage:"):
             sk = target.split(":", 1)[1]
-            if sk in REWRITE_STAGE_KEYS:
+            if sk in REWRITE_STAGE_KEYS and sk != "scene_writer":
                 out["stages"][sk]["prompt"] = raw.strip()
         elif target.startswith("stage_user:"):
             sk = target.split(":", 1)[1]
@@ -547,6 +549,51 @@ def load_rewrite_template(name: str) -> dict | None:
     out["logo_file"] = logo.name if logo else None
 
     return out
+
+
+def backfill_empty_template_scope_fields(job: dict[str, Any]) -> bool:
+    """Подставляет в проект пустые поля из шаблона (hero/master/modes, rewrite prompt, scene_writer style).
+
+    Не перезаписывает уже заполненные значения — только дополняет пропуски после смены
+    шаблона или если файл Style Promt появился на диске позже.
+    """
+    tpl_name = str(job.get("rewrite_template") or "").strip()
+    if not tpl_name:
+        return False
+    tpl = load_rewrite_template(tpl_name)
+    if not tpl:
+        return False
+    changed = False
+    for key, attr in (
+        ("hero_prompt", "hero_prompt"),
+        ("master_prompt", "master_prompt"),
+        ("scene_length_mode", "scene_length_mode"),
+        ("image_style_mode", "image_style_mode"),
+        ("video_style_mode", "video_style_mode"),
+    ):
+        if not str(job.get(attr) or "").strip():
+            disk_val = str(tpl.get(key) or "").strip()
+            if disk_val:
+                job[attr] = disk_val
+                changed = True
+    stages = job.get("stages")
+    tpl_stages = tpl.get("stages") if isinstance(tpl.get("stages"), dict) else {}
+    if not isinstance(stages, dict):
+        return changed
+    for sk in REWRITE_TEMPLATE_SCOPE_STAGE_KEYS:
+        cell = stages.get(sk) if isinstance(stages.get(sk), dict) else {}
+        tpl_cell = tpl_stages.get(sk) if isinstance(tpl_stages.get(sk), dict) else {}
+        if sk != "scene_writer" and not str(cell.get("prompt") or "").strip():
+            disk_p = str(tpl_cell.get("prompt") or "").strip()
+            if disk_p:
+                cell["prompt"] = disk_p
+                changed = True
+        if sk == "scene_writer" and not str(cell.get("style_prompt") or "").strip():
+            disk_style = str(tpl_cell.get("style_prompt") or "").strip()
+            if disk_style:
+                cell["style_prompt"] = disk_style
+                changed = True
+    return changed
 
 
 def save_rewrite_template_to_disk(
@@ -606,8 +653,9 @@ def save_rewrite_template_to_disk(
         past_prompt = str(cell.get("past_prompt") or "")
 
         # New naming: explicit System Promt / User Promt files.
+        # Scene Writer System Promt — только locked_prompt_files/, не в шаблон проекта.
         fn = _TARGET_TO_FILENAME.get(f"stage:{sk}")
-        if fn:
+        if fn and sk != "scene_writer":
             (d / fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
         ufn = _TARGET_TO_FILENAME.get(f"stage_user:{sk}")
         if ufn:
@@ -620,9 +668,10 @@ def save_rewrite_template_to_disk(
             (d / pfn).write_text(past_prompt.rstrip() + "\n", encoding="utf-8")
 
         # Backward-compatible legacy file names.
-        legacy_title = _STAGE_TARGETS.get(sk, sk.capitalize())
-        legacy_system_fn = f"{legacy_title} Prompt.txt"
-        (d / legacy_system_fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
+        if sk != "scene_writer":
+            legacy_title = _STAGE_TARGETS.get(sk, sk.capitalize())
+            legacy_system_fn = f"{legacy_title} Prompt.txt"
+            (d / legacy_system_fn).write_text(prompt.rstrip() + "\n", encoding="utf-8")
     if description is not None or tts_defaults is not None:
         cur_meta = load_template_meta(d)
         save_template_meta(
