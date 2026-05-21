@@ -51,7 +51,8 @@ data/job_videos/
 data/job_remotion/
 
 # Scenes-lab runtime (сессия Later…, props/out.mp4, загрузки)
-data/scenes_lab/
+data/scenes_lab/remotion/
+data/scenes_lab/later_session.json
 data/scenes_lab_uploads/
 
 # Per-job locks / tmp atomic write files
