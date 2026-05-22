@@ -330,7 +330,10 @@ export const JobMontage: React.FC<JobMontageProps> = ({
         );
       })}
       {audio?.src ? (
-        <Audio src={prefetchedAudioSrc || staticFile(audio.src)} />
+        <Audio
+          src={prefetchedAudioSrc || staticFile(audio.src)}
+          showInTimeline={false}
+        />
       ) : null}
     </AbsoluteFill>
   );

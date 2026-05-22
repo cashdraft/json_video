@@ -1,19 +1,30 @@
-"""API для блока Later… на странице /scenes-lab (Claude через Kie + одно фото)."""
+"""API для блока Later… на странице /scenes-lab (Claude Kie + OpenAI GPT + одно фото)."""
 
 from __future__ import annotations
 
+import json
+import os
 import uuid
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from claude_kie import (
-    CLAUDE_MODEL_IDS,
     CLAUDE_MODELS,
     claude_messages_wire_payload,
     is_claude_model,
     kie_api_key_present,
     post_claude_messages_sync,
 )
+
+OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+GPT_LATER_MODEL_ID = "gpt-5.4"
+OPENAI_LATER_MODELS: list[dict[str, str]] = [
+    {"id": GPT_LATER_MODEL_ID, "label": "ChatGPT 5.4"},
+]
+OPENAI_LATER_MODEL_IDS: set[str] = {m["id"] for m in OPENAI_LATER_MODELS}
+LATER_CHAT_TEMPERATURE = 0.1
 from werkzeug.utils import secure_filename
 
 from later_anim_dictionary import (
@@ -80,8 +91,124 @@ DEFAULT_LATER_SYSTEM_PROMPT = (
 )
 
 
+def later_models_for_ui() -> list[dict[str, str]]:
+    """Список моделей для select на /scenes-lab."""
+    return list(CLAUDE_MODELS) + list(OPENAI_LATER_MODELS)
+
+
 def claude_models_for_ui() -> list[dict[str, str]]:
-    return list(CLAUDE_MODELS)
+    return later_models_for_ui()
+
+
+def is_openai_later_model(model: str) -> bool:
+    return (model or "").strip() in OPENAI_LATER_MODEL_IDS
+
+
+def openai_api_key_present() -> bool:
+    return bool((os.getenv("OPENAI_API_KEY") or "").strip())
+
+
+def later_api_ready() -> bool:
+    return kie_api_key_present() or openai_api_key_present()
+
+
+def _openai_api_key() -> str:
+    return (os.getenv("OPENAI_API_KEY") or "").strip()
+
+
+def _sanitize_for_openai_json(s: str) -> str:
+    t = (s or "").replace("\x00", " ")
+    return t.encode("utf-8", "replace").decode("utf-8", "replace")
+
+
+def _openai_chat_timeout() -> int:
+    raw = (os.getenv("OPENAI_CHAT_TIMEOUT") or "").strip()
+    if not raw:
+        return 600
+    try:
+        return max(60, min(int(raw), 3600))
+    except ValueError:
+        return 600
+
+
+def _openai_error_message(r: requests.Response) -> str:
+    err_body = (r.text or "")[:2000]
+    try:
+        err_json = r.json()
+        em = err_json.get("error") or {}
+        if isinstance(em, dict) and em.get("message"):
+            return str(em.get("message"))
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+    return err_body or (r.reason or str(r.status_code))
+
+
+def openai_vision_wire_payload(
+    model: str,
+    system_prompt: str,
+    user_text: str,
+    image_url: str,
+) -> dict[str, Any]:
+    img = str(image_url or "").strip()
+    user_content: list[dict[str, Any]] | str
+    if img:
+        user_content = [
+            {"type": "text", "text": _sanitize_for_openai_json(user_text)},
+            {
+                "type": "image_url",
+                "image_url": {"url": img, "detail": "high"},
+            },
+        ]
+    else:
+        user_content = _sanitize_for_openai_json(user_text)
+    return {
+        "model": (model or GPT_LATER_MODEL_ID).strip(),
+        "temperature": LATER_CHAT_TEMPERATURE,
+        "messages": [
+            {"role": "system", "content": _sanitize_for_openai_json(system_prompt)},
+            {"role": "user", "content": user_content},
+        ],
+    }
+
+
+def post_openai_chat_sync(payload: dict[str, Any], timeout: int | None = None) -> tuple[str | None, str | None]:
+    api_key = _openai_api_key()
+    if not api_key:
+        return None, "Не задан OPENAI_API_KEY в .env"
+    if timeout is None:
+        timeout = _openai_chat_timeout()
+    try:
+        body = json.dumps(
+            payload,
+            ensure_ascii=True,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        r = requests.post(
+            OPENAI_CHAT_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            data=body,
+            timeout=timeout,
+        )
+    except requests.RequestException as e:
+        return None, f"Сеть / таймаут: {e}"
+    if not r.ok:
+        return None, _openai_error_message(r)
+    try:
+        data = r.json()
+        choice0 = (data.get("choices") or [{}])[0]
+        msg = choice0.get("message") or {}
+        content = msg.get("content")
+        if content is None:
+            return None, "В ответе нет choices[0].message.content"
+        if not isinstance(content, str):
+            content = str(content)
+        return content, None
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+        return None, "Неожиданная структура ответа OpenAI."
 
 
 def save_scenes_lab_upload(
@@ -109,24 +236,12 @@ def save_scenes_lab_upload(
     return f"{base}/scenes-lab/media/{out_name}", None
 
 
-def run_later_claude_request(
+def _build_later_user_body(
     *,
-    model: str,
     user_prompt: str,
-    image_url: str,
     scene_text: str = "",
     scene_text_ru: str = "",
-    system_prompt: str = "",
-) -> tuple[str | None, str | None]:
-    """Синхронный запрос к Claude. Возвращает (answer_text, error)."""
-    if not kie_api_key_present():
-        return None, "Не задан KEYAI_API_KEY в .env (Kie.ai / Claude)."
-    mid = (model or "").strip()
-    if not is_claude_model(mid):
-        mid = CLAUDE_MODELS[0]["id"]
-    img = (image_url or "").strip()
-    if not img:
-        return None, "Прикрепите фото (или используйте кадр Start)."
+) -> str:
     parts: list[str] = []
     if (scene_text or "").strip():
         parts.append(f"Текст сцены (EN):\n{scene_text.strip()}")
@@ -136,9 +251,43 @@ def run_later_claude_request(
     if up:
         parts.append(f"Запрос пользователя:\n{up}")
     else:
-        parts.append("Опиши изображение и предложи, что можно сделать с этим кадром для следующего шага видео.")
-    user_body = "\n\n".join(parts)
+        parts.append(
+            "Опиши изображение и сгенерируй инфографику по контракту (SVG + JSON анимации + NOTES)."
+        )
+    return "\n\n".join(parts)
+
+
+def run_later_model_request(
+    *,
+    model: str,
+    user_prompt: str,
+    image_url: str,
+    scene_text: str = "",
+    scene_text_ru: str = "",
+    system_prompt: str = "",
+) -> tuple[str | None, str | None]:
+    """Синхронный запрос к выбранной модели. Возвращает (answer_text, error)."""
+    mid = (model or "").strip()
+    img = (image_url or "").strip()
+    if not img:
+        return None, "Прикрепите фото (или используйте кадр Start)."
+    user_body = _build_later_user_body(
+        user_prompt=user_prompt,
+        scene_text=scene_text,
+        scene_text_ru=scene_text_ru,
+    )
     sys_p = (system_prompt or "").strip() or DEFAULT_LATER_SYSTEM_PROMPT
+
+    if is_openai_later_model(mid):
+        if not openai_api_key_present():
+            return None, "Не задан OPENAI_API_KEY в .env (ChatGPT)."
+        payload = openai_vision_wire_payload(mid, sys_p, user_body, img)
+        return post_openai_chat_sync(payload, timeout=300)
+
+    if not kie_api_key_present():
+        return None, "Не задан KEYAI_API_KEY в .env (Kie.ai / Claude)."
+    if not is_claude_model(mid):
+        mid = CLAUDE_MODELS[0]["id"]
     payload = claude_messages_wire_payload(
         mid,
         sys_p,
@@ -147,3 +296,22 @@ def run_later_claude_request(
         stream=False,
     )
     return post_claude_messages_sync(payload, timeout=300)
+
+
+def run_later_claude_request(
+    *,
+    model: str,
+    user_prompt: str,
+    image_url: str,
+    scene_text: str = "",
+    scene_text_ru: str = "",
+    system_prompt: str = "",
+) -> tuple[str | None, str | None]:
+    return run_later_model_request(
+        model=model,
+        user_prompt=user_prompt,
+        image_url=image_url,
+        scene_text=scene_text,
+        scene_text_ru=scene_text_ru,
+        system_prompt=system_prompt,
+    )

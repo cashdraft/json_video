@@ -1,7 +1,42 @@
 (function () {
     'use strict';
 
-    const KEY_OK = document.body.getAttribute('data-claude-key') === '1';
+    const KEY_ANY = document.body.getAttribute('data-claude-key') === '1';
+    const KEY_KIE = document.body.getAttribute('data-kie-key') === '1';
+    const KEY_OPENAI = document.body.getAttribute('data-openai-key') === '1';
+    const GPT_MODEL_ID = 'gpt-5.4';
+
+    function isOpenaiLaterModel(modelId) {
+        return (modelId || '').trim() === GPT_MODEL_ID;
+    }
+
+    function modelKeyOk(modelId) {
+        if (isOpenaiLaterModel(modelId)) return KEY_OPENAI;
+        return KEY_KIE;
+    }
+
+    function updateLaterKeyHints(wrap) {
+        const modelEl = wrap.querySelector('[data-later-model]');
+        const mid = modelEl ? modelEl.value : '';
+        const hintKie = wrap.querySelector('[data-later-hint-kie]');
+        const hintOpenai = wrap.querySelector('[data-later-hint-openai]');
+        if (hintKie) {
+            hintKie.classList.toggle('is-hidden', KEY_KIE || isOpenaiLaterModel(mid));
+        }
+        if (hintOpenai) {
+            hintOpenai.classList.toggle('is-hidden', KEY_OPENAI || !isOpenaiLaterModel(mid));
+        }
+    }
+
+    function syncLaterPanelEnabled(wrap) {
+        const panel = wrap.querySelector('.later-lab__panel');
+        const modelEl = wrap.querySelector('[data-later-model]');
+        if (!panel) return;
+        const mid = modelEl ? modelEl.value : '';
+        const ok = KEY_ANY && modelKeyOk(mid);
+        panel.classList.toggle('later-lab--disabled', !ok);
+        updateLaterKeyHints(wrap);
+    }
 
     const statusTimers = new WeakMap();
 
@@ -62,12 +97,36 @@
         return src.trim();
     }
 
-    function setRawAnswer(wrap, text) {
-        const box = wrap.querySelector('[data-later-raw-answer]');
+    function setRawAnswer(wrap, text, opts) {
         const out = wrap.querySelector('[data-later-raw-out]');
-        const raw = (text || '').trim();
-        if (out) out.value = text || '';
-        if (box) box.classList.toggle('is-hidden', !raw);
+        if (!out) return;
+        if (opts && opts.onlyIfEmpty && (out.value || '').trim()) return;
+        out.value = text || '';
+    }
+
+    function getRawAnswerText(wrap) {
+        const out = wrap.querySelector('[data-later-raw-out]');
+        return out ? (out.value || '').trim() : '';
+    }
+
+    async function runReparseFromRaw(wrap) {
+        const text = getRawAnswerText(wrap);
+        if (!text) {
+            setLaterStatus(wrap, 'Вставьте или отредактируйте ответ в поле выше', 'error');
+            return;
+        }
+        const reparseBtn = wrap.querySelector('[data-later-reparse]');
+        if (reparseBtn) reparseBtn.disabled = true;
+        setLaterStatus(wrap, 'Проверка и сборка…', 'generating', {
+            detail: 'Разбор SVG / JSON / NOTES и валидация на сервере…',
+        });
+        try {
+            await parseOnServer(wrap, text);
+        } catch (e) {
+            setLaterStatus(wrap, String(e.message || e), 'error');
+        } finally {
+            if (reparseBtn) reparseBtn.disabled = false;
+        }
     }
 
     let renderPollTimer = null;
@@ -266,7 +325,7 @@
         wrap.querySelectorAll('[data-later-svg-out], [data-later-json-out], [data-later-notes-out]').forEach(function (el) {
             el.value = '';
         });
-        setRawAnswer(wrap, '');
+        setRawAnswer(wrap, '', { onlyIfEmpty: false });
         const preview = wrap.querySelector('[data-later-svg-preview]');
         if (preview) preview.innerHTML = '';
     }
@@ -280,6 +339,54 @@
         if (preview && data.image_url) {
             preview.src = data.image_url;
             preview.classList.remove('is-hidden');
+        }
+    }
+
+    function showSvgIframePreview(preview, svg) {
+        preview.innerHTML = '';
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('sandbox', '');
+        iframe.setAttribute('title', 'SVG preview (vector)');
+        iframe.srcdoc =
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+            'html,body{margin:0;height:100%;background:#0a0a0c;display:flex;align-items:center;justify-content:center;overflow:hidden}' +
+            'svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}' +
+            '</style></head><body>' +
+            svg +
+            '</body></html>';
+        preview.appendChild(iframe);
+    }
+
+    async function showSvgRasterPreview(wrap, preview, svg, validationOk, previewWrap) {
+        preview.innerHTML = '<div class="later-svg-preview__loading">Рендер PNG 1920×1080…</div>';
+        try {
+            const r = await fetch('/scenes-lab/api/svg-render-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ svg_fragment: svg }),
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok || !data.preview_url) {
+                throw new Error((data && data.error) || 'Рендер превью');
+            }
+            preview.innerHTML = '';
+            const img = document.createElement('img');
+            img.className = 'later-svg-preview__img';
+            img.src = data.preview_url + (data.preview_url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+            img.alt = 'Превью кадра 1920×1080';
+            img.width = 1920;
+            img.height = 1080;
+            preview.appendChild(img);
+        } catch (e) {
+            preview.innerHTML = '';
+            showSvgIframePreview(preview, svg);
+            if (previewWrap) {
+                const note = document.createElement('div');
+                note.className = 'later-svg-preview__warn';
+                note.textContent =
+                    'PNG-превью недоступно (' + String(e.message || e) + ') — показан векторный iframe.';
+                previewWrap.insertBefore(note, preview);
+            }
         }
     }
 
@@ -311,7 +418,7 @@
         const notesOut = wrap.querySelector('[data-later-notes-out]');
         const preview = wrap.querySelector('[data-later-svg-preview]');
         const svg = parsed.svg || '';
-        setRawAnswer(wrap, (data && data.text) || '');
+        setRawAnswer(wrap, (data && data.text) || '', { onlyIfEmpty: false });
         if (svgOut) svgOut.value = svg;
         if (jsonOut) {
             jsonOut.value = parsed.animation_raw
@@ -322,22 +429,161 @@
         if (validation.ok) {
             refreshRemotionInfo(wrap);
         }
+        const previewWrap = wrap.querySelector('.later-svg-preview-wrap');
+        if (previewWrap) {
+            previewWrap.querySelectorAll('.later-svg-preview__warn').forEach(function (el) {
+                el.remove();
+            });
+        }
         if (preview) {
-            preview.innerHTML = '';
-            if (svg && validation.ok) {
-                const iframe = document.createElement('iframe');
-                iframe.setAttribute('sandbox', 'allow-scripts');
-                iframe.setAttribute('title', 'SVG preview');
-                iframe.srcdoc =
-                    '<!DOCTYPE html><html><head><style>html,body{margin:0;height:100%;background:#0a0a0c;overflow:hidden}' +
-                    'svg{width:100%;height:100%;display:block}</style></head><body>' +
-                    svg +
-                    '</body></html>';
-                preview.appendChild(iframe);
-            } else if (svg) {
-                preview.textContent = 'Превью скрыто: сначала исправьте ошибки валидации.';
+            if (svg) {
+                if (!validation.ok && previewWrap) {
+                    const note = document.createElement('div');
+                    note.className = 'later-svg-preview__warn';
+                    note.textContent =
+                        'Превью черновое: валидация не пройдена — исправьте ответ и нажмите «Проверить и собрать».';
+                    previewWrap.insertBefore(note, preview);
+                }
+                showSvgRasterPreview(wrap, preview, svg, validation.ok, previewWrap);
+            } else {
+                preview.innerHTML = '';
+                preview.textContent = 'SVG пустой — проверьте блок ===SVG_START=== в ответе.';
             }
         }
+    }
+
+    function setSvgPatchStatus(wrap, msg, kind) {
+        const el = wrap.querySelector('[data-svg-patch-status]');
+        if (!el) return;
+        if (!msg) {
+            el.classList.add('is-hidden');
+            el.textContent = '';
+            el.className = 'later-svg-patch__status is-hidden';
+            return;
+        }
+        el.classList.remove('is-hidden');
+        el.className = 'later-svg-patch__status';
+        if (kind === 'err') el.classList.add('later-svg-patch__status--err');
+        if (kind === 'ok') el.classList.add('later-svg-patch__status--ok');
+        el.textContent = msg;
+    }
+
+    function setSvgPatchPreview(wrap, url) {
+        const wrapImg = wrap.querySelector('[data-svg-patch-preview-wrap]');
+        const img = wrap.querySelector('[data-svg-patch-preview]');
+        if (!wrapImg || !img) return;
+        if (!url) {
+            wrapImg.classList.add('is-hidden');
+            img.removeAttribute('src');
+            return;
+        }
+        img.src = url;
+        wrapImg.classList.remove('is-hidden');
+    }
+
+    function bindSvgPatch(wrap) {
+        const pullBtn = wrap.querySelector('[data-svg-patch-pull]');
+        const renderBtn = wrap.querySelector('[data-svg-patch-render]');
+        const sendBtn = wrap.querySelector('[data-svg-patch-send]');
+        const fragEl = wrap.querySelector('[data-svg-patch-fragment]');
+        if (!fragEl) return;
+
+        pullBtn?.addEventListener('click', function () {
+            const svgOut = wrap.querySelector('[data-later-svg-out]');
+            const svg = svgOut ? svgOut.value : '';
+            if (!svg.trim()) {
+                setSvgPatchStatus(wrap, 'Сначала соберите SVG (ответ модели или «Проверить и собрать»).', 'err');
+                return;
+            }
+            fragEl.value = svg;
+            setSvgPatchStatus(wrap, 'Фрагмент скопирован из вкладки SVG.', 'ok');
+        });
+
+        async function renderPreview() {
+            const fragment = fragEl.value.trim();
+            if (!fragment) {
+                setSvgPatchStatus(wrap, 'Вставьте фрагмент SVG.', 'err');
+                return;
+            }
+            renderBtn && (renderBtn.disabled = true);
+            setSvgPatchStatus(wrap, 'Рендер PNG…', '');
+            try {
+                const r = await fetch('/scenes-lab/api/svg-render-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ svg_fragment: fragment }),
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    throw new Error((data && data.error) || 'Ошибка рендера');
+                }
+                setSvgPatchPreview(wrap, data.preview_url || '');
+                setSvgPatchStatus(wrap, 'Превью PNG готово.', 'ok');
+            } catch (e) {
+                setSvgPatchStatus(wrap, String(e.message || e), 'err');
+            } finally {
+                if (renderBtn) renderBtn.disabled = false;
+            }
+        }
+
+        renderBtn?.addEventListener('click', renderPreview);
+
+        sendBtn?.addEventListener('click', async function () {
+            const modelEl = wrap.querySelector('[data-later-model]');
+            const mid = modelEl ? modelEl.value : '';
+            if (!modelKeyOk(mid)) {
+                setSvgPatchStatus(
+                    wrap,
+                    isOpenaiLaterModel(mid) ? 'Нужен OPENAI_API_KEY' : 'Нужен KEYAI_API_KEY',
+                    'err'
+                );
+                return;
+            }
+            const fragment = fragEl.value.trim();
+            if (!fragment) {
+                setSvgPatchStatus(wrap, 'Фрагмент SVG пустой.', 'err');
+                return;
+            }
+            const rawOut = wrap.querySelector('[data-later-raw-out]');
+            const fullText = rawOut ? rawOut.value.trim() : '';
+            if (!fullText) {
+                setSvgPatchStatus(wrap, 'Нет полного ответа — вставьте или получите ответ с маркерами.', 'err');
+                return;
+            }
+            const sysEl = wrap.querySelector('[data-svg-patch-system]');
+            const userEl = wrap.querySelector('[data-svg-patch-user]');
+            sendBtn.disabled = true;
+            setSvgPatchStatus(wrap, 'Модель правит SVG… (1–3 мин)', '');
+            setLaterStatus(wrap, 'Правка фрагмента SVG…', 'generating', {
+                detail: 'Рендер PNG + запрос к модели',
+            });
+            try {
+                const r = await fetch('/scenes-lab/api/svg-patch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: mid,
+                        system_prompt: sysEl ? sysEl.value : '',
+                        user_prompt: userEl ? userEl.value : '',
+                        svg_fragment: fragment,
+                        text: fullText,
+                    }),
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    throw new Error((data && data.error) || 'Ошибка правки SVG');
+                }
+                if (data.preview_url) setSvgPatchPreview(wrap, data.preview_url);
+                if (data.patch_svg && fragEl) fragEl.value = data.patch_svg;
+                await applyParseResult(wrap, data);
+                setSvgPatchStatus(wrap, 'SVG заменён в полном ответе, пайплайн обновлён.', 'ok');
+            } catch (e) {
+                setSvgPatchStatus(wrap, String(e.message || e), 'err');
+                setLaterStatus(wrap, String(e.message || e), 'error');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        });
     }
 
     function bindTabs(wrap) {
@@ -403,9 +649,15 @@
         const preview = wrap.querySelector('[data-later-preview]');
         const promptEl = wrap.querySelector('[data-later-prompt]');
         const modelEl = wrap.querySelector('[data-later-model]');
-        if (!sendBtn || !KEY_OK) return;
+        if (!sendBtn || !KEY_ANY) return;
+
+        syncLaterPanelEnabled(wrap);
+        modelEl?.addEventListener('change', function () {
+            syncLaterPanelEnabled(wrap);
+        });
 
         bindTabs(wrap);
+        bindSvgPatch(wrap);
         loadSavedSession(wrap);
         let uploadToken = 0;
 
@@ -437,6 +689,17 @@
         });
 
         sendBtn.addEventListener('click', async function () {
+            const mid = modelEl ? modelEl.value : '';
+            if (!modelKeyOk(mid)) {
+                setLaterStatus(
+                    wrap,
+                    isOpenaiLaterModel(mid)
+                        ? 'Нужен OPENAI_API_KEY для ChatGPT 5.4'
+                        : 'Нужен KEYAI_API_KEY для Claude',
+                    'error'
+                );
+                return;
+            }
             const imageUrl = currentImageUrl(wrap);
             if (!imageUrl) {
                 setLaterStatus(wrap, 'Прикрепите фото перед отправкой', 'error');
@@ -444,8 +707,11 @@
             }
             clearPipelineUi(wrap);
             sendBtn.disabled = true;
+            const waitDetail = isOpenaiLaterModel(mid)
+                ? 'ChatGPT 5.4 (OpenAI) — разбор SVG и JSON может занять 1–3 минуты'
+                : 'Claude через Kie.ai — разбор SVG и JSON может занять 1–3 минуты';
             setLaterStatus(wrap, 'Ожидание ответа модели…', 'generating', {
-                detail: 'Claude через Kie.ai — разбор SVG и JSON может занять 1–3 минуты',
+                detail: waitDetail,
             });
             try {
                 const r = await fetch('/scenes-lab/api/claude', {
@@ -540,20 +806,15 @@
 
         refreshRenderStatus(wrap);
 
-        reparseBtn?.addEventListener('click', async function () {
-            const raw = wrap.querySelector('[data-later-raw-out]');
-            const text = raw ? raw.value : '';
-            if (!text.trim()) {
-                setLaterStatus(wrap, 'Нет сырого ответа для проверки', 'error');
-                return;
-            }
-            setLaterStatus(wrap, 'Проверка ответа…', 'generating', {
-                detail: 'Разбор блоков и валидация на сервере…',
-            });
-            try {
-                await parseOnServer(wrap, text);
-            } catch (e) {
-                setLaterStatus(wrap, String(e.message || e), 'error');
+        reparseBtn?.addEventListener('click', function () {
+            runReparseFromRaw(wrap);
+        });
+
+        const rawOut = wrap.querySelector('[data-later-raw-out]');
+        rawOut?.addEventListener('keydown', function (ev) {
+            if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+                ev.preventDefault();
+                runReparseFromRaw(wrap);
             }
         });
     }

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Later… — Claude</title>
+    <title>Later… — Claude / ChatGPT</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='scenes_lab.css') }}?v={{ static_style_mtime }}">
 </head>
-<body class="scenes-lab-page" data-claude-key="{{ '1' if claude_key_set else '0' }}">
+<body class="scenes-lab-page" data-claude-key="{{ '1' if claude_key_set else '0' }}" data-kie-key="{{ '1' if kie_key_set else '0' }}" data-openai-key="{{ '1' if openai_key_set else '0' }}">
     <header class="scenes-lab-page__head">
         <h1>Later…</h1>
         <p>
-            Claude (Kie.ai): промпт + одно фото → три блока (SVG, JSON анимации, пояснение).
+            Claude (Kie.ai) или ChatGPT 5.4 (OpenAI): промпт + одно фото → три блока (SVG, JSON анимации, пояснение).
             Сервер режет по маркерам <code>===SVG_START===</code> / фенсам <code>```svg</code> и валидирует XML, id и кадры.
             <a href="/scenes-lab/viewer">SVG viewer</a>
         </p>
@@ -20,7 +20,7 @@
         <article class="later-lab later-lab--standalone" data-later-lab>
             <div class="later-lab__header">
                 <span class="slot-badge badge-slot-prompt scene-slot-later-badge">Later…</span>
-                <select class="later-lab__model-select" data-later-model aria-label="Модель Claude">
+                <select class="later-lab__model-select" data-later-model aria-label="Модель">
                     {% for m in claude_models %}
                     <option value="{{ m.id }}"{% if loop.first %} selected{% endif %}>{{ m.label }}</option>
                     {% endfor %}
@@ -28,7 +28,11 @@
             </div>
             <div class="later-lab__panel{% if not claude_key_set %} later-lab--disabled{% endif %}">
                 {% if not claude_key_set %}
-                <p class="later-lab__hint">Укажите <code>KEYAI_API_KEY</code> в <code>.env</code> (Kie.ai).</p>
+                <p class="later-lab__hint">Укажите <code>KEYAI_API_KEY</code> (Claude) и/или <code>OPENAI_API_KEY</code> (ChatGPT 5.4) в <code>.env</code>.</p>
+                {% elif not kie_key_set %}
+                <p class="later-lab__hint is-hidden" data-later-hint-kie>Для Claude укажите <code>KEYAI_API_KEY</code> в <code>.env</code>.</p>
+                {% elif not openai_key_set %}
+                <p class="later-lab__hint is-hidden" data-later-hint-openai>Для ChatGPT 5.4 укажите <code>OPENAI_API_KEY</code> в <code>.env</code>.</p>
                 {% endif %}
                 <textarea
                     class="rewrite-slot-textarea later-lab__prompt"
@@ -43,16 +47,18 @@
                         Прикрепить фото (1 файл)
                     </label>
                     <button type="button" class="btn btn-primary later-lab__send" data-later-send>Отправить</button>
-                    <button type="button" class="btn" data-later-reparse>Проверить ответ</button>
                 </div>
-                <p class="later-lab__hint">Kie.ai получит фото по публичному URL после загрузки.</p>
-                <div class="later-raw-answer is-hidden" data-later-raw-answer>
-                    <div class="later-raw-answer__label">Ответ модели (целиком)</div>
+                <p class="later-lab__hint">Kie.ai получит фото по публичному URL после загрузки. Ниже можно вставить или править ответ вручную и пересобрать SVG без повторного запроса к модели.</p>
+                <div class="later-raw-answer" data-later-raw-answer>
+                    <div class="later-raw-answer__head">
+                        <div class="later-raw-answer__label">Ответ модели (целиком)</div>
+                        <button type="button" class="btn btn-primary" data-later-reparse>Проверить и собрать</button>
+                    </div>
                     <textarea
                         class="rewrite-slot-textarea later-raw-answer__code"
                         rows="18"
-                        readonly
                         spellcheck="false"
+                        placeholder="Вставьте сюда ответ с маркерами ===SVG_START=== … или правьте после «Отправить». Ctrl+Enter — проверка."
                         data-later-raw-out
                     ></textarea>
                 </div>
@@ -73,10 +79,51 @@
                     </div>
                     <div class="later-pipeline__panel is-active" data-panel="svg">
                         <div class="later-svg-preview-wrap">
-                            <div class="later-svg-preview__label">Превью кадра 1920×1080 (16∶9)</div>
+                            <div class="later-svg-preview__label">Превью кадра 1920×1080 (PNG, 16∶9)</div>
                             <div class="later-svg-preview" data-later-svg-preview></div>
                         </div>
                         <textarea class="rewrite-slot-textarea later-pipeline__code" rows="8" readonly data-later-svg-out></textarea>
+
+                        <section class="later-svg-patch" data-svg-patch>
+                            <h3 class="later-svg-patch__title">Правка фрагмента SVG (модель)</h3>
+                            <p class="later-svg-patch__hint">
+                                В модель уходит растр текущего фрагмента и текст между
+                                <code>===SVG_START===</code> … <code>===SVG_END===</code>.
+                                Ответ — только этот блок; он подставляется в полный ответ выше.
+                            </p>
+                            <label class="later-svg-patch__label">System prompt</label>
+                            <textarea
+                                class="rewrite-slot-textarea later-svg-patch__system"
+                                rows="6"
+                                spellcheck="false"
+                                data-svg-patch-system
+                            >{{ svg_patch_default_system }}</textarea>
+                            <label class="later-svg-patch__label">Запрос на правку</label>
+                            <textarea
+                                class="rewrite-slot-textarea later-svg-patch__user"
+                                rows="3"
+                                spellcheck="false"
+                                placeholder="Например: сделай заголовок крупнее, сдвинь блок влево…"
+                                data-svg-patch-user
+                            ></textarea>
+                            <div class="later-svg-patch__row">
+                                <label class="later-svg-patch__label">Фрагмент SVG</label>
+                                <button type="button" class="btn btn-secondary btn-sm" data-svg-patch-pull>Взять из SVG выше</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-svg-patch-render>Превью PNG</button>
+                                <button type="button" class="btn btn-primary btn-sm" data-svg-patch-send>Отправить правку</button>
+                            </div>
+                            <textarea
+                                class="rewrite-slot-textarea later-svg-patch__fragment"
+                                rows="6"
+                                spellcheck="false"
+                                data-svg-patch-fragment
+                            ></textarea>
+                            <div class="later-svg-patch__preview-wrap is-hidden" data-svg-patch-preview-wrap>
+                                <span class="later-svg-patch__preview-label">Растр для модели (1920×1080)</span>
+                                <img class="later-svg-patch__preview" alt="" data-svg-patch-preview />
+                            </div>
+                            <div class="later-svg-patch__status is-hidden" data-svg-patch-status></div>
+                        </section>
                     </div>
                     <div class="later-pipeline__panel" data-panel="json" hidden>
                         <textarea class="rewrite-slot-textarea later-pipeline__code" rows="10" readonly data-later-json-out></textarea>

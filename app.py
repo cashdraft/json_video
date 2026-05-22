@@ -3619,13 +3619,23 @@ def index():
 
 @app.route("/scenes-lab")
 def scenes_lab_page():
-    """Отдельная страница Later… — только запрос к Claude, без сцен проекта."""
-    from scenes_lab_later import claude_models_for_ui, kie_api_key_present as scenes_lab_kie_ok
+    """Отдельная страница Later… — Claude (Kie) или ChatGPT 5.4 (OpenAI)."""
+    from scenes_lab_later import (
+        later_api_ready,
+        later_models_for_ui,
+        openai_api_key_present,
+        kie_api_key_present as scenes_lab_kie_ok,
+    )
+
+    from scenes_lab_svg_patch import DEFAULT_SVG_PATCH_SYSTEM_PROMPT
 
     return render_template(
         "scenes_lab.html",
-        claude_models=claude_models_for_ui(),
-        claude_key_set=scenes_lab_kie_ok(),
+        claude_models=later_models_for_ui(),
+        claude_key_set=later_api_ready(),
+        kie_key_set=scenes_lab_kie_ok(),
+        openai_key_set=openai_api_key_present(),
+        svg_patch_default_system=DEFAULT_SVG_PATCH_SYSTEM_PROMPT,
     )
 
 
@@ -3677,7 +3687,7 @@ def scenes_lab_api_state():
 @app.route("/scenes-lab/api/claude", methods=["POST"])
 def scenes_lab_api_claude():
     from later_response_parse import process_later_model_response
-    from scenes_lab_later import run_later_claude_request
+    from scenes_lab_later import run_later_model_request
     from scenes_lab_session import clear_later_session, save_later_session
 
     body = request.get_json(silent=True) or {}
@@ -3690,7 +3700,7 @@ def scenes_lab_api_claude():
     if not image_url:
         return jsonify({"ok": False, "error": "Нужно фото (кадр Start или загрузка)."}), 400
     clear_later_session()
-    text, err = run_later_claude_request(
+    text, err = run_later_model_request(
         model=model,
         user_prompt=user_prompt,
         image_url=image_url,
@@ -3756,6 +3766,92 @@ def scenes_lab_api_parse():
             "pipeline_ok": pipeline_ok,
         }
     )
+
+
+@app.route("/scenes-lab/api/svg-render-preview", methods=["POST"])
+def scenes_lab_api_svg_render_preview():
+    """Растеризация фрагмента SVG → PNG для превью перед правкой."""
+    from scenes_lab_svg_patch import (
+        render_svg_to_png,
+        save_rendered_preview_png,
+        svg_to_standalone_document,
+    )
+
+    body = request.get_json(silent=True) or {}
+    fragment = str(body.get("svg_fragment") or body.get("fragment") or "")
+    doc = svg_to_standalone_document(fragment)
+    if not doc:
+        return jsonify({"ok": False, "error": "Фрагмент SVG пустой."}), 400
+    png_bytes, rend_err = render_svg_to_png(doc)
+    if rend_err or not png_bytes:
+        return jsonify({"ok": False, "error": rend_err or "Рендер не удался."}), 500
+    preview_url, up_err = save_rendered_preview_png(
+        png_bytes, public_base_url_for_kie(), stem="svg_preview"
+    )
+    if up_err or not preview_url:
+        return jsonify({"ok": False, "error": up_err or "Не удалось сохранить PNG."}), 500
+    return jsonify({"ok": True, "preview_url": preview_url})
+
+
+@app.route("/scenes-lab/api/svg-patch", methods=["POST"])
+def scenes_lab_api_svg_patch():
+    """Правка только блока SVG: растр + модель → замена в полном ответе."""
+    from scenes_lab_later import later_api_ready, openai_api_key_present, is_openai_later_model
+    from scenes_lab_svg_patch import DEFAULT_SVG_PATCH_SYSTEM_PROMPT, run_svg_patch_flow
+    from scenes_lab_session import load_later_session, save_later_session
+
+    body = request.get_json(silent=True) or {}
+    model = str(body.get("model") or "").strip()
+    if not model:
+        return jsonify({"ok": False, "error": "Не выбрана модель."}), 400
+    if is_openai_later_model(model):
+        if not openai_api_key_present():
+            return jsonify({"ok": False, "error": "Не задан OPENAI_API_KEY."}), 400
+    elif not later_api_ready():
+        return jsonify({"ok": False, "error": "Не задан KEYAI_API_KEY."}), 400
+
+    fragment = str(body.get("svg_fragment") or body.get("fragment") or "")
+    if not fragment.strip():
+        return jsonify({"ok": False, "error": "Пустой фрагмент SVG."}), 400
+
+    prev = load_later_session() or {}
+    full_text = str(body.get("text") or body.get("response") or prev.get("text") or "")
+    if not full_text.strip():
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Нет полного ответа Later… — сначала получите или вставьте ответ с маркерами.",
+            }
+        ), 400
+
+    system_prompt = str(body.get("system_prompt") or "").strip() or DEFAULT_SVG_PATCH_SYSTEM_PROMPT
+    user_prompt = str(body.get("user_prompt") or body.get("patch_prompt") or "")
+
+    result = run_svg_patch_flow(
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        svg_fragment=fragment,
+        full_later_text=full_text,
+        public_base=public_base_url_for_kie(),
+    )
+    if not result.get("ok"):
+        status = 502 if result.get("model_response") else 400
+        return jsonify(result), status
+
+    validation = result.get("validation") or {}
+    pipeline_ok = bool(result.get("pipeline_ok"))
+    merged = str(result.get("text") or "")
+    save_later_session(
+        text=merged,
+        parsed=result.get("parsed") or {},
+        validation=validation,
+        pipeline_ok=pipeline_ok,
+        model=model,
+        user_prompt=str(body.get("user_prompt") or prev.get("user_prompt") or ""),
+        image_url=str(prev.get("image_url") or ""),
+    )
+    return jsonify(result)
 
 
 @app.route("/scenes-lab/viewer")

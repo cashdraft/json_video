@@ -2,7 +2,8 @@
 Подготовка ассетов и props.json для Remotion-композиции `JobMontage`.
 
 Каталог: data/job_remotion/<job_id>/
-  voiceover.mp3   (по умолчанию; быстрее в Studio) или voiceover.wav (MONTAGE_VOICEOVER_WAV=1)
+  voiceover.mp3   (по умолчанию, перекод stereo) или voiceover.wav (MONTAGE_VOICEOVER_WAV=1)
+  В Studio волна на таймлайне отключена (showInTimeline=false); озвучка в превью и рендере работает.
   media/scene_001.<ext>            (видео > start image)
   media/scene_001.kind              ("video" | "image")
   props.json
@@ -306,31 +307,42 @@ def _image_optimize_for_studio(src: Path, target_w: int, target_h: int) -> bool:
 
 
 def _prepare_voiceover_mp3_for_studio(src: Path, dst: Path) -> bool:
-    """Озвучка для Remotion Studio: MP3 (копия или 128k), без тяжёлого WAV.
+    """Озвучка MP3: всегда перекодировать (stereo CBR), не копировать как есть.
 
-    Длинный ролик (~20+ мин) в PCM WAV даёт сотни МБ — Studio долго строит
-    waveform на таймлайне. Исходный MP3 (~20 МБ) грузится в разы быстрее;
-    Remotion render тоже принимает MP3 через ffmpeg.
+    Mono MP3 с ID3 ломает WebCodecs в Remotion Studio (волна на таймлайне).
+    В JobMontage озвучка с showInTimeline={false}, но перекод всё равно нужен для рендера.
     """
-    if src.suffix.lower() == ".mp3":
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        if src.resolve() == dst.resolve():
+            return src.is_file() and src.stat().st_size > 0
         try:
             shutil.copyfile(src, dst)
             return dst.is_file() and dst.stat().st_size > 0
         except OSError:
-            pass
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        return False
+            return False
     cmd = [
         ffmpeg,
         "-y",
-        "-i", str(src),
+        "-loglevel",
+        "error",
+        "-i",
+        str(src),
         "-vn",
-        "-ac", "2",
-        "-ar", "44100",
-        "-c:a", "libmp3lame",
-        "-b:a", "128k",
-        "-map_metadata", "-1",
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
+        "-write_xing",
+        "1",
+        "-id3v2_version",
+        "0",
+        "-map_metadata",
+        "-1",
         str(dst),
     ]
     try:
@@ -407,14 +419,17 @@ def prepare_montage(
     if isinstance(audio_src, Path) and audio_src.is_file():
         src_name = audio_src.name
         use_wav = (os.getenv("MONTAGE_VOICEOVER_WAV") or "").strip().lower() in (
-            "1", "true", "yes", "on",
+            "1",
+            "true",
+            "yes",
+            "on",
         )
         if use_wav:
             push(
                 "audio_prepare",
                 source=src_name,
                 target="voiceover.wav",
-                detail="MONTAGE_VOICEOVER_WAV=1: PCM WAV (медленная загрузка в Studio на длинных роликах)",
+                detail="PCM stereo 44.1 kHz → voiceover.wav (совместимо с декодером Studio)",
             )
             audio_target = base_dir / "voiceover.wav"
             ok = _transcode_voiceover_wav_pcm(audio_src, audio_target)
@@ -423,7 +438,7 @@ def prepare_montage(
                 "audio_prepare",
                 source=src_name,
                 target="voiceover.mp3",
-                detail="MP3 для Studio (быстрая дорожка на таймлайне; рендер MP4 тоже через ffmpeg)",
+                detail="Перекод в stereo MP3 192k (без сырого copy; озвучка в Studio без волны на таймлайне)",
             )
             audio_target = base_dir / "voiceover.mp3"
             ok = _prepare_voiceover_mp3_for_studio(audio_src, audio_target)
