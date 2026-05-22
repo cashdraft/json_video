@@ -39,6 +39,8 @@
     }
 
     const statusTimers = new WeakMap();
+    const opTimers = new WeakMap();
+    const animTimers = new WeakMap();
 
     function stopStatusTimer(wrap) {
         const t = statusTimers.get(wrap);
@@ -70,24 +72,142 @@
         statusTimers.set(wrap, { id: id, started: started });
     }
 
+    function appendLog(wrap, line) {
+        const log = wrap.querySelector('[data-later-log]');
+        if (!log || !line) return;
+        log.classList.remove('is-hidden');
+        const ts = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        log.textContent += (log.textContent ? '\n' : '') + '[' + ts + '] ' + line;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function stopOpTimer(wrap) {
+        const t = opTimers.get(wrap);
+        if (t) {
+            clearInterval(t.id);
+            opTimers.delete(wrap);
+        }
+        const timerEl = wrap.querySelector('[data-later-op-status-timer]');
+        if (timerEl) timerEl.classList.add('is-hidden');
+    }
+
+    function startOpTimer(wrap) {
+        stopOpTimer(wrap);
+        const timerEl = wrap.querySelector('[data-later-op-status-timer]');
+        const started = Date.now();
+        if (timerEl) {
+            timerEl.classList.remove('is-hidden');
+            timerEl.textContent = '0 с';
+        }
+        const id = setInterval(function () {
+            const sec = Math.floor((Date.now() - started) / 1000);
+            if (timerEl) timerEl.textContent = sec + ' с';
+        }, 1000);
+        opTimers.set(wrap, { id: id, started: started });
+    }
+
+    function setOpStatus(wrap, text, state) {
+        const box = wrap.querySelector('[data-later-op-status]');
+        const label = wrap.querySelector('[data-later-op-status-text]');
+        if (!box || !label) return;
+        const st = state || 'idle';
+        box.classList.remove('is-hidden', 'later-op-status--generating', 'later-op-status--ok', 'later-op-status--err');
+        if (st === 'idle' || !text) {
+            box.classList.add('is-hidden');
+            label.textContent = '';
+            stopOpTimer(wrap);
+            return;
+        }
+        box.classList.remove('is-hidden');
+        if (st === 'generating') {
+            box.classList.add('later-op-status--generating');
+            startOpTimer(wrap);
+        } else {
+            stopOpTimer(wrap);
+            if (st === 'ok') box.classList.add('later-op-status--ok');
+            if (st === 'error') box.classList.add('later-op-status--err');
+        }
+        label.textContent = text;
+    }
+
+    function stopAnimTimer(wrap) {
+        const t = animTimers.get(wrap);
+        if (t) {
+            clearInterval(t.id);
+            animTimers.delete(wrap);
+        }
+        const timerEl = wrap.querySelector('[data-later-anim-status-timer]');
+        if (timerEl) timerEl.classList.add('is-hidden');
+    }
+
+    function startAnimTimer(wrap) {
+        stopAnimTimer(wrap);
+        const timerEl = wrap.querySelector('[data-later-anim-status-timer]');
+        const started = Date.now();
+        if (timerEl) {
+            timerEl.classList.remove('is-hidden');
+            timerEl.textContent = '0 с';
+        }
+        const id = setInterval(function () {
+            const sec = Math.floor((Date.now() - started) / 1000);
+            if (timerEl) timerEl.textContent = sec + ' с';
+        }, 1000);
+        animTimers.set(wrap, { id: id, started: started });
+    }
+
+    function setAnimStatus(wrap, text, state) {
+        const box = wrap.querySelector('[data-later-anim-status]');
+        const label = wrap.querySelector('[data-later-anim-status-text]');
+        if (!box || !label) return;
+        const st = state || 'idle';
+        box.classList.remove(
+            'is-hidden',
+            'later-anim-status--generating',
+            'later-anim-status--ok',
+            'later-anim-status--err'
+        );
+        if (st === 'idle' || !text) {
+            box.classList.add('is-hidden');
+            label.textContent = '';
+            stopAnimTimer(wrap);
+            return;
+        }
+        box.classList.remove('is-hidden');
+        if (st === 'generating') {
+            box.classList.add('later-anim-status--generating');
+            startAnimTimer(wrap);
+        } else {
+            stopAnimTimer(wrap);
+            if (st === 'ok') box.classList.add('later-anim-status--ok');
+            if (st === 'error') box.classList.add('later-anim-status--err');
+        }
+        label.textContent = text;
+    }
+
+    function clearLog(wrap) {
+        const log = wrap.querySelector('[data-later-log]');
+        if (!log) return;
+        log.textContent = '';
+        log.classList.add('is-hidden');
+    }
+
     function setLaterStatus(wrap, text, state, opts) {
         const box = wrap.querySelector('[data-later-status]');
         const label = wrap.querySelector('[data-later-status-text]');
-        if (!box || !label) return;
         const st = state || 'pending';
-        box.setAttribute('data-status', st);
-        label.textContent = text || '';
-        label.classList.toggle('slot-status-with-spinner', st === 'generating');
+        if (box) box.setAttribute('data-status', st);
+        if (label) {
+            label.textContent = text || '';
+            label.classList.toggle('slot-status-with-spinner', st === 'generating');
+        }
         if (st === 'generating') {
-            box.classList.add('later-lab__status--active');
+            let line = text || '…';
+            if (opts && opts.detail) line += ' — ' + opts.detail;
+            appendLog(wrap, line);
             startStatusTimer(wrap, (opts && opts.detail) || '');
         } else {
-            box.classList.remove('later-lab__status--active');
             stopStatusTimer(wrap);
-            const detailEl = wrap.querySelector('[data-later-status-detail]');
-            const timerEl = wrap.querySelector('[data-later-status-timer]');
-            if (detailEl) detailEl.classList.add('is-hidden');
-            if (timerEl) timerEl.classList.add('is-hidden');
+            if (text) appendLog(wrap, text);
         }
     }
 
@@ -112,18 +232,22 @@
     async function runReparseFromRaw(wrap) {
         const text = getRawAnswerText(wrap);
         if (!text) {
-            setLaterStatus(wrap, 'Вставьте или отредактируйте ответ в поле выше', 'error');
+            setOpStatus(wrap, 'Вставьте ответ модели выше', 'error');
+            appendLog(wrap, 'Ошибка: пустой ответ');
             return;
         }
         const reparseBtn = wrap.querySelector('[data-later-reparse]');
         if (reparseBtn) reparseBtn.disabled = true;
-        setLaterStatus(wrap, 'Проверка и сборка…', 'generating', {
-            detail: 'Разбор SVG / JSON / NOTES и валидация на сервере…',
-        });
+        appendLog(wrap, '→ POST /scenes-lab/api/parse');
+        setOpStatus(wrap, 'Проверка и сборка на сервере…', 'generating');
         try {
             await parseOnServer(wrap, text);
+            appendLog(wrap, 'Готово: SVG проверен');
+            setOpStatus(wrap, 'Готово — проверка пройдена', 'ok');
         } catch (e) {
-            setLaterStatus(wrap, String(e.message || e), 'error');
+            const msg = String(e.message || e);
+            appendLog(wrap, 'Ошибка: ' + msg);
+            setOpStatus(wrap, msg, 'error');
         } finally {
             if (reparseBtn) reparseBtn.disabled = false;
         }
@@ -315,11 +439,19 @@
         stopRenderPoll();
         setMp4Preview(wrap, '', false);
         setRemotionPanelVisible(wrap, false);
-        const root = wrap.querySelector('[data-later-pipeline]');
-        if (root) root.classList.add('is-hidden');
+        const viewer = wrap.querySelector('[data-later-slot-viewer]');
+        if (viewer) viewer.classList.add('is-hidden');
+        const st = getSlotCarousel(wrap);
+        st.ids = [];
+        st.index = 0;
+        st.cache = {};
+        st.slotMeta = {};
+        st.textCache = {};
+        st.animCache = {};
+        setSlotNavUi(wrap);
         const banner = wrap.querySelector('[data-later-validation-banner]');
         if (banner) {
-            banner.className = 'later-pipeline__banner';
+            banner.className = 'later-result__banner';
             banner.textContent = '';
         }
         wrap.querySelectorAll('[data-later-svg-out], [data-later-json-out], [data-later-notes-out]').forEach(function (el) {
@@ -328,18 +460,757 @@
         setRawAnswer(wrap, '', { onlyIfEmpty: false });
         const preview = wrap.querySelector('[data-later-svg-preview]');
         if (preview) preview.innerHTML = '';
+        const savedHint = wrap.querySelector('[data-later-slot-saved-hint]');
+        if (savedHint) {
+            savedHint.classList.add('is-hidden');
+            savedHint.textContent = '';
+        }
+        const animBlock = wrap.querySelector('[data-later-anim-block]');
+        if (animBlock) animBlock.classList.add('is-hidden');
+        st.animCache = {};
+        setAnimStatus(wrap, '', 'idle');
+        const animBanner = wrap.querySelector('[data-later-anim-validation-banner]');
+        if (animBanner) {
+            animBanner.className = 'later-result__banner is-hidden';
+            animBanner.textContent = '';
+        }
+        const animRaw = wrap.querySelector('[data-later-anim-raw-out]');
+        if (animRaw) animRaw.value = '';
+    }
+
+    function getSceneDescription(wrap) {
+        const el = wrap.querySelector('[data-later-scene-description]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    function getSceneDuration(wrap) {
+        const el = wrap.querySelector('[data-later-scene-duration]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    function getSvgPromptTemplate(wrap) {
+        const el = wrap.querySelector('[data-later-svg-prompt]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    function getEditorPromptTemplate(wrap) {
+        const el = wrap.querySelector('[data-later-editor-prompt]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    function getAnimPromptTemplate(wrap) {
+        const el = wrap.querySelector('[data-later-anim-prompt]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    const slotCarousels = new WeakMap();
+    const slotAnimLocks = new WeakMap();
+    const prefsSaveTimers = new WeakMap();
+
+    function getSlotCarousel(wrap) {
+        let st = slotCarousels.get(wrap);
+        if (!st) {
+            st = { ids: [], index: 0, cache: {}, slotMeta: {}, textCache: {}, animCache: {} };
+            slotCarousels.set(wrap, st);
+        }
+        return st;
+    }
+
+    function isRawAnswerExpanded(wrap) {
+        const block = wrap.querySelector('[data-later-raw-answer-collapse]');
+        return block && !block.classList.contains('later-collapsible--body-collapsed');
+    }
+
+    function preloadImageUrl(url) {
+        if (!url) return;
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = url;
+    }
+
+    function preloadSlotNeighbors(wrap) {
+        const st = getSlotCarousel(wrap);
+        const i = st.index;
+        [i - 1, i + 1, i].forEach(function (idx) {
+            if (idx < 0 || idx >= st.ids.length) return;
+            const meta = st.slotMeta[st.ids[idx]];
+            if (meta && meta.preview_url) preloadImageUrl(meta.preview_url);
+        });
+    }
+
+    function syncSlotMetaFromList(st, slots) {
+        st.slotMeta = st.slotMeta || {};
+        (slots || []).forEach(function (s) {
+            if (!s || !s.id) return;
+            st.slotMeta[s.id] = {
+                preview_url: s.preview_url || '',
+                saved_at: s.saved_at || '',
+            };
+            if (s.preview_url) preloadImageUrl(s.preview_url);
+        });
+    }
+
+    function getCurrentSlotId(wrap) {
+        const st = getSlotCarousel(wrap);
+        if (!st.ids.length) return '';
+        return st.ids[st.index] || st.ids[st.ids.length - 1] || '';
+    }
+
+    /** Последний слот на сервере (макс. img_N) — для «Переделать». */
+    function getLatestSlotId(wrap) {
+        const st = getSlotCarousel(wrap);
+        if (!st.ids.length) return '';
+        return st.ids[st.ids.length - 1] || '';
+    }
+
+    function isSlotAnimLocked(wrap) {
+        return !!slotAnimLocks.get(wrap);
+    }
+
+    function setSlotAnimLock(wrap, locked) {
+        slotAnimLocks.set(wrap, !!locked);
+        const viewer = wrap.querySelector('[data-later-slot-viewer]');
+        const lockEl = wrap.querySelector('[data-later-slot-preview-lock]');
+        const preview = wrap.querySelector('[data-later-svg-preview]');
+        if (viewer) viewer.classList.toggle('later-slot-viewer--anim-locked', !!locked);
+        if (lockEl) {
+            lockEl.classList.toggle('is-hidden', !locked);
+            lockEl.setAttribute('aria-hidden', locked ? 'false' : 'true');
+        }
+        if (preview) preview.classList.toggle('later-svg-preview--locked', !!locked);
+        setSlotNavUi(wrap);
+    }
+
+    function setSlotNavUi(wrap) {
+        const st = getSlotCarousel(wrap);
+        const locked = isSlotAnimLocked(wrap);
+        const prevBtn = wrap.querySelector('[data-later-slot-prev]');
+        const nextBtn = wrap.querySelector('[data-later-slot-next]');
+        const remakeBtn = wrap.querySelector('[data-later-remake]');
+        const has = st.ids.length > 0;
+        if (prevBtn) prevBtn.disabled = locked || !has || st.index <= 0;
+        if (nextBtn) nextBtn.disabled = locked || !has || st.index >= st.ids.length - 1;
+        if (remakeBtn) remakeBtn.disabled = !has;
+        const animateBtn = wrap.querySelector('[data-later-animate]');
+        if (animateBtn) animateBtn.disabled = locked || !has;
+    }
+
+    async function refreshSlotsList(wrap, preferSlotId) {
+        const r = await fetch('/scenes-lab/api/img-slots');
+        const data = await r.json().catch(function () { return {}; });
+        const st = getSlotCarousel(wrap);
+        if (!r.ok || !data.ok) {
+            st.ids = [];
+            st.index = 0;
+            setSlotNavUi(wrap);
+            return st;
+        }
+        st.ids = (data.slots || []).map(function (s) { return s.id; });
+        syncSlotMetaFromList(st, data.slots);
+        let idx = st.ids.length ? st.ids.length - 1 : 0;
+        if (preferSlotId) {
+            const found = st.ids.indexOf(preferSlotId);
+            if (found >= 0) idx = found;
+        }
+        st.index = idx;
+        setSlotNavUi(wrap);
+        return st;
+    }
+
+    async function loadSlotText(wrap, slotId) {
+        const st = getSlotCarousel(wrap);
+        if (st.textCache[slotId] !== undefined) return st.textCache[slotId];
+        const r = await fetch(
+            '/scenes-lab/api/img-slots/' + encodeURIComponent(slotId) + '?text=1'
+        );
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok) {
+            throw new Error((data && data.error) || 'Не удалось загрузить ответ');
+        }
+        st.textCache[slotId] = data.text || '';
+        return st.textCache[slotId];
+    }
+
+    function applySlotText(wrap, slotId, text) {
+        const st = getSlotCarousel(wrap);
+        st.textCache[slotId] = text;
+        if (isRawAnswerExpanded(wrap)) {
+            setRawAnswer(wrap, text, { onlyIfEmpty: false });
+        }
+    }
+
+    function resolveSlotPreviewUrl(slotId, meta) {
+        if (meta && meta.preview_url) return meta.preview_url;
+        if (!slotId) return '';
+        return '/scenes-lab/img-slots/' + encodeURIComponent(slotId) + '/preview_thumb.png';
+    }
+
+    function showSlotPreviewFast(preview, url, slotId, savedAt) {
+        if (!preview) return;
+        if (!url) {
+            preview.innerHTML = '';
+            preview.textContent = 'Нет превью для ' + (slotId || '');
+            return;
+        }
+        preview.classList.add('later-svg-preview--loading');
+        let img = preview.querySelector('.later-svg-preview__img');
+        if (!img) {
+            preview.innerHTML = '';
+            img = document.createElement('img');
+            img.className = 'later-svg-preview__img';
+            preview.appendChild(img);
+        }
+        img.alt = slotId || 'img';
+        const ver = savedAt ? String(savedAt).replace(/\+/g, '%2B') : '';
+        const base = url.split('?')[0];
+        const newSrc = ver ? base + '?v=' + encodeURIComponent(ver) : base;
+        img.onload = function () {
+            preview.classList.remove('later-svg-preview--loading');
+        };
+        img.onerror = function () {
+            preview.classList.remove('later-svg-preview--loading');
+            if (base.indexOf('preview_thumb') >= 0) {
+                img.onerror = null;
+                img.src = base.replace('preview_thumb.png', 'preview.png') + (ver ? '?v=' + encodeURIComponent(ver) : '');
+            }
+        };
+        if (img.src !== newSrc) {
+            img.removeAttribute('src');
+            img.src = newSrc;
+        }
+    }
+
+    async function loadSlotAnimText(wrap, slotId) {
+        const st = getSlotCarousel(wrap);
+        if (st.animCache[slotId] !== undefined) return st.animCache[slotId];
+        const r = await fetch(
+            '/scenes-lab/api/img-slots/' + encodeURIComponent(slotId) + '?anim=1'
+        );
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok) {
+            st.animCache[slotId] = '';
+            return '';
+        }
+        st.animCache[slotId] = data.anim_text || '';
+        return st.animCache[slotId];
+    }
+
+    function setAnimRawAnswer(wrap, text) {
+        const ta = wrap.querySelector('[data-later-anim-raw-out]');
+        if (ta) ta.value = text || '';
+    }
+
+    function showAnimValidationBanner(wrap, validation) {
+        const banner = wrap.querySelector('[data-later-anim-validation-banner]');
+        if (!banner) return;
+        const v = validation || {};
+        const errs = v.errors || [];
+        const warns = v.warnings || [];
+        if (v.ok) {
+            banner.className = 'later-result__banner later-result__banner--ok';
+            let msg = 'Готово — валидация анимации ОК';
+            if (warns.length) msg += '\n' + warns.join('\n');
+            banner.textContent = msg;
+            banner.classList.remove('is-hidden');
+        } else {
+            let msg = '';
+            if (warns.length) msg += warns.join('\n') + '\n\n';
+            banner.className = 'later-result__banner later-result__banner--err';
+            msg += errs.length
+                ? 'Анимация отклонена:\n' + errs.join('\n')
+                : 'Валидация анимации не пройдена.';
+            banner.textContent = msg.trim();
+            banner.classList.remove('is-hidden');
+        }
+    }
+
+    async function getSlotResponseText(wrap, slotId) {
+        if (!slotId) return '';
+        const st = getSlotCarousel(wrap);
+        if (st.textCache[slotId] !== undefined) return st.textCache[slotId];
+        const text = await loadSlotText(wrap, slotId);
+        st.textCache[slotId] = text;
+        return text;
+    }
+
+    function applyAnimUiForSlot(wrap, slotId) {
+        const st = getSlotCarousel(wrap);
+        const cached = st.animCache[slotId];
+        if (cached !== undefined) {
+            setAnimRawAnswer(wrap, cached);
+            return;
+        }
+        loadSlotAnimText(wrap, slotId)
+            .then(function (text) {
+                if (getCurrentSlotId(wrap) === slotId) setAnimRawAnswer(wrap, text);
+            })
+            .catch(function () { /* ignore */ });
+    }
+
+    async function ensureSlotSvgInPipeline(wrap, slotId) {
+        if (!slotId) return;
+        const svgOut = wrap.querySelector('[data-later-svg-out]');
+        if (!svgOut) return;
+        if ((svgOut.value || '').trim()) return;
+        const r = await fetch('/scenes-lab/api/img-slots/' + encodeURIComponent(slotId));
+        const data = await r.json().catch(function () { return {}; });
+        if (r.ok && data.ok && data.svg) {
+            svgOut.value = data.svg;
+        }
+    }
+
+    function laterRemotionPayload(wrap) {
+        const slotId = getCurrentSlotId(wrap);
+        if (!slotId) return {};
+        // SVG и anim_response — только с сервера по slot_id (scene_at_anim.svg + anim_response.txt).
+        return { slot_id: slotId };
+    }
+
+    async function syncRemotionForCurrentSlot(wrap) {
+        const slotId = getCurrentSlotId(wrap);
+        if (!slotId) {
+            setRemotionPanelVisible(wrap, false);
+            return;
+        }
+        const st = getSlotCarousel(wrap);
+        let animText = st.animCache[slotId];
+        if (animText === undefined) {
+            try {
+                animText = await loadSlotAnimText(wrap, slotId);
+            } catch (e) {
+                animText = '';
+            }
+        }
+        const hasAnim = Boolean((animText || '').trim());
+        setRemotionPanelVisible(wrap, hasAnim);
+        if (hasAnim) {
+            setAnimRawAnswer(wrap, animText);
+            await ensureSlotSvgInPipeline(wrap, slotId);
+            const statusEl = wrap.querySelector('[data-later-render-status]');
+            if (statusEl && !statusEl.textContent.trim()) {
+                updateRenderUi(wrap, {
+                    state: 'idle',
+                    message: 'Кадр ' + slotId + ': можно записать props.json и рендерить MP4.',
+                });
+            }
+        }
+    }
+
+    async function applyAnimResult(wrap, data) {
+        const validation = (data && data.validation) || {};
+        const parsed = (data && data.parsed) || {};
+        const animText = (data && data.anim_text) || '';
+        const merged = (data && data.merged_text) || (data && data.text) || '';
+        const slotId = (data && data.slot_id) || getCurrentSlotId(wrap);
+
+        setAnimRawAnswer(wrap, animText);
+        showAnimValidationBanner(wrap, validation);
+
+        const st = getSlotCarousel(wrap);
+        if (slotId) {
+            st.animCache[slotId] = animText;
+            if (merged) {
+                st.textCache[slotId] = merged;
+                if (getCurrentSlotId(wrap) === slotId) {
+                    applySlotText(wrap, slotId, merged);
+                }
+            }
+            await ensureSlotSvgInPipeline(wrap, slotId);
+        }
+
+        const jsonOut = wrap.querySelector('[data-later-json-out]');
+        const animRaw = parsed.animation_raw
+            || (parsed.animation ? JSON.stringify(parsed.animation, null, 2) : '');
+        if (jsonOut) jsonOut.value = animRaw;
+        const hasAnimation = Boolean(
+            validation.ok
+            && ((parsed.animation && typeof parsed.animation === 'object')
+                || (animRaw && String(animRaw).trim())
+                || (animText && String(animText).trim()))
+        );
+        setRemotionPanelVisible(wrap, hasAnimation);
+        if (hasAnimation) {
+            updateRenderUi(wrap, {
+                state: 'idle',
+                message: 'Анимация ОК — «Записать props.json» возьмёт SVG кадра '
+                    + (slotId || '') + ' и ответ анимации.',
+            });
+            refreshRemotionInfo(wrap);
+        } else if (!validation.ok) {
+            updateRenderUi(wrap, {
+                state: 'error',
+                message: (validation.errors && validation.errors[0])
+                    || 'Валидация анимации не пройдена.',
+            });
+        }
+    }
+
+    function displaySlotFrame(wrap, slotId, previewUrl, savedAt) {
+        const viewer = wrap.querySelector('[data-later-slot-viewer]');
+        const label = wrap.querySelector('[data-later-slot-label]');
+        const preview = wrap.querySelector('[data-later-svg-preview]');
+        const hint = wrap.querySelector('[data-later-slot-saved-hint]');
+        const animBlock = wrap.querySelector('[data-later-anim-block]');
+        if (label) label.textContent = slotId;
+        if (hint) {
+            hint.classList.remove('is-hidden');
+            hint.textContent = 'На сервере: data/scenes_lab/' + slotId + '/ (превью 960×540)';
+        }
+        if (viewer) viewer.classList.remove('is-hidden');
+        if (animBlock) animBlock.classList.remove('is-hidden');
+        const url = previewUrl || resolveSlotPreviewUrl(slotId, null);
+        showSlotPreviewFast(preview, url, slotId, savedAt);
+        applyAnimUiForSlot(wrap, slotId);
+        syncRemotionForCurrentSlot(wrap).catch(function () { /* ignore */ });
+    }
+
+    function displaySlotInViewer(wrap, slotId, detail) {
+        const meta = {
+            preview_url: detail.preview_url,
+            saved_at: detail.saved_at || '',
+        };
+        const st = getSlotCarousel(wrap);
+        st.slotMeta[slotId] = meta;
+        displaySlotFrame(wrap, slotId, meta.preview_url, meta.saved_at);
+        applySlotText(wrap, slotId, detail.text || '');
+    }
+
+    async function showSlotAt(wrap, index) {
+        const st = getSlotCarousel(wrap);
+        if (!st.ids.length) return;
+        st.index = Math.max(0, Math.min(index, st.ids.length - 1));
+        const slotId = st.ids[st.index];
+        setSlotNavUi(wrap);
+
+        const meta = st.slotMeta[slotId] || {};
+        const previewUrl = resolveSlotPreviewUrl(slotId, meta);
+        displaySlotFrame(wrap, slotId, previewUrl, meta.saved_at);
+        preloadSlotNeighbors(wrap);
+
+        const cachedText = st.textCache[slotId];
+        if (cachedText !== undefined) {
+            if (isRawAnswerExpanded(wrap)) {
+                applySlotText(wrap, slotId, cachedText);
+            }
+            return;
+        }
+        loadSlotText(wrap, slotId)
+            .then(function (text) {
+                st.textCache[slotId] = text;
+                if (getCurrentSlotId(wrap) === slotId && isRawAnswerExpanded(wrap)) {
+                    applySlotText(wrap, slotId, text);
+                }
+            })
+            .catch(function () { /* фоновая подгрузка */ });
+    }
+
+    function laterFormPayload(wrap) {
+        const ep = getEditorPromptTemplate(wrap);
+        const slotId = getCurrentSlotId(wrap);
+        return {
+            model: (wrap.querySelector('[data-later-model]') || {}).value || '',
+            svg_prompt: getSvgPromptTemplate(wrap),
+            scene_description: getSceneDescription(wrap),
+            scene_duration_sec: getSceneDuration(wrap),
+            image_url: currentImageUrl(wrap),
+            editor_prompt: ep,
+            img_1_prompt: ep,
+            anim_prompt: getAnimPromptTemplate(wrap),
+            target_slot: slotId || undefined,
+        };
+    }
+
+    async function saveLaterPrefs(wrap) {
+        const r = await fetch('/scenes-lab/api/prefs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(laterFormPayload(wrap)),
+        });
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok) {
+            throw new Error((data && data.error) || 'Не удалось сохранить настройки');
+        }
+    }
+
+    function scheduleSaveLaterPrefs(wrap, delayMs) {
+        let t = prefsSaveTimers.get(wrap);
+        if (t) clearTimeout(t);
+        t = setTimeout(function () {
+            saveLaterPrefs(wrap).catch(function () { /* ignore */ });
+        }, delayMs == null ? 450 : delayMs);
+        prefsSaveTimers.set(wrap, t);
+    }
+
+    async function loadLaterPrefs(wrap) {
+        const r = await fetch('/scenes-lab/api/prefs');
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok) return;
+        restoreFormFields(wrap, data);
+    }
+
+    function setLaterCollapsible(block, btn, body, collapsed) {
+        if (!block || !body) return;
+        block.classList.toggle('later-collapsible--body-collapsed', collapsed);
+        if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        block.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        body.hidden = collapsed;
+    }
+
+    function bindLaterCollapsible(wrap, blockSel, toggleSel, bodySel, startCollapsed) {
+        const block = wrap.querySelector(blockSel);
+        const btn = wrap.querySelector(toggleSel);
+        const body = wrap.querySelector(bodySel);
+        if (!block || !btn || !body) return;
+        setLaterCollapsible(block, btn, body, startCollapsed !== false);
+        btn.addEventListener('click', function () {
+            const collapsed = block.classList.contains('later-collapsible--body-collapsed');
+            setLaterCollapsible(block, btn, body, !collapsed);
+        });
+    }
+
+    function setSvgPromptCollapsed(wrap, collapsed) {
+        setLaterCollapsible(
+            wrap.querySelector('[data-later-svg-prompt-collapse]'),
+            wrap.querySelector('[data-later-svg-prompt-collapse-toggle]'),
+            wrap.querySelector('[data-later-svg-prompt-body]'),
+            collapsed
+        );
+    }
+
+    function bindSvgPromptCollapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-svg-prompt-collapse]',
+            '[data-later-svg-prompt-collapse-toggle]',
+            '[data-later-svg-prompt-body]',
+            true
+        );
+    }
+
+    function bindRawAnswerCollapse(wrap) {
+        const block = wrap.querySelector('[data-later-raw-answer-collapse]');
+        const btn = wrap.querySelector('[data-later-raw-answer-collapse-toggle]');
+        const body = wrap.querySelector('[data-later-raw-answer-body]');
+        if (!block || !btn || !body) return;
+        setLaterCollapsible(block, btn, body, true);
+        btn.addEventListener('click', function () {
+            const collapsed = block.classList.contains('later-collapsible--body-collapsed');
+            setLaterCollapsible(block, btn, body, !collapsed);
+            if (collapsed) {
+                const slotId = getCurrentSlotId(wrap);
+                const st = getSlotCarousel(wrap);
+                if (!slotId) return;
+                const text = st.textCache[slotId];
+                if (text !== undefined) {
+                    setRawAnswer(wrap, text, { onlyIfEmpty: false });
+                } else {
+                    loadSlotText(wrap, slotId)
+                        .then(function (t) {
+                            if (getCurrentSlotId(wrap) === slotId) {
+                                applySlotText(wrap, slotId, t);
+                            }
+                        })
+                        .catch(function (e) {
+                            appendLog(wrap, 'Не удалось загрузить ответ: ' + String(e.message || e));
+                        });
+                }
+            }
+        });
+    }
+
+    function bindEditorPromptCollapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-editor-prompt-collapse]',
+            '[data-later-editor-prompt-collapse-toggle]',
+            '[data-later-editor-prompt-body]',
+            true
+        );
+    }
+
+    function bindSvgPromptLock(wrap) {
+        const toggle = wrap.querySelector('[data-later-svg-prompt-toggle]');
+        const ta = wrap.querySelector('[data-later-svg-prompt]');
+        if (!toggle || !ta) return;
+        function setLocked(locked) {
+            toggle.classList.toggle('rewrite-lock-toggle--locked', locked);
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+            toggle.title = locked ? 'Редактировать' : 'Сохранить';
+            toggle.setAttribute('aria-label', locked ? 'Редактировать svg промт' : 'Закрыть редактирование svg промт');
+        }
+        setLocked(true);
+        toggle.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            const wasLocked = toggle.classList.contains('rewrite-lock-toggle--locked');
+            if (wasLocked) {
+                setSvgPromptCollapsed(wrap, false);
+            }
+            setLocked(!wasLocked);
+            if (!wasLocked) {
+                saveLaterPrefs(wrap)
+                    .then(function () {
+                        appendLog(wrap, 'svg промт сохранён на сервере');
+                    })
+                    .catch(function (e) {
+                        appendLog(wrap, 'Ошибка сохранения промта: ' + String(e.message || e));
+                    });
+            } else {
+                ta.focus();
+            }
+        });
+    }
+
+    function bindEditorPromptLock(wrap) {
+        const toggle = wrap.querySelector('[data-later-editor-prompt-toggle]');
+        const ta = wrap.querySelector('[data-later-editor-prompt]');
+        const block = wrap.querySelector('[data-later-editor-prompt-collapse]');
+        const collapseBtn = wrap.querySelector('[data-later-editor-prompt-collapse-toggle]');
+        const body = wrap.querySelector('[data-later-editor-prompt-body]');
+        if (!toggle || !ta) return;
+
+        function setLocked(locked) {
+            toggle.classList.toggle('rewrite-lock-toggle--locked', locked);
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+            toggle.title = locked ? 'Редактировать' : 'Сохранить';
+            toggle.setAttribute('aria-label', locked ? 'Редактировать промт редактор' : 'Закрыть редактирование промт редактор');
+        }
+        setLocked(true);
+        toggle.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            const wasLocked = toggle.classList.contains('rewrite-lock-toggle--locked');
+            if (wasLocked) {
+                setLaterCollapsible(block, collapseBtn, body, false);
+            }
+            setLocked(!wasLocked);
+            if (!wasLocked) {
+                saveLaterPrefs(wrap)
+                    .then(function () {
+                        appendLog(wrap, 'промт редактор сохранён на сервере');
+                    })
+                    .catch(function (e) {
+                        appendLog(wrap, 'Ошибка сохранения: ' + String(e.message || e));
+                    });
+            } else {
+                ta.focus();
+            }
+        });
+    }
+
+    function bindAnimPromptCollapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-anim-prompt-collapse]',
+            '[data-later-anim-prompt-collapse-toggle]',
+            '[data-later-anim-prompt-body]',
+            true
+        );
+    }
+
+    function bindAnimPromptLock(wrap) {
+        const toggle = wrap.querySelector('[data-later-anim-prompt-toggle]');
+        const ta = wrap.querySelector('[data-later-anim-prompt]');
+        const block = wrap.querySelector('[data-later-anim-prompt-collapse]');
+        const collapseBtn = wrap.querySelector('[data-later-anim-prompt-collapse-toggle]');
+        const body = wrap.querySelector('[data-later-anim-prompt-body]');
+        if (!toggle || !ta) return;
+
+        function setLocked(locked) {
+            toggle.classList.toggle('rewrite-lock-toggle--locked', locked);
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+            toggle.title = locked ? 'Редактировать' : 'Сохранить';
+            toggle.setAttribute(
+                'aria-label',
+                locked ? 'Редактировать промт Анимация' : 'Закрыть редактирование промт Анимация'
+            );
+        }
+        setLocked(true);
+        toggle.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            const wasLocked = toggle.classList.contains('rewrite-lock-toggle--locked');
+            if (wasLocked) {
+                setLaterCollapsible(block, collapseBtn, body, false);
+            }
+            setLocked(!wasLocked);
+            if (!wasLocked) {
+                scheduleSaveLaterPrefs(wrap, 0);
+                saveLaterPrefs(wrap)
+                    .then(function () {
+                        appendLog(wrap, 'промт Анимация сохранён на сервере');
+                    })
+                    .catch(function (e) {
+                        appendLog(wrap, 'Ошибка сохранения: ' + String(e.message || e));
+                    });
+            } else {
+                ta.focus();
+            }
+        });
+    }
+
+    function bindAnimAnswerCollapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-anim-answer-collapse]',
+            '[data-later-anim-answer-collapse-toggle]',
+            '[data-later-anim-answer-body]',
+            true
+        );
     }
 
     function restoreFormFields(wrap, data) {
-        const promptEl = wrap.querySelector('[data-later-prompt]');
+        const svgPromptEl = wrap.querySelector('[data-later-svg-prompt]');
+        const imgPromptEl = wrap.querySelector('[data-later-editor-prompt]');
+        const descEl = wrap.querySelector('[data-later-scene-description]');
+        const durEl = wrap.querySelector('[data-later-scene-duration]');
         const modelEl = wrap.querySelector('[data-later-model]');
         const preview = wrap.querySelector('[data-later-preview]');
-        if (promptEl && data.user_prompt) promptEl.value = data.user_prompt;
-        if (modelEl && data.model) modelEl.value = data.model;
+        const toggle = wrap.querySelector('[data-later-svg-prompt-toggle]');
+        if (svgPromptEl) {
+            const tpl = (data.svg_prompt || '').trim();
+            if (tpl) {
+                svgPromptEl.value = tpl;
+            } else if (data.user_prompt) {
+                svgPromptEl.value = data.user_prompt;
+            }
+        }
+        if (imgPromptEl && ((data.editor_prompt || data.img_1_prompt) || '').trim()) {
+            imgPromptEl.value = data.editor_prompt || data.img_1_prompt;
+        }
+        const animPromptEl = wrap.querySelector('[data-later-anim-prompt]');
+        if (animPromptEl && (data.anim_prompt || '').trim()) {
+            animPromptEl.value = data.anim_prompt;
+        }
+        if (descEl && (data.scene_description || '').trim()) {
+            descEl.value = data.scene_description;
+        }
+        if (durEl && (data.scene_duration_sec || '').trim()) {
+            durEl.value = data.scene_duration_sec;
+        }
+        if (modelEl && (data.model || '').trim()) {
+            modelEl.value = data.model;
+            syncLaterPanelEnabled(wrap);
+        }
         if (preview && data.image_url) {
             preview.src = data.image_url;
             preview.classList.remove('is-hidden');
         }
+        if (toggle && svgPromptEl) {
+            svgPromptEl.readOnly = true;
+            svgPromptEl.classList.add('rewrite-source-textarea--locked');
+            toggle.classList.add('rewrite-lock-toggle--locked');
+        }
+        const imgToggle = wrap.querySelector('[data-later-editor-prompt-toggle]');
+        if (imgToggle && imgPromptEl) {
+            imgPromptEl.readOnly = true;
+            imgPromptEl.classList.add('rewrite-source-textarea--locked');
+            imgToggle.classList.add('rewrite-lock-toggle--locked');
+        }
+    }
+
+    function showSlotPreviewImage(preview, url, slotId, savedAt) {
+        showSlotPreviewFast(preview, url, slotId, savedAt || '');
     }
 
     function showSvgIframePreview(preview, svg) {
@@ -390,33 +1261,29 @@
         }
     }
 
-    function showPipeline(wrap, data) {
-        const root = wrap.querySelector('[data-later-pipeline]');
-        if (!root) return;
-        root.classList.remove('is-hidden');
+    async function showPipeline(wrap, data) {
         const parsed = (data && data.parsed) || {};
         const validation = (data && data.validation) || {};
         const banner = wrap.querySelector('[data-later-validation-banner]');
         if (banner) {
             const errs = validation.errors || [];
             const warns = validation.warnings || [];
-            let msg = '';
-            if (warns.length) msg += warns.join('\n') + '\n\n';
             if (validation.ok) {
-                banner.className = 'later-pipeline__banner later-pipeline__banner--ok';
-                msg += 'Валидация пройдена — можно отдавать во вьюер / Remotion.';
+                banner.className = 'later-result__banner is-hidden';
+                banner.textContent = '';
             } else {
-                banner.className = 'later-pipeline__banner later-pipeline__banner--err';
+                let msg = '';
+                if (warns.length) msg += warns.join('\n') + '\n\n';
+                banner.className = 'later-result__banner later-result__banner--err';
                 msg += errs.length
                     ? 'Отклонено:\n' + errs.join('\n')
                     : 'Валидация не пройдена.';
+                banner.textContent = msg.trim();
             }
-            banner.textContent = msg.trim();
         }
         const svgOut = wrap.querySelector('[data-later-svg-out]');
         const jsonOut = wrap.querySelector('[data-later-json-out]');
         const notesOut = wrap.querySelector('[data-later-notes-out]');
-        const preview = wrap.querySelector('[data-later-svg-preview]');
         const svg = parsed.svg || '';
         setRawAnswer(wrap, (data && data.text) || '', { onlyIfEmpty: false });
         if (svgOut) svgOut.value = svg;
@@ -425,30 +1292,58 @@
                 || (parsed.animation ? JSON.stringify(parsed.animation, null, 2) : '');
         }
         if (notesOut) notesOut.value = parsed.notes || '';
-        setRemotionPanelVisible(wrap, Boolean(validation.ok));
-        if (validation.ok) {
+        const hasAnimation = Boolean(
+            (parsed.animation && typeof parsed.animation === 'object')
+            || (parsed.animation_raw && String(parsed.animation_raw).trim())
+        );
+        setRemotionPanelVisible(wrap, Boolean(validation.ok && hasAnimation));
+        if (validation.ok && hasAnimation) {
             refreshRemotionInfo(wrap);
         }
-        const previewWrap = wrap.querySelector('.later-svg-preview-wrap');
-        if (previewWrap) {
-            previewWrap.querySelectorAll('.later-svg-preview__warn').forEach(function (el) {
-                el.remove();
-            });
-        }
-        if (preview) {
-            if (svg) {
-                if (!validation.ok && previewWrap) {
-                    const note = document.createElement('div');
-                    note.className = 'later-svg-preview__warn';
-                    note.textContent =
-                        'Превью черновое: валидация не пройдена — исправьте ответ и нажмите «Проверить и собрать».';
-                    previewWrap.insertBefore(note, preview);
-                }
-                showSvgRasterPreview(wrap, preview, svg, validation.ok, previewWrap);
-            } else {
-                preview.innerHTML = '';
-                preview.textContent = 'SVG пустой — проверьте блок ===SVG_START=== в ответе.';
+
+        const preferSlot =
+            (data && data.slot_id)
+            || (data && data.img_slot && data.img_slot.slot_id)
+            || (data && data.latest_slot_id)
+            || null;
+        const st = getSlotCarousel(wrap);
+        if (data && data.slots && data.slots.length) {
+            st.ids = data.slots.map(function (s) { return s.id; });
+            syncSlotMetaFromList(st, data.slots);
+            let idx = st.ids.length - 1;
+            if (preferSlot) {
+                const found = st.ids.indexOf(preferSlot);
+                if (found >= 0) idx = found;
             }
+            st.index = idx;
+            st.cache = {};
+            if (data.text) st.textCache[preferSlot] = data.text;
+        } else if (validation.ok && preferSlot) {
+            await refreshSlotsList(wrap, preferSlot);
+        }
+
+        if (validation.ok && preferSlot) {
+            const slotSaved = (data.img_slot && data.img_slot.saved_at) || '';
+            if (data.img_slot && data.img_slot.preview_url) {
+                st.slotMeta[preferSlot] = {
+                    preview_url: data.img_slot.preview_url,
+                    saved_at: slotSaved,
+                };
+                preloadImageUrl(data.img_slot.preview_url);
+            }
+            if (data.text) st.textCache[preferSlot] = data.text;
+            displaySlotFrame(
+                wrap,
+                preferSlot,
+                data.img_slot && data.img_slot.preview_url,
+                slotSaved
+            );
+            applySlotText(wrap, preferSlot, data.text || '');
+            const viewer = wrap.querySelector('[data-later-slot-viewer]');
+            if (viewer) viewer.classList.remove('is-hidden');
+            setSlotNavUi(wrap);
+        } else if (st.ids.length) {
+            await showSlotAt(wrap, st.index);
         }
     }
 
@@ -603,7 +1498,7 @@
     }
 
     async function applyParseResult(wrap, data) {
-        showPipeline(wrap, data);
+        await showPipeline(wrap, data);
         const ok = data && data.pipeline_ok;
         const saved = data && data.saved_at;
         let status = ok ? 'Готово — валидация OK' : 'Ответ получен — есть ошибки валидации';
@@ -615,12 +1510,7 @@
         const r = await fetch('/scenes-lab/api/parse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: text,
-                model: (wrap.querySelector('[data-later-model]') || {}).value || '',
-                user_prompt: (wrap.querySelector('[data-later-prompt]') || {}).value || '',
-                image_url: currentImageUrl(wrap),
-            }),
+            body: JSON.stringify(Object.assign({ text: text }, laterFormPayload(wrap))),
         });
         const data = await r.json().catch(function () { return {}; });
         if (!r.ok || !data.ok) {
@@ -647,18 +1537,198 @@
         const reparseBtn = wrap.querySelector('[data-later-reparse]');
         const fileInput = wrap.querySelector('[data-later-file]');
         const preview = wrap.querySelector('[data-later-preview]');
-        const promptEl = wrap.querySelector('[data-later-prompt]');
         const modelEl = wrap.querySelector('[data-later-model]');
         if (!sendBtn || !KEY_ANY) return;
 
         syncLaterPanelEnabled(wrap);
+        bindSvgPromptCollapse(wrap);
+        bindSvgPromptLock(wrap);
+        bindRawAnswerCollapse(wrap);
+        bindEditorPromptCollapse(wrap);
+        bindEditorPromptLock(wrap);
+        bindAnimPromptCollapse(wrap);
+        bindAnimPromptLock(wrap);
+        bindAnimAnswerCollapse(wrap);
         modelEl?.addEventListener('change', function () {
             syncLaterPanelEnabled(wrap);
+            saveLaterPrefs(wrap).catch(function () { /* ignore */ });
         });
 
-        bindTabs(wrap);
+        const descEl = wrap.querySelector('[data-later-scene-description]');
+        const durEl = wrap.querySelector('[data-later-scene-duration]');
+        descEl?.addEventListener('input', function () {
+            scheduleSaveLaterPrefs(wrap);
+        });
+        descEl?.addEventListener('change', function () {
+            scheduleSaveLaterPrefs(wrap);
+        });
+        durEl?.addEventListener('input', function () {
+            scheduleSaveLaterPrefs(wrap);
+        });
+        durEl?.addEventListener('change', function () {
+            scheduleSaveLaterPrefs(wrap);
+        });
+
         bindSvgPatch(wrap);
-        loadSavedSession(wrap);
+        loadLaterPrefs(wrap).then(function () {
+            return refreshSlotsList(wrap);
+        }).then(function () {
+            const st = getSlotCarousel(wrap);
+            if (st.ids.length) {
+                showSlotAt(wrap, st.index).catch(function () { /* ignore */ });
+            }
+            return loadSavedSession(wrap);
+        });
+
+        function goSlotByDelta(wrap, delta) {
+            if (isSlotAnimLocked(wrap)) return;
+            const st = getSlotCarousel(wrap);
+            if (!st.ids.length) return;
+            const next = Math.max(0, Math.min(st.index + delta, st.ids.length - 1));
+            if (next === st.index) return;
+            showSlotAt(wrap, next);
+        }
+
+        wrap.querySelector('[data-later-slot-prev]')?.addEventListener('click', function () {
+            goSlotByDelta(wrap, -1);
+        });
+        wrap.querySelector('[data-later-slot-next]')?.addEventListener('click', function () {
+            goSlotByDelta(wrap, 1);
+        });
+
+        const animateBtn = wrap.querySelector('[data-later-animate]');
+        animateBtn?.addEventListener('click', async function () {
+            const mid = modelEl ? modelEl.value : '';
+            if (!modelKeyOk(mid)) {
+                setAnimStatus(wrap, 'Нужен API-ключ для выбранной модели', 'error');
+                appendLog(wrap, 'Ошибка анимации: нет API-ключа');
+                return;
+            }
+            const slotId = getCurrentSlotId(wrap);
+            if (!slotId) {
+                setAnimStatus(wrap, 'Сначала соберите кадр', 'error');
+                return;
+            }
+            const ap = getAnimPromptTemplate(wrap);
+            if (!ap) {
+                setAnimStatus(wrap, 'Заполните промт Анимация', 'error');
+                return;
+            }
+            animateBtn.disabled = true;
+            const busyLabel = animateBtn.textContent;
+            animateBtn.textContent = 'Анимировать…';
+            const animBanner = wrap.querySelector('[data-later-anim-validation-banner]');
+            if (animBanner) {
+                animBanner.className = 'later-result__banner is-hidden';
+                animBanner.textContent = '';
+            }
+            appendLog(wrap, 'Анимировать ' + slotId + ': подготовка…');
+            setSlotAnimLock(wrap, true);
+            setAnimStatus(wrap, 'Отправка на сервер…', 'generating');
+            try {
+                const slotResponse = await getSlotResponseText(wrap, slotId);
+                const payload = laterFormPayload(wrap);
+                payload.slot_id = slotId;
+                payload.target_slot = slotId;
+                payload.slot_response = slotResponse;
+                appendLog(
+                    wrap,
+                    '→ POST /scenes-lab/api/animate (слот ' + slotId + ', ответ ' + slotResponse.length + ' симв.)'
+                );
+                setAnimStatus(wrap, 'Запрос к модели… (обычно 1–2 мин)', 'generating');
+                const r = await fetch('/scenes-lab/api/animate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    if (data.anim_text) await applyAnimResult(wrap, data);
+                    throw new Error((data && data.error) || 'Ошибка анимации (HTTP ' + r.status + ')');
+                }
+                await applyAnimResult(wrap, data);
+                appendLog(wrap, 'Анимация для ' + slotId + ' — валидация ОК');
+                setAnimStatus(wrap, 'Готово — валидация анимации ОК', 'ok');
+            } catch (e) {
+                const msg = String(e.message || e);
+                appendLog(wrap, 'Ошибка анимации: ' + msg);
+                setAnimStatus(wrap, msg, 'error');
+            } finally {
+                setSlotAnimLock(wrap, false);
+                animateBtn.textContent = busyLabel;
+                setSlotNavUi(wrap);
+            }
+        });
+
+        const remakeBtn = wrap.querySelector('[data-later-remake]');
+        remakeBtn?.addEventListener('click', async function () {
+            const mid = modelEl ? modelEl.value : '';
+            if (!modelKeyOk(mid)) {
+                setOpStatus(wrap, 'Нужен API-ключ для выбранной модели', 'error');
+                appendLog(wrap, 'Ошибка: нет API-ключа');
+                return;
+            }
+            const st = getSlotCarousel(wrap);
+            if (!st.ids.length) {
+                setOpStatus(wrap, 'Сначала соберите img_1', 'error');
+                appendLog(wrap, 'Ошибка: нет кадра на сервере');
+                return;
+            }
+            const ep = getEditorPromptTemplate(wrap);
+            if (!ep) {
+                setOpStatus(wrap, 'Заполните промт редактор', 'error');
+                appendLog(wrap, 'Ошибка: пустой промт редактор');
+                return;
+            }
+            remakeBtn.disabled = true;
+            remakeBtn.classList.add('later-remake--busy');
+            const busyLabel = remakeBtn.textContent;
+            remakeBtn.textContent = 'Переделать…';
+            appendLog(wrap, 'Переделать: подготовка запроса…');
+            setOpStatus(wrap, 'Отправка на сервер…', 'generating');
+            try {
+                await refreshSlotsList(wrap);
+                const latestId = getLatestSlotId(wrap);
+                const payload = laterFormPayload(wrap);
+                delete payload.target_slot;
+                appendLog(
+                    wrap,
+                    '→ POST /scenes-lab/api/remake (последний слот на сервере: '
+                        + (latestId || '?') + ')'
+                );
+                setOpStatus(wrap, 'Запрос к модели… (обычно 1–3 мин)', 'generating');
+                const r = await fetch('/scenes-lab/api/remake', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                appendLog(wrap, '← ответ сервера: HTTP ' + r.status);
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    throw new Error((data && data.error) || 'Ошибка переделать (HTTP ' + r.status + ')');
+                }
+                setOpStatus(wrap, 'Сохранение ' + (data.slot_id || 'слота') + '…', 'generating');
+                appendLog(wrap, 'Модель ответила — разбор SVG…');
+                const st2 = getSlotCarousel(wrap);
+                st2.cache = {};
+                if (data.text && data.slot_id) {
+                    st2.textCache[data.slot_id] = data.text;
+                }
+                await refreshSlotsList(wrap, data.slot_id);
+                await applyParseResult(wrap, data);
+                appendLog(wrap, 'Готово: сохранено как ' + (data.slot_id || '?'));
+                setOpStatus(wrap, 'Готово — ' + (data.slot_id || 'новый слот'), 'ok');
+            } catch (e) {
+                const msg = String(e.message || e);
+                appendLog(wrap, 'Ошибка: ' + msg);
+                setOpStatus(wrap, msg, 'error');
+            } finally {
+                remakeBtn.disabled = false;
+                remakeBtn.classList.remove('later-remake--busy');
+                remakeBtn.textContent = busyLabel;
+            }
+        });
+
         let uploadToken = 0;
 
         fileInput?.addEventListener('change', async function () {
@@ -682,6 +1752,7 @@
                     preview.classList.remove('is-hidden');
                 }
                 setLaterStatus(wrap, 'Фото загружено', 'done');
+                saveLaterPrefs(wrap).catch(function () { /* ignore */ });
             } catch (e) {
                 if (token !== uploadToken) return;
                 setLaterStatus(wrap, String(e.message || e), 'error');
@@ -706,30 +1777,32 @@
                 return;
             }
             clearPipelineUi(wrap);
+            appendLog(wrap, 'Отправить: подготовка…');
             sendBtn.disabled = true;
-            const waitDetail = isOpenaiLaterModel(mid)
-                ? 'ChatGPT 5.4 (OpenAI) — разбор SVG и JSON может занять 1–3 минуты'
-                : 'Claude через Kie.ai — разбор SVG и JSON может занять 1–3 минуты';
-            setLaterStatus(wrap, 'Ожидание ответа модели…', 'generating', {
-                detail: waitDetail,
-            });
+            setOpStatus(wrap, 'Отправка на сервер…', 'generating');
             try {
+                const payload = laterFormPayload(wrap);
+                payload.image_url = imageUrl;
+                appendLog(wrap, '→ POST /scenes-lab/api/claude');
+                setOpStatus(wrap, 'Запрос к модели… (обычно 1–3 мин)', 'generating');
                 const r = await fetch('/scenes-lab/api/claude', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: modelEl ? modelEl.value : '',
-                        user_prompt: promptEl ? promptEl.value : '',
-                        image_url: imageUrl,
-                    }),
+                    body: JSON.stringify(payload),
                 });
+                appendLog(wrap, '← ответ сервера: HTTP ' + r.status);
                 const data = await r.json().catch(function () { return {}; });
                 if (!r.ok || !data.ok) {
                     throw new Error((data && data.error) || 'Ошибка запроса');
                 }
+                setOpStatus(wrap, 'Разбор ответа…', 'generating');
                 await applyParseResult(wrap, data);
+                appendLog(wrap, 'Готово: ответ получен');
+                setOpStatus(wrap, 'Готово — ответ модели', 'ok');
             } catch (e) {
-                setLaterStatus(wrap, String(e.message || e), 'error');
+                const msg = String(e.message || e);
+                appendLog(wrap, 'Ошибка: ' + msg);
+                setOpStatus(wrap, msg, 'error');
             } finally {
                 sendBtn.disabled = false;
             }
@@ -762,7 +1835,13 @@
             propsBtn.disabled = true;
             setPropsHint(wrap, 'Запись props.json…', true);
             try {
-                const r = await fetch('/scenes-lab/api/remotion-props', { method: 'POST' });
+                const slotId = getCurrentSlotId(wrap);
+                if (slotId) await ensureSlotSvgInPipeline(wrap, slotId);
+                const r = await fetch('/scenes-lab/api/remotion-props', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(laterRemotionPayload(wrap)),
+                });
                 const data = await r.json().catch(function () { return {}; });
                 if (!r.ok || !data.ok) {
                     throw new Error((data && data.error) || (data && data.message) || 'Ошибка записи props');
@@ -785,7 +1864,13 @@
             setMp4Preview(wrap, '', false);
             updateRenderUi(wrap, { state: 'queued', message: 'Запуск…', progress_pct: 0 });
             try {
-                const r = await fetch('/scenes-lab/api/remotion/render', { method: 'POST' });
+                const slotId = getCurrentSlotId(wrap);
+                if (slotId) await ensureSlotSvgInPipeline(wrap, slotId);
+                const r = await fetch('/scenes-lab/api/remotion/render', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(laterRemotionPayload(wrap)),
+                });
                 const data = await r.json().catch(function () { return {}; });
                 if (!r.ok || !data.ok) {
                     const errText = (data && data.message) || (data && data.error_detail) || (data && data.error) || 'Ошибка рендера (HTTP ' + r.status + ')';
@@ -814,6 +1899,7 @@
         rawOut?.addEventListener('keydown', function (ev) {
             if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
                 ev.preventDefault();
+                appendLog(wrap, 'Проверка и сборка SVG…');
                 runReparseFromRaw(wrap);
             }
         });

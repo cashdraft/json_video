@@ -10,8 +10,8 @@
     <header class="scenes-lab-page__head">
         <h1>Later…</h1>
         <p>
-            Claude (Kie.ai) или ChatGPT 5.4 (OpenAI): промпт + одно фото → три блока (SVG, JSON анимации, пояснение).
-            Сервер режет по маркерам <code>===SVG_START===</code> / фенсам <code>```svg</code> и валидирует XML, id и кадры.
+            Claude (Kie.ai) или ChatGPT 5.4 (OpenAI): промпт + одно фото → SVG (+ опционально JSON анимации).
+            Сервер режет по маркерам <code>===SVG_START===</code> / фенсам <code>```svg</code> и валидирует XML.
             <a href="/scenes-lab/viewer">SVG viewer</a>
         </p>
     </header>
@@ -22,7 +22,7 @@
                 <span class="slot-badge badge-slot-prompt scene-slot-later-badge">Later…</span>
                 <select class="later-lab__model-select" data-later-model aria-label="Модель">
                     {% for m in claude_models %}
-                    <option value="{{ m.id }}"{% if loop.first %} selected{% endif %}>{{ m.label }}</option>
+                    <option value="{{ m.id }}"{% if default_later_model == m.id or (not default_later_model and loop.first) %} selected{% endif %}>{{ m.label }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -34,103 +34,279 @@
                 {% elif not openai_key_set %}
                 <p class="later-lab__hint is-hidden" data-later-hint-openai>Для ChatGPT 5.4 укажите <code>OPENAI_API_KEY</code> в <code>.env</code>.</p>
                 {% endif %}
-                <textarea
-                    class="rewrite-slot-textarea later-lab__prompt"
-                    rows="8"
-                    placeholder="Запрос к модели…"
-                    data-later-prompt
-                ></textarea>
-                <div class="later-lab__row">
-                    <img class="later-lab__attach-preview is-hidden" data-later-preview src="" alt="Вложение">
+
+                <div class="later-lab__scene-fields">
+                    <label class="later-lab__field-label later-lab__field-label--macro" for="later-scene-description">
+                        <span>Описание сцены</span>
+                        <span class="later-lab__macro-hint">макрос: <code>{% raw %}{{SCENE_DESCRIPTION}}{% endraw %}</code></span>
+                    </label>
+                    <input
+                        type="text"
+                        id="later-scene-description"
+                        class="later-lab__field-input"
+                        data-later-scene-description
+                        value="{{ default_scene_description }}"
+                        autocomplete="off"
+                        spellcheck="true"
+                    >
+                    <label class="later-lab__field-label later-lab__field-label--macro" for="later-scene-duration">
+                        <span>Хронометраж (сек)</span>
+                        <span class="later-lab__macro-hint">макрос: <code>{% raw %}{{SCENE_DURATION_SEC}}{% endraw %}</code></span>
+                    </label>
+                    <input
+                        type="text"
+                        id="later-scene-duration"
+                        class="later-lab__field-input later-lab__field-input--short"
+                        data-later-scene-duration
+                        value="{{ default_scene_duration }}"
+                        autocomplete="off"
+                        inputmode="decimal"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <div
+                    class="later-svg-prompt-block later-collapsible later-collapsible--body-collapsed"
+                    data-later-svg-prompt-collapse
+                    aria-expanded="false"
+                >
+                    <div class="later-collapsible__header">
+                        <button
+                            type="button"
+                            class="later-collapsible__title-btn"
+                            data-later-svg-prompt-collapse-toggle
+                            aria-expanded="false"
+                        >
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <span class="slot-badge badge-slot-prompt">svg промт</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked"
+                            data-later-svg-prompt-toggle
+                            title="Редактировать"
+                            aria-label="Редактировать svg промт"
+                        >
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                    </div>
+                    <div class="later-collapsible__inner" data-later-svg-prompt-body hidden>
+                        <textarea
+                            class="rewrite-slot-textarea later-lab__svg-prompt rewrite-source-textarea--locked"
+                            rows="12"
+                            spellcheck="false"
+                            readonly
+                            data-later-svg-prompt
+                        >{{ default_svg_prompt }}</textarea>
+                    </div>
+                </div>
+
+                <div class="later-lab__attach-row">
+                    <img class="later-lab__attach-preview{% if not default_later_image_url %} is-hidden{% endif %}" data-later-preview src="{{ default_later_image_url }}" alt="Вложение">
                     <label class="later-lab__file-label">
                         <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-later-file>
                         Прикрепить фото (1 файл)
                     </label>
+                </div>
+
+                <div class="later-lab__send-row">
                     <button type="button" class="btn btn-primary later-lab__send" data-later-send>Отправить</button>
                 </div>
-                <p class="later-lab__hint">Kie.ai получит фото по публичному URL после загрузки. Ниже можно вставить или править ответ вручную и пересобрать SVG без повторного запроса к модели.</p>
-                <div class="later-raw-answer" data-later-raw-answer>
-                    <div class="later-raw-answer__head">
-                        <div class="later-raw-answer__label">Ответ модели (целиком)</div>
-                        <button type="button" class="btn btn-primary" data-later-reparse>Проверить и собрать</button>
-                    </div>
-                    <textarea
-                        class="rewrite-slot-textarea later-raw-answer__code"
-                        rows="18"
-                        spellcheck="false"
-                        placeholder="Вставьте сюда ответ с маркерами ===SVG_START=== … или правьте после «Отправить». Ctrl+Enter — проверка."
-                        data-later-raw-out
-                    ></textarea>
+
+                <div class="later-op-status is-hidden" data-later-op-status role="status" aria-live="polite">
+                    <span class="later-op-status__spinner" data-later-op-spinner aria-hidden="true"></span>
+                    <span class="later-op-status__text" data-later-op-status-text></span>
+                    <span class="later-op-status__timer" data-later-op-status-timer></span>
                 </div>
-                <div class="slot-placeholder later-lab__status" data-later-status data-status="pending">
-                    <div class="later-status__body">
-                        <span class="slot-status later-status__line" data-later-status-text>Ожидание запроса</span>
-                        <span class="later-status__detail is-hidden" data-later-status-detail></span>
-                        <span class="later-status__timer is-hidden" data-later-status-timer aria-live="polite">0 с</span>
+
+                <pre class="later-lab__log is-hidden" data-later-log aria-live="polite"></pre>
+
+                <div
+                    class="later-editor-prompt-block later-collapsible later-collapsible--body-collapsed"
+                    data-later-editor-prompt-collapse
+                    aria-expanded="false"
+                >
+                    <div class="later-collapsible__header later-editor-prompt-block__head">
+                        <button
+                            type="button"
+                            class="later-collapsible__title-btn"
+                            data-later-editor-prompt-collapse-toggle
+                            aria-expanded="false"
+                        >
+                            <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                            <span class="slot-badge badge-slot-prompt">промт редактор</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-later-remake>Переделать</button>
+                        <button
+                            type="button"
+                            class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked"
+                            data-later-editor-prompt-toggle
+                            title="Редактировать"
+                            aria-label="Редактировать промт редактор"
+                        >
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                    </div>
+                    <div class="later-collapsible__inner" data-later-editor-prompt-body hidden>
+                        <textarea
+                            class="rewrite-slot-textarea later-lab__editor-prompt rewrite-source-textarea--locked"
+                            rows="8"
+                            spellcheck="false"
+                            readonly
+                            data-later-editor-prompt
+                            placeholder="Промт «Переделать». Макросы: {% raw %}{{SCENE_DESCRIPTION}}, {{SCENE_DURATION_SEC}}{% endraw %}."
+                        >{{ default_img_1_prompt }}</textarea>
                     </div>
                 </div>
 
-                <div class="later-pipeline is-hidden" data-later-pipeline>
-                    <div class="later-pipeline__banner" data-later-validation-banner></div>
-                    <div class="later-pipeline__tabs" role="tablist">
-                        <button type="button" class="later-pipeline__tab is-active" data-tab="svg" role="tab">SVG</button>
-                        <button type="button" class="later-pipeline__tab" data-tab="json" role="tab">Анимация</button>
-                        <button type="button" class="later-pipeline__tab" data-tab="notes" role="tab">Пояснение</button>
+                <div class="later-raw-answer__actions">
+                    <button type="button" class="btn btn-primary" data-later-reparse>Проверить и собрать</button>
+                </div>
+
+                <div class="later-slot-viewer is-hidden" data-later-slot-viewer>
+                    <div class="later-slot-viewer__nav">
+                        <button type="button" class="btn btn-secondary btn-sm" data-later-slot-prev aria-label="Предыдущий кадр">‹</button>
+                        <span class="later-result__slot-label" data-later-slot-label>img_1</span>
+                        <button type="button" class="btn btn-secondary btn-sm" data-later-slot-next aria-label="Следующий кадр">›</button>
                     </div>
-                    <div class="later-pipeline__panel is-active" data-panel="svg">
-                        <div class="later-svg-preview-wrap">
-                            <div class="later-svg-preview__label">Превью кадра 1920×1080 (PNG, 16∶9)</div>
-                            <div class="later-svg-preview" data-later-svg-preview></div>
+                    <div class="later-result__banner" data-later-validation-banner></div>
+                    <div class="later-slot-preview-frame" data-later-slot-preview-frame>
+                        <div class="later-svg-preview" data-later-svg-preview></div>
+                        <div
+                            class="later-slot-preview-lock is-hidden"
+                            data-later-slot-preview-lock
+                            aria-hidden="true"
+                        >
+                            <svg class="later-slot-preview-lock__icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    fill="currentColor"
+                                    d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-7h-1V8a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zm-3-2v2H9V8a3 3 0 0 1 6 0z"
+                                />
+                            </svg>
                         </div>
-                        <textarea class="rewrite-slot-textarea later-pipeline__code" rows="8" readonly data-later-svg-out></textarea>
+                    </div>
+                    <div
+                        class="later-raw-answer later-collapsible later-collapsible--body-collapsed later-slot-viewer__answer"
+                        data-later-raw-answer-collapse
+                        aria-expanded="false"
+                    >
+                        <div class="later-collapsible__header">
+                            <button
+                                type="button"
+                                class="later-collapsible__title-btn"
+                                data-later-raw-answer-collapse-toggle
+                                aria-expanded="false"
+                            >
+                                <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                                <span class="later-raw-answer__label">Ответ модели (целиком)</span>
+                            </button>
+                        </div>
+                        <div class="later-collapsible__inner" data-later-raw-answer-body hidden>
+                            <textarea
+                                class="rewrite-slot-textarea later-raw-answer__code"
+                                rows="10"
+                                spellcheck="false"
+                                placeholder="Ответ с маркерами ===SVG_START=== … Можно править вручную."
+                                data-later-raw-out
+                            ></textarea>
+                        </div>
+                    </div>
+                    <div class="later-result__saved-hint is-hidden" data-later-slot-saved-hint></div>
 
-                        <section class="later-svg-patch" data-svg-patch>
-                            <h3 class="later-svg-patch__title">Правка фрагмента SVG (модель)</h3>
-                            <p class="later-svg-patch__hint">
-                                В модель уходит растр текущего фрагмента и текст между
-                                <code>===SVG_START===</code> … <code>===SVG_END===</code>.
-                                Ответ — только этот блок; он подставляется в полный ответ выше.
-                            </p>
-                            <label class="later-svg-patch__label">System prompt</label>
-                            <textarea
-                                class="rewrite-slot-textarea later-svg-patch__system"
-                                rows="6"
-                                spellcheck="false"
-                                data-svg-patch-system
-                            >{{ svg_patch_default_system }}</textarea>
-                            <label class="later-svg-patch__label">Запрос на правку</label>
-                            <textarea
-                                class="rewrite-slot-textarea later-svg-patch__user"
-                                rows="3"
-                                spellcheck="false"
-                                placeholder="Например: сделай заголовок крупнее, сдвинь блок влево…"
-                                data-svg-patch-user
-                            ></textarea>
-                            <div class="later-svg-patch__row">
-                                <label class="later-svg-patch__label">Фрагмент SVG</label>
-                                <button type="button" class="btn btn-secondary btn-sm" data-svg-patch-pull>Взять из SVG выше</button>
-                                <button type="button" class="btn btn-secondary btn-sm" data-svg-patch-render>Превью PNG</button>
-                                <button type="button" class="btn btn-primary btn-sm" data-svg-patch-send>Отправить правку</button>
+                    <div class="later-anim-block is-hidden" data-later-anim-block>
+                        <div
+                            class="later-anim-prompt-block later-collapsible later-collapsible--body-collapsed"
+                            data-later-anim-prompt-collapse
+                            aria-expanded="false"
+                        >
+                            <div class="later-collapsible__header later-anim-prompt-block__head">
+                                <button
+                                    type="button"
+                                    class="later-collapsible__title-btn"
+                                    data-later-anim-prompt-collapse-toggle
+                                    aria-expanded="false"
+                                >
+                                    <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                                    <span class="slot-badge badge-slot-prompt">промт Анимация</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-later-animate>Анимировать</button>
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked"
+                                    data-later-anim-prompt-toggle
+                                    title="Редактировать"
+                                    aria-label="Редактировать промт Анимация"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
                             </div>
-                            <textarea
-                                class="rewrite-slot-textarea later-svg-patch__fragment"
-                                rows="6"
-                                spellcheck="false"
-                                data-svg-patch-fragment
-                            ></textarea>
-                            <div class="later-svg-patch__preview-wrap is-hidden" data-svg-patch-preview-wrap>
-                                <span class="later-svg-patch__preview-label">Растр для модели (1920×1080)</span>
-                                <img class="later-svg-patch__preview" alt="" data-svg-patch-preview />
+                            <div class="later-collapsible__inner" data-later-anim-prompt-body hidden>
+                                <textarea
+                                    class="rewrite-slot-textarea later-lab__anim-prompt rewrite-source-textarea--locked"
+                                    rows="6"
+                                    spellcheck="false"
+                                    readonly
+                                    data-later-anim-prompt
+                                    placeholder="Промт «Анимировать». Макросы: {% raw %}{{SCENE_DESCRIPTION}}, {{SCENE_DURATION_SEC}}{% endraw %}."
+                                ></textarea>
                             </div>
-                            <div class="later-svg-patch__status is-hidden" data-svg-patch-status></div>
-                        </section>
+                        </div>
+
+                        <div class="later-anim-status is-hidden" data-later-anim-status role="status" aria-live="polite">
+                            <span class="later-anim-status__spinner" aria-hidden="true"></span>
+                            <span class="later-anim-status__text" data-later-anim-status-text></span>
+                            <span class="later-anim-status__timer" data-later-anim-status-timer></span>
+                        </div>
+
+                        <div
+                            class="later-raw-answer later-collapsible later-collapsible--body-collapsed later-anim-block__answer"
+                            data-later-anim-answer-collapse
+                            aria-expanded="false"
+                        >
+                            <div class="later-collapsible__header">
+                                <button
+                                    type="button"
+                                    class="later-collapsible__title-btn"
+                                    data-later-anim-answer-collapse-toggle
+                                    aria-expanded="false"
+                                >
+                                    <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                                    <span class="later-raw-answer__label">Ответ анимации (целиком)</span>
+                                </button>
+                            </div>
+                            <div class="later-collapsible__inner" data-later-anim-answer-body hidden>
+                                <textarea
+                                    class="rewrite-slot-textarea later-raw-answer__code"
+                                    rows="8"
+                                    spellcheck="false"
+                                    readonly
+                                    placeholder="Ответ модели по анимации появится после «Анимировать»."
+                                    data-later-anim-raw-out
+                                ></textarea>
+                            </div>
+                        </div>
+                        <div class="later-result__banner is-hidden" data-later-anim-validation-banner></div>
                     </div>
-                    <div class="later-pipeline__panel" data-panel="json" hidden>
-                        <textarea class="rewrite-slot-textarea later-pipeline__code" rows="10" readonly data-later-json-out></textarea>
-                    </div>
-                    <div class="later-pipeline__panel" data-panel="notes" hidden>
-                        <textarea class="rewrite-slot-textarea later-pipeline__code" rows="6" readonly data-later-notes-out></textarea>
-                    </div>
+                </div>
+
+                <div class="later-lab__internals is-hidden" aria-hidden="true">
+                    <textarea class="later-pipeline__code" data-later-svg-out hidden></textarea>
+                    <textarea class="later-pipeline__code" data-later-json-out hidden></textarea>
+                    <textarea class="later-pipeline__code" data-later-notes-out hidden></textarea>
+                    <section class="later-svg-patch" data-svg-patch hidden>
+                        <textarea data-svg-patch-system hidden>{{ svg_patch_default_system }}</textarea>
+                        <textarea data-svg-patch-user hidden></textarea>
+                        <textarea data-svg-patch-fragment hidden></textarea>
+                    </section>
+                </div>
+
+                <div class="later-lab__status is-hidden" data-later-status data-status="pending" aria-hidden="true">
+                    <span data-later-status-text></span>
+                    <span data-later-status-detail></span>
+                    <span data-later-status-timer></span>
                 </div>
 
                 <div class="later-remotion is-hidden" data-later-remotion>

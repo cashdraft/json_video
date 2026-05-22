@@ -176,33 +176,7 @@ def lab_render_state_view(st: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def build_remotion_props_from_session() -> tuple[dict[str, Any] | None, str | None]:
-    """Собрать props.json из валидированной later_session."""
-    from later_response_parse import process_later_model_response
-    from scenes_lab_session import load_later_session
-
-    row = load_later_session()
-    if not row:
-        return None, "Нет сохранённой сессии Later…"
-    text = str(row.get("text") or "").strip()
-    if not text:
-        return None, "Пустая сессия."
-
-    bundle = process_later_model_response(text)
-    validation = bundle.get("validation") if isinstance(bundle.get("validation"), dict) else {}
-    if not validation.get("ok"):
-        errs = validation.get("errors") or []
-        msg = "; ".join(str(e) for e in errs[:5]) if errs else "Валидация не пройдена."
-        return None, msg
-
-    parsed = bundle.get("parsed") if isinstance(bundle.get("parsed"), dict) else {}
-    svg = str(parsed.get("svg") or "").strip()
-    animation = parsed.get("animation")
-    if not svg:
-        return None, "SVG пустой."
-    if not isinstance(animation, dict):
-        return None, "JSON анимации отсутствует или невалиден."
-
+def _props_from_svg_and_animation(svg: str, animation: dict[str, Any]) -> dict[str, Any]:
     try:
         fps = max(1, int(float(animation.get("fps") or 30)))
     except (TypeError, ValueError):
@@ -214,11 +188,10 @@ def build_remotion_props_from_session() -> tuple[dict[str, Any] | None, str | No
 
     tracks = animation.get("tracks")
     if not isinstance(tracks, list):
-        return None, "В animation нет tracks[]."
+        raise ValueError("В animation нет tracks[].")
 
     duration_frames = max(1, int(round(duration_sec * fps)))
-
-    props: dict[str, Any] = {
+    return {
         "schema": "later_infographic_props@1",
         "fps": fps,
         "width": 1920,
@@ -233,11 +206,123 @@ def build_remotion_props_from_session() -> tuple[dict[str, Any] | None, str | No
             "tracks": tracks,
         },
     }
+
+
+def build_remotion_props_from_sources(
+    *,
+    slot_id: str = "",
+    svg: str = "",
+    anim_text: str = "",
+) -> tuple[dict[str, Any] | None, str | None]:
+    """
+    props.json из SVG кадра + ответа анимации (===ANIM_START=== … или сырой JSON).
+    Источники: явные svg/anim_text, иначе файлы слота img_N (scene.svg, anim_response.txt).
+    """
+    from later_response_parse import validate_animation_for_svg
+    from scenes_lab_img_slots import (
+        _slot_dir,
+        load_img_slot_anim_response,
+        load_img_slot_response,
+        load_img_slot_svg_for_remotion,
+    )
+
+    sid = (slot_id or "").strip()
+    svg_body = (svg or "").strip()
+    anim_src = (anim_text or "").strip()
+
+    if sid:
+        slot_path = _slot_dir(sid)
+        if slot_path is None:
+            return None, f"Слот {sid!r} не найден."
+        # Remotion всегда берёт SVG/anim с диска слота (не textarea UI — там часто чужой кадр).
+        svg_body = load_img_slot_svg_for_remotion(sid).strip()
+        anim_src = load_img_slot_anim_response(sid).strip()
+        if not anim_src:
+            anim_src = load_img_slot_response(sid).strip()
+
+    if not svg_body:
+        return None, (
+            "SVG пустой — в слоте нужен scene.svg "
+            "(после «Анимировать» также пишется scene_at_anim.svg)."
+        )
+    if not anim_src:
+        return None, "Нет ответа анимации — сначала «Анимировать» для этого кадра."
+
+    validation = validate_animation_for_svg(anim_src, svg_body)
+    if not validation.get("ok"):
+        errs = validation.get("errors") or []
+        return None, "; ".join(str(e) for e in errs[:5]) or "Валидация анимации не пройдена."
+
+    parsed = validation.get("parsed") if isinstance(validation.get("parsed"), dict) else {}
+    animation = parsed.get("animation")
+    if not isinstance(animation, dict):
+        return None, "JSON анимации отсутствует или невалиден."
+
+    try:
+        props = _props_from_svg_and_animation(svg_body, animation)
+    except ValueError as exc:
+        return None, str(exc)
+    if sid:
+        props["slot_id"] = sid
     return props, None
 
 
-def write_remotion_props() -> tuple[Path | None, str | None]:
-    props, err = build_remotion_props_from_session()
+def build_remotion_props_from_session() -> tuple[dict[str, Any] | None, str | None]:
+    """Fallback: последний слот с anim_response или старая later_session."""
+    from scenes_lab_img_slots import list_img_slot_ids, load_img_slot_anim_response
+
+    for sid in reversed(list_img_slot_ids()):
+        if load_img_slot_anim_response(sid).strip():
+            props, err = build_remotion_props_from_sources(slot_id=sid)
+            if props:
+                return props, None
+            if err:
+                return None, err
+
+    from later_response_parse import process_later_model_response
+    from scenes_lab_session import load_later_session
+
+    row = load_later_session()
+    if not row:
+        return None, "Нет кадра с анимацией — выберите слот и нажмите «Анимировать»."
+    text = str(row.get("text") or "").strip()
+    if not text:
+        return None, "Пустая сессия."
+
+    bundle = process_later_model_response(text)
+    validation = bundle.get("validation") if isinstance(bundle.get("validation"), dict) else {}
+    parsed = bundle.get("parsed") if isinstance(bundle.get("parsed"), dict) else {}
+    svg = str(parsed.get("svg") or "").strip()
+    animation = parsed.get("animation")
+    anim_raw = str(parsed.get("animation_raw") or "").strip()
+    if svg and isinstance(animation, dict):
+        try:
+            return _props_from_svg_and_animation(svg, animation), None
+        except ValueError as exc:
+            return None, str(exc)
+    if svg and anim_raw:
+        return build_remotion_props_from_sources(svg=svg, anim_text=anim_raw)
+
+    errs = validation.get("errors") or []
+    msg = "; ".join(str(e) for e in errs[:5]) if errs else "JSON анимации отсутствует или невалиден."
+    return None, msg
+
+
+def write_remotion_props(
+    *,
+    slot_id: str = "",
+    svg: str = "",
+    anim_text: str = "",
+) -> tuple[Path | None, str | None]:
+    """Записать props.json: приоритет — slot_id + anim_text из UI, иначе fallback."""
+    if (slot_id or "").strip() or (svg or "").strip() or (anim_text or "").strip():
+        props, err = build_remotion_props_from_sources(
+            slot_id=slot_id,
+            svg=svg,
+            anim_text=anim_text,
+        )
+    else:
+        props, err = build_remotion_props_from_session()
     if err or not props:
         return None, err or "Не удалось собрать props."
     path = remotion_props_path()

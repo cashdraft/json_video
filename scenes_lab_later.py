@@ -236,18 +236,236 @@ def save_scenes_lab_upload(
     return f"{base}/scenes-lab/media/{out_name}", None
 
 
+SCENE_DESCRIPTION_TOKEN = "{{SCENE_DESCRIPTION}}"
+SCENE_DURATION_TOKEN = "{{SCENE_DURATION_SEC}}"
+
+# Поля JSON-тела запросов /scenes-lab/api/*, где подставляются макросы сцены.
+# Новый промт на странице Later… — добавьте имя поля в этот набор.
+LATER_MACRO_PROMPT_FIELD_KEYS: frozenset[str] = frozenset(
+    {
+        "svg_prompt",
+        "editor_prompt",
+        "img_1_prompt",
+        "anim_prompt",
+        "patch_prompt",
+        "system_prompt",
+        "user_prompt",
+    }
+)
+
+DEFAULT_LATER_SCENE_DESCRIPTION = "Человек летит на луну и надпись Луна-Близко"
+DEFAULT_LATER_SCENE_DURATION = "5,4"
+
+DEFAULT_LATER_SVG_USER_TEMPLATE = """СЦЕНА ДЛЯ MOTION-ГРАФИКИ. Сгенерируй строго по контракту. Это машинно-парсимый вывод — любое отклонение ломает автоматический рендер.
+
+=== ВХОД ===
+Описание сцены: {{SCENE_DESCRIPTION}}
+Хронометраж: {{SCENE_DURATION_SEC}}
+FPS: 30
+Формат кадра: 1920x1080
+Стиль: см. прикреплённую референс-картинку (цвета, шрифт, настроение бери оттуда)
+Доп. пожелания: <опционально>
+
+=== ТВОЯ ЗАДАЧА ===
+Сам решаешь фразы, слова, цифры, состав графика и порядок появления — исходя из описания и хронометража. Не задавай уточняющих вопросов, прими разумные решения.
+
+=== ЖЁСТКИЕ ПРАВИЛА ВЫВОДА (нарушение = отказ рендера) ===
+
+1. НИКАКИХ markdown код-фенсов. НЕ оборачивай блоки в ```svg, ```json или любые ``` . Внутри маркеров START/END лежит ТОЛЬКО сырой контент и больше ничего.
+
+2. Каждый текстовый элемент — ПОЛНЫЙ тег <text>...</text>. ЗАПРЕЩЕНО писать атрибуты без открывающего тега.
+   ВЕРНО:    <text id="t-word-1" x="660" y="240" font-size="92">VOYAGER</text>
+   НЕВЕРНО:   id="t-word-1" x="660" y="240" font-size="92">VOYAGER
+   Проверь КАЖДУЮ строку, где есть id=: если она начинается не с символа "<", это баг — добавь открывающий тег.
+
+3. Анимируемый текст оборачивай так, чтобы двигалась ГРУППА, а текст был валиден внутри:
+   <g id="word-1"><text id="t-word-1" x="660" y="240" font-size="92">VOYAGER</text></g>
+   В листе анимации указывай id ГРУППЫ (word-1), не внутреннего text.
+
+4. Перед выводом мысленно прогони SVG как XML: все теги открыты И закрыты, нет «голых» атрибутов без тега, все кавычки парные. SVG обязан парситься как well-formed XML.
+
+5. Каждый id из листа анимации обязан существовать в SVG. Каждый anim — ТОЛЬКО из словаря ниже. end ≤ duration_sec × fps.
+
+=== СЛОВАРЬ ANIM (закрытый список, движок умеет ТОЛЬКО это) ===
+none, fade-in, fade-out, fly-up, grow-y, grow-x, scale-in, draw-path, count-up
+
+Нужен другой тип движения — НЕ выдумывай и НЕ бери из общих знаний об анимации
+(никаких slide-in, bounce, pop-in, blur-in, fly-left и т.п. — их движок НЕ умеет).
+Используй в tracks ближайший из девяти выше, а желаемый новый кубик опиши
+словами в блоке NOTES как «заявка на новый кубик».
+
+Памятка по кубикам (чтобы выбирать правильный):
+- none — элемент статичен, не двигается
+- fade-in / fade-out — проявление / затухание (opacity)
+- fly-up — текст въезжает снизу с проявлением
+- grow-y — столбик растёт снизу вверх (для баров)
+- grow-x — линия/ось/прогресс растёт слева направо
+- scale-in — появление из точки (хорошо для точек, бейджей, крупных цифр)
+- draw-path — прорисовка линии обводкой (только сплошные линии, НЕ пунктир)
+- count-up — накрутка числа от 0 к значению (только для <text> с числом)
+
+Для текста ширину оценивай как: (число символов) × font-size × 0.6
+плюс (число пробелов между буквами) × letter-spacing, если задан.
+Высота ≈ font-size. Закладывай запас +15% к ширине на неточность оценки.
+Если строка с этим запасом заходит в зону иллюстрации — сокращай текст,
+уменьшай font-size или переноси блок в свободную зону.
+
+В NOTES добавь раздел "BBox-проверка": для каждого крупного элемента укажи его
+примерный прямоугольник [x, y, w, h] и подтверди, что зоны текста и иллюстраций
+не пересекаются. Если пересекаются — перекомпонуй ДО вывода.
+
+=== ФОРМАТ ВЫВОДА ===
+Ровно три блока в этом порядке, обёрнутые ТОЛЬКО маркерами ниже, без код-фенсов, без текста вне маркеров:
+
+===SVG_START===
+<svg viewBox="..." xmlns="http://www.w3.org/2000/svg">...</svg>
+===SVG_END===
+===ANIM_START===
+{"fps":...,"duration_sec":...,"tracks":[...]}
+===ANIM_END===
+===NOTES_START===
+список слоёв и id; выбранные фразы/цифры и почему; порядок появления словами; заявки на новые кубики
+===NOTES_END===
+
+Никакого Remotion-кода. Никаких ``` . Только три блока."""
+
+
+def normalize_scene_duration_display(raw: str) -> str:
+    """Отображение хронометража в промте (5,4 или 5.4)."""
+    t = (raw or "").strip()
+    return t or DEFAULT_LATER_SCENE_DURATION
+
+
+def apply_later_prompt_macros(
+    template: str,
+    *,
+    scene_description: str = "",
+    scene_duration_sec: str = "",
+) -> str:
+    """Подстановка {{SCENE_DESCRIPTION}} и {{SCENE_DURATION_SEC}} в любой текст промта."""
+    body = (template or "").strip()
+    if not body:
+        return template or ""
+    desc = (scene_description or "").strip() or DEFAULT_LATER_SCENE_DESCRIPTION
+    dur = normalize_scene_duration_display(scene_duration_sec)
+    return body.replace(SCENE_DESCRIPTION_TOKEN, desc).replace(SCENE_DURATION_TOKEN, dur)
+
+
+def expand_later_request_prompts(body: dict[str, Any]) -> dict[str, Any]:
+    """Развернуть макросы во всех известных полях промта в теле API-запроса (шаблоны в prefs не трогаем)."""
+    if not body:
+        return {}
+    out = dict(body)
+    desc = str(out.get("scene_description") or "")
+    dur = str(out.get("scene_duration_sec") or "")
+    for key in LATER_MACRO_PROMPT_FIELD_KEYS:
+        val = out.get(key)
+        if isinstance(val, str) and val.strip():
+            out[key] = apply_later_prompt_macros(
+                val,
+                scene_description=desc,
+                scene_duration_sec=dur,
+            )
+    return out
+
+
+def apply_svg_prompt_variables(
+    template: str,
+    *,
+    scene_description: str = "",
+    scene_duration_sec: str = "",
+) -> str:
+    body = (template or "").strip() or DEFAULT_LATER_SVG_USER_TEMPLATE
+    return apply_later_prompt_macros(
+        body,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+    )
+
+
+def split_legacy_user_prompt(user_prompt: str) -> dict[str, str]:
+    """Разбор старой сессии: описание/хронометраж из текста, шаблон с плейсхолдерами."""
+    import re
+
+    text = (user_prompt or "").strip()
+    if not text:
+        return {
+            "svg_prompt": DEFAULT_LATER_SVG_USER_TEMPLATE,
+            "scene_description": DEFAULT_LATER_SCENE_DESCRIPTION,
+            "scene_duration_sec": DEFAULT_LATER_SCENE_DURATION,
+        }
+    desc = DEFAULT_LATER_SCENE_DESCRIPTION
+    dur = DEFAULT_LATER_SCENE_DURATION
+    m_desc = re.search(r"Описание сцены:\s*(.+)", text, re.IGNORECASE)
+    m_dur = re.search(r"Хронометраж:\s*(.+)", text, re.IGNORECASE)
+    if m_desc:
+        desc = m_desc.group(1).strip()
+    if m_dur:
+        dur = m_dur.group(1).strip()
+    template = text
+    if m_desc:
+        template = re.sub(
+            r"Описание сцены:\s*.+",
+            f"Описание сцены: {SCENE_DESCRIPTION_TOKEN}",
+            template,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    if m_dur:
+        template = re.sub(
+            r"Хронометраж:\s*.+",
+            f"Хронометраж: {SCENE_DURATION_TOKEN}",
+            template,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    if SCENE_DESCRIPTION_TOKEN not in template and SCENE_DURATION_TOKEN not in template:
+        template = DEFAULT_LATER_SVG_USER_TEMPLATE
+    return {
+        "svg_prompt": template,
+        "scene_description": desc,
+        "scene_duration_sec": dur,
+    }
+
+
+def compose_later_user_prompt(
+    *,
+    svg_prompt: str = "",
+    scene_description: str = "",
+    scene_duration_sec: str = "",
+    user_prompt: str = "",
+) -> str:
+    """Собранный user-промт для модели (шаблон + подстановка переменных)."""
+    legacy = (user_prompt or "").strip()
+    if legacy and not (svg_prompt or "").strip():
+        return legacy
+    return apply_svg_prompt_variables(
+        svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+    )
+
+
 def _build_later_user_body(
     *,
     user_prompt: str,
     scene_text: str = "",
     scene_text_ru: str = "",
+    svg_prompt: str = "",
+    scene_description: str = "",
+    scene_duration_sec: str = "",
 ) -> str:
     parts: list[str] = []
     if (scene_text or "").strip():
         parts.append(f"Текст сцены (EN):\n{scene_text.strip()}")
     if (scene_text_ru or "").strip():
         parts.append(f"Текст сцены (RU):\n{scene_text_ru.strip()}")
-    up = (user_prompt or "").strip()
+    up = compose_later_user_prompt(
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+        user_prompt=user_prompt,
+    ).strip()
     if up:
         parts.append(f"Запрос пользователя:\n{up}")
     else:
@@ -265,6 +483,9 @@ def run_later_model_request(
     scene_text: str = "",
     scene_text_ru: str = "",
     system_prompt: str = "",
+    svg_prompt: str = "",
+    scene_description: str = "",
+    scene_duration_sec: str = "",
 ) -> tuple[str | None, str | None]:
     """Синхронный запрос к выбранной модели. Возвращает (answer_text, error)."""
     mid = (model or "").strip()
@@ -275,6 +496,9 @@ def run_later_model_request(
         user_prompt=user_prompt,
         scene_text=scene_text,
         scene_text_ru=scene_text_ru,
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
     )
     sys_p = (system_prompt or "").strip() or DEFAULT_LATER_SYSTEM_PROMPT
 
@@ -306,6 +530,9 @@ def run_later_claude_request(
     scene_text: str = "",
     scene_text_ru: str = "",
     system_prompt: str = "",
+    svg_prompt: str = "",
+    scene_description: str = "",
+    scene_duration_sec: str = "",
 ) -> tuple[str | None, str | None]:
     return run_later_model_request(
         model=model,
@@ -314,4 +541,7 @@ def run_later_claude_request(
         scene_text=scene_text,
         scene_text_ru=scene_text_ru,
         system_prompt=system_prompt,
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
     )

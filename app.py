@@ -3627,7 +3627,10 @@ def scenes_lab_page():
         kie_api_key_present as scenes_lab_kie_ok,
     )
 
+    from scenes_lab_session import later_prefs_for_page
     from scenes_lab_svg_patch import DEFAULT_SVG_PATCH_SYSTEM_PROMPT
+
+    prefs = later_prefs_for_page()
 
     return render_template(
         "scenes_lab.html",
@@ -3636,6 +3639,13 @@ def scenes_lab_page():
         kie_key_set=scenes_lab_kie_ok(),
         openai_key_set=openai_api_key_present(),
         svg_patch_default_system=DEFAULT_SVG_PATCH_SYSTEM_PROMPT,
+        default_svg_prompt=prefs["svg_prompt"],
+        default_scene_description=prefs["scene_description"],
+        default_scene_duration=prefs["scene_duration_sec"],
+        default_later_model=prefs.get("model") or "",
+        default_later_image_url=prefs.get("image_url") or "",
+        default_img_1_prompt=prefs.get("editor_prompt") or prefs.get("img_1_prompt") or "",
+        default_anim_prompt=prefs.get("anim_prompt") or "",
     )
 
 
@@ -3676,6 +3686,14 @@ def scenes_lab_api_anim_dictionary():
     return jsonify(anim_dictionary_debug())
 
 
+def _scenes_lab_json_bodies() -> tuple[dict, dict]:
+    """(сырое тело запроса, тело с подставленными макросами сцены для модели)."""
+    from scenes_lab_later import expand_later_request_prompts
+
+    raw = request.get_json(silent=True) or {}
+    return raw, expand_later_request_prompts(raw)
+
+
 @app.route("/scenes-lab/api/state", methods=["GET"])
 def scenes_lab_api_state():
     """Последний сохранённый ответ Later… (для восстановления после перезагрузки)."""
@@ -3684,15 +3702,174 @@ def scenes_lab_api_state():
     return jsonify(later_session_api_payload())
 
 
+@app.route("/scenes-lab/api/prefs", methods=["GET"])
+def scenes_lab_api_prefs_get():
+    """Поля формы Later… из later_prefs.json (для восстановления после F5)."""
+    from scenes_lab_session import later_prefs_for_page
+
+    prefs = later_prefs_for_page()
+    return jsonify({"ok": True, **prefs})
+
+
+@app.route("/scenes-lab/api/prefs", methods=["POST"])
+def scenes_lab_api_prefs():
+    """Сохранить svg промт и поля формы без запроса к модели."""
+    from scenes_lab_session import save_later_prefs_from_body
+
+    body = request.get_json(silent=True) or {}
+    save_later_prefs_from_body(body)
+    return jsonify({"ok": True})
+
+
+@app.route("/scenes-lab/api/animate", methods=["POST"])
+def scenes_lab_api_animate():
+    from scenes_lab_animate import run_animate_flow
+    from scenes_lab_session import save_later_prefs
+
+    raw_body, body = _scenes_lab_json_bodies()
+    model = str(body.get("model") or "").strip()
+    anim_prompt = str(body.get("anim_prompt") or "")
+    slot_id = str(body.get("slot_id") or body.get("target_slot") or "").strip()
+    slot_response = str(
+        body.get("slot_response")
+        or body.get("slot_response_text")
+        or body.get("previous_response")
+        or ""
+    )
+    result = run_animate_flow(
+        model=model,
+        anim_prompt=anim_prompt,
+        slot_id=slot_id,
+        public_base=public_base_url_for_kie(),
+        slot_response=slot_response,
+        scene_description=str(body.get("scene_description") or ""),
+        scene_duration_sec=str(body.get("scene_duration_sec") or ""),
+    )
+    if not result.get("ok"):
+        code = 400 if "не найден" in str(result.get("error") or "").lower() else 502
+        return jsonify(result), code
+    from scenes_lab_session import save_later_prefs_from_body
+
+    save_later_prefs_from_body(raw_body)
+    return jsonify(result)
+
+
+@app.route("/scenes-lab/api/img-slots", methods=["GET"])
+def scenes_lab_api_img_slots_list():
+    from scenes_lab_img_slots import list_img_slots_payload
+
+    return jsonify(list_img_slots_payload(public_base_url_for_kie()))
+
+
+@app.route("/scenes-lab/api/img-slots/<slot_id>", methods=["GET"])
+def scenes_lab_api_img_slot_detail(slot_id: str):
+    from scenes_lab_img_slots import load_img_slot_detail, load_img_slot_response
+
+    if request.args.get("anim") == "1":
+        from scenes_lab_img_slots import img_slot_asset_path, load_img_slot_anim_response
+
+        if img_slot_asset_path(slot_id, "anim_response.txt") is None and img_slot_asset_path(
+            slot_id, "preview.png"
+        ) is None:
+            return jsonify({"ok": False, "error": f"Слот {slot_id} не найден."}), 404
+        return jsonify(
+            {
+                "ok": True,
+                "id": slot_id,
+                "anim_text": load_img_slot_anim_response(slot_id),
+            }
+        )
+
+    if request.args.get("text") == "1":
+        from scenes_lab_img_slots import img_slot_asset_path, load_img_slot_response
+
+        if img_slot_asset_path(slot_id, "response.txt") is None and img_slot_asset_path(
+            slot_id, "preview.png"
+        ) is None:
+            return jsonify({"ok": False, "error": f"Слот {slot_id} не найден."}), 404
+        text = load_img_slot_response(slot_id)
+        return jsonify({"ok": True, "id": slot_id, "text": text})
+
+    if request.args.get("light") == "1":
+        from scenes_lab_img_slots import img_slot_preview_public_url, img_slot_asset_path
+
+        if img_slot_asset_path(slot_id, "preview.png") is None and img_slot_asset_path(
+            slot_id, "response.txt"
+        ) is None:
+            return jsonify({"ok": False, "error": f"Слот {slot_id} не найден."}), 404
+        return jsonify(
+            {
+                "ok": True,
+                "id": slot_id,
+                "preview_url": img_slot_preview_public_url(
+                    slot_id, public_base_url_for_kie()
+                ),
+            }
+        )
+
+    detail = load_img_slot_detail(slot_id, public_base_url_for_kie())
+    if not detail.get("ok"):
+        return jsonify(detail), 404
+    return jsonify(detail)
+
+
+@app.route("/scenes-lab/api/remake", methods=["POST"])
+def scenes_lab_api_remake():
+    from scenes_lab_remake import run_remake_flow
+    from scenes_lab_img_slots import latest_img_slot_id
+
+    raw_body, body = _scenes_lab_json_bodies()
+    model = str(body.get("model") or "").strip()
+    editor_prompt = str(body.get("editor_prompt") or body.get("img_1_prompt") or "")
+    # Переделать: всегда последний слот на диске (img с макс. номером), не карусель.
+    source_slot = latest_img_slot_id()
+    result = run_remake_flow(
+        model=model,
+        editor_prompt=editor_prompt,
+        public_base=public_base_url_for_kie(),
+        source_slot_id=source_slot,
+        slot_response="",
+        scene_description=str(body.get("scene_description") or ""),
+        scene_duration_sec=str(body.get("scene_duration_sec") or ""),
+    )
+    if not result.get("ok"):
+        code = 400 if "Нет сохранённых" in str(result.get("error") or "") else 502
+        return jsonify(result), code
+    from scenes_lab_session import save_later_prefs_from_body
+
+    save_later_prefs_from_body(raw_body)
+    return jsonify(result)
+
+
+@app.route("/scenes-lab/img-slots/<slot_id>/<path:filename>")
+def scenes_lab_img_slot_file(slot_id: str, filename: str):
+    from scenes_lab_img_slots import img_slot_asset_path
+
+    path = img_slot_asset_path(slot_id, filename)
+    if path is None:
+        return "Not found", 404
+    return send_from_directory(path.parent, path.name)
+
+
 @app.route("/scenes-lab/api/claude", methods=["POST"])
 def scenes_lab_api_claude():
     from later_response_parse import process_later_model_response
     from scenes_lab_later import run_later_model_request
     from scenes_lab_session import clear_later_session, save_later_session
 
-    body = request.get_json(silent=True) or {}
+    from scenes_lab_later import compose_later_user_prompt
+
+    raw_body, body = _scenes_lab_json_bodies()
     model = str(body.get("model") or "").strip()
-    user_prompt = str(body.get("user_prompt") or body.get("prompt") or "")
+    svg_prompt = str(body.get("svg_prompt") or "")
+    scene_description = str(body.get("scene_description") or "")
+    scene_duration_sec = str(body.get("scene_duration_sec") or "")
+    user_prompt = compose_later_user_prompt(
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+        user_prompt=str(body.get("user_prompt") or body.get("prompt") or ""),
+    )
     image_url = str(body.get("image_url") or "").strip()
     scene_text = str(body.get("scene_text") or "")
     scene_text_ru = str(body.get("scene_text_ru") or "")
@@ -3707,12 +3884,16 @@ def scenes_lab_api_claude():
         scene_text=scene_text,
         scene_text_ru=scene_text_ru,
         system_prompt=system_prompt,
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
     )
     if err:
         return jsonify({"ok": False, "error": err}), 502
     bundle = process_later_model_response(text or "")
     validation = bundle["validation"]
     pipeline_ok = bool(validation.get("ok", False))
+    img_1_prompt = str(raw_body.get("img_1_prompt") or raw_body.get("editor_prompt") or "")
     save_later_session(
         text=text or "",
         parsed=bundle["parsed"],
@@ -3721,7 +3902,19 @@ def scenes_lab_api_claude():
         model=model,
         user_prompt=user_prompt,
         image_url=image_url,
+        svg_prompt=str(raw_body.get("svg_prompt") or ""),
+        scene_description=str(raw_body.get("scene_description") or ""),
+        scene_duration_sec=str(raw_body.get("scene_duration_sec") or ""),
     )
+    from scenes_lab_session import save_later_prefs_from_body
+
+    save_body = dict(raw_body)
+    save_body.setdefault("model", model)
+    save_body.setdefault("image_url", image_url)
+    save_body.setdefault("img_1_prompt", img_1_prompt)
+    save_body.setdefault("editor_prompt", img_1_prompt)
+    save_later_prefs_from_body(save_body)
+    img_slot = _save_parse_img_slot(body, text or "", bundle, pipeline_ok)
     return jsonify(
         {
             "ok": True,
@@ -3729,7 +3922,34 @@ def scenes_lab_api_claude():
             "parsed": bundle["parsed"],
             "validation": validation,
             "pipeline_ok": pipeline_ok,
+            "img_slot": img_slot,
+            "slot_id": (img_slot or {}).get("slot_id"),
         }
+    )
+
+
+def _save_parse_img_slot(
+    body: dict,
+    raw: str,
+    bundle: dict,
+    pipeline_ok: bool,
+) -> dict | None:
+    if not pipeline_ok:
+        return None
+    from scenes_lab_img_slots import latest_img_slot_id, save_img_slot
+
+    parsed = bundle.get("parsed") if isinstance(bundle.get("parsed"), dict) else {}
+    svg = str(parsed.get("svg") or "").strip()
+    if not svg:
+        return None
+    target = str(body.get("target_slot") or body.get("slot_id") or "").strip()
+    if not target:
+        target = latest_img_slot_id() or "img_1"
+    return save_img_slot(
+        target,
+        full_text=raw,
+        svg=svg,
+        public_base=public_base_url_for_kie(),
     )
 
 
@@ -3742,21 +3962,54 @@ def scenes_lab_api_parse():
     raw = str(body.get("text") or body.get("response") or "")
     if not raw.strip():
         return jsonify({"ok": False, "error": "Пустой текст."}), 400
+    from scenes_lab_later import compose_later_user_prompt
     from scenes_lab_session import load_later_session, save_later_session
 
     bundle = process_later_model_response(raw)
     v = bundle["validation"]
     pipeline_ok = bool(v.get("ok", False))
     prev = load_later_session() or {}
+    svg_prompt = str(body.get("svg_prompt") or prev.get("svg_prompt") or "")
+    scene_description = str(
+        body.get("scene_description") or prev.get("scene_description") or ""
+    )
+    scene_duration_sec = str(
+        body.get("scene_duration_sec") or prev.get("scene_duration_sec") or ""
+    )
+    user_prompt = compose_later_user_prompt(
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+        user_prompt=str(body.get("user_prompt") or prev.get("user_prompt") or ""),
+    )
+    img_1_prompt = str(body.get("editor_prompt") or body.get("img_1_prompt") or "")
     save_later_session(
         text=raw,
         parsed=bundle["parsed"],
         validation=v,
         pipeline_ok=pipeline_ok,
         model=str(body.get("model") or prev.get("model") or ""),
-        user_prompt=str(body.get("user_prompt") or prev.get("user_prompt") or ""),
+        user_prompt=user_prompt,
         image_url=str(body.get("image_url") or prev.get("image_url") or ""),
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
     )
+    from scenes_lab_session import save_later_prefs
+
+    save_later_prefs(
+        svg_prompt=svg_prompt,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+        model=str(body.get("model") or prev.get("model") or ""),
+        image_url=str(body.get("image_url") or prev.get("image_url") or ""),
+        img_1_prompt=img_1_prompt,
+        editor_prompt=img_1_prompt,
+    )
+    img_slot = _save_parse_img_slot(body, raw, bundle, pipeline_ok)
+    from scenes_lab_img_slots import list_img_slots_payload
+
+    slots_info = list_img_slots_payload(public_base_url_for_kie())
     return jsonify(
         {
             "ok": True,
@@ -3764,6 +4017,10 @@ def scenes_lab_api_parse():
             "parsed": bundle["parsed"],
             "validation": v,
             "pipeline_ok": pipeline_ok,
+            "img_slot": img_slot,
+            "slot_id": (img_slot or {}).get("slot_id"),
+            "slots": slots_info.get("slots") or [],
+            "latest_slot_id": slots_info.get("latest_id"),
         }
     )
 
@@ -3800,7 +4057,7 @@ def scenes_lab_api_svg_patch():
     from scenes_lab_svg_patch import DEFAULT_SVG_PATCH_SYSTEM_PROMPT, run_svg_patch_flow
     from scenes_lab_session import load_later_session, save_later_session
 
-    body = request.get_json(silent=True) or {}
+    raw_body, body = _scenes_lab_json_bodies()
     model = str(body.get("model") or "").strip()
     if not model:
         return jsonify({"ok": False, "error": "Не выбрана модель."}), 400
@@ -3848,8 +4105,11 @@ def scenes_lab_api_svg_patch():
         validation=validation,
         pipeline_ok=pipeline_ok,
         model=model,
-        user_prompt=str(body.get("user_prompt") or prev.get("user_prompt") or ""),
+        user_prompt=str(prev.get("user_prompt") or ""),
         image_url=str(prev.get("image_url") or ""),
+        svg_prompt=str(prev.get("svg_prompt") or ""),
+        scene_description=str(prev.get("scene_description") or ""),
+        scene_duration_sec=str(prev.get("scene_duration_sec") or ""),
     )
     return jsonify(result)
 
@@ -3903,13 +4163,21 @@ def scenes_lab_api_remotion_info():
 
 @app.route("/scenes-lab/api/remotion-props", methods=["POST"])
 def scenes_lab_api_remotion_props():
-    """Записать props.json из валидированной later_session."""
-    from scenes_lab_remotion import build_remotion_props_from_session, remotion_props_path, write_remotion_props
+    """Записать props.json из SVG слота + ответа анимации (UI или файлы img_N)."""
+    from scenes_lab_remotion import remotion_props_path, write_remotion_props
 
-    path, err = write_remotion_props()
+    body = request.get_json(silent=True) or {}
+    path, err = write_remotion_props(
+        slot_id=str(body.get("slot_id") or body.get("target_slot") or ""),
+        svg=str(body.get("svg") or ""),
+        anim_text=str(body.get("anim_text") or body.get("animation_text") or ""),
+    )
     if err or not path:
         return jsonify({"ok": False, "error": err or "props_failed", "message": err}), 400
-    props, _ = build_remotion_props_from_session()
+    try:
+        props = json.loads(remotion_props_path().read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        props = {}
     tracks_n = int((props or {}).get("tracks_count") or 0)
     frames_n = int((props or {}).get("duration_frames") or 0)
     msg = f"props.json записан ({tracks_n} треков, {frames_n} кадров)."
@@ -3963,7 +4231,12 @@ def scenes_lab_api_remotion_render():
         write_remotion_props,
     )
 
-    path, err = write_remotion_props()
+    body = request.get_json(silent=True) or {}
+    path, err = write_remotion_props(
+        slot_id=str(body.get("slot_id") or body.get("target_slot") or ""),
+        svg=str(body.get("svg") or ""),
+        anim_text=str(body.get("anim_text") or body.get("animation_text") or ""),
+    )
     if err or not path:
         return jsonify({"ok": False, "error": err or "no_props", "message": err}), 400
     if not remotion_props_path().is_file():

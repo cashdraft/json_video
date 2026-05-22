@@ -354,13 +354,21 @@ def validate_later_parsed(parsed: dict[str, Any]) -> dict[str, Any]:
         except ET.ParseError:
             pass
 
-    errors.extend(
-        _validate_animation(
-            parsed.get("animation") if isinstance(parsed.get("animation"), dict) else None,
-            str(parsed.get("animation_raw") or ""),
-            svg_ids,
+    anim_raw = str(parsed.get("animation_raw") or "")
+    if anim_raw.strip():
+        errors.extend(
+            _validate_animation(
+                parsed.get("animation")
+                if isinstance(parsed.get("animation"), dict)
+                else None,
+                anim_raw,
+                svg_ids,
+            )
         )
-    )
+    else:
+        warnings.append(
+            "JSON анимации нет — проверяется только блок ===SVG_START=== … ===SVG_END===."
+        )
 
     return {
         "ok": len(errors) == 0,
@@ -368,6 +376,105 @@ def validate_later_parsed(parsed: dict[str, Any]) -> dict[str, Any]:
         "warnings": warnings,
         "svg_id_count": len(svg_ids),
     }
+
+
+def extract_animation_raw(text: str) -> str:
+    """Сырой JSON анимации из ответа (маркеры, fence или голый объект)."""
+    parsed = parse_later_response(text)
+    anim_raw = str(parsed.get("animation_raw") or "").strip()
+    if anim_raw:
+        return anim_raw
+    raw = (text or "").strip()
+    if raw.startswith("{") or raw.startswith("["):
+        norm, _ = _normalize_json_block(raw)
+        return norm
+    return ""
+
+
+def replace_animation_in_later_text(full_text: str, new_anim_raw: str) -> tuple[str, str | None]:
+    """Подставить JSON анимации в полный ответ Later… (между ANIM_START и ANIM_END)."""
+    raw = full_text or ""
+    new_inner, _meta = _normalize_json_block(new_anim_raw or "")
+    if not new_inner:
+        return raw, "JSON анимации пустой."
+
+    start = raw.find(MARKER_ANIM_START)
+    end = raw.find(MARKER_ANIM_END)
+    if start >= 0 and end > start:
+        before = raw[: start + len(MARKER_ANIM_START)]
+        after = raw[end:]
+        return f"{before}\n{new_inner}\n{after}", None
+
+    parts = parse_later_response(raw)
+    svg_raw = str(parts.get("svg") or "").strip()
+    notes = str(parts.get("notes") or "").strip()
+    chunks: list[str] = []
+    if svg_raw:
+        chunks.append(f"{MARKER_SVG_START}\n{svg_raw}\n{MARKER_SVG_END}")
+    chunks.append(f"{MARKER_ANIM_START}\n{new_inner}\n{MARKER_ANIM_END}")
+    if notes:
+        chunks.append(f"{MARKER_NOTES_START}\n{notes}\n{MARKER_NOTES_END}")
+    if not chunks:
+        return raw, "В ответе нет SVG — сначала соберите кадр."
+    return "\n\n".join(chunks) + "\n", None
+
+
+def validate_animation_for_svg(text: str, svg: str) -> dict[str, Any]:
+    """Проверка только JSON анимации против id из SVG кадра."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    anim_raw = extract_animation_raw(text)
+    anim_norm, anim_meta = _normalize_json_block(anim_raw)
+    if anim_meta.get("fence_stripped"):
+        warnings.append("Снята обёртка ``` внутри блока анимации.")
+    animation = _parse_animation_json(anim_norm)
+
+    svg_body = (svg or "").strip()
+    if not svg_body:
+        errors.append("SVG кадра пустой — нельзя проверить tracks[].id.")
+        return {
+            "ok": False,
+            "errors": errors,
+            "warnings": warnings,
+            "svg_id_count": 0,
+        }
+
+    svg_ids: set[str] = set()
+    svg_errors = _validate_svg_xml(svg_body)
+    if svg_errors:
+        warnings.extend(svg_errors)
+    else:
+        try:
+            svg_ids = _collect_svg_ids(svg_body)
+        except ET.ParseError:
+            pass
+
+    errors.extend(
+        _validate_animation(
+            animation if isinstance(animation, dict) else None,
+            anim_norm,
+            svg_ids,
+        )
+    )
+    parsed = {
+        "animation_raw": anim_norm,
+        "animation": animation,
+        "normalize": {"animation": anim_meta},
+    }
+    return {
+        "ok": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "svg_id_count": len(svg_ids),
+        "parsed": parsed,
+    }
+
+
+def process_animation_model_response(text: str, svg: str) -> dict[str, Any]:
+    """Разбор ответа модели с одним блоком ANIM + валидация против SVG кадра."""
+    v = validate_animation_for_svg(text, svg)
+    parsed = v.pop("parsed", {})
+    return {"parsed": parsed, "validation": v}
 
 
 def process_later_model_response(text: str) -> dict[str, Any]:
