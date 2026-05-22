@@ -331,6 +331,25 @@ def write_remotion_props(
     return path, None
 
 
+def clear_remotion_lab_artifacts() -> bool:
+    """Удалить props/out/status/log scenes-lab remotion."""
+    SCENES_LAB_REMOTION_DIR.mkdir(parents=True, exist_ok=True)
+    cleared = False
+    for path in (
+        remotion_props_path(),
+        remotion_out_path(),
+        render_status_path(),
+        render_log_path(),
+    ):
+        if path.is_file():
+            try:
+                path.unlink()
+                cleared = True
+            except OSError:
+                pass
+    return cleared
+
+
 def spawn_lab_render_supervisor(task_id: str) -> int | None:
     cmd = [
         sys.executable,

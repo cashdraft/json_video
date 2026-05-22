@@ -25,6 +25,12 @@
                     <option value="{{ m.id }}"{% if default_later_model == m.id or (not default_later_model and loop.first) %} selected{% endif %}>{{ m.label }}</option>
                     {% endfor %}
                 </select>
+                <button
+                    type="button"
+                    class="btn btn-secondary btn-sm later-lab__clear-btn"
+                    data-later-clear
+                    title="Удалить кадры и ответы модели; промты, поля формы и фото сохранятся"
+                >Очистить</button>
             </div>
             <div class="later-lab__panel{% if not claude_key_set %} later-lab--disabled{% endif %}">
                 {% if not claude_key_set %}
@@ -211,6 +217,35 @@
                                 placeholder="Ответ с маркерами ===SVG_START=== … Можно править вручную."
                                 data-later-raw-out
                             ></textarea>
+                        </div>
+                    </div>
+                    <div class="later-fixlog-block is-hidden" data-later-fixlog-block>
+                        <div
+                            class="later-raw-answer later-collapsible later-collapsible--body-collapsed later-fixlog-block__answer"
+                            data-later-fixlog-collapse
+                            aria-expanded="false"
+                        >
+                            <div class="later-collapsible__header">
+                                <button
+                                    type="button"
+                                    class="later-collapsible__title-btn"
+                                    data-later-fixlog-collapse-toggle
+                                    aria-expanded="false"
+                                >
+                                    <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                                    <span class="later-raw-answer__label">Журнал правок (FIXLOG)</span>
+                                </button>
+                            </div>
+                            <div class="later-collapsible__inner" data-later-fixlog-body hidden>
+                                <textarea
+                                    class="rewrite-slot-textarea later-raw-answer__code"
+                                    rows="6"
+                                    spellcheck="false"
+                                    readonly
+                                    placeholder="Появится после «Переделать»: блок ===FIXLOG_START=== … ===FIXLOG_END===."
+                                    data-later-fixlog-out
+                                ></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="later-result__saved-hint is-hidden" data-later-slot-saved-hint></div>

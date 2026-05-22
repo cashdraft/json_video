@@ -48,6 +48,10 @@ body.scenes-lab-page {
     margin-bottom: 0.75rem;
 }
 
+.later-lab__clear-btn {
+    margin-left: auto;
+}
+
 .later-lab__scene-fields {
     display: flex;
     flex-direction: column;
@@ -963,6 +967,18 @@ body.scenes-lab-page {
 
 .later-slot-viewer__answer {
     margin-top: 0.65rem;
+}
+
+.later-fixlog-block {
+    margin-top: 0.65rem;
+}
+
+.later-fixlog-block.is-hidden {
+    display: none;
+}
+
+.later-fixlog-block__answer {
+    margin-top: 0;
 }
 
 .later-anim-block {

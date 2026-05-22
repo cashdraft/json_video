@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,12 +22,14 @@ PREVIEW_THUMB_HEIGHT = 540
 
 ANIM_RESPONSE_NAME = "anim_response.txt"
 SCENE_AT_ANIM_NAME = "scene_at_anim.svg"
+FIXLOG_NAME = "fixlog.txt"
 
 ALLOWED_SLOT_FILES = frozenset(
     {
         "response.txt",
         "scene.svg",
         SCENE_AT_ANIM_NAME,
+        FIXLOG_NAME,
         PREVIEW_FULL_NAME,
         PREVIEW_THUMB_NAME,
         "meta.json",
@@ -60,11 +63,12 @@ def save_img_slot(
     *,
     full_text: str = "",
     svg: str = "",
+    fixlog: str = "",
     public_base: str = "",
 ) -> dict[str, Any]:
     """
     Записать в data/scenes_lab/img_1/ (и т.д.):
-    response.txt, scene.svg, preview.png, meta.json.
+    response.txt, scene.svg, preview.png, fixlog.txt (если есть), meta.json.
     Промт редактора — один на все слоты (later_prefs.json).
     """
     slot_path = _slot_dir(slot_id)
@@ -76,9 +80,21 @@ def save_img_slot(
         return {"ok": False, "error": "SVG пустой."}
 
     slot_path.mkdir(parents=True, exist_ok=True)
-    response_text = wrap_svg_response_text(svg_body, full_text)
+    full = (full_text or "").strip()
+    if full and MARKER_SVG_START in full:
+        from scenes_lab_svg_patch import replace_svg_in_later_text
+
+        merged, err = replace_svg_in_later_text(full, svg_body)
+        response_text = merged if not err else wrap_svg_response_text(svg_body, full)
+    else:
+        response_text = wrap_svg_response_text(svg_body, full_text)
     (slot_path / "response.txt").write_text(response_text, encoding="utf-8")
     (slot_path / "scene.svg").write_text(svg_body, encoding="utf-8")
+    fixlog_body = (fixlog or "").strip()
+    if fixlog_body:
+        (slot_path / FIXLOG_NAME).write_text(fixlog_body, encoding="utf-8")
+    elif (slot_path / FIXLOG_NAME).is_file():
+        (slot_path / FIXLOG_NAME).unlink()
 
     preview_error: str | None = None
     has_full = False
@@ -112,6 +128,7 @@ def save_img_slot(
         "saved_at": _now_iso(),
         "has_preview": has_full,
         "has_preview_thumb": has_thumb,
+        "has_fixlog": bool(fixlog_body),
         "preview_error": preview_error,
     }
     (slot_path / "meta.json").write_text(
@@ -172,6 +189,18 @@ def latest_img_slot_id() -> str | None:
     return ids[-1] if ids else None
 
 
+def delete_all_img_slots() -> list[str]:
+    """Удалить все img_N на диске. Возвращает список удалённых id."""
+    deleted: list[str] = []
+    for sid in list_img_slot_ids():
+        slot_path = _slot_dir(sid)
+        if slot_path is None or not slot_path.is_dir():
+            continue
+        shutil.rmtree(slot_path)
+        deleted.append(sid)
+    return deleted
+
+
 def next_img_slot_id() -> str:
     ids = list_img_slot_ids()
     if not ids:
@@ -192,11 +221,39 @@ def load_img_slot_response(slot_id: str) -> str:
     return ""
 
 
+def load_img_slot_repaired_response(slot_id: str) -> str:
+    """response.txt с подставленным починенным SVG из scene.svg (для «Переделать» / «Анимировать»)."""
+    raw = load_img_slot_response(slot_id).strip()
+    slot_path = _slot_dir(slot_id)
+    if slot_path is None:
+        return raw
+    svg_path = slot_path / "scene.svg"
+    if not svg_path.is_file():
+        return raw
+    repaired = svg_path.read_text(encoding="utf-8").strip()
+    if not repaired:
+        return raw
+    from scenes_lab_svg_patch import replace_svg_in_later_text
+
+    merged, err = replace_svg_in_later_text(raw or repaired, repaired)
+    return merged if not err else raw
+
+
 def load_img_slot_anim_response(slot_id: str) -> str:
     slot_path = _slot_dir(slot_id)
     if slot_path is None:
         return ""
     p = slot_path / ANIM_RESPONSE_NAME
+    if p.is_file():
+        return p.read_text(encoding="utf-8")
+    return ""
+
+
+def load_img_slot_fixlog(slot_id: str) -> str:
+    slot_path = _slot_dir(slot_id)
+    if slot_path is None:
+        return ""
+    p = slot_path / FIXLOG_NAME
     if p.is_file():
         return p.read_text(encoding="utf-8")
     return ""
@@ -310,11 +367,14 @@ def load_img_slot_detail(slot_id: str, public_base: str = "") -> dict[str, Any]:
     svg_path = slot_path / "scene.svg"
     if svg_path.is_file():
         svg = svg_path.read_text(encoding="utf-8")
+    fixlog = load_img_slot_fixlog(slot_id)
     return {
         "ok": True,
         "id": slot_id,
         "text": text,
         "svg": svg,
+        "fixlog_text": fixlog,
+        "has_fixlog": bool(fixlog.strip()),
         "preview_url": img_slot_preview_public_url(slot_id, public_base),
     }
 

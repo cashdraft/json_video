@@ -22,6 +22,45 @@ def clear_later_session() -> None:
         LATER_SESSION_PATH.unlink()
 
 
+def clear_later_workspace() -> dict[str, Any]:
+    """
+    Сброс рабочего состояния Later…: кадры, сессия, remotion.
+    Промты, описание, хронометраж, модель и прикреплённое фото (image_url) сохраняются.
+    """
+    from scenes_lab_img_slots import delete_all_img_slots
+    from scenes_lab_remotion import clear_remotion_lab_artifacts
+
+    prefs = load_later_prefs() or {}
+    deleted_slots = delete_all_img_slots()
+    clear_later_session()
+    remotion_cleared = clear_remotion_lab_artifacts()
+
+    ep = str(prefs.get("editor_prompt") or prefs.get("img_1_prompt") or "").strip()
+    image_url = str(prefs.get("image_url") or "").strip()
+    payload = {
+        "saved_at": _now_iso(),
+        "svg_prompt": str(prefs.get("svg_prompt") or "").strip(),
+        "scene_description": str(prefs.get("scene_description") or "").strip(),
+        "scene_duration_sec": str(prefs.get("scene_duration_sec") or "").strip(),
+        "model": str(prefs.get("model") or "").strip(),
+        "image_url": image_url,
+        "editor_prompt": ep,
+        "img_1_prompt": ep,
+        "anim_prompt": str(prefs.get("anim_prompt") or "").strip(),
+    }
+    LATER_PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LATER_PREFS_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return {
+        "ok": True,
+        "deleted_slots": deleted_slots,
+        "remotion_cleared": remotion_cleared,
+    }
+
+
 def save_later_prefs(
     *,
     svg_prompt: str = "",

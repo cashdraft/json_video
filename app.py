@@ -3694,6 +3694,14 @@ def _scenes_lab_json_bodies() -> tuple[dict, dict]:
     return raw, expand_later_request_prompts(raw)
 
 
+@app.route("/scenes-lab/api/clear", methods=["POST"])
+def scenes_lab_api_clear():
+    """Очистить кадры, ответы, фото и remotion; промты и поля формы оставить."""
+    from scenes_lab_session import clear_later_workspace
+
+    return jsonify(clear_later_workspace())
+
+
 @app.route("/scenes-lab/api/state", methods=["GET"])
 def scenes_lab_api_state():
     """Последний сохранённый ответ Later… (для восстановления после перезагрузки)."""
@@ -3777,6 +3785,23 @@ def scenes_lab_api_img_slot_detail(slot_id: str):
                 "ok": True,
                 "id": slot_id,
                 "anim_text": load_img_slot_anim_response(slot_id),
+            }
+        )
+
+    if request.args.get("fixlog") == "1":
+        from scenes_lab_img_slots import img_slot_asset_path, load_img_slot_fixlog
+
+        if img_slot_asset_path(slot_id, "response.txt") is None and img_slot_asset_path(
+            slot_id, "preview.png"
+        ) is None:
+            return jsonify({"ok": False, "error": f"Слот {slot_id} не найден."}), 404
+        fixlog = load_img_slot_fixlog(slot_id)
+        return jsonify(
+            {
+                "ok": True,
+                "id": slot_id,
+                "fixlog_text": fixlog,
+                "has_fixlog": bool(fixlog.strip()),
             }
         )
 

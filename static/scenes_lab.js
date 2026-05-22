@@ -448,6 +448,7 @@
         st.slotMeta = {};
         st.textCache = {};
         st.animCache = {};
+        st.fixlogCache = {};
         setSlotNavUi(wrap);
         const banner = wrap.querySelector('[data-later-validation-banner]');
         if (banner) {
@@ -476,6 +477,34 @@
         }
         const animRaw = wrap.querySelector('[data-later-anim-raw-out]');
         if (animRaw) animRaw.value = '';
+        setFixlogAnswer(wrap, '');
+        setFixlogBlockVisible(wrap, false);
+        const log = wrap.querySelector('[data-later-log]');
+        if (log) {
+            log.textContent = '';
+            log.classList.add('is-hidden');
+        }
+        setPropsHint(wrap, '', true);
+        updateRenderUi(wrap, { state: 'idle', message: '' });
+    }
+
+    function clearLabAttachment(wrap) {
+        const preview = wrap.querySelector('[data-later-preview]');
+        const fileInput = wrap.querySelector('[data-later-file]');
+        if (preview) {
+            preview.removeAttribute('src');
+            preview.classList.add('is-hidden');
+        }
+        if (fileInput) fileInput.value = '';
+    }
+
+    async function clearLabWorkspace(wrap) {
+        stopRenderPoll();
+        clearPipelineUi(wrap);
+        setOpStatus(wrap, '', 'idle');
+        setLaterStatus(wrap, '', 'idle');
+        setRemotionPanelVisible(wrap, false);
+        setMp4Preview(wrap, '', false);
     }
 
     function getSceneDescription(wrap) {
@@ -510,7 +539,7 @@
     function getSlotCarousel(wrap) {
         let st = slotCarousels.get(wrap);
         if (!st) {
-            st = { ids: [], index: 0, cache: {}, slotMeta: {}, textCache: {}, animCache: {} };
+            st = { ids: [], index: 0, cache: {}, slotMeta: {}, textCache: {}, animCache: {}, fixlogCache: {} };
             slotCarousels.set(wrap, st);
         }
         return st;
@@ -700,6 +729,57 @@
         if (ta) ta.value = text || '';
     }
 
+    function setFixlogAnswer(wrap, text) {
+        const ta = wrap.querySelector('[data-later-fixlog-out]');
+        if (ta) ta.value = text || '';
+    }
+
+    function setFixlogBlockVisible(wrap, visible) {
+        const block = wrap.querySelector('[data-later-fixlog-block]');
+        if (block) block.classList.toggle('is-hidden', !visible);
+    }
+
+    function expandFixlogAnswer(wrap) {
+        const block = wrap.querySelector('[data-later-fixlog-collapse]');
+        const btn = wrap.querySelector('[data-later-fixlog-collapse-toggle]');
+        const body = wrap.querySelector('[data-later-fixlog-body]');
+        if (block && btn && body) setLaterCollapsible(block, btn, body, false);
+    }
+
+    async function loadSlotFixlogText(wrap, slotId) {
+        const st = getSlotCarousel(wrap);
+        if (st.fixlogCache[slotId] !== undefined) return st.fixlogCache[slotId];
+        const r = await fetch(
+            '/scenes-lab/api/img-slots/' + encodeURIComponent(slotId) + '?fixlog=1'
+        );
+        const data = await r.json().catch(function () { return {}; });
+        if (!r.ok || !data.ok) {
+            st.fixlogCache[slotId] = '';
+            return '';
+        }
+        st.fixlogCache[slotId] = data.fixlog_text || '';
+        return st.fixlogCache[slotId];
+    }
+
+    function applyFixlogUiForSlot(wrap, slotId) {
+        const st = getSlotCarousel(wrap);
+        const cached = st.fixlogCache[slotId];
+        if (cached !== undefined) {
+            const has = Boolean((cached || '').trim());
+            setFixlogAnswer(wrap, cached);
+            setFixlogBlockVisible(wrap, has);
+            return;
+        }
+        loadSlotFixlogText(wrap, slotId)
+            .then(function (text) {
+                if (getCurrentSlotId(wrap) !== slotId) return;
+                const has = Boolean((text || '').trim());
+                setFixlogAnswer(wrap, text);
+                setFixlogBlockVisible(wrap, has);
+            })
+            .catch(function () { /* ignore */ });
+    }
+
     function showAnimValidationBanner(wrap, validation) {
         const banner = wrap.querySelector('[data-later-anim-validation-banner]');
         if (!banner) return;
@@ -861,6 +941,7 @@
         const url = previewUrl || resolveSlotPreviewUrl(slotId, null);
         showSlotPreviewFast(preview, url, slotId, savedAt);
         applyAnimUiForSlot(wrap, slotId);
+        applyFixlogUiForSlot(wrap, slotId);
         syncRemotionForCurrentSlot(wrap).catch(function () { /* ignore */ });
     }
 
@@ -1159,6 +1240,16 @@
         );
     }
 
+    function bindFixlogAnswerCollapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-fixlog-collapse]',
+            '[data-later-fixlog-collapse-toggle]',
+            '[data-later-fixlog-body]',
+            true
+        );
+    }
+
     function restoreFormFields(wrap, data) {
         const svgPromptEl = wrap.querySelector('[data-later-svg-prompt]');
         const imgPromptEl = wrap.querySelector('[data-later-editor-prompt]');
@@ -1292,6 +1383,19 @@
                 || (parsed.animation ? JSON.stringify(parsed.animation, null, 2) : '');
         }
         if (notesOut) notesOut.value = parsed.notes || '';
+        const fixlog = (parsed.fixlog || data.fixlog_text || '').trim();
+        const preferSlotEarly =
+            (data && data.slot_id)
+            || (data && data.img_slot && data.img_slot.slot_id)
+            || (data && data.latest_slot_id)
+            || getCurrentSlotId(wrap)
+            || null;
+        if (preferSlotEarly && fixlog) {
+            getSlotCarousel(wrap).fixlogCache[preferSlotEarly] = fixlog;
+        }
+        setFixlogAnswer(wrap, fixlog);
+        setFixlogBlockVisible(wrap, Boolean(fixlog));
+        if (fixlog) expandFixlogAnswer(wrap);
         const hasAnimation = Boolean(
             (parsed.animation && typeof parsed.animation === 'object')
             || (parsed.animation_raw && String(parsed.animation_raw).trim())
@@ -1549,9 +1653,38 @@
         bindAnimPromptCollapse(wrap);
         bindAnimPromptLock(wrap);
         bindAnimAnswerCollapse(wrap);
+        bindFixlogAnswerCollapse(wrap);
         modelEl?.addEventListener('change', function () {
             syncLaterPanelEnabled(wrap);
             saveLaterPrefs(wrap).catch(function () { /* ignore */ });
+        });
+
+        const clearBtn = wrap.querySelector('[data-later-clear]');
+        clearBtn?.addEventListener('click', async function () {
+            if (
+                !window.confirm(
+                    'Удалить все кадры (img_N), ответы модели и remotion?\n\n'
+                        + 'Сохранятся: фото, все промты, описание сцены, хронометраж и модель.'
+                )
+            ) {
+                return;
+            }
+            clearBtn.disabled = true;
+            setOpStatus(wrap, 'Очистка…', 'generating');
+            try {
+                const r = await fetch('/scenes-lab/api/clear', { method: 'POST' });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.ok) {
+                    throw new Error((data && data.error) || 'Ошибка очистки');
+                }
+                await clearLabWorkspace(wrap);
+                const n = Array.isArray(data.deleted_slots) ? data.deleted_slots.length : 0;
+                setOpStatus(wrap, 'Очищено — удалено кадров: ' + n, 'ok');
+            } catch (e) {
+                setOpStatus(wrap, String(e.message || e), 'error');
+            } finally {
+                clearBtn.disabled = false;
+            }
         });
 
         const descEl = wrap.querySelector('[data-later-scene-description]');
@@ -1713,6 +1846,9 @@
                 st2.cache = {};
                 if (data.text && data.slot_id) {
                     st2.textCache[data.slot_id] = data.text;
+                }
+                if (data.fixlog_text && data.slot_id) {
+                    st2.fixlogCache[data.slot_id] = data.fixlog_text;
                 }
                 await refreshSlotsList(wrap, data.slot_id);
                 await applyParseResult(wrap, data);

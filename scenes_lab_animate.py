@@ -11,6 +11,7 @@ from later_response_parse import (
 )
 from scenes_lab_img_slots import (
     img_slot_preview_public_url,
+    load_img_slot_repaired_response,
     load_img_slot_response,
     save_img_slot_anim_response,
     update_img_slot_response_text,
@@ -88,8 +89,8 @@ def run_animate_flow(
         return {"ok": False, "error": f"В слоте {sid} нет scene.svg — сначала соберите кадр."}
 
     svg = svg_path.read_text(encoding="utf-8")
-    # Всегда ответ и превью одного слота с диска (не устаревший текст из textarea другого img_N).
-    previous_response = load_img_slot_response(sid).strip()
+    # Всегда ответ и превью одного слота с диска; SVG в тексте — починенный из scene.svg.
+    previous_response = load_img_slot_repaired_response(sid).strip()
     if not previous_response and (slot_response or "").strip():
         previous_response = (slot_response or "").strip()
 

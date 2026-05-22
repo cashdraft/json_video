@@ -16,6 +16,8 @@ MARKER_ANIM_START = "===ANIM_START==="
 MARKER_ANIM_END = "===ANIM_END==="
 MARKER_NOTES_START = "===NOTES_START==="
 MARKER_NOTES_END = "===NOTES_END==="
+MARKER_FIXLOG_START = "===FIXLOG_START==="
+MARKER_FIXLOG_END = "===FIXLOG_END==="
 
 _FENCE_RE = re.compile(
     r"```([a-zA-Z0-9_-]+)?\s*\n?(.*?)```",
@@ -161,12 +163,14 @@ def _parse_by_markers(text: str) -> dict[str, str] | None:
     svg_raw = _slice_markers(text, MARKER_SVG_START, MARKER_SVG_END)
     anim_raw = _slice_markers(text, MARKER_ANIM_START, MARKER_ANIM_END)
     notes = _slice_markers(text, MARKER_NOTES_START, MARKER_NOTES_END)
-    if svg_raw is None and anim_raw is None and notes is None:
+    fixlog = _slice_markers(text, MARKER_FIXLOG_START, MARKER_FIXLOG_END)
+    if svg_raw is None and anim_raw is None and notes is None and fixlog is None:
         return None
     return {
         "svg": svg_raw or "",
         "animation_raw": anim_raw or "",
         "notes": notes or "",
+        "fixlog": fixlog or "",
     }
 
 
@@ -224,6 +228,7 @@ def parse_later_response(text: str) -> dict[str, Any]:
         "animation_raw": anim_raw,
         "animation": animation,
         "notes": (parts.get("notes") or "").strip(),
+        "fixlog": (parts.get("fixlog") or "").strip(),
         "normalize": normalize_meta,
     }
 
