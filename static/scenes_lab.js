@@ -197,8 +197,8 @@
         const st = state || 'pending';
         if (box) box.setAttribute('data-status', st);
         if (label) {
-            label.textContent = text || '';
-            label.classList.toggle('slot-status-with-spinner', st === 'generating');
+        label.textContent = text || '';
+        label.classList.toggle('slot-status-with-spinner', st === 'generating');
         }
         if (st === 'generating') {
             let line = text || '…';
@@ -572,9 +572,103 @@
         return el ? (el.value || '').trim() : '';
     }
 
-    function getSvgExample2Template(wrap) {
-        const el = wrap.querySelector('[data-later-svg-example2]');
-        return el ? (el.value || '').trim() : '';
+    function getSvgExampleUrl(wrap) {
+        return normalizeLaterImageUrl(wrap.dataset.laterSvgExampleUrl || '');
+    }
+
+    function getSvgExamplePreviewUrl(wrap) {
+        return normalizeLaterImageUrl(wrap.dataset.laterSvgExamplePreviewUrl || '');
+    }
+
+    function setLaterSvgExample(wrap, svgUrl, previewUrl, filename) {
+        const preview = wrap.querySelector('[data-later-svg-example-preview]');
+        const meta = wrap.querySelector('[data-later-svg-example-meta]');
+        const cleanSvg = normalizeLaterImageUrl(svgUrl || '');
+        const cleanPreview = normalizeLaterImageUrl(previewUrl || '');
+        if (cleanSvg) {
+            wrap.dataset.laterSvgExampleUrl = cleanSvg;
+        } else {
+            delete wrap.dataset.laterSvgExampleUrl;
+        }
+        if (cleanPreview) {
+            wrap.dataset.laterSvgExamplePreviewUrl = cleanPreview;
+        } else {
+            delete wrap.dataset.laterSvgExamplePreviewUrl;
+        }
+        if (preview) {
+            if (cleanPreview) {
+                preview.src = cleanPreview + (cleanPreview.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+                preview.classList.remove('is-hidden');
+            } else {
+                preview.removeAttribute('src');
+                preview.classList.add('is-hidden');
+            }
+        }
+        const label = filename || laterImageFilename(cleanSvg);
+        if (meta) meta.textContent = label ? ('Файл: ' + label) : '';
+        return cleanSvg;
+    }
+
+    let svgExampleLightboxBound = false;
+
+    function bindSvgExamplePreviewLightbox() {
+        if (svgExampleLightboxBound) return;
+        svgExampleLightboxBound = true;
+
+        const lightbox = document.getElementById('later-svg-preview-lightbox');
+        const lightboxImage = lightbox && lightbox.querySelector('[data-later-svg-preview-lightbox-image]');
+        const closeBtn = lightbox && lightbox.querySelector('[data-later-svg-preview-lightbox-close]');
+        if (!lightbox || !lightboxImage) return;
+
+        function openSvgExampleLightbox(src) {
+            const cleanSrc = String(src || '').trim();
+            if (!cleanSrc) return;
+            lightboxImage.src = cleanSrc;
+            lightbox.hidden = false;
+            lightbox.classList.add('is-open');
+            lightbox.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('later-preview-lightbox-open');
+        }
+
+        function closeSvgExampleLightbox() {
+            lightbox.classList.remove('is-open');
+            lightbox.setAttribute('aria-hidden', 'true');
+            lightbox.hidden = true;
+            lightboxImage.removeAttribute('src');
+            document.body.classList.remove('later-preview-lightbox-open');
+        }
+
+        document.addEventListener('click', function (e) {
+            const preview = e.target.closest('[data-later-svg-example-preview]');
+            if (!preview || preview.classList.contains('is-hidden') || !preview.src) return;
+            e.preventDefault();
+            openSvgExampleLightbox(preview.currentSrc || preview.src);
+        });
+
+        document.addEventListener('keydown', function (e) {
+            const preview = e.target.closest('[data-later-svg-example-preview]');
+            if (!preview || preview.classList.contains('is-hidden') || !preview.src) return;
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            openSvgExampleLightbox(preview.currentSrc || preview.src);
+        });
+
+        closeBtn?.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeSvgExampleLightbox();
+        });
+
+        lightbox.addEventListener('click', function (e) {
+            if (e.target === lightbox) {
+                closeSvgExampleLightbox();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && lightbox.classList.contains('is-open')) {
+                closeSvgExampleLightbox();
+            }
+        });
     }
 
     function getEditorPromptTemplate(wrap) {
@@ -1047,7 +1141,8 @@
             model: (wrap.querySelector('[data-later-model]') || {}).value || '',
             svg_prompt: getSvgPromptTemplate(wrap),
             svg_prompt_2: getSvgPrompt2Template(wrap),
-            svg_example_2: getSvgExample2Template(wrap),
+            svg_example_url: getSvgExampleUrl(wrap),
+            svg_example_preview_url: getSvgExamplePreviewUrl(wrap),
             scene_description: getSceneDescription(wrap),
             scene_duration_sec: getSceneDuration(wrap),
             image_url: currentImageUrl(wrap),
@@ -1181,58 +1276,6 @@
             '[data-later-svg-prompt2-collapse]',
             '[data-later-svg-prompt2-collapse-toggle]',
             '[data-later-svg-prompt2-body]',
-            true
-        );
-    }
-
-    function bindSvgExample2Lock(wrap) {
-        const toggle = wrap.querySelector('[data-later-svg-example2-toggle]');
-        const ta = wrap.querySelector('[data-later-svg-example2]');
-        if (!toggle || !ta) return;
-        function setLocked(locked) {
-            toggle.classList.toggle('rewrite-lock-toggle--locked', locked);
-            ta.readOnly = locked;
-            ta.classList.toggle('rewrite-source-textarea--locked', locked);
-            toggle.title = locked ? 'Редактировать' : 'Сохранить';
-            toggle.setAttribute('aria-label', locked ? 'Редактировать svg Пример 2' : 'Закрыть редактирование svg Пример 2');
-        }
-        setLocked(true);
-        toggle.addEventListener('click', function (ev) {
-            ev.stopPropagation();
-            const wasLocked = toggle.classList.contains('rewrite-lock-toggle--locked');
-            if (wasLocked) {
-                setSvgExample2Collapsed(wrap, false);
-            }
-            setLocked(!wasLocked);
-            if (!wasLocked) {
-                saveLaterPrefs(wrap)
-                    .then(function () {
-                        appendLog(wrap, 'svg Пример 2 сохранён на сервере');
-                    })
-                    .catch(function (e) {
-                        appendLog(wrap, 'Ошибка сохранения примера 2: ' + String(e.message || e));
-                    });
-            } else {
-                ta.focus();
-            }
-        });
-    }
-
-    function setSvgExample2Collapsed(wrap, collapsed) {
-        setLaterCollapsible(
-            wrap.querySelector('[data-later-svg-example2-collapse]'),
-            wrap.querySelector('[data-later-svg-example2-collapse-toggle]'),
-            wrap.querySelector('[data-later-svg-example2-body]'),
-            collapsed
-        );
-    }
-
-    function bindSvgExample2Collapse(wrap) {
-        bindLaterCollapsible(
-            wrap,
-            '[data-later-svg-example2-collapse]',
-            '[data-later-svg-example2-collapse-toggle]',
-            '[data-later-svg-example2-body]',
             true
         );
     }
@@ -1415,7 +1458,6 @@
         const skipImage = !!(opts && opts.skipImage);
         const svgPromptEl = wrap.querySelector('[data-later-svg-prompt]');
         const svgPrompt2El = wrap.querySelector('[data-later-svg-prompt2]');
-        const svgExample2El = wrap.querySelector('[data-later-svg-example2]');
         const imgPromptEl = wrap.querySelector('[data-later-editor-prompt]');
         const descEl = wrap.querySelector('[data-later-scene-description]');
         const durEl = wrap.querySelector('[data-later-scene-duration]');
@@ -1433,8 +1475,13 @@
         if (svgPrompt2El && (data.svg_prompt_2 || '').trim()) {
             svgPrompt2El.value = data.svg_prompt_2;
         }
-        if (svgExample2El && (data.svg_example_2 || '').trim()) {
-            svgExample2El.value = data.svg_example_2;
+        if (!skipImage && (data.svg_example_url || data.svg_example_preview_url)) {
+            setLaterSvgExample(
+                wrap,
+                data.svg_example_url || '',
+                data.svg_example_preview_url || '',
+                data.svg_example_filename || laterImageFilename(data.svg_example_url || '')
+            );
         }
         if (imgPromptEl && ((data.editor_prompt || data.img_1_prompt) || '').trim()) {
             imgPromptEl.value = data.editor_prompt || data.img_1_prompt;
@@ -1466,12 +1513,6 @@
             svgPrompt2El.readOnly = true;
             svgPrompt2El.classList.add('rewrite-source-textarea--locked');
             svg2Toggle.classList.add('rewrite-lock-toggle--locked');
-        }
-        const example2Toggle = wrap.querySelector('[data-later-svg-example2-toggle]');
-        if (example2Toggle && svgExample2El) {
-            svgExample2El.readOnly = true;
-            svgExample2El.classList.add('rewrite-source-textarea--locked');
-            example2Toggle.classList.add('rewrite-lock-toggle--locked');
         }
         const imgToggle = wrap.querySelector('[data-later-editor-prompt-toggle]');
         if (imgToggle && imgPromptEl) {
@@ -1550,7 +1591,7 @@
                 msg += errs.length
                     ? 'Отклонено:\n' + errs.join('\n')
                     : 'Валидация не пройдена.';
-                banner.textContent = msg.trim();
+            banner.textContent = msg.trim();
             }
         }
         const svgOut = wrap.querySelector('[data-later-svg-out]');
@@ -1822,6 +1863,7 @@
         const send2Btn = wrap.querySelector('[data-later-send2]');
         const reparseBtn = wrap.querySelector('[data-later-reparse]');
         const fileInput = wrap.querySelector('[data-later-file]');
+        const svgExampleFileInput = wrap.querySelector('[data-later-svg-example-file]');
         const preview = wrap.querySelector('[data-later-preview]');
         const modelEl = wrap.querySelector('[data-later-model]');
         if (!sendBtn || !KEY_ANY) return;
@@ -1829,14 +1871,15 @@
         if (preview && currentImageUrl(wrap)) {
             setLaterAttachedImage(wrap, currentImageUrl(wrap));
         }
+        if (getSvgExampleUrl(wrap)) {
+            setLaterSvgExample(wrap, getSvgExampleUrl(wrap), getSvgExamplePreviewUrl(wrap));
+        }
 
         syncLaterPanelEnabled(wrap);
         bindSvgPromptCollapse(wrap);
         bindSvgPromptLock(wrap);
         bindSvgPrompt2Collapse(wrap);
         bindSvgPrompt2Lock(wrap);
-        bindSvgExample2Collapse(wrap);
-        bindSvgExample2Lock(wrap);
         bindRawAnswerCollapse(wrap);
         bindEditorPromptCollapse(wrap);
         bindEditorPromptLock(wrap);
@@ -2055,6 +2098,40 @@
             }
         });
 
+        let svgExampleUploadToken = 0;
+
+        svgExampleFileInput?.addEventListener('change', async function () {
+            const file = svgExampleFileInput.files && svgExampleFileInput.files[0];
+            if (!file) return;
+            const name = String(file.name || '').toLowerCase();
+            if (!name.endsWith('.svg') && file.type !== 'image/svg+xml') {
+                setLaterStatus(wrap, 'Допустим только файл .svg', 'error');
+                svgExampleFileInput.value = '';
+                return;
+            }
+            const token = ++svgExampleUploadToken;
+            setLaterStatus(wrap, 'Загрузка SVG…', 'generating', {
+                detail: 'Сохранение и рендер PNG-превью…',
+            });
+            try {
+                const fd = new FormData();
+                fd.append('svg', file);
+                const r = await fetch('/scenes-lab/api/upload-svg-example', { method: 'POST', body: fd });
+                const data = await r.json().catch(function () { return {}; });
+                if (token !== svgExampleUploadToken) return;
+                if (!r.ok || !data.ok || !data.svg_url) {
+                    throw new Error((data && data.error) || 'Не удалось загрузить SVG');
+                }
+                setLaterSvgExample(wrap, data.svg_url, data.preview_url, data.filename || file.name);
+                setLaterStatus(wrap, 'SVG загружен', 'done');
+                appendLog(wrap, 'SVG-пример: ' + (data.filename || file.name));
+                await saveLaterPrefs(wrap);
+            } catch (e) {
+                if (token !== svgExampleUploadToken) return;
+                setLaterStatus(wrap, String(e.message || e), 'error');
+            }
+        });
+
         let uploadToken = 0;
 
         fileInput?.addEventListener('change', async function () {
@@ -2100,10 +2177,10 @@
             const payload = laterFormPayload(wrap);
             payload.send_mode = mode;
             if (mode === 'photo') {
-                const imageUrl = currentImageUrl(wrap);
-                if (!imageUrl) {
-                    setLaterStatus(wrap, 'Прикрепите фото перед отправкой', 'error');
-                    return;
+            const imageUrl = currentImageUrl(wrap);
+            if (!imageUrl) {
+                setLaterStatus(wrap, 'Прикрепите фото перед отправкой', 'error');
+                return;
                 }
                 payload.image_url = imageUrl;
                 appendLog(wrap, '→ фото в запросе: ' + laterImageFilename(imageUrl));
@@ -2112,11 +2189,12 @@
                     setLaterStatus(wrap, 'Заполните svg промт 2', 'error');
                     return;
                 }
-                if (!getSvgExample2Template(wrap)) {
-                    setLaterStatus(wrap, 'Заполните svg Пример 2', 'error');
+                if (!getSvgExampleUrl(wrap)) {
+                    setLaterStatus(wrap, 'Загрузите SVG-пример', 'error');
                     return;
                 }
                 delete payload.image_url;
+                appendLog(wrap, '→ SVG в запросе: ' + laterImageFilename(getSvgExampleUrl(wrap)));
             }
             clearPipelineUi(wrap);
             appendLog(wrap, mode === 'dual_prompt' ? 'Отправить 2: подготовка…' : 'Отправить: подготовка…');
@@ -2252,5 +2330,6 @@
         });
     }
 
+    bindSvgExamplePreviewLightbox();
     document.querySelectorAll('[data-later-lab]').forEach(bindLaterLab);
 })();

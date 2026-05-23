@@ -34,7 +34,8 @@ from later_anim_dictionary import (
 
 BASE_DIR = Path(__file__).resolve().parent
 SCENES_LAB_UPLOADS_DIR = BASE_DIR / "data" / "scenes_lab_uploads"
-ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+ALLOWED_SVG_UPLOAD_EXT = {".svg"}
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
 def _build_later_response_contract() -> str:
@@ -236,6 +237,91 @@ def save_scenes_lab_upload(
     return f"{base}/scenes-lab/media/{out_name}", None
 
 
+def scenes_lab_upload_path_from_url(url: str) -> Path | None:
+    """Локальный путь к файлу в scenes_lab_uploads по public URL."""
+    from urllib.parse import urlparse
+
+    name = Path(urlparse(str(url or "")).path).name
+    safe = secure_filename(name)
+    if not safe:
+        return None
+    root = SCENES_LAB_UPLOADS_DIR.resolve()
+    path = (SCENES_LAB_UPLOADS_DIR / safe).resolve()
+    if not str(path).startswith(str(root)) or not path.is_file():
+        return None
+    return path
+
+
+def load_scenes_lab_svg_example_document(url: str) -> tuple[str | None, str | None]:
+    """Прочитать SVG-пример с диска по URL из uploads."""
+    path = scenes_lab_upload_path_from_url(url)
+    if not path:
+        return None, "SVG-файл не найден на сервере (загрузите заново)."
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, f"Не удалось прочитать SVG: {exc}"
+    from scenes_lab_svg_patch import svg_to_standalone_document
+
+    doc = svg_to_standalone_document(raw)
+    if not doc:
+        return None, "Файл не содержит валидный <svg>."
+    return doc, None
+
+
+def save_scenes_lab_svg_example(
+    data: bytes,
+    filename: str,
+    public_base: str,
+) -> tuple[dict[str, str] | None, str | None]:
+    """Сохранить SVG-пример и PNG-превью (превью только для UI)."""
+    if not data:
+        return None, "Пустой файл."
+    if len(data) > MAX_UPLOAD_BYTES:
+        return None, f"Файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ."
+    ext = Path(filename or "").suffix.lower()
+    if ext not in ALLOWED_SVG_UPLOAD_EXT:
+        return None, "Допустим только файл .svg"
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None, "SVG должен быть в кодировке UTF-8."
+
+    from scenes_lab_svg_patch import (
+        render_svg_to_png,
+        save_rendered_preview_png,
+        svg_to_standalone_document,
+    )
+
+    doc = svg_to_standalone_document(text)
+    if not doc:
+        return None, "Не найден валидный <svg> в файле."
+
+    svg_url, err = save_scenes_lab_upload(
+        data,
+        filename if ext == ".svg" else f"{Path(filename or 'example').stem}.svg",
+        public_base,
+    )
+    if err or not svg_url:
+        return None, err or "Не удалось сохранить SVG."
+
+    preview_url = ""
+    png_bytes, rend_err = render_svg_to_png(doc)
+    if png_bytes:
+        pu, up_err = save_rendered_preview_png(
+            png_bytes, public_base, stem="svg_example_preview"
+        )
+        if pu and not up_err:
+            preview_url = pu
+
+    fname = Path(scenes_lab_upload_path_from_url(svg_url) or Path()).name
+    return {
+        "svg_url": svg_url,
+        "preview_url": preview_url,
+        "filename": fname or Path(filename or "example.svg").name,
+    }, None
+
+
 SCENE_DESCRIPTION_TOKEN = "{{SCENE_DESCRIPTION}}"
 SCENE_DURATION_TOKEN = "{{SCENE_DURATION_SEC}}"
 
@@ -245,7 +331,6 @@ LATER_MACRO_PROMPT_FIELD_KEYS: frozenset[str] = frozenset(
     {
         "svg_prompt",
         "svg_prompt_2",
-        "svg_example_2",
         "editor_prompt",
         "img_1_prompt",
         "anim_prompt",
@@ -451,24 +536,24 @@ def compose_later_user_prompt(
 def compose_later_dual_user_prompt(
     *,
     svg_prompt_2: str = "",
-    svg_example_2: str = "",
+    svg_example_document: str = "",
     scene_description: str = "",
     scene_duration_sec: str = "",
 ) -> str:
-    """Два svg-промта справа (режим «Отправить 2», без фото)."""
+    """svg промт 2 + прикреплённый SVG-файл (режим «Отправить 2»)."""
     p1 = apply_svg_prompt_variables(
         svg_prompt_2,
         scene_description=scene_description,
         scene_duration_sec=scene_duration_sec,
     ).strip()
-    p2 = apply_svg_prompt_variables(
-        svg_example_2,
-        scene_description=scene_description,
-        scene_duration_sec=scene_duration_sec,
-    ).strip()
-    if p1 and p2:
-        return p1 + "\n\n---\n\n" + p2
-    return p1 or p2
+    svg_doc = (svg_example_document or "").strip()
+    if p1 and svg_doc:
+        return (
+            p1
+            + "\n\n---\n\n=== SVG-ПРИМЕР (прикреплённый файл) ===\n"
+            + svg_doc
+        )
+    return p1 or svg_doc
 
 
 def _build_later_user_body(
@@ -478,7 +563,7 @@ def _build_later_user_body(
     scene_text_ru: str = "",
     svg_prompt: str = "",
     svg_prompt_2: str = "",
-    svg_example_2: str = "",
+    svg_example_document: str = "",
     scene_description: str = "",
     scene_duration_sec: str = "",
 ) -> str:
@@ -487,10 +572,10 @@ def _build_later_user_body(
         parts.append(f"Текст сцены (EN):\n{scene_text.strip()}")
     if (scene_text_ru or "").strip():
         parts.append(f"Текст сцены (RU):\n{scene_text_ru.strip()}")
-    if (svg_example_2 or "").strip():
+    if (svg_example_document or "").strip():
         up = compose_later_dual_user_prompt(
             svg_prompt_2=svg_prompt_2,
-            svg_example_2=svg_example_2,
+            svg_example_document=svg_example_document,
             scene_description=scene_description,
             scene_duration_sec=scene_duration_sec,
         ).strip()
@@ -520,7 +605,7 @@ def run_later_model_request(
     system_prompt: str = "",
     svg_prompt: str = "",
     svg_prompt_2: str = "",
-    svg_example_2: str = "",
+    svg_example_document: str = "",
     scene_description: str = "",
     scene_duration_sec: str = "",
     require_image: bool = True,
@@ -536,7 +621,7 @@ def run_later_model_request(
         scene_text_ru=scene_text_ru,
         svg_prompt=svg_prompt,
         svg_prompt_2=svg_prompt_2,
-        svg_example_2=svg_example_2,
+        svg_example_document=svg_example_document,
         scene_description=scene_description,
         scene_duration_sec=scene_duration_sec,
     )

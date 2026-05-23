@@ -41,7 +41,8 @@ def clear_later_workspace() -> dict[str, Any]:
         "saved_at": _now_iso(),
         "svg_prompt": str(prefs.get("svg_prompt") or "").strip(),
         "svg_prompt_2": str(prefs.get("svg_prompt_2") or "").strip(),
-        "svg_example_2": str(prefs.get("svg_example_2") or "").strip(),
+        "svg_example_url": str(prefs.get("svg_example_url") or "").strip(),
+        "svg_example_preview_url": str(prefs.get("svg_example_preview_url") or "").strip(),
         "scene_description": str(prefs.get("scene_description") or "").strip(),
         "scene_duration_sec": str(prefs.get("scene_duration_sec") or "").strip(),
         "model": str(prefs.get("model") or "").strip(),
@@ -67,7 +68,8 @@ def save_later_prefs(
     *,
     svg_prompt: str = "",
     svg_prompt_2: str = "",
-    svg_example_2: str = "",
+    svg_example_url: str = "",
+    svg_example_preview_url: str = "",
     scene_description: str = "",
     scene_duration_sec: str = "",
     model: str = "",
@@ -94,7 +96,8 @@ def save_later_prefs(
         "saved_at": _now_iso(),
         "svg_prompt": _keep(svg_prompt, "svg_prompt"),
         "svg_prompt_2": _keep(svg_prompt_2, "svg_prompt_2"),
-        "svg_example_2": _keep(svg_example_2, "svg_example_2"),
+        "svg_example_url": _keep(svg_example_url, "svg_example_url"),
+        "svg_example_preview_url": _keep(svg_example_preview_url, "svg_example_preview_url"),
         "scene_description": _keep(scene_description, "scene_description"),
         "scene_duration_sec": _keep(scene_duration_sec, "scene_duration_sec"),
         "model": _keep(model, "model"),
@@ -130,7 +133,8 @@ def later_prefs_for_page() -> dict[str, str]:
     out = {
         "svg_prompt": DEFAULT_LATER_SVG_USER_TEMPLATE,
         "svg_prompt_2": "",
-        "svg_example_2": "",
+        "svg_example_url": "",
+        "svg_example_preview_url": "",
         "scene_description": DEFAULT_LATER_SCENE_DESCRIPTION,
         "scene_duration_sec": DEFAULT_LATER_SCENE_DURATION,
         "model": "",
@@ -145,8 +149,10 @@ def later_prefs_for_page() -> dict[str, str]:
             out["svg_prompt"] = str(prefs["svg_prompt"]).strip()
         if str(prefs.get("svg_prompt_2") or "").strip():
             out["svg_prompt_2"] = str(prefs["svg_prompt_2"]).strip()
-        if str(prefs.get("svg_example_2") or "").strip():
-            out["svg_example_2"] = str(prefs["svg_example_2"]).strip()
+        if str(prefs.get("svg_example_url") or "").strip():
+            out["svg_example_url"] = str(prefs["svg_example_url"]).strip()
+        if str(prefs.get("svg_example_preview_url") or "").strip():
+            out["svg_example_preview_url"] = str(prefs["svg_example_preview_url"]).strip()
         if str(prefs.get("scene_description") or "").strip():
             out["scene_description"] = str(prefs["scene_description"]).strip()
         if str(prefs.get("scene_duration_sec") or "").strip():
@@ -185,7 +191,8 @@ def save_later_prefs_from_body(body: dict[str, Any] | None) -> None:
     save_later_prefs(
         svg_prompt=str(b.get("svg_prompt") or ""),
         svg_prompt_2=str(b.get("svg_prompt_2") or ""),
-        svg_example_2=str(b.get("svg_example_2") or ""),
+        svg_example_url=str(b.get("svg_example_url") or ""),
+        svg_example_preview_url=str(b.get("svg_example_preview_url") or ""),
         scene_description=str(b.get("scene_description") or ""),
         scene_duration_sec=str(b.get("scene_duration_sec") or ""),
         model=str(b.get("model") or ""),
@@ -299,7 +306,8 @@ def later_session_api_payload() -> dict[str, Any]:
         "user_prompt": user_prompt,
         "svg_prompt": svg_prompt,
         "svg_prompt_2": str(prefs.get("svg_prompt_2") or "").strip(),
-        "svg_example_2": str(prefs.get("svg_example_2") or "").strip(),
+        "svg_example_url": str(prefs.get("svg_example_url") or "").strip(),
+        "svg_example_preview_url": str(prefs.get("svg_example_preview_url") or "").strip(),
         "scene_description": scene_description,
         "scene_duration_sec": scene_duration_sec,
         "image_url": row.get("image_url") or "",

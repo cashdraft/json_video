@@ -1,0 +1,20 @@
+Разрежь CURRENT_BLOCK на сцены для видео.
+
+Настройки:
+{{VIDEO_DYNAMICS}}
+{{ELEMENTS_USED}}
+
+Контекст:
+- MACRO_MAP — вся карта macro blocks без поля text
+- CURRENT_BLOCK — текущий macro block с полным text
+- PREVIOUS_SCENE_TAIL — последние 3–5 сцен из уже обработанных блоков (или [])
+
+{{MACRO_MAP}}
+
+{{CURRENT_BLOCK}}
+
+{{PREVIOUS_SCENE_TAIL}}
+
+Формат ответа: JSONL — одна строка = одна сцена (полный JSON-объект).
+Каждая сцена должна содержать scene_id (сквозная нумерация scene_001, scene_002, …) и text.
+Верни только JSONL, без markdown и пояснений.

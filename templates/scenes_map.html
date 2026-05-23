@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scenes Map — MacroMap & SceneMap Agents</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_style_mtime }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='scenes_map.css') }}?v={{ scenes_map_asset_mtime }}">
+</head>
+<body class="scenes-map-page" data-api-key="{{ '1' if api_key_set else '0' }}">
+    <header class="scenes-map-page__head">
+        <h1>Scenes Map</h1>
+        <p>Цепочка агентов для карты сцен: <strong>MacroMap Agent</strong> → <strong>SceneMap Agent</strong>.</p>
+    </header>
+
+    <section class="scenes-map-main" aria-label="Scenes Map agents">
+        <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index rewrite-stage-card--prompt-collapsed rewrite-stage-card--stage-user-prompt-collapsed scenes-map-agent" data-scenes-map-agent="macromap">
+            <div class="scene-header">
+                <div class="rewrite-stage-header-row">
+                    <div class="rewrite-stage-header-top">
+                        <div class="rewrite-stage-title-row">
+                            <div class="scene-id rewrite-stage-title-text">MacroMap Agent</div>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-subtitle">Агент 1 — карта сцен по Inbox и настройкам динамики / типов / элементов.</div>
+                </div>
+            </div>
+
+            <div class="rewrite-scene-writer-settings-row scenes-map-settings-row">
+                <div class="rewrite-mode-dropdown-field scenes-map-model-field" data-sm-model-field>
+                    {% set cur_model = (prefs.model or '')|trim %}
+                    {% if not cur_model %}{% set cur_model = 'gpt-5.4' %}{% endif %}
+                    {% set ns_sm_model = namespace(label='—') %}
+                    {% for m in models %}{% if cur_model == m.id %}{% set ns_sm_model.label = m.label %}{% endif %}{% endfor %}
+                    <h3 class="rewrite-source-subtitle">Model</h3>
+                    <p class="rewrite-source-subhint">ChatGPT или Claude для MacroMap Agent.</p>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-rewrite-mode-field="1">
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Model">
+                            <span class="rewrite-anim-dropdown__btn-label" data-rewrite-mode-label>{{ ns_sm_model.label }}</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel" hidden role="listbox">
+                            {% for m in models %}
+                            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-mode-dropdown-option">
+                                <input type="radio" name="sm-model-radio" class="rewrite-anim-radio rewrite-mode-dropdown-radio visually-hidden-input" value="{{ m.id }}" {% if cur_model == m.id %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <select id="sm-model" class="rewrite-global-model-select-hidden rewrite-mode-dropdown-select-hidden" data-sm-model {% if not api_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                        {% for m in models %}
+                        <option value="{{ m.id }}"{% if cur_model == m.id %} selected{% endif %}>{{ m.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% with field_title='Динамика видео', mode_options=video_dynamics_modes, mode_value=prefs.video_dynamics_mode, default_mode_id=video_dynamics_default, mode_valid_ids=video_dynamics_valid_ids, mode_select_id='sm-video-dynamics', mode_radio_name='sm-video-dynamics-radio', mode_options_key='video_dynamics', macro_token='VIDEO_DYNAMICS', macro_subhint='полный pacing profile для макроса', extra_class='scenes-map-setting--video-dynamics', openai_key_set=api_key_set %}
+                {% include '_rewrite_mode_dropdown_field.html' %}
+                {% endwith %}
+
+                {% with field_title='Типы сцен', mode_options=scene_types_modes, mode_value=prefs.scene_types_mode, default_mode_id='mixed', mode_valid_ids=['narrative','data','mixed'], mode_select_id='sm-scene-types', mode_radio_name='sm-scene-types-radio', mode_options_key='scene_types', macro_token='SCENE_TYPES', macro_subhint='типы сцен для макроса', extra_class='scenes-map-setting--scene-types', openai_key_set=api_key_set %}
+                {% include '_rewrite_mode_dropdown_field.html' %}
+                {% endwith %}
+
+                <div class="rewrite-mode-dropdown-field scenes-map-elements-field" data-sm-elements-field>
+                    <h3 class="rewrite-source-subtitle">Используемые элементы</h3>
+                    <p class="rewrite-source-subhint">Макрос <code>{% raw %}{{{% endraw %}ELEMENTS_USED{% raw %}}}{% endraw %}</code> — выбранные элементы через запятую.</p>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-sm-elements-dropdown>
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Используемые элементы">
+                            <span class="rewrite-anim-dropdown__btn-label" data-sm-elements-label>—</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel scenes-map-elements-panel" hidden role="listbox">
+                            <div class="scenes-map-elements-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" data-sm-elements-select-all>Все</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-sm-elements-clear-all>Снять все</button>
+                            </div>
+                            {% for el in elements_options %}
+                            <label class="rewrite-anim-option rewrite-anim-option--checkbox scenes-map-elements-option">
+                                <input type="checkbox" class="rewrite-anim-checkbox visually-hidden-input scenes-map-elements-checkbox" value="{{ el.id }}" data-sm-elements-checkbox {% if el.id in prefs.elements_used %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ el.label }}</span>
+                                    <span class="rewrite-anim-option__desc">{{ el.hint }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rewrite-stage-stack scenes-map-stack">
+                <div class="rewrite-stage-row rewrite-stage-row--controls scenes-map-prompts-row">
+                    <div class="rewrite-stage-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.system_prompt else 'no' }} rewrite-stage-prompt-badge" data-sm-system-badge>System Prompt: {{ 'YES' if prefs.system_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sm-system-toggle title="Редактировать" aria-label="Редактировать System Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline" data-sm-system-wrap hidden>
+                            <textarea class="rewrite-stage-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-sm-system-prompt placeholder="System Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.system_prompt }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.user_prompt else 'no' }} rewrite-stage-user-prompt-badge" data-sm-user-badge>User Prompt: {{ 'YES' if prefs.user_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sm-user-toggle title="Редактировать" aria-label="Редактировать User Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt" data-sm-user-wrap hidden>
+                            <textarea class="rewrite-stage-user-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-sm-user-prompt placeholder="User Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.user_prompt }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row scenes-map-inbox-row">
+                    <div class="rewrite-stage-prompt-cell scenes-map-inbox-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.inbox else 'no' }}" data-sm-inbox-badge>Inbox</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sm-inbox-toggle title="Редактировать" aria-label="Редактировать Inbox" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                            <textarea class="rewrite-source-textarea rewrite-source-textarea--locked scenes-map-inbox" rows="8" readonly data-sm-inbox placeholder="Вставьте исходный текст сценария…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.inbox }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row rewrite-stage-row--result">
+                    <div class="slot-header rewrite-stage-result-toolbar">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.result else 'no' }} rewrite-stage-result-badge" data-sm-result-badge>Result</span>
+                        <button type="button" class="rewrite-json-export-btn scenes-map-api-export" data-sm-export title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not api_key_set %}disabled{% endif %}>J</button>
+                        <button type="button" class="btn-regenerate rewrite-stage-run scenes-map-run" title="Запустить MacroMap Agent" data-sm-run {% if not api_key_set %}disabled{% endif %}>↻</button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sm-result-toggle title="Редактировать" aria-label="Редактировать Result" {% if not api_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-sm-result-copy title="Копировать результат" aria-label="Копировать результат">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-stage-result-counts" data-sm-result-counts aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-sm-result-wrap data-status="{{ 'done' if prefs.result else 'pending' }}">
+                        <div class="slot-status-row rewrite-stage-status-row hidden" data-sm-status-row>
+                            <span class="slot-status slot-status-with-spinner rewrite-stage-status-text" data-sm-status-text></span>
+                            <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn hidden" data-sm-cancel-btn>Cancel</button>
+                        </div>
+                        <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="12" readonly data-sm-result placeholder="Pending" {% if not api_key_set %}disabled{% endif %}>{{ prefs.result }}</textarea>
+                    </div>
+                    <div class="rewrite-scene-writer-check" data-sm-macromap-check aria-live="polite"></div>
+
+                    <div class="slot-header rewrite-stage-result-toolbar scenes-map-result-as-toolbar">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.result_as else 'no' }} rewrite-stage-result-badge" data-sm-result-as-badge>Result AS</span>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sm-result-as-toggle title="Редактировать" aria-label="Редактировать Result AS" {% if not api_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-sm-result-as-copy title="Копировать Result AS" aria-label="Копировать Result AS">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-stage-result-counts" data-sm-result-as-counts aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result scenes-map-result-as-slot">
+                        <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked scenes-map-result-as" rows="12" readonly data-sm-result-as placeholder="Собирается из Result + Inbox…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.result_as }}</textarea>
+                    </div>
+                    <div class="rewrite-scene-writer-check" data-sm-result-as-check aria-live="polite"></div>
+                </div>
+            </div>
+        </article>
+
+        <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index rewrite-stage-card--prompt-collapsed rewrite-stage-card--stage-user-prompt-collapsed scenes-map-agent scenes-map-agent--scenemap" data-scenes-map-agent="scenemap">
+            <div class="scene-header">
+                <div class="rewrite-stage-header-row">
+                    <div class="rewrite-stage-header-top">
+                        <div class="rewrite-stage-title-row">
+                            <div class="scene-id rewrite-stage-title-text">SceneMap Agent</div>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-subtitle">Агент 2 — детальная карта сцен по Result от MacroMap Agent.</div>
+                </div>
+            </div>
+
+            <div class="rewrite-stage-stack scenes-map-stack scenes-map-stack--user-first">
+                <div class="rewrite-stage-row rewrite-stage-row--controls scenes-map-prompts-row">
+                    <div class="rewrite-stage-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.scenemap_system_prompt else 'no' }} rewrite-stage-prompt-badge" data-ssm-system-badge>System Prompt: {{ 'YES' if prefs.scenemap_system_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ssm-system-toggle title="Редактировать" aria-label="Редактировать System Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline" data-ssm-system-wrap hidden>
+                            <textarea class="rewrite-stage-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-ssm-system-prompt placeholder="System Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.scenemap_system_prompt }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell scenes-map-user-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.scenemap_user_prompt else 'no' }} rewrite-stage-user-prompt-badge" data-ssm-user-badge>User Prompt: {{ 'YES' if prefs.scenemap_user_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ssm-user-toggle title="Редактировать" aria-label="Редактировать User Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt" data-ssm-user-wrap hidden>
+                            <textarea class="rewrite-stage-user-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-ssm-user-prompt placeholder="User Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.scenemap_user_prompt }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rewrite-scene-writer-settings-row scenes-map-settings-row">
+                <div class="rewrite-mode-dropdown-field scenes-map-model-field" data-ssm-model-field>
+                    {% set cur_ssm_model = (prefs.scenemap_model or '')|trim %}
+                    {% if not cur_ssm_model %}{% set cur_ssm_model = 'gpt-5.4' %}{% endif %}
+                    {% set ns_ssm_model = namespace(label='—') %}
+                    {% for m in models %}{% if cur_ssm_model == m.id %}{% set ns_ssm_model.label = m.label %}{% endif %}{% endfor %}
+                    <h3 class="rewrite-source-subtitle">Model</h3>
+                    <p class="rewrite-source-subhint">ChatGPT или Claude для SceneMap Agent.</p>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-rewrite-mode-field="1">
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Model">
+                            <span class="rewrite-anim-dropdown__btn-label" data-rewrite-mode-label>{{ ns_ssm_model.label }}</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel" hidden role="listbox">
+                            {% for m in models %}
+                            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-mode-dropdown-option">
+                                <input type="radio" name="ssm-model-radio" class="rewrite-anim-radio rewrite-mode-dropdown-radio visually-hidden-input" value="{{ m.id }}" {% if cur_ssm_model == m.id %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <select id="ssm-model" class="rewrite-global-model-select-hidden rewrite-mode-dropdown-select-hidden" data-ssm-model {% if not api_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                        {% for m in models %}
+                        <option value="{{ m.id }}"{% if cur_ssm_model == m.id %} selected{% endif %}>{{ m.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% with field_title='Динамика видео', mode_options=video_dynamics_modes, mode_value=prefs.scenemap_video_dynamics_mode, default_mode_id=video_dynamics_default, mode_valid_ids=video_dynamics_valid_ids, mode_select_id='ssm-video-dynamics', mode_radio_name='ssm-video-dynamics-radio', mode_options_key='video_dynamics', macro_token='VIDEO_DYNAMICS', macro_subhint='полный pacing profile для макроса', extra_class='scenes-map-setting--video-dynamics', openai_key_set=api_key_set %}
+                {% include '_rewrite_mode_dropdown_field.html' %}
+                {% endwith %}
+
+                <div class="rewrite-mode-dropdown-field scenes-map-elements-field" data-ssm-elements-field>
+                    <h3 class="rewrite-source-subtitle">Используемые элементы</h3>
+                    <p class="rewrite-source-subhint">Макрос <code>{% raw %}{{{% endraw %}ELEMENTS_USED{% raw %}}}{% endraw %}</code> — выбранные элементы через запятую.</p>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-ssm-elements-dropdown>
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Используемые элементы">
+                            <span class="rewrite-anim-dropdown__btn-label" data-ssm-elements-label>—</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel scenes-map-elements-panel" hidden role="listbox">
+                            <div class="scenes-map-elements-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" data-ssm-elements-select-all>Все</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-ssm-elements-clear-all>Снять все</button>
+                            </div>
+                            {% for el in elements_options %}
+                            <label class="rewrite-anim-option rewrite-anim-option--checkbox scenes-map-elements-option">
+                                <input type="checkbox" class="rewrite-anim-checkbox visually-hidden-input scenes-map-elements-checkbox" value="{{ el.id }}" data-ssm-elements-checkbox {% if el.id in prefs.scenemap_elements_used %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ el.label }}</span>
+                                    <span class="rewrite-anim-option__desc">{{ el.hint }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rewrite-stage-stack scenes-map-stack">
+                <div class="rewrite-stage-row scenes-map-input-result-row">
+                    <div class="rewrite-stage-prompt-cell scenes-map-input-result-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.result_as else 'no' }}" data-ssm-input-result-badge>Result AS (MacroMap)</span>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                            <textarea class="rewrite-source-textarea rewrite-source-textarea--locked scenes-map-input-result" rows="8" readonly data-ssm-input-result placeholder="Result AS от MacroMap Agent (macro_map с text)…" tabindex="-1">{{ prefs.result_as }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row rewrite-stage-row--result">
+                    <div class="slot-header rewrite-stage-result-toolbar">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.scenemap_result else 'no' }} rewrite-stage-result-badge" data-ssm-result-badge>Result</span>
+                        <button type="button" class="rewrite-json-export-btn scenes-map-api-export" data-ssm-export title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not api_key_set %}disabled{% endif %}>J</button>
+                        <button type="button" class="btn-regenerate rewrite-stage-run scenes-map-run" title="Запустить SceneMap Agent" data-ssm-run {% if not api_key_set %}disabled{% endif %}>↻</button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ssm-result-toggle title="Редактировать" aria-label="Редактировать Result" {% if not api_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-ssm-result-copy title="Копировать результат" aria-label="Копировать результат">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-stage-result-counts" data-ssm-result-counts aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-ssm-result-wrap data-status="{{ 'done' if prefs.scenemap_result else 'pending' }}">
+                        <div class="slot-status-row rewrite-stage-status-row hidden" data-ssm-status-row>
+                            <span class="slot-status slot-status-with-spinner rewrite-stage-status-text" data-ssm-status-text></span>
+                            <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn hidden" data-ssm-cancel-btn>Cancel</button>
+                        </div>
+                        <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="12" readonly data-ssm-result placeholder="final_scene_map.jsonl (после всех блоков)…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.scenemap_result }}</textarea>
+                    </div>
+                    <div class="rewrite-scene-writer-check scenes-map-scenemap-progress" data-ssm-progress aria-live="polite"></div>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    {% if not api_key_set %}
+    <p class="scenes-map-page__hint">Укажите <code>OPENAI_API_KEY</code> и/или <code>KEYAI_API_KEY</code> в <code>.env</code>.</p>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='scenes_map.js') }}?v={{ scenes_map_asset_mtime }}"></script>
+    <script src="{{ url_for('static', filename='scenes_map_scenemap.js') }}?v={{ scenes_map_asset_mtime }}"></script>
+</body>
+</html>

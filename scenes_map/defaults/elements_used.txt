@@ -1,0 +1,38 @@
+# Ai_Scene
+AI-сцена / cinematic image
+
+# Ai_Video
+AI-видео / motion scene
+
+# Stock_Video
+Видео со стока
+
+# Stock_Photo
+Фото со стока
+
+# Kinetic_Text
+Анимированный текст / punch text
+
+# Text_Screen
+Спокойный текстовый экран
+
+# Infographic_Simple
+Простая инфографика / график
+
+# Infographic_Complex
+Сложная инфографика / система
+
+# Chart_Scene
+График / data visualization
+
+# Table_Scene
+Таблица / comparison scene
+
+# Svg_Explainer
+SVG / motion explainer
+
+# Ui_Mockup
+Интерфейс / dashboard / UI
+
+# Meme_Insert
+Мем / ironic insert

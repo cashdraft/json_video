@@ -211,6 +211,62 @@ body.scenes-lab-page {
     min-width: 0;
 }
 
+.later-preview-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: rgba(0, 0, 0, 0.88);
+}
+
+.later-preview-lightbox.is-open {
+    display: flex;
+}
+
+.later-preview-lightbox__image {
+    max-width: min(1200px, 92vw);
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.later-preview-lightbox__close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(30, 30, 34, 0.92);
+    color: var(--text);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.later-preview-lightbox__close:hover {
+    background: rgba(45, 45, 50, 0.95);
+}
+
+body.later-preview-lightbox-open {
+    overflow: hidden;
+}
+
+.later-lab__attach-preview--svg {
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: zoom-in;
+}
+
+.later-lab__attach-preview--svg.is-hidden {
+    cursor: default;
+}
+
 .later-lab__attach-filename {
     font-size: 0.72rem;
     color: var(--text-muted);

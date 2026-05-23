@@ -1804,20 +1804,22 @@ def _format_openai_wire_payloads_txt(
     bodies: list[dict[str, Any]],
     *,
     header_lines: list[str] | None = None,
+    about: str | None = None,
 ) -> str:
     """Один валидный JSON (UTF-8): about + requests[]; content развёрнут рекурсивно."""
-    about = (
-        "Логика входов как у кнопки ↻: тот же JSON со страницы (collectSnapshot), на сервере те же "
-        "snapshot_stages_from_body / compose_rewrite_openai_request_body, что и в POST /rewrite/<id>/run. "
-        "Дальше: для одного POST на этап — то же, что перед HTTP, что и в iter_rewrite_completion: "
-        "openai_chat_completions_request_dict / rewrite_chat_completion_wire_payload "
-        "(нормализация model, sanitize на system/user, temperature=REWRITE_CHAT_TEMPERATURE). "
-        "draft1 и scene_writer шлют несколько POST подряд — в requests[] по одному объекту на каждый такой вызов "
-        "(для draft1 при отсутствии block_*.json контекст short_summary может отличаться от живого прогона — см. notes). "
-        "Файл — читаемый JSON (UTF-8, отступы); реальное тело POST кодируется компактнее (другой вид сериализации JSON). "
-        "Здесь messages[].content и (для Claude) поле system могут быть развёрнуты в объекты и в пометки "
-        "{\"_export\":\"text_lines\",\"lines\":[...]} — это только в этом файле для просмотра; в HTTP к API такого нет, там всегда строки."
-    )
+    if about is None:
+        about = (
+            "Логика входов как у кнопки ↻: тот же JSON со страницы (collectSnapshot), на сервере те же "
+            "snapshot_stages_from_body / compose_rewrite_openai_request_body, что и в POST /rewrite/<id>/run. "
+            "Дальше: для одного POST на этап — то же, что перед HTTP, что и в iter_rewrite_completion: "
+            "openai_chat_completions_request_dict / rewrite_chat_completion_wire_payload "
+            "(нормализация model, sanitize на system/user, temperature=REWRITE_CHAT_TEMPERATURE). "
+            "draft1 и scene_writer шлют несколько POST подряд — в requests[] по одному объекту на каждый такой вызов "
+            "(для draft1 при отсутствии block_*.json контекст short_summary может отличаться от живого прогона — см. notes). "
+            "Файл — читаемый JSON (UTF-8, отступы); реальное тело POST кодируется компактнее (другой вид сериализации JSON). "
+            "Здесь messages[].content и (для Claude) поле system могут быть развёрнуты в объекты и в пометки "
+            "{\"_export\":\"text_lines\",\"lines\":[...]} — это только в этом файле для просмотра; в HTTP к API такого нет, там всегда строки."
+        )
     pretty = [_body_for_pretty_openai_export(b) for b in bodies]
     env: dict[str, Any] = {
         "about": about,
@@ -3641,7 +3643,8 @@ def scenes_lab_page():
         svg_patch_default_system=DEFAULT_SVG_PATCH_SYSTEM_PROMPT,
         default_svg_prompt=prefs["svg_prompt"],
         default_svg_prompt_2=prefs.get("svg_prompt_2") or "",
-        default_svg_example_2=prefs.get("svg_example_2") or "",
+        default_svg_example_url=prefs.get("svg_example_url") or "",
+        default_svg_example_preview_url=prefs.get("svg_example_preview_url") or "",
         default_scene_description=prefs["scene_description"],
         default_scene_duration=prefs["scene_duration_sec"],
         default_later_model=prefs.get("model") or "",
@@ -3649,6 +3652,269 @@ def scenes_lab_page():
         default_img_1_prompt=prefs.get("editor_prompt") or prefs.get("img_1_prompt") or "",
         default_anim_prompt=prefs.get("anim_prompt") or "",
     )
+
+
+def _scenes_map_asset_mtime() -> str:
+    try:
+        static_root = Path(app.static_folder)
+        parts: list[str] = []
+        for name in ("scenes_map.css", "scenes_map.js", "scenes_map_scenemap.js"):
+            p = static_root / name
+            if p.is_file():
+                parts.append(str(int(p.stat().st_mtime)))
+        return "-".join(parts) if parts else "0"
+    except (OSError, AttributeError, TypeError):
+        return "0"
+
+
+@app.route("/scenes-map")
+def scenes_map_page():
+    """Scenes Map — цепочка агентов (MacroMap Agent и далее)."""
+    from scenes_map_agent import scenes_map_api_ready, scenes_map_models_for_ui
+    from scenes_map_modes import (
+        DEFAULT_VIDEO_DYNAMICS,
+        elements_options_for_ui,
+        scene_types_modes_for_ui,
+        video_dynamics_modes_for_ui,
+        video_dynamics_valid_ids,
+    )
+    from scenes_map_session import prefs_for_page
+
+    prefs = prefs_for_page()
+    return render_template(
+        "scenes_map.html",
+        api_key_set=scenes_map_api_ready(),
+        models=scenes_map_models_for_ui(),
+        prefs=prefs,
+        video_dynamics_modes=video_dynamics_modes_for_ui(),
+        video_dynamics_default=DEFAULT_VIDEO_DYNAMICS,
+        video_dynamics_valid_ids=video_dynamics_valid_ids(),
+        scene_types_modes=scene_types_modes_for_ui(),
+        elements_options=elements_options_for_ui(),
+        scenes_map_asset_mtime=_scenes_map_asset_mtime(),
+    )
+
+
+@app.route("/scenes-map/api/prefs", methods=["GET", "POST"])
+def scenes_map_api_prefs():
+    from scenes_map_session import load_prefs, save_prefs
+
+    if request.method == "GET":
+        return jsonify({"ok": True, "prefs": load_prefs()})
+    body = request.get_json(silent=True) or {}
+    saved = save_prefs(body if isinstance(body, dict) else {})
+    return jsonify({"ok": True, "prefs": saved})
+
+
+@app.route("/scenes-map/api/scenemap/prepare", methods=["GET"])
+def scenes_map_scenemap_prepare():
+    from scenes_map_pipeline import load_macromap_from_prefs
+    from scenes_map_session import load_prefs
+
+    prefs = load_prefs()
+    blocks, global_summary, err = load_macromap_from_prefs(prefs)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({
+        "ok": True,
+        "blocks_total": len(blocks),
+        "blocks": [
+            {
+                "block_index": i,
+                "block_id": str(b.get("block_id") or f"block_{i + 1:02d}"),
+                "macro_block_type": str(b.get("macro_block_type") or ""),
+                "title": str(b.get("title") or ""),
+            }
+            for i, b in enumerate(blocks)
+        ],
+        "global_structure_summary": global_summary,
+    })
+
+
+@app.route("/scenes-map/api/scenemap/progress", methods=["GET"])
+def scenes_map_scenemap_progress():
+    from scenes_map_pipeline import build_scenemap_progress_report
+    from scenes_map_session import load_prefs
+
+    prefs = load_prefs()
+    report = build_scenemap_progress_report(prefs)
+    if not report.get("ok"):
+        return jsonify({"ok": False, "error": report.get("error") or "progress_failed"}), 400
+    return jsonify({"ok": True, **report})
+
+
+@app.route("/scenes-map/api/generate", methods=["POST"])
+def scenes_map_api_generate():
+    from scenes_map_agent import (
+        build_generation_context,
+        build_scenemap_generation_context,
+        model_key_ok,
+        run_macromap_agent,
+    )
+    from scenes_map_session import apply_prompt_macros, load_prefs, save_prefs
+
+    body = request.get_json(silent=True) or {}
+    agent = str(body.get("agent") or "macromap").strip().lower()
+    prefs = load_prefs()
+    if isinstance(body, dict):
+        prefs = save_prefs(body)
+
+    if agent == "scenemap":
+        from scenes_map_agent import scenemap_run_agent_adapter
+        from scenes_map_pipeline import (
+            load_macromap_from_prefs,
+            merge_final_scene_map,
+            process_scenemap_block,
+            run_scenemap_audit_stub,
+            run_scenemap_pipeline,
+        )
+
+        ctx = build_scenemap_generation_context(prefs)
+        if not model_key_ok(ctx["model"]):
+            return jsonify({"ok": False, "error": "Нет API-ключа для выбранной модели."}), 400
+
+        user_prompt = str(ctx.get("user_prompt") or "")
+        model_id = str(ctx.get("model") or "")
+        reset = bool(body.get("reset", True))
+        finalize_only = bool(body.get("finalize"))
+        block_index_raw = body.get("block_index")
+
+        if finalize_only:
+            from scenes_map_pipeline import load_run_state
+
+            state = load_run_state()
+            if not state.get("block_results"):
+                return jsonify({"ok": False, "error": "Нет обработанных блоков для финализации."}), 400
+            final_content, final_meta = merge_final_scene_map(state)
+            audit = run_scenemap_audit_stub()
+            saved = save_prefs({**prefs, "scenemap_result": final_content})
+            return jsonify({
+                "ok": True,
+                "result": final_content,
+                "final": final_meta,
+                "audit": audit,
+                "prefs": saved,
+            })
+
+        if block_index_raw is not None:
+            try:
+                block_index = int(block_index_raw)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "block_index должен быть числом."}), 400
+
+            outcome = process_scenemap_block(
+                prefs=prefs,
+                block_index=block_index,
+                model=model_id,
+                user_prompt_template=user_prompt,
+                run_agent=scenemap_run_agent_adapter,
+                reset=reset and block_index == 0,
+            )
+            if not outcome.get("ok"):
+                return jsonify({"ok": False, **outcome}), 502
+
+            blocks, _, prep_err = load_macromap_from_prefs(prefs)
+            if prep_err:
+                return jsonify({"ok": False, "error": prep_err}), 400
+
+            is_last = block_index >= len(blocks) - 1
+            result_text = ""
+            final_meta: dict = {}
+            audit: dict = {}
+            if is_last:
+                from scenes_map_pipeline import load_run_state
+
+                state = outcome.get("state") or load_run_state()
+                result_text, final_meta = merge_final_scene_map(state)
+                audit = run_scenemap_audit_stub()
+            from scenes_map_pipeline import build_scenemap_progress_report
+
+            progress = build_scenemap_progress_report(prefs)
+            saved = save_prefs({**prefs, "scenemap_result": result_text or prefs.get("scenemap_result", "")})
+            return jsonify({
+                "ok": True,
+                **outcome,
+                "is_last": is_last,
+                "result": result_text,
+                "final": final_meta,
+                "audit": audit,
+                "progress": progress.get("summary") if progress.get("ok") else None,
+                "prefs": saved,
+            })
+
+        pipeline = run_scenemap_pipeline(
+            prefs=prefs,
+            model=model_id,
+            user_prompt_template=user_prompt,
+            run_agent=scenemap_run_agent_adapter,
+            reset=reset,
+        )
+        if not pipeline.get("ok"):
+            return jsonify({"ok": False, **pipeline}), 502
+
+        saved = save_prefs({**prefs, "scenemap_result": pipeline.get("result") or ""})
+        return jsonify({"ok": True, **pipeline, "prefs": saved})
+
+    if agent != "macromap":
+        return jsonify({"ok": False, "error": f"Неизвестный агент: {agent}"}), 400
+
+    ctx = build_generation_context(prefs)
+    if not model_key_ok(ctx["model"]):
+        return jsonify({"ok": False, "error": "Нет API-ключа для выбранной модели."}), 400
+
+    system_prompt = apply_prompt_macros(str(ctx.get("system_prompt") or ""), prefs)
+    user_prompt = str(ctx.get("user_prompt") or "")
+    inbox = str(ctx.get("inbox") or "")
+
+    answer, err = run_macromap_agent(
+        model=str(ctx.get("model") or ""),
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        inbox=inbox,
+    )
+    if err or answer is None:
+        return jsonify({"ok": False, "error": err or "generation_failed"}), 502
+
+    from scenes_map_check import build_result_as
+
+    result_as, _ = build_result_as(result=answer, inbox=inbox)
+    saved = save_prefs({**prefs, "result": answer, "result_as": result_as})
+    return jsonify({"ok": True, "result": answer, "result_as": result_as, "prefs": saved})
+
+
+@app.route("/scenes-map/api/export", methods=["POST"])
+def scenes_map_api_export():
+    """Скачивание JSON тела запроса к OpenAI (как при запуске ↻, кнопка J)."""
+    from flask import make_response
+
+    from scenes_map_export import (
+        SCENES_MAP_EXPORT_ABOUT,
+        export_macromap_wire_bodies,
+        export_scenemap_wire_bodies,
+        merge_prefs_snapshot,
+    )
+
+    body = request.get_json(silent=True) or {}
+    agent = str(body.get("agent") or "macromap").strip().lower()
+    prefs = merge_prefs_snapshot(body)
+
+    if agent == "macromap":
+        bodies, hdr, err = export_macromap_wire_bodies(prefs)
+        fname = "scenes_map_macromap_openai_request.json"
+    elif agent == "scenemap":
+        bodies, hdr, err = export_scenemap_wire_bodies(prefs)
+        fname = "scenes_map_scenemap_openai_request.json"
+    else:
+        return jsonify({"ok": False, "error": f"Неизвестный агент: {agent}"}), 400
+
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+
+    txt = _format_openai_wire_payloads_txt(bodies, header_lines=hdr, about=SCENES_MAP_EXPORT_ABOUT)
+    resp = make_response(txt)
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
 
 
 @app.route("/scenes-lab/media/<path:filename>")
@@ -3678,6 +3944,28 @@ def scenes_lab_api_upload():
     if err:
         return jsonify({"ok": False, "error": err}), 400
     return jsonify({"ok": True, "image_url": url})
+
+
+@app.route("/scenes-lab/api/upload-svg-example", methods=["POST"])
+def scenes_lab_api_upload_svg_example():
+    """Загрузка SVG-примера для «Отправить 2» (+ PNG-превью только для UI)."""
+    from scenes_lab_later import save_scenes_lab_svg_example
+
+    f = request.files.get("svg") or request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "Файл не передан."}), 400
+    data = f.read()
+    info, err = save_scenes_lab_svg_example(data, f.filename, public_base_url_for_kie())
+    if err or not info:
+        return jsonify({"ok": False, "error": err or "Не удалось сохранить SVG."}), 400
+    return jsonify(
+        {
+            "ok": True,
+            "svg_url": info.get("svg_url") or "",
+            "preview_url": info.get("preview_url") or "",
+            "filename": info.get("filename") or "",
+        }
+    )
 
 
 @app.route("/scenes-lab/api/anim-dictionary", methods=["GET"])
@@ -3884,25 +4172,33 @@ def scenes_lab_api_claude():
     from scenes_lab_later import run_later_model_request
     from scenes_lab_session import clear_later_session, save_later_session
 
-    from scenes_lab_later import compose_later_user_prompt, compose_later_dual_user_prompt
+    from scenes_lab_later import (
+        compose_later_user_prompt,
+        compose_later_dual_user_prompt,
+        load_scenes_lab_svg_example_document,
+    )
 
     raw_body, body = _scenes_lab_json_bodies()
     model = str(body.get("model") or "").strip()
     svg_prompt = str(body.get("svg_prompt") or "")
     svg_prompt_2 = str(body.get("svg_prompt_2") or "")
-    svg_example_2 = str(body.get("svg_example_2") or "")
+    svg_example_url = str(raw_body.get("svg_example_url") or body.get("svg_example_url") or "").strip()
     scene_description = str(body.get("scene_description") or "")
     scene_duration_sec = str(body.get("scene_duration_sec") or "")
     send_mode = str(body.get("send_mode") or "photo").strip().lower()
     dual_prompt = send_mode in {"dual_prompt", "dual", "prompt2", "text"}
+    svg_example_document = ""
     if dual_prompt:
         if not svg_prompt_2.strip():
             return jsonify({"ok": False, "error": "Заполните svg промт 2."}), 400
-        if not svg_example_2.strip():
-            return jsonify({"ok": False, "error": "Заполните svg Пример 2."}), 400
+        if not svg_example_url:
+            return jsonify({"ok": False, "error": "Загрузите SVG-пример."}), 400
+        svg_example_document, svg_load_err = load_scenes_lab_svg_example_document(svg_example_url)
+        if svg_load_err or not svg_example_document:
+            return jsonify({"ok": False, "error": svg_load_err or "Не удалось прочитать SVG."}), 400
         user_prompt = compose_later_dual_user_prompt(
             svg_prompt_2=svg_prompt_2,
-            svg_example_2=svg_example_2,
+            svg_example_document=svg_example_document,
             scene_description=scene_description,
             scene_duration_sec=scene_duration_sec,
         )
@@ -3932,7 +4228,7 @@ def scenes_lab_api_claude():
         system_prompt=system_prompt,
         svg_prompt=svg_prompt,
         svg_prompt_2=svg_prompt_2 if dual_prompt else "",
-        svg_example_2=svg_example_2 if dual_prompt else "",
+        svg_example_document=svg_example_document if dual_prompt else "",
         scene_description=scene_description,
         scene_duration_sec=scene_duration_sec,
         require_image=require_image,
@@ -4161,12 +4457,6 @@ def scenes_lab_api_svg_patch():
         scene_duration_sec=str(prev.get("scene_duration_sec") or ""),
     )
     return jsonify(result)
-
-
-@app.route("/scenes-lab/viewer")
-def scenes_lab_viewer_page():
-    """Мини-вьюер SVG: вставка разметки, превью, проверка XML."""
-    return render_template("scenes_lab_viewer.html")
 
 
 @app.route("/scenes-lab/api/remotion/info", methods=["GET"])
