@@ -3640,6 +3640,8 @@ def scenes_lab_page():
         openai_key_set=openai_api_key_present(),
         svg_patch_default_system=DEFAULT_SVG_PATCH_SYSTEM_PROMPT,
         default_svg_prompt=prefs["svg_prompt"],
+        default_svg_prompt_2=prefs.get("svg_prompt_2") or "",
+        default_svg_example_2=prefs.get("svg_example_2") or "",
         default_scene_description=prefs["scene_description"],
         default_scene_duration=prefs["scene_duration_sec"],
         default_later_model=prefs.get("model") or "",
@@ -3882,25 +3884,44 @@ def scenes_lab_api_claude():
     from scenes_lab_later import run_later_model_request
     from scenes_lab_session import clear_later_session, save_later_session
 
-    from scenes_lab_later import compose_later_user_prompt
+    from scenes_lab_later import compose_later_user_prompt, compose_later_dual_user_prompt
 
     raw_body, body = _scenes_lab_json_bodies()
     model = str(body.get("model") or "").strip()
     svg_prompt = str(body.get("svg_prompt") or "")
+    svg_prompt_2 = str(body.get("svg_prompt_2") or "")
+    svg_example_2 = str(body.get("svg_example_2") or "")
     scene_description = str(body.get("scene_description") or "")
     scene_duration_sec = str(body.get("scene_duration_sec") or "")
-    user_prompt = compose_later_user_prompt(
-        svg_prompt=svg_prompt,
-        scene_description=scene_description,
-        scene_duration_sec=scene_duration_sec,
-        user_prompt=str(body.get("user_prompt") or body.get("prompt") or ""),
-    )
-    image_url = str(body.get("image_url") or "").strip()
+    send_mode = str(body.get("send_mode") or "photo").strip().lower()
+    dual_prompt = send_mode in {"dual_prompt", "dual", "prompt2", "text"}
+    if dual_prompt:
+        if not svg_prompt_2.strip():
+            return jsonify({"ok": False, "error": "Заполните svg промт 2."}), 400
+        if not svg_example_2.strip():
+            return jsonify({"ok": False, "error": "Заполните svg Пример 2."}), 400
+        user_prompt = compose_later_dual_user_prompt(
+            svg_prompt_2=svg_prompt_2,
+            svg_example_2=svg_example_2,
+            scene_description=scene_description,
+            scene_duration_sec=scene_duration_sec,
+        )
+        image_url = ""
+        require_image = False
+    else:
+        user_prompt = compose_later_user_prompt(
+            svg_prompt=svg_prompt,
+            scene_description=scene_description,
+            scene_duration_sec=scene_duration_sec,
+            user_prompt=str(body.get("user_prompt") or body.get("prompt") or ""),
+        )
+        image_url = str(body.get("image_url") or "").strip()
+        require_image = True
+        if not image_url:
+            return jsonify({"ok": False, "error": "Нужно фото (кадр Start или загрузка)."}), 400
     scene_text = str(body.get("scene_text") or "")
     scene_text_ru = str(body.get("scene_text_ru") or "")
     system_prompt = str(body.get("system_prompt") or "")
-    if not image_url:
-        return jsonify({"ok": False, "error": "Нужно фото (кадр Start или загрузка)."}), 400
     clear_later_session()
     text, err = run_later_model_request(
         model=model,
@@ -3910,8 +3931,11 @@ def scenes_lab_api_claude():
         scene_text_ru=scene_text_ru,
         system_prompt=system_prompt,
         svg_prompt=svg_prompt,
+        svg_prompt_2=svg_prompt_2 if dual_prompt else "",
+        svg_example_2=svg_example_2 if dual_prompt else "",
         scene_description=scene_description,
         scene_duration_sec=scene_duration_sec,
+        require_image=require_image,
     )
     if err:
         return jsonify({"ok": False, "error": err}), 502

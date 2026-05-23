@@ -71,6 +71,8 @@
                     >
                 </div>
 
+                <div class="later-lab__modes-row">
+                    <div class="later-lab__mode-col">
                 <div
                     class="later-svg-prompt-block later-collapsible later-collapsible--body-collapsed"
                     data-later-svg-prompt-collapse
@@ -110,14 +112,103 @@
 
                 <div class="later-lab__attach-row">
                     <img class="later-lab__attach-preview{% if not default_later_image_url %} is-hidden{% endif %}" data-later-preview src="{{ default_later_image_url }}" alt="Вложение">
-                    <label class="later-lab__file-label">
-                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-later-file>
-                        Прикрепить фото (1 файл)
-                    </label>
+                    <div class="later-lab__attach-meta">
+                        <label class="later-lab__file-label">
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-later-file>
+                            Прикрепить фото (1 файл)
+                        </label>
+                        <span class="later-lab__attach-filename" data-later-preview-meta title="Этот файл уйдёт в запрос при «Отправить»"></span>
+                    </div>
                 </div>
 
                 <div class="later-lab__send-row">
-                    <button type="button" class="btn btn-primary later-lab__send" data-later-send>Отправить</button>
+                    <button type="button" class="btn btn-primary later-lab__send" data-later-send title="svg промт + фото">Отправить</button>
+                </div>
+                    </div>
+
+                    <div class="later-lab__mode-divider" aria-hidden="true"></div>
+
+                    <div class="later-lab__mode-col">
+                        <div
+                            class="later-svg-prompt-block later-collapsible later-collapsible--body-collapsed"
+                            data-later-svg-prompt2-collapse
+                            aria-expanded="false"
+                        >
+                            <div class="later-collapsible__header">
+                                <button
+                                    type="button"
+                                    class="later-collapsible__title-btn"
+                                    data-later-svg-prompt2-collapse-toggle
+                                    aria-expanded="false"
+                                >
+                                    <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                                    <span class="slot-badge badge-slot-prompt">svg промт 2</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked"
+                                    data-later-svg-prompt2-toggle
+                                    title="Редактировать"
+                                    aria-label="Редактировать svg промт 2"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                            </div>
+                            <div class="later-collapsible__inner" data-later-svg-prompt2-body hidden>
+                                <textarea
+                                    class="rewrite-slot-textarea later-lab__svg-prompt rewrite-source-textarea--locked"
+                                    rows="12"
+                                    spellcheck="false"
+                                    readonly
+                                    placeholder="Второй промт (без фото). Макросы: {% raw %}{{SCENE_DESCRIPTION}}, {{SCENE_DURATION_SEC}}{% endraw %}."
+                                    data-later-svg-prompt2
+                                >{{ default_svg_prompt_2 }}</textarea>
+                            </div>
+                        </div>
+
+                        <div
+                            class="later-svg-prompt-block later-collapsible later-collapsible--body-collapsed"
+                            data-later-svg-example2-collapse
+                            aria-expanded="false"
+                        >
+                            <div class="later-collapsible__header">
+                                <button
+                                    type="button"
+                                    class="later-collapsible__title-btn"
+                                    data-later-svg-example2-collapse-toggle
+                                    aria-expanded="false"
+                                >
+                                    <span class="rewrite-stage-body-collapse-chevron" aria-hidden="true"></span>
+                                    <span class="slot-badge badge-slot-prompt">svg Пример 2</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked"
+                                    data-later-svg-example2-toggle
+                                    title="Редактировать"
+                                    aria-label="Редактировать svg Пример 2"
+                                >
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                            </div>
+                            <div class="later-collapsible__inner" data-later-svg-example2-body hidden>
+                                <textarea
+                                    class="rewrite-slot-textarea later-lab__svg-prompt rewrite-source-textarea--locked"
+                                    rows="12"
+                                    spellcheck="false"
+                                    readonly
+                                    placeholder="Пример SVG (второй блок промта). Макросы: {% raw %}{{SCENE_DESCRIPTION}}, {{SCENE_DURATION_SEC}}{% endraw %}."
+                                    data-later-svg-example2
+                                >{{ default_svg_example_2 }}</textarea>
+                            </div>
+                        </div>
+
+                        <div class="later-lab__send-row">
+                            <button type="button" class="btn btn-primary later-lab__send" data-later-send2 title="svg промт 2 + svg Пример 2, без фото">Отправить 2</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="later-op-status is-hidden" data-later-op-status role="status" aria-live="polite">

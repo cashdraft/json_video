@@ -211,10 +211,59 @@
         }
     }
 
+    function normalizeLaterImageUrl(url) {
+        const u = String(url || '').trim();
+        if (!u) return '';
+        try {
+            const parsed = new URL(u);
+            parsed.searchParams.delete('v');
+            return parsed.toString();
+        } catch (_) {
+            return u.replace(/([?&])v=\d+(&|$)/, '$1').replace(/[?&]$/, '');
+        }
+    }
+
+    function laterImageFilename(url) {
+        const clean = normalizeLaterImageUrl(url);
+        if (!clean) return '';
+        try {
+            const name = decodeURIComponent(clean.split('/').pop() || '').replace(/\?.*$/, '');
+            return name || clean;
+        } catch (_) {
+            return clean.split('/').pop() || clean;
+        }
+    }
+
+    function setLaterAttachedImage(wrap, url) {
+        const preview = wrap.querySelector('[data-later-preview]');
+        const meta = wrap.querySelector('[data-later-preview-meta]');
+        const clean = normalizeLaterImageUrl(url);
+        if (!clean) {
+            delete wrap.dataset.laterImageUrl;
+            if (preview) {
+                preview.removeAttribute('src');
+                preview.classList.add('is-hidden');
+            }
+            if (meta) meta.textContent = '';
+            return '';
+        }
+        wrap.dataset.laterImageUrl = clean;
+        if (preview) {
+            const bust = clean + (clean.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+            preview.src = bust;
+            preview.classList.remove('is-hidden');
+        }
+        const fname = laterImageFilename(clean);
+        if (meta) meta.textContent = fname ? ('Файл: ' + fname) : '';
+        return clean;
+    }
+
     function currentImageUrl(wrap) {
+        const fromData = normalizeLaterImageUrl(wrap.dataset.laterImageUrl || '');
+        if (fromData) return fromData;
         const preview = wrap.querySelector('[data-later-preview]');
         const src = (preview && preview.getAttribute('src')) || '';
-        return src.trim();
+        return normalizeLaterImageUrl(src);
     }
 
     function setRawAnswer(wrap, text, opts) {
@@ -489,12 +538,8 @@
     }
 
     function clearLabAttachment(wrap) {
-        const preview = wrap.querySelector('[data-later-preview]');
         const fileInput = wrap.querySelector('[data-later-file]');
-        if (preview) {
-            preview.removeAttribute('src');
-            preview.classList.add('is-hidden');
-        }
+        setLaterAttachedImage(wrap, '');
         if (fileInput) fileInput.value = '';
     }
 
@@ -519,6 +564,16 @@
 
     function getSvgPromptTemplate(wrap) {
         const el = wrap.querySelector('[data-later-svg-prompt]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    function getSvgPrompt2Template(wrap) {
+        const el = wrap.querySelector('[data-later-svg-prompt2]');
+        return el ? (el.value || '').trim() : '';
+    }
+
+    function getSvgExample2Template(wrap) {
+        const el = wrap.querySelector('[data-later-svg-example2]');
         return el ? (el.value || '').trim() : '';
     }
 
@@ -991,6 +1046,8 @@
         return {
             model: (wrap.querySelector('[data-later-model]') || {}).value || '',
             svg_prompt: getSvgPromptTemplate(wrap),
+            svg_prompt_2: getSvgPrompt2Template(wrap),
+            svg_example_2: getSvgExample2Template(wrap),
             scene_description: getSceneDescription(wrap),
             scene_duration_sec: getSceneDuration(wrap),
             image_url: currentImageUrl(wrap),
@@ -1107,6 +1164,110 @@
             '[data-later-editor-prompt-body]',
             true
         );
+    }
+
+    function setSvgPrompt2Collapsed(wrap, collapsed) {
+        setLaterCollapsible(
+            wrap.querySelector('[data-later-svg-prompt2-collapse]'),
+            wrap.querySelector('[data-later-svg-prompt2-collapse-toggle]'),
+            wrap.querySelector('[data-later-svg-prompt2-body]'),
+            collapsed
+        );
+    }
+
+    function bindSvgPrompt2Collapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-svg-prompt2-collapse]',
+            '[data-later-svg-prompt2-collapse-toggle]',
+            '[data-later-svg-prompt2-body]',
+            true
+        );
+    }
+
+    function bindSvgExample2Lock(wrap) {
+        const toggle = wrap.querySelector('[data-later-svg-example2-toggle]');
+        const ta = wrap.querySelector('[data-later-svg-example2]');
+        if (!toggle || !ta) return;
+        function setLocked(locked) {
+            toggle.classList.toggle('rewrite-lock-toggle--locked', locked);
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+            toggle.title = locked ? 'Редактировать' : 'Сохранить';
+            toggle.setAttribute('aria-label', locked ? 'Редактировать svg Пример 2' : 'Закрыть редактирование svg Пример 2');
+        }
+        setLocked(true);
+        toggle.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            const wasLocked = toggle.classList.contains('rewrite-lock-toggle--locked');
+            if (wasLocked) {
+                setSvgExample2Collapsed(wrap, false);
+            }
+            setLocked(!wasLocked);
+            if (!wasLocked) {
+                saveLaterPrefs(wrap)
+                    .then(function () {
+                        appendLog(wrap, 'svg Пример 2 сохранён на сервере');
+                    })
+                    .catch(function (e) {
+                        appendLog(wrap, 'Ошибка сохранения примера 2: ' + String(e.message || e));
+                    });
+            } else {
+                ta.focus();
+            }
+        });
+    }
+
+    function setSvgExample2Collapsed(wrap, collapsed) {
+        setLaterCollapsible(
+            wrap.querySelector('[data-later-svg-example2-collapse]'),
+            wrap.querySelector('[data-later-svg-example2-collapse-toggle]'),
+            wrap.querySelector('[data-later-svg-example2-body]'),
+            collapsed
+        );
+    }
+
+    function bindSvgExample2Collapse(wrap) {
+        bindLaterCollapsible(
+            wrap,
+            '[data-later-svg-example2-collapse]',
+            '[data-later-svg-example2-collapse-toggle]',
+            '[data-later-svg-example2-body]',
+            true
+        );
+    }
+
+    function bindSvgPrompt2Lock(wrap) {
+        const toggle = wrap.querySelector('[data-later-svg-prompt2-toggle]');
+        const ta = wrap.querySelector('[data-later-svg-prompt2]');
+        if (!toggle || !ta) return;
+        function setLocked(locked) {
+            toggle.classList.toggle('rewrite-lock-toggle--locked', locked);
+            ta.readOnly = locked;
+            ta.classList.toggle('rewrite-source-textarea--locked', locked);
+            toggle.title = locked ? 'Редактировать' : 'Сохранить';
+            toggle.setAttribute('aria-label', locked ? 'Редактировать svg промт 2' : 'Закрыть редактирование svg промт 2');
+        }
+        setLocked(true);
+        toggle.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            const wasLocked = toggle.classList.contains('rewrite-lock-toggle--locked');
+            if (wasLocked) {
+                setSvgPrompt2Collapsed(wrap, false);
+            }
+            setLocked(!wasLocked);
+            if (!wasLocked) {
+                saveLaterPrefs(wrap)
+                    .then(function () {
+                        appendLog(wrap, 'svg промт 2 сохранён на сервере');
+                    })
+                    .catch(function (e) {
+                        appendLog(wrap, 'Ошибка сохранения промта 2: ' + String(e.message || e));
+                    });
+            } else {
+                ta.focus();
+            }
+        });
     }
 
     function bindSvgPromptLock(wrap) {
@@ -1250,8 +1411,11 @@
         );
     }
 
-    function restoreFormFields(wrap, data) {
+    function restoreFormFields(wrap, data, opts) {
+        const skipImage = !!(opts && opts.skipImage);
         const svgPromptEl = wrap.querySelector('[data-later-svg-prompt]');
+        const svgPrompt2El = wrap.querySelector('[data-later-svg-prompt2]');
+        const svgExample2El = wrap.querySelector('[data-later-svg-example2]');
         const imgPromptEl = wrap.querySelector('[data-later-editor-prompt]');
         const descEl = wrap.querySelector('[data-later-scene-description]');
         const durEl = wrap.querySelector('[data-later-scene-duration]');
@@ -1265,6 +1429,12 @@
             } else if (data.user_prompt) {
                 svgPromptEl.value = data.user_prompt;
             }
+        }
+        if (svgPrompt2El && (data.svg_prompt_2 || '').trim()) {
+            svgPrompt2El.value = data.svg_prompt_2;
+        }
+        if (svgExample2El && (data.svg_example_2 || '').trim()) {
+            svgExample2El.value = data.svg_example_2;
         }
         if (imgPromptEl && ((data.editor_prompt || data.img_1_prompt) || '').trim()) {
             imgPromptEl.value = data.editor_prompt || data.img_1_prompt;
@@ -1283,14 +1453,25 @@
             modelEl.value = data.model;
             syncLaterPanelEnabled(wrap);
         }
-        if (preview && data.image_url) {
-            preview.src = data.image_url;
-            preview.classList.remove('is-hidden');
+        if (!skipImage && preview && data.image_url) {
+            setLaterAttachedImage(wrap, data.image_url);
         }
         if (toggle && svgPromptEl) {
             svgPromptEl.readOnly = true;
             svgPromptEl.classList.add('rewrite-source-textarea--locked');
             toggle.classList.add('rewrite-lock-toggle--locked');
+        }
+        const svg2Toggle = wrap.querySelector('[data-later-svg-prompt2-toggle]');
+        if (svg2Toggle && svgPrompt2El) {
+            svgPrompt2El.readOnly = true;
+            svgPrompt2El.classList.add('rewrite-source-textarea--locked');
+            svg2Toggle.classList.add('rewrite-lock-toggle--locked');
+        }
+        const example2Toggle = wrap.querySelector('[data-later-svg-example2-toggle]');
+        if (example2Toggle && svgExample2El) {
+            svgExample2El.readOnly = true;
+            svgExample2El.classList.add('rewrite-source-textarea--locked');
+            example2Toggle.classList.add('rewrite-lock-toggle--locked');
         }
         const imgToggle = wrap.querySelector('[data-later-editor-prompt-toggle]');
         if (imgToggle && imgPromptEl) {
@@ -1629,7 +1810,7 @@
             const r = await fetch('/scenes-lab/api/state');
             const data = await r.json().catch(function () { return {}; });
             if (!r.ok || !data.ok || !data.has_saved) return;
-            restoreFormFields(wrap, data);
+            restoreFormFields(wrap, data, { skipImage: true });
             await applyParseResult(wrap, data);
         } catch (e) {
             /* no-op */
@@ -1638,15 +1819,24 @@
 
     function bindLaterLab(wrap) {
         const sendBtn = wrap.querySelector('[data-later-send]');
+        const send2Btn = wrap.querySelector('[data-later-send2]');
         const reparseBtn = wrap.querySelector('[data-later-reparse]');
         const fileInput = wrap.querySelector('[data-later-file]');
         const preview = wrap.querySelector('[data-later-preview]');
         const modelEl = wrap.querySelector('[data-later-model]');
         if (!sendBtn || !KEY_ANY) return;
 
+        if (preview && currentImageUrl(wrap)) {
+            setLaterAttachedImage(wrap, currentImageUrl(wrap));
+        }
+
         syncLaterPanelEnabled(wrap);
         bindSvgPromptCollapse(wrap);
         bindSvgPromptLock(wrap);
+        bindSvgPrompt2Collapse(wrap);
+        bindSvgPrompt2Lock(wrap);
+        bindSvgExample2Collapse(wrap);
+        bindSvgExample2Lock(wrap);
         bindRawAnswerCollapse(wrap);
         bindEditorPromptCollapse(wrap);
         bindEditorPromptLock(wrap);
@@ -1883,19 +2073,19 @@
                 if (!r.ok || !data.ok || !data.image_url) {
                     throw new Error((data && data.error) || 'Не удалось загрузить фото');
                 }
-                if (preview) {
-                    preview.src = data.image_url;
-                    preview.classList.remove('is-hidden');
-                }
+                const attached = setLaterAttachedImage(wrap, data.image_url);
                 setLaterStatus(wrap, 'Фото загружено', 'done');
-                saveLaterPrefs(wrap).catch(function () { /* ignore */ });
+                appendLog(wrap, 'Фото прикреплено: ' + laterImageFilename(attached));
+                await saveLaterPrefs(wrap);
             } catch (e) {
                 if (token !== uploadToken) return;
                 setLaterStatus(wrap, String(e.message || e), 'error');
             }
         });
 
-        sendBtn.addEventListener('click', async function () {
+        async function submitLaterGeneration(wrap, opts) {
+            const mode = opts && opts.mode === 'dual_prompt' ? 'dual_prompt' : 'photo';
+            const btn = mode === 'dual_prompt' ? send2Btn : sendBtn;
             const mid = modelEl ? modelEl.value : '';
             if (!modelKeyOk(mid)) {
                 setLaterStatus(
@@ -1907,18 +2097,32 @@
                 );
                 return;
             }
-            const imageUrl = currentImageUrl(wrap);
-            if (!imageUrl) {
-                setLaterStatus(wrap, 'Прикрепите фото перед отправкой', 'error');
-                return;
+            const payload = laterFormPayload(wrap);
+            payload.send_mode = mode;
+            if (mode === 'photo') {
+                const imageUrl = currentImageUrl(wrap);
+                if (!imageUrl) {
+                    setLaterStatus(wrap, 'Прикрепите фото перед отправкой', 'error');
+                    return;
+                }
+                payload.image_url = imageUrl;
+                appendLog(wrap, '→ фото в запросе: ' + laterImageFilename(imageUrl));
+            } else {
+                if (!getSvgPrompt2Template(wrap)) {
+                    setLaterStatus(wrap, 'Заполните svg промт 2', 'error');
+                    return;
+                }
+                if (!getSvgExample2Template(wrap)) {
+                    setLaterStatus(wrap, 'Заполните svg Пример 2', 'error');
+                    return;
+                }
+                delete payload.image_url;
             }
             clearPipelineUi(wrap);
-            appendLog(wrap, 'Отправить: подготовка…');
-            sendBtn.disabled = true;
+            appendLog(wrap, mode === 'dual_prompt' ? 'Отправить 2: подготовка…' : 'Отправить: подготовка…');
+            if (btn) btn.disabled = true;
             setOpStatus(wrap, 'Отправка на сервер…', 'generating');
             try {
-                const payload = laterFormPayload(wrap);
-                payload.image_url = imageUrl;
                 appendLog(wrap, '→ POST /scenes-lab/api/claude');
                 setOpStatus(wrap, 'Запрос к модели… (обычно 1–3 мин)', 'generating');
                 const r = await fetch('/scenes-lab/api/claude', {
@@ -1940,8 +2144,15 @@
                 appendLog(wrap, 'Ошибка: ' + msg);
                 setOpStatus(wrap, msg, 'error');
             } finally {
-                sendBtn.disabled = false;
+                if (btn) btn.disabled = false;
             }
+        }
+
+        sendBtn.addEventListener('click', function () {
+            submitLaterGeneration(wrap, { mode: 'photo' });
+        });
+        send2Btn?.addEventListener('click', function () {
+            submitLaterGeneration(wrap, { mode: 'dual_prompt' });
         });
 
         const propsBtn = wrap.querySelector('[data-later-props-write]');

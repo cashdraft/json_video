@@ -158,11 +158,65 @@ body.scenes-lab-page {
     transform: rotate(-90deg);
 }
 
+.later-lab__modes-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 0.85rem;
+}
+
+.later-lab__mode-col {
+    flex: 1 1 280px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.later-lab__mode-col .later-svg-prompt-block {
+    margin-bottom: 0;
+}
+
+.later-lab__mode-divider {
+    flex: 0 0 1px;
+    align-self: stretch;
+    width: 1px;
+    min-height: 8rem;
+    margin: 0 1.1rem;
+    background: var(--border);
+}
+
+@media (max-width: 820px) {
+    .later-lab__mode-divider {
+        flex: 1 1 100%;
+        width: 100%;
+        height: 1px;
+        min-height: 0;
+        margin: 0.65rem 0;
+    }
+}
+
 .later-lab__attach-row {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.65rem;
+}
+
+.later-lab__attach-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.later-lab__attach-filename {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    word-break: break-all;
+    line-height: 1.35;
+    max-width: 22rem;
 }
 
 .later-lab__send-row {

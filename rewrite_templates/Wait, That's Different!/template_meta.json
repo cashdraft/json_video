@@ -1,0 +1,13 @@
+{
+  "description": "",
+  "tts_defaults": {
+    "voice_id": "od84OdVweqzO3t6kKlWT",
+    "voice_name": "Pete - Engaging Radio Host",
+    "model_id": "eleven_multilingual_v2",
+    "stability_pct": 50,
+    "similarity_pct": 75,
+    "style_pct": 61,
+    "speed_pct": 20,
+    "use_speaker_boost": true
+  }
+}

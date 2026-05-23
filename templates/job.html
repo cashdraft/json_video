@@ -1221,8 +1221,16 @@
         jobErrorModal.setAttribute('aria-hidden', 'true');
     };
 
-    const openJobErrorModal = (message) => {
+    const formatJobFetchError = (message) => {
         const text = String(message == null ? '' : message).trim() || 'Неизвестная ошибка';
+        if (/failed to fetch/i.test(text)) {
+            return 'Сеть: запрос не дошёл до сервера (часто из‑за перегрузки вкладки). Подождите 2–3 с и обновите страницу или повторите действие.';
+        }
+        return text;
+    };
+
+    const openJobErrorModal = (message) => {
+        const text = formatJobFetchError(message);
         if (!jobErrorModal || !jobErrorText) {
             window.alert(text);
             return;
@@ -3793,7 +3801,7 @@
         let done = false;
         while (!done) {
             if (canceledTasks.has(taskId)) break;
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, GENERATION_POLL_INTERVAL_MS));
             if (canceledTasks.has(taskId)) break;
             const statusResp = await fetchWithRetry(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`, {}, 2);
             const statusData = await parseJsonOrThrow(statusResp, 'Status');
@@ -3963,17 +3971,50 @@
         if (btn.dataset.scenesUiBound === '1') return;
         btn.dataset.scenesUiBound = '1';
         btn.addEventListener('click', async function() {
-            await startGenerationForButton(this);
+            const slot = this.dataset.slot || 'start';
+            await generationPoolForSlot(slot).run(() => startGenerationForButton(this));
         });
     };
 
 
 
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
-    const BULK_START_INTERVAL_MS = {
-        image: 650, // <= ~15 new requests / 10s
-        video: 900, // <= ~11 new requests / 10s
-    };
+    /** Одновременно: старт + опрос до готовности. Снижает «Failed to fetch» при пакетной генерации. */
+    const GENERATION_CONCURRENCY = { image: 20, video: 3 };
+    const GENERATION_POLL_INTERVAL_MS = 3000;
+
+    function createGenerationPool(maxSlots) {
+        let active = 0;
+        const waiters = [];
+        return {
+            get activeCount() { return active; },
+            get maxSlots() { return maxSlots; },
+            run(fn) {
+                return new Promise((resolve, reject) => {
+                    const launch = () => {
+                        active += 1;
+                        Promise.resolve()
+                            .then(fn)
+                            .then(resolve, reject)
+                            .finally(() => {
+                                active -= 1;
+                                const next = waiters.shift();
+                                if (next) next();
+                            });
+                    };
+                    if (active < maxSlots) launch();
+                    else waiters.push(launch);
+                });
+            },
+        };
+    }
+
+    const imageGenerationPool = createGenerationPool(GENERATION_CONCURRENCY.image);
+    const videoGenerationPool = createGenerationPool(GENERATION_CONCURRENCY.video);
+
+    function generationPoolForSlot(slot) {
+        return slot === 'video' ? videoGenerationPool : imageGenerationPool;
+    }
 
     const isLikelyRateLimitError = (msg) => {
         const s = String(msg || '').toLowerCase();
@@ -4054,10 +4095,13 @@
             if (bulkRunActive) syncBulkRunUi();
         }, armDelayMs);
         await new Promise((r) => setTimeout(r, 60));
-        appendBulkLog(`══ Пакетный запуск ${noun}: ${count} задач ══`);
+        appendBulkLog(
+            `══ Пакетный запуск ${noun}: ${count} задач `
+            + `(не более ${isVideo ? GENERATION_CONCURRENCY.video : GENERATION_CONCURRENCY.image} одновременно) ══`
+        );
         try {
             const runners = [];
-            let started = 0;
+            const pool = isVideo ? videoGenerationPool : imageGenerationPool;
             for (let i = 0; i < targets.length; i += 1) {
                 if (bulkStopRequested) {
                     appendBulkLog('✖ Пакетный запуск остановлен пользователем.');
@@ -4069,12 +4113,7 @@
                     appendBulkLog(`… пропуск: кнопка disabled (${btn.dataset.slot || '?'}, сцена ${btn.dataset.sceneIndex ?? '?'})`);
                     continue;
                 }
-                if (started > 0) {
-                    const gapMs = BULK_START_INTERVAL_MS[kind] || 700;
-                    await new Promise((r) => setTimeout(r, gapMs));
-                }
-                started += 1;
-                runners.push(startGenerationForButton(btn, { bulk: true }));
+                runners.push(pool.run(() => startGenerationForButton(btn, { bulk: true })));
             }
             if (runners.length) {
                 await Promise.allSettled(runners);
@@ -4385,12 +4424,7 @@
         const VIDEO_JSON_PANEL_COLLAPSE_LS = 'json-video-job-video-json-panel-collapse';
         const panelEl = document.getElementById('job-parse-form');
         function loadVideoJsonPanelCollapsed() {
-            try {
-                const all = JSON.parse(localStorage.getItem(VIDEO_JSON_PANEL_COLLAPSE_LS) || '{}');
-                if (Object.prototype.hasOwnProperty.call(all, jobId)) return !!all[jobId];
-            } catch (e) {}
-            const n = parseInt(panelEl?.dataset.existingScenesCount || '0', 10) || 0;
-            return n > 0;
+            return true;
         }
         function saveVideoJsonPanelCollapsed(collapsed) {
             try {
@@ -4438,7 +4472,7 @@
         };
         window.__syncVideoJsonPanelCompactCounts = window.__syncVideoJsonPanelCompact;
         if (panelEl && panelEl.getAttribute('data-video-json-collapse') === '1') {
-            applyVideoJsonPanelCollapsed(true);
+            applyVideoJsonPanelCollapsed(loadVideoJsonPanelCollapsed());
             const hdr = panelEl.querySelector('.video-json-panel-card-header');
             if (hdr) {
                 hdr.addEventListener('click', function (e) {
@@ -4466,10 +4500,6 @@
         const toggleEl = document.getElementById('video-json-scenes-toggle');
         if (!wrapEl || !bodyEl || !headerEl) return;
         function loadCollapsed() {
-            try {
-                const all = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-                if (Object.prototype.hasOwnProperty.call(all, jobId)) return !!all[jobId];
-            } catch (e) {}
             return true;
         }
         function saveCollapsed(collapsed) {
@@ -7836,11 +7866,20 @@
         let autoApplyScenesTimingsTimer = null;
         window.__scheduleAutoApplyScenesTimings = () => {
             if (autoApplyScenesTimingsTimer) clearTimeout(autoApplyScenesTimingsTimer);
-            autoApplyScenesTimingsTimer = setTimeout(() => {
+            autoApplyScenesTimingsTimer = setTimeout(async () => {
                 autoApplyScenesTimingsTimer = null;
                 if (!canApplyTimings()) return;
+                const hasText = !!(textEl.value || '').trim();
+                if (hasText) {
+                    try {
+                        await refreshScenesTimingsFromServer();
+                    } catch (e) {
+                        console.warn('timings-panel refresh (auto):', e);
+                    }
+                    return;
+                }
                 runApplyScenesTimings({ auto: true });
-            }, 350);
+            }, 800);
         };
         window.__notifyWordsSourceReady = (sourceValue) => {
             refreshHasWordsDataset();
@@ -7894,7 +7933,6 @@
             });
             while (lines.length && lines[lines.length - 1] === '') lines.pop();
             setVideoJsonScenesTimingsText(lines.join('\n'));
-            expandVideoJsonScenesPanel();
         };
 
         const runApplyScenesTimings = async (opts) => {
@@ -7945,22 +7983,38 @@
                 }
             }
             setApplyStatus(`Сопоставляем тайминги (${srcLabel})…`);
+            const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
+            const applyUrl = `${ROOT}/job/${jobId}/scenes/apply-tts-timings`;
+            const maxAttempts = auto ? 3 : 1;
+            let lastErr = null;
             try {
-                const ROOT = (window.__JSON_VIDEO_ROOT__ || '').replace(/\/$/, '');
-                const r = await fetch(`${ROOT}/job/${jobId}/scenes/apply-tts-timings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ source: src }),
-                });
-                const data = await parseJsonOrThrow(r, 'apply-tts-timings');
-                if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                let data = null;
+                for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                    try {
+                        const r = await fetch(applyUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ source: src }),
+                        });
+                        data = await parseJsonOrThrow(r, 'apply-tts-timings');
+                        if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                        lastErr = null;
+                        break;
+                    } catch (e) {
+                        lastErr = e;
+                        const transient = /failed to fetch|networkerror|load failed/i.test(String(e?.message || e));
+                        if (!auto || !transient || attempt >= maxAttempts) throw e;
+                        setApplyStatus(`Повтор ${attempt + 1}/${maxAttempts}: сопоставляем тайминги (${srcLabel})…`);
+                        await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+                    }
+                }
+                if (!data) throw lastErr || new Error('apply-tts-timings failed');
                 const rows = Array.isArray(data.scene_audio_timings) ? data.scene_audio_timings : [];
                 if (rows.length && typeof window.applySceneAudioTimings === 'function') {
                     window.applySceneAudioTimings(rows);
                 } else {
                     setVideoJsonScenesTimingsText(String(data.scenes_stripped_text || ''));
-                    expandVideoJsonScenesPanel();
                 }
                 const usedLabel = (data.source === 'whisper') ? 'Whisper' : 'ElevenLabs';
                 const prefix = auto ? 'Обновлено' : 'Готово';
@@ -7972,9 +8026,12 @@
                     renderScenesTimingsValidation(data.timings_validation);
                 }
             } catch (e) {
-                setApplyStatus('Ошибка: ' + (e?.message || String(e)), true);
-                if (typeof openJobErrorModal === 'function') {
-                    openJobErrorModal(e?.message || String(e));
+                const errMsg = formatJobFetchError(e?.message || String(e));
+                setApplyStatus('Ошибка: ' + errMsg, true);
+                if (!auto && typeof openJobErrorModal === 'function') {
+                    openJobErrorModal(errMsg);
+                } else {
+                    console.warn('apply-tts-timings (auto):', e);
                 }
             } finally {
                 if (scenesRunBtn) {

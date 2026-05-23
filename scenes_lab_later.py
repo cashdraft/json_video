@@ -244,6 +244,8 @@ SCENE_DURATION_TOKEN = "{{SCENE_DURATION_SEC}}"
 LATER_MACRO_PROMPT_FIELD_KEYS: frozenset[str] = frozenset(
     {
         "svg_prompt",
+        "svg_prompt_2",
+        "svg_example_2",
         "editor_prompt",
         "img_1_prompt",
         "anim_prompt",
@@ -446,12 +448,37 @@ def compose_later_user_prompt(
     )
 
 
+def compose_later_dual_user_prompt(
+    *,
+    svg_prompt_2: str = "",
+    svg_example_2: str = "",
+    scene_description: str = "",
+    scene_duration_sec: str = "",
+) -> str:
+    """Два svg-промта справа (режим «Отправить 2», без фото)."""
+    p1 = apply_svg_prompt_variables(
+        svg_prompt_2,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+    ).strip()
+    p2 = apply_svg_prompt_variables(
+        svg_example_2,
+        scene_description=scene_description,
+        scene_duration_sec=scene_duration_sec,
+    ).strip()
+    if p1 and p2:
+        return p1 + "\n\n---\n\n" + p2
+    return p1 or p2
+
+
 def _build_later_user_body(
     *,
     user_prompt: str,
     scene_text: str = "",
     scene_text_ru: str = "",
     svg_prompt: str = "",
+    svg_prompt_2: str = "",
+    svg_example_2: str = "",
     scene_description: str = "",
     scene_duration_sec: str = "",
 ) -> str:
@@ -460,12 +487,20 @@ def _build_later_user_body(
         parts.append(f"Текст сцены (EN):\n{scene_text.strip()}")
     if (scene_text_ru or "").strip():
         parts.append(f"Текст сцены (RU):\n{scene_text_ru.strip()}")
-    up = compose_later_user_prompt(
-        svg_prompt=svg_prompt,
-        scene_description=scene_description,
-        scene_duration_sec=scene_duration_sec,
-        user_prompt=user_prompt,
-    ).strip()
+    if (svg_example_2 or "").strip():
+        up = compose_later_dual_user_prompt(
+            svg_prompt_2=svg_prompt_2,
+            svg_example_2=svg_example_2,
+            scene_description=scene_description,
+            scene_duration_sec=scene_duration_sec,
+        ).strip()
+    else:
+        up = compose_later_user_prompt(
+            svg_prompt=svg_prompt,
+            scene_description=scene_description,
+            scene_duration_sec=scene_duration_sec,
+            user_prompt=user_prompt,
+        ).strip()
     if up:
         parts.append(f"Запрос пользователя:\n{up}")
     else:
@@ -484,19 +519,24 @@ def run_later_model_request(
     scene_text_ru: str = "",
     system_prompt: str = "",
     svg_prompt: str = "",
+    svg_prompt_2: str = "",
+    svg_example_2: str = "",
     scene_description: str = "",
     scene_duration_sec: str = "",
+    require_image: bool = True,
 ) -> tuple[str | None, str | None]:
     """Синхронный запрос к выбранной модели. Возвращает (answer_text, error)."""
     mid = (model or "").strip()
     img = (image_url or "").strip()
-    if not img:
+    if require_image and not img:
         return None, "Прикрепите фото (или используйте кадр Start)."
     user_body = _build_later_user_body(
         user_prompt=user_prompt,
         scene_text=scene_text,
         scene_text_ru=scene_text_ru,
         svg_prompt=svg_prompt,
+        svg_prompt_2=svg_prompt_2,
+        svg_example_2=svg_example_2,
         scene_description=scene_description,
         scene_duration_sec=scene_duration_sec,
     )
