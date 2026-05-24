@@ -488,7 +488,7 @@ def compute_block_scene_stats(scenes: list[dict[str, Any]]) -> dict[str, Any]:
     for scene in scenes:
         if not isinstance(scene, dict):
             continue
-        text = str(scene.get("text") or "")
+        text = str(scene.get("text") or scene.get("hero_text") or "")
         if text.strip():
             char_lens.append(len(text))
         vkey = str(scene.get("visual_source") or "").strip() or "—"
@@ -517,7 +517,7 @@ def match_scenes_in_source(source: str, scenes: list[dict[str, Any]]) -> list[di
     for i, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict):
             continue
-        raw = str(scene.get("text") or "")
+        raw = str(scene.get("text") or scene.get("hero_text") or "")
         needle = raw.strip()
         sid = str(scene.get("scene_id") or f"scene_{i}")
         if not needle:

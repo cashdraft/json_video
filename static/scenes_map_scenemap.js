@@ -192,7 +192,7 @@
         }
     }
 
-    function showStageError(text) {
+    function showStageError(text, rawResponse) {
         if (statusTimer) {
             clearInterval(statusTimer);
             statusTimer = null;
@@ -220,11 +220,26 @@
             els.resultWrap.setAttribute('data-status', 'error');
         }
         if (els.resultTa) {
-            els.resultTa.value = 'Ошибка: ' + text;
+            const err = String(text || '').trim();
+            const raw = String(rawResponse || '').trim();
+            if (raw) {
+                els.resultTa.value = raw + '\n\n--- Ошибка ---\n' + err;
+            } else {
+                els.resultTa.value = 'Ошибка: ' + err;
+            }
             els.resultTa.classList.remove('rewrite-stage-result--busy');
             els.resultTa.classList.add('rewrite-stage-result--error');
         }
         updateResultCounts();
+    }
+
+    function resolveStageErrorRaw(data) {
+        if (!data || typeof data !== 'object') return '';
+        if (data.raw && String(data.raw).trim()) return String(data.raw);
+        if (Array.isArray(data.scenes) && data.scenes.length) {
+            return data.scenes.map(function (s) { return JSON.stringify(s); }).join('\n');
+        }
+        return '';
     }
 
     function bindLockToggle(toggle, wrap, ta, onSave, opts) {
@@ -607,7 +622,12 @@
                     if (!r.ok || !data.ok) {
                         doneMap[b.block_index] = { status: 'err' };
                         renderProgress(blocks, doneMap, progressSummary);
-                        throw new Error((data && data.error) || ('Ошибка блока ' + (b.block_id || i)));
+                        showStageError(
+                            (data && data.error) || ('Ошибка блока ' + (b.block_id || i)),
+                            resolveStageErrorRaw(data)
+                        );
+                        hadError = true;
+                        return;
                     }
                     doneMap[b.block_index] = {
                         status: 'ok',

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scenes Stock — Finder Agent</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_style_mtime }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='scenes_map.css') }}?v={{ scenes_stock_asset_mtime }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='scenes_stock.css') }}?v={{ scenes_stock_asset_mtime }}">
+</head>
+<body class="scenes-map-page scenes-stock-page" data-api-key="{{ '1' if api_key_set else '0' }}" data-pexels-key-set="{{ '1' if pexels_key_set else '0' }}">
+    <header class="scenes-map-page__head">
+        <h1>Scenes Stock</h1>
+        <p>Тестовый проект подбора stock-медиа: агент <strong>Finder</strong> (оформление как Scenes Map).</p>
+    </header>
+
+    <section class="scenes-map-main scenes-stock-main" aria-label="Scenes Stock agents">
+        <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index rewrite-stage-card--prompt-collapsed rewrite-stage-card--stage-user-prompt-collapsed scenes-map-agent scenes-stock-agent" data-scenes-stock-agent="finder">
+            <div class="scene-header">
+                <div class="rewrite-stage-header-row">
+                    <div class="rewrite-stage-header-top">
+                        <div class="rewrite-stage-title-row">
+                            <div class="scene-id rewrite-stage-title-text">Finder Agent</div>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-subtitle">Агент 1 — поиск stock-медиа по тексту сцены и выбранному источнику.</div>
+                </div>
+            </div>
+
+            <div class="rewrite-scene-writer-settings-row scenes-map-settings-row scenes-stock-settings-row">
+                <div class="rewrite-mode-dropdown-field scenes-map-model-field" data-sst-model-field>
+                    {% set cur_model = (prefs.model or '')|trim %}
+                    {% if not cur_model %}{% set cur_model = 'gpt-5.4' %}{% endif %}
+                    {% set ns_sst_model = namespace(label='—') %}
+                    {% for m in models %}{% if cur_model == m.id %}{% set ns_sst_model.label = m.label %}{% endif %}{% endfor %}
+                    <h3 class="rewrite-source-subtitle">Model</h3>
+                    <p class="rewrite-source-subhint">ChatGPT или Claude для Finder Agent.</p>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-rewrite-mode-field="1">
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Model">
+                            <span class="rewrite-anim-dropdown__btn-label" data-rewrite-mode-label>{{ ns_sst_model.label }}</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel" hidden role="listbox">
+                            {% for m in models %}
+                            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-mode-dropdown-option">
+                                <input type="radio" name="sst-model-radio" class="rewrite-anim-radio rewrite-mode-dropdown-radio visually-hidden-input" value="{{ m.id }}" {% if cur_model == m.id %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <select id="sst-model" class="rewrite-global-model-select-hidden rewrite-mode-dropdown-select-hidden" data-sst-model {% if not api_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                        {% for m in models %}
+                        <option value="{{ m.id }}"{% if cur_model == m.id %} selected{% endif %}>{{ m.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="rewrite-mode-dropdown-field scenes-stock-setting--source scenes-stock-setting--pexels-only">
+                    <h3 class="rewrite-source-subtitle">Источник</h3>
+                    <p class="rewrite-source-subhint">Макрос <code>{{ '{{SOURCE}}' }}</code> — Pexels (stock video и photo, API).</p>
+                    <span class="slot-badge badge-yes scenes-stock-source-fixed">Pexels</span>
+                    <select id="sst-source" class="rewrite-mode-dropdown-select-hidden visually-hidden-input" aria-hidden="true" tabindex="-1">
+                        <option value="pexels" selected>Pexels</option>
+                    </select>
+                    <div class="scenes-stock-pexels-key">
+                        <span class="slot-badge badge-{{ 'yes' if pexels_key_set else 'no' }} scenes-stock-pexels-key-badge" data-sst-pexels-key-badge>Pexels API: {{ 'YES' if pexels_key_set else 'NO' }}</span>
+                        <div class="scenes-stock-pexels-key-row">
+                            <input type="text" class="scenes-stock-pexels-key-input" data-sst-pexels-key-input value="{{ prefs.pexels_api_key or '' }}" placeholder="Pexels API key" autocomplete="off" spellcheck="false" aria-label="Pexels API key">
+                            <button type="button" class="scenes-stock-pexels-key-save" data-sst-pexels-key-save title="Сохранить ключ">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rewrite-stage-stack scenes-map-stack">
+                <div class="rewrite-stage-row rewrite-stage-row--controls scenes-map-prompts-row">
+                    <div class="rewrite-stage-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.system_prompt else 'no' }} rewrite-stage-prompt-badge" data-sst-system-badge>System Prompt: {{ 'YES' if prefs.system_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sst-system-toggle title="Редактировать" aria-label="Редактировать System Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline" data-sst-system-wrap hidden>
+                            <textarea class="rewrite-stage-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-sst-system-prompt placeholder="System Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.system_prompt }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell scenes-map-user-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.user_prompt else 'no' }} rewrite-stage-user-prompt-badge" data-sst-user-badge>User Prompt: {{ 'YES' if prefs.user_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sst-user-toggle title="Редактировать" aria-label="Редактировать User Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt" data-sst-user-wrap hidden>
+                            <textarea class="rewrite-stage-user-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-sst-user-prompt placeholder="User Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.user_prompt }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row scenes-stock-scene-row">
+                    <div class="rewrite-stage-prompt-cell scenes-stock-scene-cell">
+                        <div class="slot-header rewrite-stage-compact-header">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.scene else 'no' }}" data-sst-scene-badge>Сцена</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sst-scene-toggle title="Редактировать" aria-label="Редактировать Сцена" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                            <textarea class="rewrite-source-textarea rewrite-source-textarea--locked scenes-stock-scene" rows="8" readonly data-sst-scene placeholder="Текст одной сцены для подбора stock…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.scene }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row rewrite-stage-row--result">
+                    <div class="slot-header rewrite-stage-result-toolbar">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.result else 'no' }} rewrite-stage-result-badge" data-sst-result-badge>Result</span>
+                        <button type="button" class="rewrite-json-export-btn scenes-map-api-export" data-sst-export title="Скачать тело POST к OpenAI (JSON, читаемый вид, как при запуске)" aria-label="Скачать JSON тела запроса OpenAI" {% if not api_key_set %}disabled{% endif %}>J</button>
+                        <button type="button" class="btn-regenerate rewrite-stage-run scenes-map-run" title="Запустить Finder Agent" data-sst-run {% if not api_key_set %}disabled{% endif %}>↻</button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-sst-result-toggle title="Редактировать" aria-label="Редактировать Result" {% if not api_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-sst-result-copy title="Копировать результат" aria-label="Копировать результат">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-stage-result-counts" data-sst-result-counts aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-sst-result-wrap data-status="{{ 'done' if prefs.result else 'pending' }}">
+                        <div class="slot-status-row rewrite-stage-status-row hidden" data-sst-status-row>
+                            <span class="slot-status slot-status-with-spinner rewrite-stage-status-text" data-sst-status-text></span>
+                            <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn hidden" data-sst-cancel-btn>Cancel</button>
+                        </div>
+                        <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="12" readonly data-sst-result placeholder="Pending" {% if not api_key_set %}disabled{% endif %}>{{ prefs.result }}</textarea>
+                    </div>
+                    <div class="rewrite-scene-writer-check scenes-stock-finder-check" data-sst-finder-check aria-live="polite"></div>
+
+                    <div class="scenes-stock-board-sync-row">
+                        <button type="button" class="btn-regenerate scenes-stock-board-sync-btn" data-sst-board-sync title="Пересобрать блок «Сцены» из текущего Result">↻ Обновить сцены</button>
+                        <span class="scenes-stock-board-sync-hint" data-sst-board-sync-hint aria-live="polite"></span>
+                    </div>
+
+                    <section class="scenes-stock-board-section" aria-label="Stock сцены для поиска">
+                        <div class="scenes-stock-board-head">
+                            <h3 class="rewrite-source-subtitle scenes-stock-board-title">Сцены</h3>
+                            <p class="rewrite-source-subhint scenes-stock-board-subhint">Stock_Video из Result: hero text, visual intent и отдельные query-запросы. ↻ — поиск в Pexels.</p>
+                        </div>
+                        <div class="scenes-stock-board" data-sst-board aria-live="polite"></div>
+                    </section>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    {% if not api_key_set %}
+    <p class="scenes-map-page__hint">Укажите <code>OPENAI_API_KEY</code> и/или <code>KEYAI_API_KEY</code> в <code>.env</code>.</p>
+    {% endif %}
+
+    <script type="application/json" id="sst-board-initial">{{ prefs.board | tojson }}</script>
+    <script src="{{ url_for('static', filename='scenes_stock.js') }}?v={{ scenes_stock_asset_mtime }}"></script>
+</body>
+</html>

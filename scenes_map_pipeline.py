@@ -106,6 +106,29 @@ def scenes_to_jsonl(scenes: list[dict[str, Any]]) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def scene_text_value(scene: dict[str, Any]) -> str:
+    """Текст сцены: canonical `text`, fallback на `hero_text` из ответа модели."""
+    if not isinstance(scene, dict):
+        return ""
+    text = str(scene.get("text") or "").strip()
+    if text:
+        return text
+    return str(scene.get("hero_text") or "").strip()
+
+
+def normalize_scene_row(scene: dict[str, Any]) -> dict[str, Any]:
+    """Привести строку сцены к canonical виду (text заполнен из hero_text при необходимости)."""
+    row = dict(scene)
+    text = scene_text_value(row)
+    if text:
+        row["text"] = text
+    return row
+
+
+def normalize_scene_rows(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [normalize_scene_row(s) for s in scenes if isinstance(s, dict)]
+
+
 def parse_scenemap_jsonl(raw: str) -> tuple[list[dict[str, Any]], list[str]]:
     """Распарсить JSONL: одна строка = одна сцена."""
     text = _strip_markdown_fence(raw)
@@ -170,7 +193,7 @@ def validate_scene_rows(scenes: list[dict[str, Any]]) -> list[str]:
         sid = str(scene.get("scene_id") or "").strip()
         if not sid:
             errors.append(f"Сцена {i}: нет scene_id")
-        if not str(scene.get("text") or "").strip():
+        if not scene_text_value(scene):
             errors.append(f"Сцена {sid or i}: нет text")
     return errors
 
@@ -391,6 +414,7 @@ def process_scenemap_block(
             "raw": answer,
         }
 
+    raw_scenes = normalize_scene_rows(raw_scenes)
     start_idx = len(prior_scenes) + 1
     scenes, id_notes = assign_scene_ids(raw_scenes, start_index=start_idx)
     val_errors = validate_scene_rows(scenes)
@@ -438,6 +462,7 @@ def process_scenemap_block(
             "scenes": scenes,
             "file": filename,
             "notes": all_notes,
+            "raw": answer,
             "state": state,
         }
 
