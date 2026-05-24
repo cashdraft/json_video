@@ -4119,6 +4119,201 @@ def scenes_stock_api_search():
     })
 
 
+def _overlay_text_asset_mtime() -> str:
+    try:
+        static_root = Path(app.static_folder)
+        parts: list[str] = []
+        for name in ("overlay_text.css", "overlay_text.js", "overlay_text_preview.js", "overlay_text_layout.js"):
+            p = static_root / name
+            if p.is_file():
+                parts.append(str(int(p.stat().st_mtime)))
+        return "-".join(parts) if parts else "0"
+    except (OSError, AttributeError, TypeError):
+        return "0"
+
+
+@app.route("/overlay-text")
+def overlay_text_page():
+    """Overlay Text — генерация overlay-текста по фото."""
+    from overlay_text_agent import overlay_api_ready, overlay_models_for_ui
+    from overlay_text_session import prefs_for_page
+
+    prefs = prefs_for_page()
+    return render_template(
+        "overlay_text.html",
+        api_key_set=overlay_api_ready(),
+        models=overlay_models_for_ui(),
+        prefs=prefs,
+        overlay_text_asset_mtime=_overlay_text_asset_mtime(),
+    )
+
+
+@app.route("/overlay-text/api/prefs", methods=["GET", "POST"])
+def overlay_text_api_prefs():
+    from overlay_text_session import load_prefs, save_prefs
+
+    if request.method == "GET":
+        return jsonify({"ok": True, "prefs": load_prefs()})
+    body = request.get_json(silent=True) or {}
+    saved = save_prefs(body if isinstance(body, dict) else {})
+    return jsonify({"ok": True, "prefs": saved})
+
+
+@app.route("/overlay-text/api/upload", methods=["POST"])
+def overlay_text_api_upload():
+    from overlay_text_upload import save_overlay_upload
+
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "Файл не передан."}), 400
+    data = f.read()
+    url, err = save_overlay_upload(data, f.filename, public_base_url_for_kie())
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "image_url": url})
+
+
+@app.route("/overlay-text/media/<path:filename>")
+def overlay_text_media(filename: str):
+    from overlay_text_upload import OVERLAY_UPLOADS_DIR
+
+    safe = Path(secure_filename(Path(filename).name))
+    if not safe.name:
+        return "Not found", 404
+    path = (OVERLAY_UPLOADS_DIR / safe.name).resolve()
+    root = OVERLAY_UPLOADS_DIR.resolve()
+    if not str(path).startswith(str(root)) or not path.is_file():
+        return "Not found", 404
+    return send_from_directory(root, safe.name)
+
+
+@app.route("/overlay-text/api/generate", methods=["POST"])
+def overlay_text_api_generate():
+    from overlay_text_agent import build_overlay_generation_context, run_overlay_agent
+    from overlay_text_session import load_prefs, save_prefs
+    from scenes_map_agent import model_key_ok
+
+    body = request.get_json(silent=True) or {}
+    prefs = load_prefs()
+    if isinstance(body, dict):
+        prefs = save_prefs(body)
+
+    ctx = build_overlay_generation_context(prefs)
+    if not model_key_ok(ctx["model"]):
+        return jsonify({"ok": False, "error": "Нет API-ключа для выбранной модели."}), 400
+
+    answer, err = run_overlay_agent(
+        model=str(ctx.get("model") or ""),
+        system_prompt=str(ctx.get("system_prompt") or ""),
+        user_prompt=str(ctx.get("user_prompt") or ""),
+        text=str(ctx.get("text") or ""),
+        style=str(ctx.get("style") or ""),
+        duration_sec=str(ctx.get("duration_sec") or ""),
+        image_url=str(ctx.get("image_url") or ""),
+    )
+    if err or answer is None:
+        return jsonify({"ok": False, "error": err or "generation_failed", "raw": answer or ""}), 502
+
+    saved = save_prefs({**prefs, "result": answer})
+    return jsonify({"ok": True, "result": answer, "prefs": saved})
+
+
+@app.route("/overlay-text/api/export", methods=["POST"])
+def overlay_text_api_export():
+    from flask import make_response
+
+    from overlay_text_export import OVERLAY_TEXT_EXPORT_ABOUT, export_overlay_wire_bodies, merge_prefs_snapshot
+
+    body = request.get_json(silent=True) or {}
+    if isinstance(body, dict) and body:
+        from overlay_text_session import save_prefs
+
+        prefs = save_prefs(body)
+    else:
+        prefs = merge_prefs_snapshot(body)
+    bodies, hdr, err = export_overlay_wire_bodies(prefs)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+
+    txt = _format_openai_wire_payloads_txt(bodies, header_lines=hdr, about=OVERLAY_TEXT_EXPORT_ABOUT)
+    resp = make_response(txt)
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
+    resp.headers["Content-Disposition"] = 'attachment; filename="overlay_text_request.json"'
+    return resp
+
+
+@app.route("/overlay-text/api/remotion-props", methods=["POST"])
+def overlay_text_api_remotion_props():
+    from overlay_text_remotion import write_remotion_props
+    from overlay_text_session import load_prefs, save_prefs
+
+    body = request.get_json(silent=True) or {}
+    prefs = load_prefs()
+    if isinstance(body, dict) and body:
+        prefs = save_prefs(body)
+    path, err = write_remotion_props(prefs)
+    if err or path is None:
+        return jsonify({"ok": False, "error": err or "props_failed"}), 400
+    try:
+        props = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        props = None
+    return jsonify({
+        "ok": True,
+        "props": props,
+        "props_url": url_for("overlay_text_remotion_file", filename="props.json"),
+        "studio_url": url_for("overlay_text_remotion_studio"),
+    })
+
+
+@app.route("/overlay-text/api/remotion-props/preview", methods=["POST"])
+def overlay_text_api_remotion_props_preview():
+    """Собрать props.json для Remotion без записи на диск (для блока на странице)."""
+    from overlay_text_remotion import build_remotion_props_from_prefs
+    from overlay_text_session import load_prefs
+
+    body = request.get_json(silent=True) or {}
+    prefs = load_prefs()
+    if isinstance(body, dict):
+        for key in ("result", "image_url", "image_preview_url", "duration_sec"):
+            if key in body:
+                prefs[key] = body[key]
+    props, err = build_remotion_props_from_prefs(prefs)
+    if err or props is None:
+        return jsonify({"ok": False, "error": err or "props_failed"}), 400
+    return jsonify({"ok": True, "props": props})
+
+
+@app.route("/overlay-text/remotion/file/<path:filename>", methods=["GET", "HEAD", "OPTIONS"])
+def overlay_text_remotion_file(filename: str):
+    from overlay_text_remotion import OVERLAY_TEXT_REMOTION_DIR
+
+    if request.method == "OPTIONS":
+        return _montage_file_cors(make_response("", 204))
+    safe = Path(secure_filename(Path(filename).name))
+    if not safe.name:
+        return "Not found", 404
+    path = (OVERLAY_TEXT_REMOTION_DIR / safe.name).resolve()
+    root = OVERLAY_TEXT_REMOTION_DIR.resolve()
+    if not str(path).startswith(str(root)) or not path.is_file():
+        return "Not found", 404
+    if safe.suffix.lower() == ".json":
+        resp = send_from_directory(root, safe.name, mimetype="application/json")
+    elif safe.suffix.lower() == ".mp4":
+        resp = send_from_directory(root, safe.name, mimetype="video/mp4")
+    else:
+        resp = send_from_directory(root, safe.name)
+    return _montage_file_cors(resp)
+
+
+@app.route("/overlay-text/remotion/studio")
+def overlay_text_remotion_studio():
+    """Редирект в Remotion Studio (OverlayCaption)."""
+    host = request.host.split(":")[0]
+    port = os.environ.get("REMOTION_STUDIO_PORT", "3000")
+    return redirect(f"http://{host}:{port}/OverlayCaption?overlay=1", code=302)
+
+
 @app.route("/scenes-lab/media/<path:filename>")
 def scenes_lab_media(filename: str):
     """Раздача загруженных для Later… фото (доступ Kie.ai по PUBLIC_BASE_URL)."""

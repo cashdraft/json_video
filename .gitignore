@@ -64,6 +64,11 @@ data/scenes_map/
 data/scenes_stock/media/
 data/scenes_stock/prefs.json
 
+# Overlay Text runtime
+data/overlay_text/prefs.json
+data/overlay_text/uploads/
+data/overlay_text/remotion/
+
 # ReWrite runtime media (локальные артефакты)
 data/rewrite_media/
 
@@ -92,6 +97,7 @@ remotion/.cache/
 remotion/.remotion/
 remotion/scene_renders/
 remotion/public/jobs/
+remotion/public/overlay-text/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

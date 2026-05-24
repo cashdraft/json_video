@@ -8,6 +8,11 @@ import {
   laterInfographicPropsSchema,
 } from "./LaterInfographic/LaterInfographic";
 import { defaultLaterInfographicProps } from "./LaterInfographic/defaultProps";
+import {
+  OverlayCaption,
+  overlayCaptionPropsSchema,
+} from "./OverlayCaption/OverlayCaption";
+import { defaultOverlayCaptionProps } from "./OverlayCaption/defaultProps";
 
 declare global {
   interface Window {
@@ -47,6 +52,43 @@ function laterInfographicPropsFlaskUrl(): string | null {
     return `${protocol}//${hostname}:5000/scenes-lab/remotion/file/props.json`;
   }
   return null;
+}
+
+function overlayCaptionPropsFlaskUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const custom = (window.__JSON_VIDEO_API_ORIGIN__ || "").trim().replace(/\/+$/, "");
+  if (custom) {
+    return `${custom}/overlay-text/remotion/file/props.json`;
+  }
+  const { protocol, hostname, port } = window.location;
+  if (port === "3000") {
+    return `${protocol}//${hostname}:5000/overlay-text/remotion/file/props.json`;
+  }
+  return null;
+}
+
+async function fetchOverlayCaptionPropsJson(): Promise<unknown | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25_000);
+  const tryFetch = async (url: string): Promise<unknown | null> => {
+    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    if (!res.ok) return null;
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("application/json")) return null;
+    return (await res.json()) as unknown;
+  };
+  try {
+    const flaskUrl = overlayCaptionPropsFlaskUrl();
+    if (flaskUrl) {
+      const fromFlask = await tryFetch(flaskUrl);
+      if (fromFlask) return fromFlask;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchLaterInfographicPropsJson(): Promise<unknown | null> {
@@ -230,6 +272,72 @@ export const RemotionRoot: React.FC = () => {
             };
           } catch (e) {
             console.warn("LaterInfographic calculateMetadata failed", e);
+            const merged = { ...defaultProps, ...props };
+            const fps = Math.max(1, merged.fps || 30);
+            return {
+              durationInFrames: Math.max(1, merged.duration_frames ?? 150),
+              fps,
+              width: merged.width || 1920,
+              height: merged.height || 1080,
+              props: merged,
+            };
+          }
+        }}
+      />
+
+      <Composition
+        id="OverlayCaption"
+        component={OverlayCaption}
+        durationInFrames={defaultOverlayCaptionProps.duration_frames ?? 150}
+        fps={defaultOverlayCaptionProps.fps}
+        width={defaultOverlayCaptionProps.width}
+        height={defaultOverlayCaptionProps.height}
+        schema={overlayCaptionPropsSchema}
+        defaultProps={defaultOverlayCaptionProps}
+        calculateMetadata={async ({ props, defaultProps, isRendering }) => {
+          try {
+            const merged = { ...defaultProps, ...props };
+            let resolved = merged;
+
+            if (!isRendering && typeof window !== "undefined") {
+              const params = new URLSearchParams(window.location.search);
+              if (
+                params.get("overlay") === "1" ||
+                params.get("composition") === "OverlayCaption"
+              ) {
+                try {
+                  const json = await fetchOverlayCaptionPropsJson();
+                  if (json) {
+                    const parsed = overlayCaptionPropsSchema.safeParse(json);
+                    if (parsed.success) {
+                      resolved = parsed.data;
+                    } else {
+                      console.warn(
+                        "OverlayCaption props.json validation failed",
+                        parsed.error.flatten(),
+                      );
+                    }
+                  }
+                } catch (err) {
+                  console.warn("OverlayCaption props load error", err);
+                }
+              }
+            }
+
+            const fps = Math.max(1, resolved.fps || 30);
+            const durationSec = Math.max(0.5, resolved.duration_sec || 5);
+            const frames =
+              resolved.duration_frames ??
+              Math.max(1, Math.round(durationSec * fps));
+            return {
+              durationInFrames: Math.max(1, frames),
+              fps,
+              width: resolved.width || 1920,
+              height: resolved.height || 1080,
+              props: resolved,
+            };
+          } catch (e) {
+            console.warn("OverlayCaption calculateMetadata failed", e);
             const merged = { ...defaultProps, ...props };
             const fps = Math.max(1, merged.fps || 30);
             return {

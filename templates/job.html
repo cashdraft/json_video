@@ -2575,7 +2575,7 @@
     const jobId = '{{ job_id }}';
     const canceledTasks = new Set();
 
-    const fetchWithRetry = async (url, init, attempts = 3) => {
+    const fetchWithRetry = async (url, init, attempts = 5) => {
         let lastErr = null;
         for (let i = 0; i < attempts; i += 1) {
             try {
@@ -2583,13 +2583,18 @@
             } catch (e) {
                 lastErr = e;
                 if (i < attempts - 1) {
-                    await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+                    const delayMs = 500 * (i + 1) + Math.floor(Math.random() * 250);
+                    await new Promise((r) => setTimeout(r, delayMs));
                     continue;
                 }
             }
         }
         throw lastErr || new Error('fetch failed');
     };
+
+    const isNetworkFetchError = (err) => /failed to fetch|networkerror|load failed|network request failed/i.test(
+        String(err && err.message ? err.message : err)
+    );
 
     /** Avoid "Unexpected token '<'" when server returns HTML (502 page, crash, proxy). */
     const parseJsonOrThrow = async (resp, label) => {
@@ -3803,7 +3808,7 @@
             if (canceledTasks.has(taskId)) break;
             await new Promise(r => setTimeout(r, GENERATION_POLL_INTERVAL_MS));
             if (canceledTasks.has(taskId)) break;
-            const statusResp = await fetchWithRetry(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`, {}, 2);
+            const statusResp = await fetchWithRetry(`/job/${jobId}/generate/status?task_id=${encodeURIComponent(taskId)}`, {}, 4);
             const statusData = await parseJsonOrThrow(statusResp, 'Status');
             if (!statusResp.ok) {
                 throw new Error(statusData.error || 'Status check failed');
@@ -3887,7 +3892,7 @@
         renderStatus(placeholder, 'Task submitted', 0, true);
         try {
             let taskId = '';
-            const maxAttempts = options.bulk ? 3 : 1;
+            const maxAttempts = options.bulk ? 4 : 3;
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 const genPayload = { scene_index: sceneIndex, slot };
                 const vmEl = document.getElementById('video_model');
@@ -3912,18 +3917,31 @@
                     ).trim();
                     if (endUrl) genPayload.end_image_url = endUrl;
                 }
-                const startResp = await fetchWithRetry(`/job/${jobId}/generate/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(genPayload)
-                });
+                let startResp;
+                try {
+                    startResp = await fetchWithRetry(`/job/${jobId}/generate/start`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(genPayload),
+                    }, 5);
+                } catch (netErr) {
+                    if (attempt >= maxAttempts || !isNetworkFetchError(netErr)) {
+                        throw netErr;
+                    }
+                    const backoffMs = attempt * 1200 + Math.floor(Math.random() * 400);
+                    if (options.bulk) {
+                        appendBulkLog(`… ${sceneId} · ${slot}: сеть, retry ${attempt}/${maxAttempts} через ${backoffMs}ms`);
+                    }
+                    await new Promise((r) => setTimeout(r, backoffMs));
+                    continue;
+                }
                 const startData = await parseJsonOrThrow(startResp, 'Start');
                 if (startResp.ok && startData.task_id) {
                     taskId = startData.task_id;
                     break;
                 }
                 const errMsg = startData.error || 'Failed to submit task';
-                if (!options.bulk || attempt >= maxAttempts || !isLikelyRateLimitError(errMsg)) {
+                if (attempt >= maxAttempts || (!options.bulk && !isLikelyRateLimitError(errMsg))) {
                     throw new Error(errMsg);
                 }
                 const backoffMs = attempt * 1800 + Math.floor(Math.random() * 350);
@@ -3964,6 +3982,8 @@
             showPlaceholderError(placeholder, errMsg);
             syncSceneCardGenerateUi(sceneCard);
             if (options.bulk) appendBulkLog(`✖ ${sceneId} · ${slot}: ${errMsg}`);
+        } finally {
+            syncSceneCardGenerateUi(sceneCard);
         }
     };
 
@@ -3979,9 +3999,9 @@
 
 
     const IMAGE_ACTIVE_PLACEHOLDER_STATUSES = new Set(['submitted', 'waiting', 'queuing', 'generating']);
-    /** Одновременно: старт + опрос до готовности. Снижает «Failed to fetch» при пакетной генерации. */
-    const GENERATION_CONCURRENCY = { image: 20, video: 3 };
-    const GENERATION_POLL_INTERVAL_MS = 3000;
+    /** Одновременно: старт + опрос до готовности. Низкий лимит — меньше «Failed to fetch» при 100+ сценах. */
+    const GENERATION_CONCURRENCY = { image: 5, video: 2 };
+    const GENERATION_POLL_INTERVAL_MS = 4000;
 
     function createGenerationPool(maxSlots) {
         let active = 0;
@@ -4113,7 +4133,13 @@
                     appendBulkLog(`… пропуск: кнопка disabled (${btn.dataset.slot || '?'}, сцена ${btn.dataset.sceneIndex ?? '?'})`);
                     continue;
                 }
-                runners.push(pool.run(() => startGenerationForButton(btn, { bulk: true })));
+                const queueIdx = runners.length;
+                runners.push(pool.run(async () => {
+                    if (queueIdx > 0) {
+                        await new Promise((r) => setTimeout(r, Math.min(queueIdx, 12) * 150));
+                    }
+                    return startGenerationForButton(btn, { bulk: true });
+                }));
             }
             if (runners.length) {
                 await Promise.allSettled(runners);

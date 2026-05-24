@@ -495,6 +495,13 @@
         video.play().catch(function () { /* ignore */ });
     }
 
+    function pexelsItemPlaybackUrl(it) {
+        const local = String(it && it.local_url || '').trim();
+        const remote = String(it && it.media_url || '').trim();
+        if (local.indexOf('/scenes-stock/media/') === 0) return local;
+        return remote || local;
+    }
+
     function renderSearchResults(search) {
         const s = search || {};
         const status = String(s.status || 'idle');
@@ -511,15 +518,15 @@
         let html = '<div class="pexels-slots-grid">';
         items.forEach(function (it, idx) {
             const thumb = String(it.thumbnail_url || '').trim();
-            const local = String(it.local_url || it.media_url || '').trim();
+            const playUrl = pexelsItemPlaybackUrl(it);
             const kw = String(it.found_by_query || it.found_by_keyword || '').trim();
             const w = Number(it.width || 0);
             const h = Number(it.height || 0);
             const isVideo = String(it.type || '') === 'video';
             html += '<div class="scene-slot pexels-slot-item" data-pexels-index="' + String(idx) + '">';
             html += '<div class="slot-placeholder" data-status="done">';
-            if (isVideo && local) {
-                html += '<button type="button" class="pexels-slot-preview" data-sst-video-play data-video-src="' + escapeHtml(local) + '" data-video-poster="' + escapeHtml(thumb) + '" title="Воспроизвести" aria-label="Воспроизвести видео">';
+            if (isVideo && playUrl) {
+                html += '<button type="button" class="pexels-slot-preview" data-sst-video-play data-video-src="' + escapeHtml(playUrl) + '" data-video-poster="' + escapeHtml(thumb) + '" title="Воспроизвести" aria-label="Воспроизвести видео">';
                 if (thumb) {
                     html += '<img src="' + escapeHtml(thumb) + '" alt="" class="slot-image pexels-slot-thumb" loading="lazy" decoding="async">';
                 } else {
@@ -527,8 +534,8 @@
                 }
                 html += '<span class="pexels-slot-play" aria-hidden="true">▶</span>';
                 html += '</button>';
-            } else if (local) {
-                html += '<img src="' + escapeHtml(local) + '" alt="" class="slot-image" loading="lazy" decoding="async">';
+            } else if (playUrl) {
+                html += '<img src="' + escapeHtml(playUrl) + '" alt="" class="slot-image" loading="lazy" decoding="async">';
             }
             html += '</div>';
             html += '<div class="pexels-item-meta">';

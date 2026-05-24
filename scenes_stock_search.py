@@ -287,26 +287,56 @@ def _fetch_url_bytes(url: str, *, cap: int = 80_000_000) -> bytes | None:
         return None
 
 
-def persist_search_items(*, scene_id: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def prepare_search_items(*, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Подготовить результаты поиска для board — без скачивания на диск."""
+    return [dict(it or {}) for it in items]
+
+
+def _write_search_item_to_local(*, scene_id: str, row: dict[str, Any], index: int, nonce: int | None = None) -> dict[str, Any]:
+    """Скачать один ролик в data/scenes_stock/media/ и проставить local_url."""
     SCENES_STOCK_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     safe_sid = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(scene_id or "scene").strip()) or "scene"
+    ts = int(nonce if nonce is not None else time.time() * 1000)
+    out = dict(row or {})
+    media_src = str(out.get("media_url") or "").strip()
+    if not media_src:
+        return out
+    bts = _fetch_url_bytes(media_src)
+    if not bts:
+        return out
+    ext = _media_ext_from_url(media_src)
+    fname = f"{safe_sid}_{ts}_{index:02d}{ext}"
+    fp = SCENES_STOCK_MEDIA_DIR / fname
+    try:
+        fp.write_bytes(bts)
+        out["local_url"] = f"/scenes-stock/media/{fname}"
+    except OSError:
+        pass
+    return out
+
+
+def persist_search_items(
+    *,
+    scene_id: str,
+    items: list[dict[str, Any]],
+    download_media: bool = False,
+) -> list[dict[str, Any]]:
+    """Сохранить результаты поиска. По умолчанию только metadata (media_url + poster)."""
+    if not download_media:
+        return prepare_search_items(items=items)
     nonce = int(time.time() * 1000)
     saved: list[dict[str, Any]] = []
     for i, it in enumerate(items, start=1):
         row = dict(it or {})
         media_src = str(row.get("media_url") or "").strip()
         if media_src:
-            bts = _fetch_url_bytes(media_src)
-            if bts:
-                ext = _media_ext_from_url(media_src)
-                fname = f"{safe_sid}_{nonce}_{i:02d}{ext}"
-                fp = SCENES_STOCK_MEDIA_DIR / fname
-                try:
-                    fp.write_bytes(bts)
-                    row["local_url"] = f"/scenes-stock/media/{fname}"
-                except OSError:
-                    pass
+            row = _write_search_item_to_local(scene_id=scene_id, row=row, index=i, nonce=nonce)
         if "local_url" not in row:
             row["local_url"] = media_src or str(row.get("thumbnail_url") or "")
         saved.append(row)
     return saved
+
+
+def persist_single_search_item(*, scene_id: str, item: dict[str, Any], index: int = 1) -> dict[str, Any]:
+    """Скачать один выбранный ролик (для UI выбора — позже)."""
+    return _write_search_item_to_local(scene_id=scene_id, row=dict(item or {}), index=index)
