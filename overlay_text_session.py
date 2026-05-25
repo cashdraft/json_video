@@ -21,8 +21,6 @@ DEFAULTS_DIR = BASE_DIR / "overlay_text" / "defaults"
 
 # Зеркало промптов в git-tracked defaults/ (для push на GitHub)
 PROMPT_DEFAULT_FILES: dict[str, str] = {
-    "system_prompt": "system_prompt.txt",
-    "user_prompt": "user_prompt.txt",
     "rp_system_prompt": "remotion_preview_system_prompt.txt",
     "rp_user_prompt": "remotion_preview_user_prompt.txt",
     "ot2_system_prompt": "overlay_text2_system_prompt.txt",
@@ -71,15 +69,6 @@ def _read_default(name: str) -> str:
 def default_prefs() -> dict[str, Any]:
     return {
         "saved_at": "",
-        "model": "gpt-5.4",
-        "system_prompt": _read_default("system_prompt.txt"),
-        "user_prompt": _read_default("user_prompt.txt"),
-        "text": "",
-        "style": "",
-        "duration_sec": "",
-        "result": "",
-        "image_url": "",
-        "image_preview_url": "",
         "rp_model": "gpt-5.4",
         "rp_system_prompt": _read_default("remotion_preview_system_prompt.txt"),
         "rp_user_prompt": _read_default("remotion_preview_user_prompt.txt"),
@@ -90,9 +79,6 @@ def default_prefs() -> dict[str, Any]:
         "rp_dino_annotated_url": "",
         "rp_sam2_result": "",
         "rp_sam2_preview_url": "",
-        "rp_sam2_auto_result": "",
-        "rp_sam2_auto_preview_url": "",
-        "cm2_result": "",
         "ot2_model": "gpt-5.4",
         "ot2_system_prompt": _read_default("overlay_text2_system_prompt.txt"),
         "ot2_user_prompt": _read_default("overlay_text2_user_prompt.txt"),
@@ -132,8 +118,6 @@ RP_PREF_KEYS = (
     "rp_dino_annotated_url",
     "rp_sam2_result",
     "rp_sam2_preview_url",
-    "rp_sam2_auto_result",
-    "rp_sam2_auto_preview_url",
 )
 
 
@@ -146,7 +130,7 @@ def merge_rp_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, Any
         if key not in body:
             continue
         val = body[key]
-        if key in ("rp_result", "rp_image_url", "rp_image_preview_url", "rp_dino_result", "rp_dino_annotated_url", "rp_sam2_result", "rp_sam2_preview_url", "rp_sam2_auto_result", "rp_sam2_auto_preview_url"):
+        if key in ("rp_result", "rp_image_url", "rp_image_preview_url", "rp_dino_result", "rp_dino_annotated_url", "rp_sam2_result", "rp_sam2_preview_url"):
             out[key] = str(val or "")
         else:
             out[key] = str(val or "").strip()
@@ -161,7 +145,6 @@ OT2_PREF_KEYS = (
     "ot2_style",
     "ot2_duration_sec",
     "ot2_result",
-    "cm2_result",
 )
 
 
@@ -173,7 +156,7 @@ def merge_ot2_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, An
         if key not in body:
             continue
         val = body[key]
-        if key in ("ot2_result", "cm2_result", "ot2_text", "ot2_style", "ot2_duration_sec"):
+        if key in ("ot2_result", "ot2_text", "ot2_style", "ot2_duration_sec"):
             out[key] = str(val or "")
         else:
             out[key] = str(val or "").strip()
@@ -187,7 +170,7 @@ def save_ot2_prefs(data: dict[str, Any]) -> dict[str, Any]:
         if key not in data:
             continue
         val = data[key]
-        if key in ("ot2_result", "cm2_result", "ot2_text", "ot2_style", "ot2_duration_sec"):
+        if key in ("ot2_result", "ot2_text", "ot2_style", "ot2_duration_sec"):
             payload[key] = str(val or "")
         else:
             payload[key] = str(val or "").strip()
@@ -203,7 +186,6 @@ RP2_PREF_KEYS = (
     "rp2_system_prompt",
     "rp2_user_prompt",
     "rp2_result",
-    "cm2_result",
 )
 
 
@@ -215,7 +197,7 @@ def merge_rp2_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, An
         if key not in body:
             continue
         val = body[key]
-        if key in ("rp2_result", "cm2_result"):
+        if key in ("rp2_result",):
             out[key] = str(val or "")
         else:
             out[key] = str(val or "").strip()
@@ -229,7 +211,7 @@ def save_rp2_prefs(data: dict[str, Any]) -> dict[str, Any]:
         if key not in data:
             continue
         val = data[key]
-        if key in ("rp2_result", "cm2_result"):
+        if key in ("rp2_result",):
             payload[key] = str(val or "")
         else:
             payload[key] = str(val or "").strip()
@@ -247,7 +229,7 @@ def save_rp_prefs(data: dict[str, Any]) -> dict[str, Any]:
         if key not in data:
             continue
         val = data[key]
-        if key in ("rp_result", "rp_image_url", "rp_image_preview_url", "rp_dino_result", "rp_dino_annotated_url", "rp_sam2_result", "rp_sam2_preview_url", "rp_sam2_auto_result", "rp_sam2_auto_preview_url"):
+        if key in ("rp_result", "rp_image_url", "rp_image_preview_url", "rp_dino_result", "rp_dino_annotated_url", "rp_sam2_result", "rp_sam2_preview_url"):
             payload[key] = str(val or "")
         else:
             payload[key] = str(val or "").strip()
@@ -261,17 +243,8 @@ def save_rp_prefs(data: dict[str, Any]) -> dict[str, Any]:
 def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
     prev = load_prefs()
     payload = dict(prev)
-    _preserve_if_empty = ("rp_dino_result", "rp_dino_annotated_url", "rp_sam2_result", "rp_sam2_preview_url", "rp_sam2_auto_result", "rp_sam2_auto_preview_url")
+    _preserve_if_empty = ("rp_dino_result", "rp_dino_annotated_url", "rp_sam2_result", "rp_sam2_preview_url")
     for key in (
-        "model",
-        "system_prompt",
-        "user_prompt",
-        "text",
-        "style",
-        "duration_sec",
-        "result",
-        "image_url",
-        "image_preview_url",
         "rp_model",
         "rp_system_prompt",
         "rp_user_prompt",
@@ -282,9 +255,6 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
         "rp_dino_annotated_url",
         "rp_sam2_result",
         "rp_sam2_preview_url",
-        "rp_sam2_auto_result",
-        "rp_sam2_auto_preview_url",
-        "cm2_result",
         "ot2_model",
         "ot2_system_prompt",
         "ot2_user_prompt",
@@ -304,12 +274,6 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
             if str(payload.get(key) or "").strip():
                 continue
         if key in (
-            "text",
-            "style",
-            "duration_sec",
-            "result",
-            "image_url",
-            "image_preview_url",
             "rp_result",
             "rp_image_url",
             "rp_image_preview_url",
@@ -317,9 +281,6 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
             "rp_dino_annotated_url",
             "rp_sam2_result",
             "rp_sam2_preview_url",
-            "rp_sam2_auto_result",
-            "rp_sam2_auto_preview_url",
-            "cm2_result",
             "ot2_text",
             "ot2_style",
             "ot2_duration_sec",
@@ -340,6 +301,11 @@ def prefs_for_page() -> dict[str, Any]:
     return load_prefs()
 
 
+def resolve_cm2_macro_value(prefs: dict[str, Any]) -> str:
+    """Значение для {{CM2_RESULT}} — Result SAM2 (DINO → masks)."""
+    return str(prefs.get("rp_sam2_result") or "").strip()
+
+
 def apply_prompt_macros(text: str, prefs: dict[str, Any]) -> str:
     s = str(text or "")
     text_val = str(prefs.get("text") or "").strip()
@@ -358,8 +324,8 @@ def apply_ot2_prompt_macros(text: str, prefs: dict[str, Any]) -> str:
     ot2_prefs["style"] = str(prefs.get("ot2_style") or "")
     ot2_prefs["duration_sec"] = str(prefs.get("ot2_duration_sec") or "")
     s = apply_prompt_macros(text, ot2_prefs)
-    return s.replace(PH_CM2_RESULT, str(prefs.get("cm2_result") or "").strip())
+    return s.replace(PH_CM2_RESULT, resolve_cm2_macro_value(prefs))
 
 
 def apply_rp2_prompt_macros(text: str, prefs: dict[str, Any]) -> str:
-    return str(text or "").replace(PH_CM2_RESULT, str(prefs.get("cm2_result") or "").strip())
+    return str(text or "").replace(PH_CM2_RESULT, resolve_cm2_macro_value(prefs))

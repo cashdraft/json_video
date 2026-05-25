@@ -52,15 +52,6 @@
         sam2ResultCopy: root.querySelector('[data-rp-sam2-result-copy]'),
         sam2PreviewWrap: root.querySelector('[data-rp-sam2-preview-wrap]'),
         sam2Preview: root.querySelector('[data-rp-sam2-preview]'),
-        sam2AutoRunBtn: root.querySelector('[data-rp-sam2-auto-run]'),
-        sam2AutoResultToggle: root.querySelector('[data-rp-sam2-auto-result-toggle]'),
-        sam2AutoResultWrap: root.querySelector('[data-rp-sam2-auto-result-wrap]'),
-        sam2AutoResultTa: root.querySelector('[data-rp-sam2-auto-result]'),
-        sam2AutoBadge: root.querySelector('[data-rp-sam2-auto-badge]'),
-        sam2AutoResultCounts: root.querySelector('[data-rp-sam2-auto-result-counts]'),
-        sam2AutoResultCopy: root.querySelector('[data-rp-sam2-auto-result-copy]'),
-        sam2AutoPreviewWrap: root.querySelector('[data-rp-sam2-auto-preview-wrap]'),
-        sam2AutoPreview: root.querySelector('[data-rp-sam2-auto-preview]'),
     };
 
     let imageUrl = (els.photoPreview && els.photoPreview.getAttribute('src')) || '';
@@ -108,20 +99,8 @@
         updateTextareaCounts(els.sam2ResultTa, els.sam2ResultCounts);
     }
 
-    function updateSam2AutoResultCounts() {
-        updateTextareaCounts(els.sam2AutoResultTa, els.sam2AutoResultCounts);
-    }
 
-    function syncSam2AutoResultWrapStatus() {
-        if (!els.sam2AutoResultWrap || !els.sam2AutoResultTa) return;
-        els.sam2AutoResultWrap.setAttribute('data-status', (els.sam2AutoResultTa.value || '').trim() ? 'done' : 'pending');
-    }
 
-    function showSam2AutoPreview(url) {
-        if (!els.sam2AutoPreview || !url) return;
-        els.sam2AutoPreview.src = url;
-        if (els.sam2AutoPreviewWrap) els.sam2AutoPreviewWrap.classList.remove('is-hidden');
-    }
 
     function syncSam2ResultWrapStatus() {
         if (!els.sam2ResultWrap || !els.sam2ResultTa) return;
@@ -171,12 +150,6 @@
         syncSam2ResultWrapStatus();
         if (els.sam2PreviewWrap) els.sam2PreviewWrap.classList.add('is-hidden');
         if (els.sam2Preview) els.sam2Preview.removeAttribute('src');
-        if (els.sam2AutoResultTa) els.sam2AutoResultTa.value = '';
-        setBadgeYesNo(els.sam2AutoBadge, '', 'Result SAM auto');
-        updateSam2AutoResultCounts();
-        syncSam2AutoResultWrapStatus();
-        if (els.sam2AutoPreviewWrap) els.sam2AutoPreviewWrap.classList.add('is-hidden');
-        if (els.sam2AutoPreview) els.sam2AutoPreview.removeAttribute('src');
         setSam2Log('—');
         renderDinoKeywordCheck();
         setDinoLog('Новое фото — нажмите ↻ у Result для LLM, затем ↻ у Grounding DINO.');
@@ -259,12 +232,6 @@
             if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_preview_url')) {
                 payload.rp_sam2_preview_url = extra.rp_sam2_preview_url;
             }
-            if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_auto_result')) {
-                payload.rp_sam2_auto_result = extra.rp_sam2_auto_result;
-            }
-            if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_auto_preview_url')) {
-                payload.rp_sam2_auto_preview_url = extra.rp_sam2_auto_preview_url;
-            }
             return Object.assign(payload, extra);
         }
         return payload;
@@ -300,15 +267,6 @@
         }
         if (prefs.rp_sam2_preview_url) {
             showSam2Preview(prefs.rp_sam2_preview_url);
-        }
-        if (els.sam2AutoResultTa && prefs.rp_sam2_auto_result != null) {
-            els.sam2AutoResultTa.value = prefs.rp_sam2_auto_result;
-            setBadgeYesNo(els.sam2AutoBadge, prefs.rp_sam2_auto_result, 'Result SAM auto');
-            updateSam2AutoResultCounts();
-            syncSam2AutoResultWrapStatus();
-        }
-        if (prefs.rp_sam2_auto_preview_url) {
-            showSam2AutoPreview(prefs.rp_sam2_auto_preview_url);
         }
         if (!readPhotoDimsFromDinoResult()) readPhotoDimsFromPreview();
         renderDinoKeywordCheck();
@@ -697,6 +655,7 @@
                 rp_sam2_result: text,
                 rp_sam2_preview_url: previewUrl,
             });
+            window.dispatchEvent(new CustomEvent('overlay-sam2-result-updated', { detail: { text: text } }));
         } catch (e) {
             setSam2Log(['Ошибка: ' + String(e.message || e)]);
             alert(String(e.message || e));
@@ -707,64 +666,6 @@
         }
     }
 
-    async function runSam2Auto() {
-        if (!API_OK || !els.sam2AutoRunBtn) return;
-        const activeImage = getActiveImageUrl();
-        if (!activeImage) {
-            alert('Загрузите исходное фото в Remotion Preview Agent.');
-            return;
-        }
-
-        if (els.sam2AutoRunBtn) els.sam2AutoRunBtn.disabled = true;
-        if (els.sam2RunBtn) els.sam2RunBtn.disabled = true;
-        if (els.sam2AutoResultTa) els.sam2AutoResultTa.classList.add('rewrite-stage-result--busy');
-        if (els.sam2AutoResultWrap) els.sam2AutoResultWrap.setAttribute('data-status', 'generating');
-        if (els.sam2AutoPreviewWrap) els.sam2AutoPreviewWrap.classList.add('is-hidden');
-        setSam2Log([
-            'SAM mask (auto)…',
-            'без DINO — automatic segmentation по всему кадру',
-            'image: ' + activeImage,
-        ]);
-
-        try {
-            const r = await fetch('/overlay-text/api/remotion-preview/sam2-auto', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image_url: activeImage,
-                    rp_image_url: activeImage,
-                    rp_image_preview_url: activeImage,
-                }),
-            });
-            const data = await r.json().catch(function () { return {}; });
-            if (!r.ok || !data.ok) {
-                setSam2Log((data.log || []).concat([data.error || 'HTTP ' + r.status]));
-                alert((data && data.error) || 'SAM auto failed');
-                return;
-            }
-            const text = data.result_text || JSON.stringify(data.result, null, 2);
-            if (els.sam2AutoResultTa) els.sam2AutoResultTa.value = text;
-            setBadgeYesNo(els.sam2AutoBadge, text, 'Result SAM auto');
-            updateSam2AutoResultCounts();
-            syncSam2AutoResultWrapStatus();
-            setSam2Log(data.log || ['Готово.']);
-            const previewUrl = data.preview_url || data.image_preview_url || '';
-            if (previewUrl) showSam2AutoPreview(previewUrl);
-            if (data.prefs) applyPrefsFromServer(data.prefs);
-            else await savePrefs({
-                rp_sam2_auto_result: text,
-                rp_sam2_auto_preview_url: previewUrl,
-            });
-        } catch (e) {
-            setSam2Log(['Ошибка: ' + String(e.message || e)]);
-            alert(String(e.message || e));
-        } finally {
-            if (els.sam2AutoRunBtn) els.sam2AutoRunBtn.disabled = !API_OK;
-            if (els.sam2RunBtn) els.sam2RunBtn.disabled = !API_OK;
-            if (els.sam2AutoResultTa) els.sam2AutoResultTa.classList.remove('rewrite-stage-result--busy');
-            syncSam2AutoResultWrapStatus();
-        }
-    }
 
     function scheduleSave(delayMs) {
         if (!API_OK) return;
@@ -1014,8 +915,6 @@
             rp_dino_annotated_url: '',
             rp_sam2_result: '',
             rp_sam2_preview_url: '',
-            rp_sam2_auto_result: '',
-            rp_sam2_auto_preview_url: '',
         });
         readPhotoDimsFromPreview();
         window.dispatchEvent(new CustomEvent('overlay-rp-photo-updated', { detail: { url: url } }));
@@ -1188,9 +1087,6 @@
         runSam2Segment();
     });
 
-    els.sam2AutoRunBtn?.addEventListener('click', function () {
-        runSam2Auto();
-    });
 
     bindLockToggle(els.sam2ResultToggle, null, els.sam2ResultTa, function () {
         setBadgeYesNo(els.sam2Badge, els.sam2ResultTa.value, 'Result SAM2 (DINO)');
@@ -1201,14 +1097,6 @@
         }).catch(function () { /* ignore */ });
     }, { alwaysVisible: true });
 
-    bindLockToggle(els.sam2AutoResultToggle, null, els.sam2AutoResultTa, function () {
-        setBadgeYesNo(els.sam2AutoBadge, els.sam2AutoResultTa.value, 'Result SAM auto');
-        updateSam2AutoResultCounts();
-        syncSam2AutoResultWrapStatus();
-        savePrefs({
-            rp_sam2_auto_result: els.sam2AutoResultTa ? els.sam2AutoResultTa.value : '',
-        }).catch(function () { /* ignore */ });
-    }, { alwaysVisible: true });
 
     els.sam2ResultCopy?.addEventListener('click', function () {
         if (!els.sam2ResultTa) return;
@@ -1217,12 +1105,6 @@
         navigator.clipboard.writeText(text).catch(function () { /* ignore */ });
     });
 
-    els.sam2AutoResultCopy?.addEventListener('click', function () {
-        if (!els.sam2AutoResultTa) return;
-        const text = els.sam2AutoResultTa.value || '';
-        if (!text.trim()) return;
-        navigator.clipboard.writeText(text).catch(function () { /* ignore */ });
-    });
 
     els.dinoResultCopy?.addEventListener('click', function () {
         if (!els.dinoResultTa) return;
@@ -1245,9 +1127,6 @@
     if (els.sam2ResultTa) setBadgeYesNo(els.sam2Badge, els.sam2ResultTa.value, 'Result SAM2 (DINO)');
     updateSam2ResultCounts();
     syncSam2ResultWrapStatus();
-    if (els.sam2AutoResultTa) setBadgeYesNo(els.sam2AutoBadge, els.sam2AutoResultTa.value, 'Result SAM auto');
-    updateSam2AutoResultCounts();
-    syncSam2AutoResultWrapStatus();
     updateResultCounts();
     renderDinoKeywordCheck();
     clearStageStatus();

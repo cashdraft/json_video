@@ -3,16 +3,10 @@
     border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
 }
 
-.overlay-text-agent--remotion-preview2,
-.overlay-text-agent--pass2 {
-    padding-top: 2rem;
-    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-}
-
-.overlay-text-cm2-block {
+.overlay-text-remotion-card--pass2 {
     margin-top: 1.25rem;
-    padding-top: 1rem;
-    border-top: 1px dashed var(--border, rgba(255, 255, 255, 0.12));
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
 }
 
 .overlay-text-photo-field--readonly .overlay-text-photo-upload {
@@ -149,19 +143,6 @@
     justify-content: center;
     gap: 0.65rem;
     margin: 0.85rem 0 0.5rem;
-}
-
-.overlay-text-sam2-run-btn,
-.overlay-text-sam2-auto-btn {
-    min-width: 10rem;
-    text-transform: none;
-    letter-spacing: 0.01em;
-}
-
-.overlay-text-sam2-auto-result {
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px dashed var(--border, rgba(255, 255, 255, 0.1));
 }
 
 .overlay-text-sam2-run-btn {

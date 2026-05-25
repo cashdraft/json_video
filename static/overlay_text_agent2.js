@@ -5,13 +5,6 @@
     const root = document.querySelector('[data-overlay-text-agent="main2"]');
     if (!root) return;
 
-    const cm2Ta = document.querySelector('[data-cm2-result]');
-    const cm2Badge = document.querySelector('[data-cm2-badge]');
-    const cm2Toggle = document.querySelector('[data-cm2-result-toggle]');
-    const cm2Wrap = document.querySelector('[data-cm2-result-wrap]');
-    const cm2Counts = document.querySelector('[data-cm2-result-counts]');
-    const cm2Copy = document.querySelector('[data-cm2-result-copy]');
-
     const els = {
         model: document.getElementById('ot2-model'),
         systemToggle: root.querySelector('[data-ot2-system-toggle]'),
@@ -75,14 +68,16 @@
         updateTextareaCounts(els.resultTa, els.resultCounts);
     }
 
-    function updateCm2Counts() {
-        updateTextareaCounts(cm2Ta, cm2Counts);
-    }
-
     function getRpImageUrl() {
         const rpImg = document.querySelector('[data-rp-photo-preview]');
         const src = rpImg ? (rpImg.getAttribute('src') || rpImg.src || '') : '';
         return String(src || '').trim();
+    }
+
+    function refreshPreview2() {
+        if (window.OverlayTextPreview2 && typeof window.OverlayTextPreview2.refresh === 'function') {
+            window.OverlayTextPreview2.refresh();
+        }
     }
 
     function syncRpPhotoPreview() {
@@ -97,23 +92,7 @@
             }
         }
         setBadgeYesNo(els.photoBadge, url, 'Photo');
-        document.querySelectorAll('[data-rp2-photo-preview]').forEach(function (img) {
-            if (!img) return;
-            if (url) {
-                img.src = url;
-                img.classList.remove('is-hidden');
-            } else {
-                img.classList.add('is-hidden');
-                img.removeAttribute('src');
-            }
-        });
-        document.querySelectorAll('[data-rp2-photo-badge]').forEach(function (badge) {
-            setBadgeYesNo(badge, url, 'Photo');
-        });
-    }
-
-    function getCm2Result() {
-        return cm2Ta ? String(cm2Ta.value || '').trim() : '';
+        refreshPreview2();
     }
 
     function collectPayload(extra) {
@@ -125,7 +104,6 @@
             ot2_style: els.styleTa ? els.styleTa.value : '',
             ot2_duration_sec: els.durationInput ? els.durationInput.value : '',
             ot2_result: els.resultTa ? els.resultTa.value : '',
-            cm2_result: getCm2Result(),
         }, extra || {});
     }
 
@@ -154,11 +132,6 @@
     function syncResultWrapIdleStatus() {
         if (!els.resultWrap || !els.resultTa) return;
         els.resultWrap.setAttribute('data-status', (els.resultTa.value || '').trim() ? 'done' : 'pending');
-    }
-
-    function syncCm2WrapStatus() {
-        if (!cm2Wrap || !cm2Ta) return;
-        cm2Wrap.setAttribute('data-status', getCm2Result() ? 'done' : 'pending');
     }
 
     function clearStageStatus() {
@@ -350,7 +323,7 @@
         if (!API_OK || generating) return;
         syncRpPhotoPreview();
         if (!getRpImageUrl()) {
-            alert('Загрузите фото в Remotion Preview Agent (не в Overlay Text Agent).');
+            alert('Загрузите фото в Remotion Preview Agent.');
             return;
         }
         try {
@@ -383,6 +356,7 @@
             setBadgeYesNo(els.resultBadge, els.resultTa && els.resultTa.value, 'Result');
             updateResultCounts();
             clearStageStatus();
+            refreshPreview2();
         } catch (e) {
             if (e && e.name === 'AbortError') {
                 clearStageStatus();
@@ -414,20 +388,20 @@
 
     bindLockToggle(els.resultToggle, null, els.resultTa, function () {
         setBadgeYesNo(els.resultBadge, els.resultTa.value, 'Result');
+        refreshPreview2();
     }, { alwaysVisible: true });
 
-    bindLockToggle(cm2Toggle, null, cm2Ta, function () {
-        setBadgeYesNo(cm2Badge, getCm2Result(), 'Result from CM2');
-        syncCm2WrapStatus();
-        updateCm2Counts();
-    }, { alwaysVisible: true });
-
-    [els.textTa, els.styleTa, els.durationInput, cm2Ta].forEach(function (el) {
+    [els.textTa, els.styleTa, els.durationInput].forEach(function (el) {
         if (!el) return;
         el.addEventListener('input', function () { scheduleSave(); });
         el.addEventListener('change', function () { scheduleSave(0); });
         el.addEventListener('blur', function () { scheduleSave(0); });
     });
+
+    if (els.resultTa) {
+        els.resultTa.addEventListener('input', refreshPreview2);
+        els.resultTa.addEventListener('change', refreshPreview2);
+    }
 
     els.runBtn?.addEventListener('click', runAgent);
     els.exportBtn?.addEventListener('click', function () { downloadExport(els.exportBtn); });
@@ -439,10 +413,6 @@
         if (!els.resultTa || !els.resultTa.value.trim()) return;
         navigator.clipboard.writeText(els.resultTa.value).catch(function () { /* ignore */ });
     });
-    cm2Copy?.addEventListener('click', function () {
-        if (!cm2Ta || !cm2Ta.value.trim()) return;
-        navigator.clipboard.writeText(cm2Ta.value).catch(function () { /* ignore */ });
-    });
 
     window.addEventListener('overlay-rp-photo-updated', syncRpPhotoPreview);
 
@@ -452,9 +422,7 @@
     setBadgeYesNo(els.textBadge, els.textTa && els.textTa.value, 'Text');
     setBadgeYesNo(els.styleBadge, els.styleTa && els.styleTa.value, 'Style');
     setBadgeYesNo(els.resultBadge, els.resultTa && els.resultTa.value, 'Result');
-    setBadgeYesNo(cm2Badge, getCm2Result(), 'Result from CM2');
     updateResultCounts();
-    updateCm2Counts();
-    syncCm2WrapStatus();
     clearStageStatus();
+    refreshPreview2();
 })();

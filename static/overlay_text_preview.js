@@ -111,7 +111,8 @@
         return { visible: true, opacity: 1, translateX: 0, translateY: 0, scale: 1 };
     }
 
-    function createPreview(root, getImageUrl, getResultText, getRemotionPayload) {
+    function createPreview(root, getImageUrl, getResultText, getRemotionPayload, options) {
+        options = options || {};
         var bg = root.querySelector('[data-ot-preview-bg]');
         var overlayEl = root.querySelector('[data-ot-preview-overlay]');
         var panelEl = root.querySelector('[data-ot-preview-panel]');
@@ -300,14 +301,14 @@
             var raw = getResultText ? getResultText() : '';
             if (!String(raw || '').trim()) {
                 parsed = null;
-                setStatus('Заполните Result и загрузите фото.', 'err');
+                setStatus(options.emptyMessage || 'Заполните Result и загрузите фото.', 'err');
                 if (overlayEl) overlayEl.hidden = true;
                 syncTimeUi();
                 return false;
             }
             if (!String(img || '').trim()) {
                 parsed = null;
-                setStatus('Загрузите фото.', 'err');
+                setStatus(options.noPhotoMessage || 'Загрузите фото.', 'err');
                 if (overlayEl) overlayEl.hidden = true;
                 syncTimeUi();
                 return false;
@@ -411,12 +412,12 @@
         };
     }
 
-    function bootFromDom() {
-        var remotionRoot = document.querySelector('[data-overlay-text-remotion]');
+    function bootPreview2FromDom() {
+        var remotionRoot = document.querySelector('[data-overlay-text-remotion2]');
         if (!remotionRoot) return null;
-        var resultTa = document.querySelector('[data-ot-result]');
-        var photoPreview = document.querySelector('[data-ot-photo-preview]');
-        var durationInput = document.querySelector('[data-ot-duration]');
+        var resultTa = document.querySelector('[data-ot2-result]');
+        var photoPreview = document.querySelector('[data-rp-photo-preview]');
+        var durationInput = document.querySelector('[data-ot2-duration]');
         return createPreview(
             remotionRoot,
             function () {
@@ -433,35 +434,39 @@
                     image_preview_url: photoPreview ? (photoPreview.getAttribute('src') || photoPreview.src || '') : '',
                     duration_sec: durationInput ? durationInput.value : '',
                 };
+            },
+            {
+                emptyMessage: 'Заполните Result (Agent 2) и фото Remotion Preview.',
+                noPhotoMessage: 'Загрузите фото в Remotion Preview Agent.',
             }
         );
     }
 
-    var defaultCtrl = null;
+    var preview2Ctrl = null;
 
-    function scheduleRefresh() {
+    function scheduleRefresh(ctrl) {
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                if (defaultCtrl && typeof defaultCtrl.refresh === 'function') {
-                    defaultCtrl.refresh();
+                if (ctrl && typeof ctrl.refresh === 'function') {
+                    ctrl.refresh();
                 }
             });
         });
     }
 
     function initPreview() {
-        if (!defaultCtrl) {
-            defaultCtrl = bootFromDom();
+        if (!preview2Ctrl) {
+            preview2Ctrl = bootPreview2FromDom();
         }
-        scheduleRefresh();
+        scheduleRefresh(preview2Ctrl);
     }
 
-    function refreshOverlayTextPreview() {
-        if (!defaultCtrl) {
+    function refreshOverlayTextPreview2() {
+        if (!preview2Ctrl) {
             initPreview();
             return;
         }
-        scheduleRefresh();
+        scheduleRefresh(preview2Ctrl);
     }
 
     if (document.readyState === 'loading') {
@@ -469,15 +474,18 @@
     } else {
         initPreview();
     }
-    window.addEventListener('load', scheduleRefresh);
-    window.addEventListener('resize', scheduleRefresh);
+    window.addEventListener('load', function () { scheduleRefresh(preview2Ctrl); });
+    window.addEventListener('resize', function () { scheduleRefresh(preview2Ctrl); });
 
     global.OverlayTextPreview = {
         createPreview: createPreview,
-        refresh: refreshOverlayTextPreview,
+    };
+
+    global.OverlayTextPreview2 = {
+        refresh: refreshOverlayTextPreview2,
         remount: function () {
-            defaultCtrl = bootFromDom();
-            scheduleRefresh();
+            preview2Ctrl = bootPreview2FromDom();
+            scheduleRefresh(preview2Ctrl);
         },
     };
 })(window);
