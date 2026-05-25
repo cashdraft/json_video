@@ -86,6 +86,71 @@ def run_overlay_agent(
     return post_openai_chat_sync(payload, timeout=300)
 
 
+def resolve_remotion_preview_image_url(prefs: dict[str, Any]) -> str:
+    """Только фото Remotion Preview Agent — не image_url верхнего Overlay Text."""
+    url = str(prefs.get("rp_image_url") or "").strip()
+    if not url:
+        url = str(prefs.get("rp_image_preview_url") or "").strip()
+    return url
+
+
+def build_remotion_preview_context(prefs: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "system_prompt": str(prefs.get("rp_system_prompt") or "").strip(),
+        "user_prompt": str(prefs.get("rp_user_prompt") or "").strip(),
+        "image_url": resolve_remotion_preview_image_url(prefs),
+        "model": normalize_scenes_map_model(str(prefs.get("rp_model") or "")),
+    }
+
+
+def run_remotion_preview_agent(
+    *,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    image_url: str = "",
+) -> tuple[str | None, str | None]:
+    mid = normalize_scenes_map_model(model)
+    if not model_key_ok(mid):
+        if is_claude_model(mid):
+            return None, "Не задан KEYAI_API_KEY в .env (Claude)."
+        return None, "Не задан OPENAI_API_KEY в .env (ChatGPT)."
+
+    img = (image_url or "").strip()
+    if not img:
+        return None, "Прикрепите фото."
+
+    sys_p = (system_prompt or "").strip() or (
+        "Ты — Remotion Preview Agent. По фото верни JSON по user prompt."
+    )
+    user_body = (user_prompt or "").strip()
+    if not user_body:
+        return None, "Заполните User Prompt."
+
+    if is_claude_model(mid):
+        payload = claude_messages_wire_payload(mid, sys_p, user_body, image_url=img)
+        return post_claude_messages_sync(payload, timeout=300)
+
+    payload = openai_vision_wire_payload(mid, sys_p, user_body, img)
+    return post_openai_chat_sync(payload, timeout=300)
+
+
+def build_remotion_preview_wire_payload(prefs: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    ctx = build_remotion_preview_context(prefs)
+    mid = str(ctx.get("model") or "")
+    img = str(ctx.get("image_url") or "").strip()
+    system_prompt = str(ctx.get("system_prompt") or "")
+    user_body = str(ctx.get("user_prompt") or "").strip()
+    if not img:
+        return None, "Прикрепите фото — тело POST с vision не формируется."
+    if not user_body:
+        return None, "Заполните User Prompt."
+
+    if is_claude_model(mid):
+        return claude_messages_wire_payload(mid, system_prompt, user_body, image_url=img), None
+    return openai_vision_wire_payload(mid, system_prompt, user_body, img), None
+
+
 def build_overlay_wire_payload(prefs: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     ctx = build_overlay_generation_context(prefs)
     mid = str(ctx.get("model") or "")

@@ -4,6 +4,14 @@
 venv/
 env/
 
+# Grounding DINO (отдельный venv + артефакты)
+grounding_dino_service/.venv/
+grounding_dino_service/test.jpg
+grounding_dino_service/uploads/*
+!grounding_dino_service/uploads/.gitkeep
+grounding_dino_service/outputs/*
+!grounding_dino_service/outputs/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]

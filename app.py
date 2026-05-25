@@ -4123,7 +4123,13 @@ def _overlay_text_asset_mtime() -> str:
     try:
         static_root = Path(app.static_folder)
         parts: list[str] = []
-        for name in ("overlay_text.css", "overlay_text.js", "overlay_text_preview.js", "overlay_text_layout.js"):
+        for name in (
+            "overlay_text.css",
+            "overlay_text.js",
+            "overlay_text_remotion_preview.js",
+            "overlay_text_preview.js",
+            "overlay_text_layout.js",
+        ):
             p = static_root / name
             if p.is_file():
                 parts.append(str(int(p.stat().st_mtime)))
@@ -4187,13 +4193,65 @@ def overlay_text_media(filename: str):
     return send_from_directory(root, safe.name)
 
 
+def overlay_text_api_remotion_preview_generate_impl(body: dict | None = None):
+    """Remotion Preview Agent — только rp_* промты и rp_image_url (не Overlay Text)."""
+    from overlay_text_agent import build_remotion_preview_context, run_remotion_preview_agent
+    from overlay_text_session import load_prefs, merge_rp_prefs, save_rp_prefs
+    from scenes_map_agent import model_key_ok
+
+    body = body if isinstance(body, dict) else {}
+    prefs = merge_rp_prefs(load_prefs(), body)
+    ctx = build_remotion_preview_context(prefs)
+    if not model_key_ok(ctx["model"]):
+        return jsonify({"ok": False, "error": "Нет API-ключа для выбранной модели."}), 400
+    if not str(ctx.get("image_url") or "").strip():
+        return jsonify({
+            "ok": False,
+            "error": "Загрузите фото в Remotion Preview Agent (не используется фото Overlay Text).",
+        }), 400
+
+    answer, err = run_remotion_preview_agent(
+        model=str(ctx.get("model") or ""),
+        system_prompt=str(ctx.get("system_prompt") or ""),
+        user_prompt=str(ctx.get("user_prompt") or ""),
+        image_url=str(ctx.get("image_url") or ""),
+    )
+    if err or answer is None:
+        return jsonify({"ok": False, "error": err or "generation_failed", "raw": answer or ""}), 502
+
+    saved = save_rp_prefs({**prefs, "rp_result": answer})
+    return jsonify({
+        "ok": True,
+        "agent": "remotion_preview",
+        "rp_result": answer,
+        "result": answer,
+        "prefs": saved,
+    })
+
+
+@app.route("/overlay-text/api/remotion-preview/generate", methods=["POST"])
+def overlay_text_api_remotion_preview_generate():
+    body = request.get_json(silent=True) or {}
+    return overlay_text_api_remotion_preview_generate_impl(body)
+
+
 @app.route("/overlay-text/api/generate", methods=["POST"])
 def overlay_text_api_generate():
-    from overlay_text_agent import build_overlay_generation_context, run_overlay_agent
+    from overlay_text_agent import (
+        build_overlay_generation_context,
+        build_remotion_preview_context,
+        run_overlay_agent,
+        run_remotion_preview_agent,
+    )
     from overlay_text_session import load_prefs, save_prefs
     from scenes_map_agent import model_key_ok
 
     body = request.get_json(silent=True) or {}
+    agent = str(body.get("agent") or "overlay").strip().lower()
+
+    if agent in ("remotion_preview", "remotion-preview", "rp"):
+        return overlay_text_api_remotion_preview_generate_impl(body)
+
     prefs = load_prefs()
     if isinstance(body, dict):
         prefs = save_prefs(body)
@@ -4222,23 +4280,138 @@ def overlay_text_api_generate():
 def overlay_text_api_export():
     from flask import make_response
 
-    from overlay_text_export import OVERLAY_TEXT_EXPORT_ABOUT, export_overlay_wire_bodies, merge_prefs_snapshot
+    from overlay_text_export import (
+        OVERLAY_TEXT_EXPORT_ABOUT,
+        REMOTION_PREVIEW_EXPORT_ABOUT,
+        export_overlay_wire_bodies,
+        export_remotion_preview_wire_bodies,
+        merge_prefs_snapshot,
+    )
 
     body = request.get_json(silent=True) or {}
+    agent = str(body.get("agent") or "overlay").strip().lower()
     if isinstance(body, dict) and body:
         from overlay_text_session import save_prefs
 
         prefs = save_prefs(body)
     else:
         prefs = merge_prefs_snapshot(body)
-    bodies, hdr, err = export_overlay_wire_bodies(prefs)
+
+    if agent in ("remotion_preview", "remotion-preview", "rp"):
+        from overlay_text_session import merge_rp_prefs
+
+        prefs = merge_rp_prefs(prefs, body)
+        bodies, hdr, err = export_remotion_preview_wire_bodies(prefs)
+        about = REMOTION_PREVIEW_EXPORT_ABOUT
+        filename = "overlay_text_remotion_preview_request.json"
+    else:
+        bodies, hdr, err = export_overlay_wire_bodies(prefs)
+        about = OVERLAY_TEXT_EXPORT_ABOUT
+        filename = "overlay_text_request.json"
+
     if err:
         return jsonify({"ok": False, "error": err}), 400
 
-    txt = _format_openai_wire_payloads_txt(bodies, header_lines=hdr, about=OVERLAY_TEXT_EXPORT_ABOUT)
+    txt = _format_openai_wire_payloads_txt(bodies, header_lines=hdr, about=about)
     resp = make_response(txt)
     resp.headers["Content-Type"] = "application/json; charset=utf-8"
-    resp.headers["Content-Disposition"] = 'attachment; filename="overlay_text_request.json"'
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@app.route("/overlay-text/api/remotion-preview/prefs", methods=["GET", "POST"])
+def overlay_text_api_remotion_preview_prefs():
+    from overlay_text_session import load_prefs, merge_rp_prefs, save_rp_prefs
+
+    if request.method == "GET":
+        return jsonify({"ok": True, "prefs": load_prefs()})
+    body = request.get_json(silent=True) or {}
+    merged = merge_rp_prefs(load_prefs(), body if isinstance(body, dict) else {})
+    saved = save_rp_prefs(merged)
+    return jsonify({"ok": True, "prefs": saved})
+
+
+@app.route("/overlay-text/api/remotion-preview/grounding-dino", methods=["POST"])
+def overlay_text_api_remotion_preview_grounding_dino():
+    from overlay_text_grounding_dino import run_grounding_dino_for_remotion_preview
+    from overlay_text_session import load_prefs, merge_rp_prefs, save_rp_prefs
+
+    body = request.get_json(silent=True) or {}
+    prefs = merge_rp_prefs(load_prefs(), body)
+
+    result, log, err = run_grounding_dino_for_remotion_preview(
+        image_url=str(body.get("image_url") or prefs.get("rp_image_url") or ""),
+        dino_prompt=str(body.get("dino_prompt") or ""),
+        rp_result=str(body.get("rp_result") or prefs.get("rp_result") or ""),
+        box_threshold=float(body.get("box_threshold") or 0.25),
+        text_threshold=float(body.get("text_threshold") or 0.25),
+    )
+    if err or result is None:
+        return jsonify({"ok": False, "error": err or "grounding_dino_failed", "log": log}), 502
+
+    out_json = json.dumps(result, ensure_ascii=False, indent=2)
+    from overlay_text_dino_check import check_remotion_dino_keywords
+
+    keyword_check, _check_err = check_remotion_dino_keywords(
+        rp_result=str(body.get("rp_result") or prefs.get("rp_result") or ""),
+        rp_dino_result=out_json,
+    )
+    saved = save_rp_prefs({**prefs, "rp_dino_result": out_json})
+    return jsonify({
+        "ok": True,
+        "log": log,
+        "result": result,
+        "result_text": out_json,
+        "keyword_check": keyword_check,
+        "prefs": saved,
+    })
+
+
+@app.route("/overlay-text/api/remotion-preview/dino-draw", methods=["POST"])
+def overlay_text_api_remotion_preview_dino_draw():
+    from overlay_text_dino_draw import annotate_image_from_dino_result
+    from overlay_text_session import load_prefs, merge_rp_prefs, save_rp_prefs
+
+    body = request.get_json(silent=True) or {}
+    prefs = merge_rp_prefs(load_prefs(), body)
+
+    url, log, err = annotate_image_from_dino_result(
+        image_url=str(body.get("image_url") or prefs.get("rp_image_url") or ""),
+        rp_dino_result=str(body.get("rp_dino_result") or prefs.get("rp_dino_result") or ""),
+        public_base=public_base_url_for_kie(),
+    )
+    if err or not url:
+        return jsonify({"ok": False, "error": err or "dino_draw_failed", "log": log}), 502
+
+    saved = save_rp_prefs({**prefs, "rp_dino_annotated_url": url})
+    return jsonify({
+        "ok": True,
+        "log": log,
+        "image_url": url,
+        "image_preview_url": url,
+        "prefs": saved,
+    })
+
+
+@app.route("/overlay-text/api/remotion-preview/export", methods=["POST"])
+def overlay_text_api_remotion_preview_export():
+    from flask import make_response
+
+    from overlay_text_export import REMOTION_PREVIEW_EXPORT_ABOUT, export_remotion_preview_wire_bodies
+    from overlay_text_session import load_prefs, merge_rp_prefs, save_rp_prefs
+
+    body = request.get_json(silent=True) or {}
+    prefs = merge_rp_prefs(load_prefs(), body)
+    if body:
+        save_rp_prefs(prefs)
+    bodies, hdr, err = export_remotion_preview_wire_bodies(prefs)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+
+    txt = _format_openai_wire_payloads_txt(bodies, header_lines=hdr, about=REMOTION_PREVIEW_EXPORT_ABOUT)
+    resp = make_response(txt)
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
+    resp.headers["Content-Disposition"] = 'attachment; filename="overlay_text_remotion_preview_request.json"'
     return resp
 
 

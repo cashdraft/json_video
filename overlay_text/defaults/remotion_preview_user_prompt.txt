@@ -1,0 +1,3 @@
+IMAGE: (attached)
+
+Перечисли в dino_prompt все значимые объекты на кадре (person, face, glasses, hand, monitor, screen, keyboard, phone, desk и т.д.) для последующего Grounding DINO.

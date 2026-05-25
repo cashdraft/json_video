@@ -45,6 +45,14 @@ def default_prefs() -> dict[str, Any]:
         "result": "",
         "image_url": "",
         "image_preview_url": "",
+        "rp_model": "gpt-5.4",
+        "rp_system_prompt": _read_default("remotion_preview_system_prompt.txt"),
+        "rp_user_prompt": _read_default("remotion_preview_user_prompt.txt"),
+        "rp_result": "",
+        "rp_image_url": "",
+        "rp_image_preview_url": "",
+        "rp_dino_result": "",
+        "rp_dino_annotated_url": "",
     }
 
 
@@ -62,9 +70,55 @@ def load_prefs() -> dict[str, Any]:
     return base
 
 
+RP_PREF_KEYS = (
+    "rp_model",
+    "rp_system_prompt",
+    "rp_user_prompt",
+    "rp_result",
+    "rp_image_url",
+    "rp_image_preview_url",
+    "rp_dino_result",
+    "rp_dino_annotated_url",
+)
+
+
+def merge_rp_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+    """Снимок prefs для Remotion Preview: только rp_* из body поверх сохранённых."""
+    out = dict(prefs)
+    if not isinstance(body, dict):
+        return out
+    for key in RP_PREF_KEYS:
+        if key not in body:
+            continue
+        val = body[key]
+        if key in ("rp_result", "rp_image_url", "rp_image_preview_url", "rp_dino_result", "rp_dino_annotated_url"):
+            out[key] = str(val or "")
+        else:
+            out[key] = str(val or "").strip()
+    return out
+
+
+def save_rp_prefs(data: dict[str, Any]) -> dict[str, Any]:
+    prev = load_prefs()
+    payload = dict(prev)
+    for key in RP_PREF_KEYS:
+        if key not in data:
+            continue
+        val = data[key]
+        if key in ("rp_result", "rp_image_url", "rp_image_preview_url", "rp_dino_result", "rp_dino_annotated_url"):
+            payload[key] = str(val or "")
+        else:
+            payload[key] = str(val or "").strip()
+    payload["saved_at"] = _now_iso()
+    PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PREFS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
+
+
 def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
     prev = load_prefs()
     payload = dict(prev)
+    _preserve_if_empty = ("rp_dino_result", "rp_dino_annotated_url")
     for key in (
         "model",
         "system_prompt",
@@ -75,11 +129,34 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
         "result",
         "image_url",
         "image_preview_url",
+        "rp_model",
+        "rp_system_prompt",
+        "rp_user_prompt",
+        "rp_result",
+        "rp_image_url",
+        "rp_image_preview_url",
+        "rp_dino_result",
+        "rp_dino_annotated_url",
     ):
         if key not in data:
             continue
         val = data[key]
-        if key in ("text", "style", "duration_sec", "result", "image_url", "image_preview_url"):
+        if key in _preserve_if_empty and not str(val or "").strip():
+            if str(payload.get(key) or "").strip():
+                continue
+        if key in (
+            "text",
+            "style",
+            "duration_sec",
+            "result",
+            "image_url",
+            "image_preview_url",
+            "rp_result",
+            "rp_image_url",
+            "rp_image_preview_url",
+            "rp_dino_result",
+            "rp_dino_annotated_url",
+        ):
             payload[key] = str(val or "")
         else:
             payload[key] = str(val or "").strip()

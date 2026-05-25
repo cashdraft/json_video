@@ -99,9 +99,18 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(collectPayload(extra)),
         });
-        const data = await r.json().catch(function () { return {}; });
+        const rawText = await r.text();
+        let data = {};
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (_e) {
+            data = {};
+        }
         if (!r.ok || !data.ok) {
-            throw new Error((data && data.error) || 'Ошибка сохранения');
+            const msg = (data && (data.error || data.message)) || ('HTTP ' + r.status);
+            const err = new Error(msg || 'Ошибка сохранения');
+            err.rawResponse = rawText && rawText.trim() ? rawText : JSON.stringify(data, null, 2);
+            throw err;
         }
         return data;
     }
@@ -653,7 +662,7 @@
                     return;
                 }
                 hadError = true;
-                showStageError(String(e.message || e));
+                showStageError(String(e.message || e), e && e.rawResponse ? e.rawResponse : '');
             } finally {
                 if (statusTimer) {
                     clearInterval(statusTimer);
