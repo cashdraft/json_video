@@ -345,6 +345,326 @@
                     <div class="overlay-text-dino-annotated{% if not prefs.rp_dino_annotated_url %} is-hidden{% endif %}" data-rp-dino-annotated-wrap>
                         <img class="overlay-text-dino-annotated__img" data-rp-dino-annotated-preview src="{{ prefs.rp_dino_annotated_url or '' }}" alt="Обводка DINO">
                     </div>
+
+                    <div class="overlay-text-sam2-block" data-rp-sam2-block>
+                        <div class="overlay-text-sam2__head">
+                            <h3 class="rewrite-source-subtitle">SAM2 · masks</h3>
+                            <p class="rewrite-source-subhint"><strong>DINO → SAM2</strong> — уточняет bbox из Grounding DINO (box prompt). <strong>SAM mask</strong> — сам ищет сегменты по кадру (без DINO). Оба берут <strong>исходное фото</strong> Remotion Preview.</p>
+                        </div>
+                        <div class="overlay-text-sam2-btn-row">
+                            <button type="button" class="btn btn-secondary overlay-text-sam2-run-btn" data-rp-sam2-run {% if not api_key_set %}disabled{% endif %} title="DINO bbox → точные masks">DINO → SAM2</button>
+                            <button type="button" class="btn btn-secondary overlay-text-sam2-auto-btn" data-rp-sam2-auto-run {% if not api_key_set %}disabled{% endif %} title="Automatic mask generation без DINO">SAM mask</button>
+                        </div>
+                        <pre class="overlay-text-dino__log overlay-text-sam2__log" data-rp-sam2-log aria-live="polite">Ожидание…</pre>
+                        <div class="rewrite-stage-row rewrite-stage-row--result">
+                            <div class="slot-header rewrite-stage-result-toolbar">
+                                <span class="slot-badge badge-{{ 'yes' if prefs.rp_sam2_result else 'no' }} rewrite-stage-result-badge" data-rp-sam2-badge>Result SAM2 (DINO): {{ 'YES' if prefs.rp_sam2_result else 'NO' }}</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rp-sam2-result-toggle title="Редактировать" aria-label="Редактировать Result from SAM2" {% if not api_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-rp-sam2-result-copy title="Копировать Result from SAM2" aria-label="Копировать Result from SAM2">
+                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                </button>
+                                <span class="rewrite-stage-result-counts" data-rp-sam2-result-counts aria-live="polite"></span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-rp-sam2-result-wrap data-status="{{ 'done' if prefs.rp_sam2_result else 'pending' }}">
+                                <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="10" readonly data-rp-sam2-result placeholder="Pending — нажмите «DINO → SAM2 masks»" {% if not api_key_set %}disabled{% endif %}>{{ prefs.rp_sam2_result }}</textarea>
+                            </div>
+                        </div>
+                        <div class="overlay-text-sam2-preview{% if not prefs.rp_sam2_preview_url %} is-hidden{% endif %}" data-rp-sam2-preview-wrap>
+                            <img class="overlay-text-dino-annotated__img" data-rp-sam2-preview src="{{ prefs.rp_sam2_preview_url or '' }}" alt="SAM2 DINO preview">
+                        </div>
+
+                        <div class="rewrite-stage-row rewrite-stage-row--result overlay-text-sam2-auto-result">
+                            <div class="slot-header rewrite-stage-result-toolbar">
+                                <span class="slot-badge badge-{{ 'yes' if prefs.rp_sam2_auto_result else 'no' }} rewrite-stage-result-badge" data-rp-sam2-auto-badge>Result SAM auto: {{ 'YES' if prefs.rp_sam2_auto_result else 'NO' }}</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rp-sam2-auto-result-toggle title="Редактировать" aria-label="Редактировать Result SAM auto" {% if not api_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-rp-sam2-auto-result-copy title="Копировать Result SAM auto" aria-label="Копировать Result SAM auto">
+                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                </button>
+                                <span class="rewrite-stage-result-counts" data-rp-sam2-auto-result-counts aria-live="polite"></span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-rp-sam2-auto-result-wrap data-status="{{ 'done' if prefs.rp_sam2_auto_result else 'pending' }}">
+                                <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="8" readonly data-rp-sam2-auto-result placeholder="Pending — нажмите «SAM mask»" {% if not api_key_set %}disabled{% endif %}>{{ prefs.rp_sam2_auto_result }}</textarea>
+                            </div>
+                        </div>
+                        <div class="overlay-text-sam2-preview{% if not prefs.rp_sam2_auto_preview_url %} is-hidden{% endif %}" data-rp-sam2-auto-preview-wrap>
+                            <img class="overlay-text-dino-annotated__img" data-rp-sam2-auto-preview src="{{ prefs.rp_sam2_auto_preview_url or '' }}" alt="SAM2 auto preview">
+                        </div>
+                    </div>
+
+                    <div class="overlay-text-cm2-block" data-cm2-block>
+                        <div class="overlay-text-cm2__head">
+                            <h3 class="rewrite-source-subtitle">Result from CM2</h3>
+                            <p class="rewrite-source-subhint">Контекст для Agent 2 / Preview 2. Макрос <code>{{ '{{CM2_RESULT}}' }}</code> в промтах ниже.</p>
+                        </div>
+                        <div class="rewrite-stage-row rewrite-stage-row--result">
+                            <div class="slot-header rewrite-stage-result-toolbar">
+                                <span class="slot-badge badge-{{ 'yes' if prefs.cm2_result else 'no' }} rewrite-stage-result-badge" data-cm2-badge>Result from CM2: {{ 'YES' if prefs.cm2_result else 'NO' }}</span>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-cm2-result-toggle title="Редактировать" aria-label="Редактировать Result from CM2" {% if not api_key_set %}disabled{% endif %}>
+                                    <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                    <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                                </button>
+                                <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-cm2-result-copy title="Копировать Result from CM2" aria-label="Копировать Result from CM2">
+                                    <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                </button>
+                                <span class="rewrite-stage-result-counts" data-cm2-result-counts aria-live="polite"></span>
+                            </div>
+                            <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-cm2-result-wrap data-status="{{ 'done' if prefs.cm2_result else 'pending' }}">
+                                <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="10" readonly data-cm2-result placeholder="Ожидание ответа CM2…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.cm2_result }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index rewrite-stage-card--prompt-collapsed rewrite-stage-card--stage-user-prompt-collapsed scenes-map-agent overlay-text-agent overlay-text-agent--pass2" data-overlay-text-agent="main2">
+            <div class="scene-header">
+                <div class="rewrite-stage-header-row">
+                    <div class="rewrite-stage-header-top">
+                        <div class="rewrite-stage-title-row">
+                            <div class="scene-id rewrite-stage-title-text">Overlay Text Agent 2</div>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-subtitle">Фото из Remotion Preview + <code>{{ '{{CM2_RESULT}}' }}</code> + Text/Style → JSON.</div>
+                </div>
+            </div>
+
+            <div class="rewrite-scene-writer-settings-row scenes-map-settings-row overlay-text-settings-row">
+                <div class="rewrite-mode-dropdown-field scenes-map-model-field" data-ot2-model-field>
+                    {% set cur_ot2_model = (prefs.ot2_model or '')|trim %}
+                    {% if not cur_ot2_model %}{% set cur_ot2_model = 'gpt-5.4' %}{% endif %}
+                    {% set ns_ot2_model = namespace(label='—') %}
+                    {% for m in models %}{% if cur_ot2_model == m.id %}{% set ns_ot2_model.label = m.label %}{% endif %}{% endfor %}
+                    <h3 class="rewrite-source-subtitle">Model</h3>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-rewrite-mode-field="1">
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Model">
+                            <span class="rewrite-anim-dropdown__btn-label" data-rewrite-mode-label>{{ ns_ot2_model.label }}</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel" hidden role="listbox">
+                            {% for m in models %}
+                            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-mode-dropdown-option">
+                                <input type="radio" name="ot2-model-radio" class="rewrite-anim-radio rewrite-mode-dropdown-radio visually-hidden-input" value="{{ m.id }}" {% if cur_ot2_model == m.id %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <select id="ot2-model" class="rewrite-global-model-select-hidden rewrite-mode-dropdown-select-hidden" data-ot2-model {% if not api_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                        {% for m in models %}
+                        <option value="{{ m.id }}"{% if cur_ot2_model == m.id %} selected{% endif %}>{{ m.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="overlay-text-photo-field overlay-text-photo-field--readonly">
+                    <h3 class="rewrite-source-subtitle">Фото (Remotion Preview)</h3>
+                    <p class="rewrite-source-subhint">Не из Overlay Text Agent — только <strong>Remotion Preview Agent</strong> выше.</p>
+                    <div class="overlay-text-photo-row">
+                        <img class="overlay-text-photo-preview{% if not prefs.rp_image_preview_url and not prefs.rp_image_url %} is-hidden{% endif %}" data-ot2-photo-preview src="{{ prefs.rp_image_preview_url or prefs.rp_image_url or '' }}" alt="Фото Remotion Preview">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.rp_image_url else 'no' }}" data-ot2-photo-badge>Photo: {{ 'YES' if prefs.rp_image_url else 'NO' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rewrite-stage-stack scenes-map-stack">
+                <div class="rewrite-stage-row rewrite-stage-row--controls scenes-map-prompts-row">
+                    <div class="rewrite-stage-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.ot2_system_prompt else 'no' }} rewrite-stage-prompt-badge" data-ot2-system-badge>System Prompt: {{ 'YES' if prefs.ot2_system_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ot2-system-toggle title="Редактировать" aria-label="Редактировать System Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline" data-ot2-system-wrap hidden>
+                            <textarea class="rewrite-stage-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-ot2-system-prompt placeholder="System Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.ot2_system_prompt }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell scenes-map-user-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.ot2_user_prompt else 'no' }} rewrite-stage-user-prompt-badge" data-ot2-user-badge>User Prompt: {{ 'YES' if prefs.ot2_user_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ot2-user-toggle title="Редактировать" aria-label="Редактировать User Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt" data-ot2-user-wrap hidden>
+                            <textarea class="rewrite-stage-user-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-ot2-user-prompt placeholder="User Prompt… Макросы: {{ '{{CM2_RESULT}}' }}, {{ '{{TEXT}}' }}, {{ '{{STYLE}}' }}, {{ '{{DURATION_SEC}}' }}" {% if not api_key_set %}disabled{% endif %}>{{ prefs.ot2_user_prompt }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row overlay-text-fields-row">
+                    <div class="rewrite-stage-prompt-cell overlay-text-field-cell overlay-text-field-cell--duration">
+                        <label class="overlay-text-duration-label" for="ot2-duration">
+                            <span>Хронометраж (сек)</span>
+                            <span class="overlay-text-macro-hint">макрос: <code>{{ '{{DURATION_SEC}}' }}</code></span>
+                        </label>
+                        <input type="text" id="ot2-duration" class="overlay-text-duration-input" data-ot2-duration value="{{ prefs.ot2_duration_sec or '' }}" placeholder="12.4" autocomplete="off" inputmode="decimal" spellcheck="false" {% if not api_key_set %}disabled{% endif %}>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell overlay-text-field-cell">
+                        <div class="slot-header rewrite-stage-compact-header">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.ot2_text else 'no' }}" data-ot2-text-badge>Text</span>
+                            <span class="overlay-text-macro-hint">макрос: <code>{{ '{{TEXT}}' }}</code></span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ot2-text-toggle title="Редактировать" aria-label="Редактировать Text" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                            <textarea class="rewrite-source-textarea rewrite-source-textarea--locked overlay-text-input" rows="4" readonly data-ot2-text placeholder="Текст для оверлея…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.ot2_text }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell overlay-text-field-cell">
+                        <div class="slot-header rewrite-stage-compact-header">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.ot2_style else 'no' }}" data-ot2-style-badge>Style</span>
+                            <span class="overlay-text-macro-hint">макрос: <code>{{ '{{STYLE}}' }}</code></span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ot2-style-toggle title="Редактировать" aria-label="Редактировать Style" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source">
+                            <textarea class="rewrite-source-textarea rewrite-source-textarea--locked overlay-text-input" rows="4" readonly data-ot2-style placeholder="Стиль…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.ot2_style }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row rewrite-stage-row--result">
+                    <div class="slot-header rewrite-stage-result-toolbar">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.ot2_result else 'no' }} rewrite-stage-result-badge" data-ot2-result-badge>Result</span>
+                        <button type="button" class="rewrite-json-export-btn scenes-map-api-export" data-ot2-export title="Скачать тело POST (JSON)" aria-label="Скачать JSON" {% if not api_key_set %}disabled{% endif %}>J</button>
+                        <button type="button" class="btn-regenerate rewrite-stage-run scenes-map-run" title="Запустить" data-ot2-run {% if not api_key_set %}disabled{% endif %}>↻</button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-ot2-result-toggle title="Редактировать" aria-label="Редактировать Result" {% if not api_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-ot2-result-copy title="Копировать результат" aria-label="Копировать результат">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-stage-result-counts" data-ot2-result-counts aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-ot2-result-wrap data-status="{{ 'done' if prefs.ot2_result else 'pending' }}">
+                        <div class="slot-status-row rewrite-stage-status-row hidden" data-ot2-status-row>
+                            <span class="slot-status slot-status-with-spinner rewrite-stage-status-text" data-ot2-status-text></span>
+                            <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn hidden" data-ot2-cancel-btn>Cancel</button>
+                        </div>
+                        <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="12" readonly data-ot2-result placeholder="Pending" {% if not api_key_set %}disabled{% endif %}>{{ prefs.ot2_result }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <article class="scene-card rewrite-stage-card rewrite-stage-card--full rewrite-stage-card--no-index scenes-map-agent overlay-text-agent overlay-text-agent--remotion-preview2" data-overlay-text-agent="remotion-preview2">
+            <div class="scene-header">
+                <div class="rewrite-stage-header-row">
+                    <div class="rewrite-stage-header-top">
+                        <div class="rewrite-stage-title-row">
+                            <div class="scene-id rewrite-stage-title-text">Remotion Preview Agent 2</div>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-subtitle">Фото Remotion Preview + <code>{{ '{{CM2_RESULT}}' }}</code> → Result (pass 2).</div>
+                </div>
+            </div>
+
+            <div class="rewrite-scene-writer-settings-row scenes-map-settings-row overlay-text-settings-row">
+                <div class="rewrite-mode-dropdown-field scenes-map-model-field" data-rp2-model-field>
+                    {% set cur_rp2_model = (prefs.rp2_model or '')|trim %}
+                    {% if not cur_rp2_model %}{% set cur_rp2_model = 'gpt-5.4' %}{% endif %}
+                    {% set ns_rp2_model = namespace(label='—') %}
+                    {% for m in models %}{% if cur_rp2_model == m.id %}{% set ns_rp2_model.label = m.label %}{% endif %}{% endfor %}
+                    <h3 class="rewrite-source-subtitle">Model</h3>
+                    <div class="rewrite-global-model-field rewrite-anim-field rewrite-anim-field--single" data-rewrite-mode-field="1">
+                        <button type="button" class="rewrite-anim-dropdown__btn" aria-haspopup="listbox" aria-expanded="false" {% if not api_key_set %}disabled{% endif %} aria-label="Model">
+                            <span class="rewrite-anim-dropdown__btn-label" data-rewrite-mode-label>{{ ns_rp2_model.label }}</span>
+                            <span class="rewrite-anim-dropdown__btn-chev" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rewrite-anim-dropdown__panel rewrite-global-model-panel rewrite-mode-dropdown-panel" hidden role="listbox">
+                            {% for m in models %}
+                            <label class="rewrite-anim-option rewrite-anim-option--radio rewrite-mode-dropdown-option">
+                                <input type="radio" name="rp2-model-radio" class="rewrite-anim-radio rewrite-mode-dropdown-radio visually-hidden-input" value="{{ m.id }}" {% if cur_rp2_model == m.id %}checked{% endif %} {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-anim-option__body">
+                                    <span class="rewrite-anim-option__title">{{ m.label }}</span>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <select id="rp2-model" class="rewrite-global-model-select-hidden rewrite-mode-dropdown-select-hidden" data-rp2-model {% if not api_key_set %}disabled{% endif %} aria-hidden="true" tabindex="-1">
+                        {% for m in models %}
+                        <option value="{{ m.id }}"{% if cur_rp2_model == m.id %} selected{% endif %}>{{ m.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="overlay-text-photo-field overlay-text-photo-field--readonly">
+                    <h3 class="rewrite-source-subtitle">Фото (Remotion Preview)</h3>
+                    <p class="rewrite-source-subhint">То же исходное фото, что у Remotion Preview Agent.</p>
+                    <div class="overlay-text-photo-row">
+                        <img class="overlay-text-photo-preview{% if not prefs.rp_image_preview_url and not prefs.rp_image_url %} is-hidden{% endif %}" data-rp2-photo-preview src="{{ prefs.rp_image_preview_url or prefs.rp_image_url or '' }}" alt="Фото Remotion Preview">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.rp_image_url else 'no' }}" data-rp2-photo-badge>Photo: {{ 'YES' if prefs.rp_image_url else 'NO' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rewrite-stage-stack scenes-map-stack">
+                <div class="rewrite-stage-row rewrite-stage-row--controls scenes-map-prompts-row">
+                    <div class="rewrite-stage-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.rp2_system_prompt else 'no' }} rewrite-stage-prompt-badge" data-rp2-system-badge>System Prompt: {{ 'YES' if prefs.rp2_system_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rp2-system-toggle title="Редактировать" aria-label="Редактировать System Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--prompt-inline" data-rp2-system-wrap>
+                            <textarea class="rewrite-stage-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-rp2-system-prompt placeholder="System Prompt…" {% if not api_key_set %}disabled{% endif %}>{{ prefs.rp2_system_prompt }}</textarea>
+                        </div>
+                    </div>
+                    <div class="rewrite-stage-prompt-cell rewrite-stage-user-prompt-cell scenes-map-user-prompt-cell">
+                        <div class="slot-header rewrite-stage-compact-header rewrite-stage-prompt-toolbar">
+                            <span class="slot-badge badge-{{ 'yes' if prefs.rp2_user_prompt else 'no' }} rewrite-stage-user-prompt-badge" data-rp2-user-badge>User Prompt: {{ 'YES' if prefs.rp2_user_prompt else 'NO' }}</span>
+                            <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rp2-user-toggle title="Редактировать" aria-label="Редактировать User Prompt" {% if not api_key_set %}disabled{% endif %}>
+                                <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                                <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--prompt rewrite-slot--stage-user-prompt" data-rp2-user-wrap>
+                            <textarea class="rewrite-stage-user-prompt rewrite-slot-textarea rewrite-source-textarea--locked" rows="6" readonly data-rp2-user-prompt placeholder="User Prompt… Макрос: {{ '{{CM2_RESULT}}' }}" {% if not api_key_set %}disabled{% endif %}>{{ prefs.rp2_user_prompt }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rewrite-stage-row rewrite-stage-row--result">
+                    <div class="slot-header rewrite-stage-result-toolbar">
+                        <span class="slot-badge badge-{{ 'yes' if prefs.rp2_result else 'no' }} rewrite-stage-result-badge" data-rp2-result-badge>Result: {{ 'YES' if prefs.rp2_result else 'NO' }}</span>
+                        <button type="button" class="rewrite-json-export-btn scenes-map-api-export" data-rp2-export title="Скачать тело POST (JSON)" aria-label="Скачать JSON" {% if not api_key_set %}disabled{% endif %}>J</button>
+                        <button type="button" class="btn-regenerate rewrite-stage-run scenes-map-run" title="Запустить" data-rp2-run {% if not api_key_set %}disabled{% endif %}>↻</button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-lock-toggle--locked" data-rp2-result-toggle title="Редактировать" aria-label="Редактировать Result" {% if not api_key_set %}disabled{% endif %}>
+                            <span class="rewrite-lock-toggle__edit" aria-hidden="true">✎</span>
+                            <span class="rewrite-lock-toggle__save" aria-hidden="true">✓</span>
+                        </button>
+                        <button type="button" class="rewrite-lock-toggle btn-icon rewrite-stage-copy-btn" data-rp2-result-copy title="Копировать результат" aria-label="Копировать результат">
+                            <svg class="rewrite-stage-copy-btn__svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                        <span class="rewrite-stage-result-counts" data-rp2-result-counts aria-live="polite"></span>
+                    </div>
+                    <div class="slot-placeholder rewrite-slot-placeholder rewrite-slot--source rewrite-slot--stage-result" data-rp2-result-wrap data-status="{{ 'done' if prefs.rp2_result else 'pending' }}">
+                        <div class="slot-status-row rewrite-stage-status-row hidden" data-rp2-status-row>
+                            <span class="slot-status slot-status-with-spinner rewrite-stage-status-text" data-rp2-status-text></span>
+                            <button type="button" class="btn-cancel-generation rewrite-stage-cancel-btn hidden" data-rp2-cancel-btn>Cancel</button>
+                        </div>
+                        <textarea class="rewrite-source-textarea rewrite-stage-result rewrite-source-textarea--locked" rows="12" readonly data-rp2-result placeholder="Pending" {% if not api_key_set %}disabled{% endif %}>{{ prefs.rp2_result }}</textarea>
+                    </div>
                 </div>
             </div>
         </article>
@@ -358,5 +678,7 @@
     <script src="{{ url_for('static', filename='overlay_text_preview.js') }}?v={{ overlay_text_asset_mtime }}"></script>
     <script src="{{ url_for('static', filename='overlay_text.js') }}?v={{ overlay_text_asset_mtime }}"></script>
     <script src="{{ url_for('static', filename='overlay_text_remotion_preview.js') }}?v={{ overlay_text_asset_mtime }}"></script>
+    <script src="{{ url_for('static', filename='overlay_text_agent2.js') }}?v={{ overlay_text_asset_mtime }}"></script>
+    <script src="{{ url_for('static', filename='overlay_text_remotion_preview2.js') }}?v={{ overlay_text_asset_mtime }}"></script>
 </body>
 </html>

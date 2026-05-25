@@ -1,0 +1,22 @@
+{
+  "image_width": 640,
+  "image_height": 427,
+  "prompt": "person. face. mountain. sky.",
+  "detections": [
+    {
+      "label": "mountain",
+      "score": 0.62,
+      "box_px": {"x1": 80, "y1": 120, "x2": 560, "y2": 400}
+    },
+    {
+      "label": "sky",
+      "score": 0.55,
+      "box_px": {"x1": 0, "y1": 0, "x2": 640, "y2": 180}
+    },
+    {
+      "label": "person",
+      "score": 0.48,
+      "box_px": {"x1": 200, "y1": 50, "x2": 400, "y2": 350}
+    }
+  ]
+}

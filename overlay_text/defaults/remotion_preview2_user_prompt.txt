@@ -1,0 +1,6 @@
+Посмотри на изображение и result from CM2.
+
+Result from CM2:
+{{CM2_RESULT}}
+
+Верни JSON по system prompt.

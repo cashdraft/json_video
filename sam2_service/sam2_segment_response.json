@@ -1,0 +1,106 @@
+{
+  "image_width": 640,
+  "image_height": 427,
+  "mode": "dino_to_sam2",
+  "items": [
+    {
+      "label": "mountain",
+      "source_score": 0.62,
+      "source_box_px": {
+        "x1": 80,
+        "y1": 120,
+        "x2": 560,
+        "y2": 400
+      },
+      "mask_path": "outputs/masks/mountain_001.png",
+      "mask_bbox_px": {
+        "x1": 64,
+        "y1": 119,
+        "x2": 521,
+        "y2": 399,
+        "w": 458,
+        "h": 281
+      },
+      "mask_bbox_pct": {
+        "x_pct": 10.0,
+        "y_pct": 27.87,
+        "w_pct": 71.56,
+        "h_pct": 65.81
+      },
+      "mask_area_px": 58231,
+      "mask_area_pct": 21.31
+    },
+    {
+      "label": "sky",
+      "source_score": 0.55,
+      "source_box_px": {
+        "x1": 0,
+        "y1": 0,
+        "x2": 639,
+        "y2": 180
+      },
+      "mask_path": "outputs/masks/sky_001.png",
+      "mask_bbox_px": {
+        "x1": 0,
+        "y1": 1,
+        "x2": 639,
+        "y2": 183,
+        "w": 640,
+        "h": 183
+      },
+      "mask_bbox_pct": {
+        "x_pct": 0.0,
+        "y_pct": 0.23,
+        "w_pct": 100.0,
+        "h_pct": 42.86
+      },
+      "mask_area_px": 86855,
+      "mask_area_pct": 31.78
+    },
+    {
+      "label": "person",
+      "source_score": 0.48,
+      "source_box_px": {
+        "x1": 200,
+        "y1": 50,
+        "x2": 400,
+        "y2": 350
+      },
+      "mask_path": "outputs/masks/person_001.png",
+      "mask_bbox_px": {
+        "x1": 185,
+        "y1": 47,
+        "x2": 351,
+        "y2": 344,
+        "w": 167,
+        "h": 298
+      },
+      "mask_bbox_pct": {
+        "x_pct": 28.91,
+        "y_pct": 11.01,
+        "w_pct": 26.09,
+        "h_pct": 69.79
+      },
+      "mask_area_px": 28621,
+      "mask_area_pct": 10.47
+    }
+  ],
+  "merged_occupied": {
+    "mask_path": "outputs/masks/merged_occupied.png",
+    "preview_path": "outputs/preview_dino_sam2.png",
+    "mask_area_px": 149414,
+    "mask_area_pct": 54.67
+  },
+  "skipped": [],
+  "run_id": "2d783b5bc4f0",
+  "ok": true,
+  "log": [
+    "detections in: 3 · kept: 3 · skipped: 0",
+    "SAM2 device: cpu",
+    "SAM2 loaded in 1.2s",
+    "  mountain: 0.1s",
+    "  sky: 0.1s",
+    "  person: 0.1s",
+    "items: 3 · merged area 54.67%"
+  ]
+}

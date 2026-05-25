@@ -1,0 +1,20 @@
+[Unit]
+Description=Remotion Studio (JobMontage preview, port 3000)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/json_video/remotion
+EnvironmentFile=-/srv/json_video/.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=BROWSER=none
+Environment=NODE_OPTIONS=--max-old-space-size=6144
+ExecStart=/usr/bin/npx --no remotion studio src/index.ts --host 0.0.0.0 --port 3000 --no-open --log=info
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

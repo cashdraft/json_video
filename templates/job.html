@@ -3352,6 +3352,7 @@
             if (s === 'activating' || s === 'reloading') return 'Запускается…';
             if (s === 'deactivating' || s === 'stopping') return 'Останавливается…';
             if (s === 'failed') return 'Ошибка (failed)';
+            if (s === 'not-found') return 'Юнит не найден';
             return s || 'Неизвестно';
         };
 

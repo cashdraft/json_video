@@ -12,6 +12,7 @@ PH_OVERLAY_TEXT = "{{OVERLAY_TEXT}}"
 PH_STYLE = "{{STYLE}}"
 PH_DURATION_SEC = "{{DURATION_SEC}}"
 PH_SCENE_DURATION_SEC = "{{SCENE_DURATION_SEC}}"
+PH_CM2_RESULT = "{{CM2_RESULT}}"
 
 BASE_DIR = Path(__file__).resolve().parent
 OVERLAY_DATA_DIR = BASE_DIR / "data" / "overlay_text"
@@ -24,6 +25,10 @@ PROMPT_DEFAULT_FILES: dict[str, str] = {
     "user_prompt": "user_prompt.txt",
     "rp_system_prompt": "remotion_preview_system_prompt.txt",
     "rp_user_prompt": "remotion_preview_user_prompt.txt",
+    "ot2_system_prompt": "overlay_text2_system_prompt.txt",
+    "ot2_user_prompt": "overlay_text2_user_prompt.txt",
+    "rp2_system_prompt": "remotion_preview2_system_prompt.txt",
+    "rp2_user_prompt": "remotion_preview2_user_prompt.txt",
 }
 
 
@@ -87,6 +92,18 @@ def default_prefs() -> dict[str, Any]:
         "rp_sam2_preview_url": "",
         "rp_sam2_auto_result": "",
         "rp_sam2_auto_preview_url": "",
+        "cm2_result": "",
+        "ot2_model": "gpt-5.4",
+        "ot2_system_prompt": _read_default("overlay_text2_system_prompt.txt"),
+        "ot2_user_prompt": _read_default("overlay_text2_user_prompt.txt"),
+        "ot2_text": "",
+        "ot2_style": "",
+        "ot2_duration_sec": "",
+        "ot2_result": "",
+        "rp2_model": "gpt-5.4",
+        "rp2_system_prompt": _read_default("remotion_preview2_system_prompt.txt"),
+        "rp2_user_prompt": _read_default("remotion_preview2_user_prompt.txt"),
+        "rp2_result": "",
     }
 
 
@@ -136,6 +153,93 @@ def merge_rp_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, Any
     return out
 
 
+OT2_PREF_KEYS = (
+    "ot2_model",
+    "ot2_system_prompt",
+    "ot2_user_prompt",
+    "ot2_text",
+    "ot2_style",
+    "ot2_duration_sec",
+    "ot2_result",
+    "cm2_result",
+)
+
+
+def merge_ot2_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+    out = dict(prefs)
+    if not isinstance(body, dict):
+        return out
+    for key in OT2_PREF_KEYS:
+        if key not in body:
+            continue
+        val = body[key]
+        if key in ("ot2_result", "cm2_result", "ot2_text", "ot2_style", "ot2_duration_sec"):
+            out[key] = str(val or "")
+        else:
+            out[key] = str(val or "").strip()
+    return out
+
+
+def save_ot2_prefs(data: dict[str, Any]) -> dict[str, Any]:
+    prev = load_prefs()
+    payload = dict(prev)
+    for key in OT2_PREF_KEYS:
+        if key not in data:
+            continue
+        val = data[key]
+        if key in ("ot2_result", "cm2_result", "ot2_text", "ot2_style", "ot2_duration_sec"):
+            payload[key] = str(val or "")
+        else:
+            payload[key] = str(val or "").strip()
+    payload["saved_at"] = _now_iso()
+    PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PREFS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_prompts_to_defaults(payload)
+    return payload
+
+
+RP2_PREF_KEYS = (
+    "rp2_model",
+    "rp2_system_prompt",
+    "rp2_user_prompt",
+    "rp2_result",
+    "cm2_result",
+)
+
+
+def merge_rp2_prefs(prefs: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+    out = dict(prefs)
+    if not isinstance(body, dict):
+        return out
+    for key in RP2_PREF_KEYS:
+        if key not in body:
+            continue
+        val = body[key]
+        if key in ("rp2_result", "cm2_result"):
+            out[key] = str(val or "")
+        else:
+            out[key] = str(val or "").strip()
+    return out
+
+
+def save_rp2_prefs(data: dict[str, Any]) -> dict[str, Any]:
+    prev = load_prefs()
+    payload = dict(prev)
+    for key in RP2_PREF_KEYS:
+        if key not in data:
+            continue
+        val = data[key]
+        if key in ("rp2_result", "cm2_result"):
+            payload[key] = str(val or "")
+        else:
+            payload[key] = str(val or "").strip()
+    payload["saved_at"] = _now_iso()
+    PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PREFS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_prompts_to_defaults(payload)
+    return payload
+
+
 def save_rp_prefs(data: dict[str, Any]) -> dict[str, Any]:
     prev = load_prefs()
     payload = dict(prev)
@@ -180,6 +284,18 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
         "rp_sam2_preview_url",
         "rp_sam2_auto_result",
         "rp_sam2_auto_preview_url",
+        "cm2_result",
+        "ot2_model",
+        "ot2_system_prompt",
+        "ot2_user_prompt",
+        "ot2_text",
+        "ot2_style",
+        "ot2_duration_sec",
+        "ot2_result",
+        "rp2_model",
+        "rp2_system_prompt",
+        "rp2_user_prompt",
+        "rp2_result",
     ):
         if key not in data:
             continue
@@ -203,6 +319,12 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
             "rp_sam2_preview_url",
             "rp_sam2_auto_result",
             "rp_sam2_auto_preview_url",
+            "cm2_result",
+            "ot2_text",
+            "ot2_style",
+            "ot2_duration_sec",
+            "ot2_result",
+            "rp2_result",
         ):
             payload[key] = str(val or "")
         else:
@@ -228,3 +350,16 @@ def apply_prompt_macros(text: str, prefs: dict[str, Any]) -> str:
     s = s.replace(PH_DURATION_SEC, dur_val)
     s = s.replace(PH_SCENE_DURATION_SEC, dur_val)
     return s
+
+
+def apply_ot2_prompt_macros(text: str, prefs: dict[str, Any]) -> str:
+    ot2_prefs = dict(prefs)
+    ot2_prefs["text"] = str(prefs.get("ot2_text") or "")
+    ot2_prefs["style"] = str(prefs.get("ot2_style") or "")
+    ot2_prefs["duration_sec"] = str(prefs.get("ot2_duration_sec") or "")
+    s = apply_prompt_macros(text, ot2_prefs)
+    return s.replace(PH_CM2_RESULT, str(prefs.get("cm2_result") or "").strip())
+
+
+def apply_rp2_prompt_macros(text: str, prefs: dict[str, Any]) -> str:
+    return str(text or "").replace(PH_CM2_RESULT, str(prefs.get("cm2_result") or "").strip())

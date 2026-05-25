@@ -42,6 +42,25 @@
         dinoAnnotatedWrap: root.querySelector('[data-rp-dino-annotated-wrap]'),
         dinoAnnotatedPreview: root.querySelector('[data-rp-dino-annotated-preview]'),
         dinoCheckWrap: root.querySelector('[data-rp-dino-check]'),
+        sam2RunBtn: root.querySelector('[data-rp-sam2-run]'),
+        sam2Log: root.querySelector('[data-rp-sam2-log]'),
+        sam2ResultToggle: root.querySelector('[data-rp-sam2-result-toggle]'),
+        sam2ResultWrap: root.querySelector('[data-rp-sam2-result-wrap]'),
+        sam2ResultTa: root.querySelector('[data-rp-sam2-result]'),
+        sam2Badge: root.querySelector('[data-rp-sam2-badge]'),
+        sam2ResultCounts: root.querySelector('[data-rp-sam2-result-counts]'),
+        sam2ResultCopy: root.querySelector('[data-rp-sam2-result-copy]'),
+        sam2PreviewWrap: root.querySelector('[data-rp-sam2-preview-wrap]'),
+        sam2Preview: root.querySelector('[data-rp-sam2-preview]'),
+        sam2AutoRunBtn: root.querySelector('[data-rp-sam2-auto-run]'),
+        sam2AutoResultToggle: root.querySelector('[data-rp-sam2-auto-result-toggle]'),
+        sam2AutoResultWrap: root.querySelector('[data-rp-sam2-auto-result-wrap]'),
+        sam2AutoResultTa: root.querySelector('[data-rp-sam2-auto-result]'),
+        sam2AutoBadge: root.querySelector('[data-rp-sam2-auto-badge]'),
+        sam2AutoResultCounts: root.querySelector('[data-rp-sam2-auto-result-counts]'),
+        sam2AutoResultCopy: root.querySelector('[data-rp-sam2-auto-result-copy]'),
+        sam2AutoPreviewWrap: root.querySelector('[data-rp-sam2-auto-preview-wrap]'),
+        sam2AutoPreview: root.querySelector('[data-rp-sam2-auto-preview]'),
     };
 
     let imageUrl = (els.photoPreview && els.photoPreview.getAttribute('src')) || '';
@@ -85,11 +104,82 @@
         els.dinoResultWrap.setAttribute('data-status', (els.dinoResultTa.value || '').trim() ? 'done' : 'pending');
     }
 
+    function updateSam2ResultCounts() {
+        updateTextareaCounts(els.sam2ResultTa, els.sam2ResultCounts);
+    }
+
+    function updateSam2AutoResultCounts() {
+        updateTextareaCounts(els.sam2AutoResultTa, els.sam2AutoResultCounts);
+    }
+
+    function syncSam2AutoResultWrapStatus() {
+        if (!els.sam2AutoResultWrap || !els.sam2AutoResultTa) return;
+        els.sam2AutoResultWrap.setAttribute('data-status', (els.sam2AutoResultTa.value || '').trim() ? 'done' : 'pending');
+    }
+
+    function showSam2AutoPreview(url) {
+        if (!els.sam2AutoPreview || !url) return;
+        els.sam2AutoPreview.src = url;
+        if (els.sam2AutoPreviewWrap) els.sam2AutoPreviewWrap.classList.remove('is-hidden');
+    }
+
+    function syncSam2ResultWrapStatus() {
+        if (!els.sam2ResultWrap || !els.sam2ResultTa) return;
+        els.sam2ResultWrap.setAttribute('data-status', (els.sam2ResultTa.value || '').trim() ? 'done' : 'pending');
+    }
+
+    function setSam2Log(lines) {
+        if (!els.sam2Log) return;
+        const text = Array.isArray(lines) ? lines.join('\n') : String(lines || '');
+        els.sam2Log.textContent = text || '—';
+        els.sam2Log.classList.toggle('overlay-text-dino__log--busy', /работает|Запрос|SAM2/i.test(text));
+    }
+
+    function showSam2Preview(url) {
+        if (!els.sam2Preview || !url) return;
+        els.sam2Preview.src = url;
+        if (els.sam2PreviewWrap) els.sam2PreviewWrap.classList.remove('is-hidden');
+    }
+
     function syncImageUrlFromPreview() {
-        const src = (els.photoPreview && els.photoPreview.getAttribute('src')) || '';
+        const src = (els.photoPreview && (els.photoPreview.getAttribute('src') || els.photoPreview.src)) || '';
         if (src && src.trim() && !/^data:/i.test(src.trim())) {
             imageUrl = src.trim();
         }
+        return imageUrl;
+    }
+
+    function getActiveImageUrl() {
+        syncImageUrlFromPreview();
+        return (imageUrl || '').trim();
+    }
+
+    function clearResultsForNewImage() {
+        if (els.resultTa) els.resultTa.value = '';
+        if (els.dinoResultTa) els.dinoResultTa.value = '';
+        setBadgeYesNo(els.resultBadge, '', 'Result');
+        setBadgeYesNo(els.dinoBadge, '', 'Result from DINO');
+        updateResultCounts();
+        updateDinoResultCounts();
+        syncResultWrapIdleStatus();
+        syncDinoResultWrapStatus();
+        if (els.dinoAnnotatedWrap) els.dinoAnnotatedWrap.classList.add('is-hidden');
+        if (els.dinoAnnotatedPreview) els.dinoAnnotatedPreview.removeAttribute('src');
+        if (els.sam2ResultTa) els.sam2ResultTa.value = '';
+        setBadgeYesNo(els.sam2Badge, '', 'Result SAM2 (DINO)');
+        updateSam2ResultCounts();
+        syncSam2ResultWrapStatus();
+        if (els.sam2PreviewWrap) els.sam2PreviewWrap.classList.add('is-hidden');
+        if (els.sam2Preview) els.sam2Preview.removeAttribute('src');
+        if (els.sam2AutoResultTa) els.sam2AutoResultTa.value = '';
+        setBadgeYesNo(els.sam2AutoBadge, '', 'Result SAM auto');
+        updateSam2AutoResultCounts();
+        syncSam2AutoResultWrapStatus();
+        if (els.sam2AutoPreviewWrap) els.sam2AutoPreviewWrap.classList.add('is-hidden');
+        if (els.sam2AutoPreview) els.sam2AutoPreview.removeAttribute('src');
+        setSam2Log('—');
+        renderDinoKeywordCheck();
+        setDinoLog('Новое фото — нажмите ↻ у Result для LLM, затем ↻ у Grounding DINO.');
     }
 
     function formatPhotoDimsText(w, h) {
@@ -146,14 +236,14 @@
     }
 
     function collectPayload(extra) {
-        syncImageUrlFromPreview();
+        const activeImage = getActiveImageUrl();
         const payload = {
             rp_model: els.model ? els.model.value : '',
             rp_system_prompt: els.systemTa ? els.systemTa.value : '',
             rp_user_prompt: els.userTa ? els.userTa.value : '',
             rp_result: els.resultTa ? els.resultTa.value : '',
-            rp_image_url: imageUrl,
-            rp_image_preview_url: imageUrl,
+            rp_image_url: activeImage,
+            rp_image_preview_url: activeImage,
         };
         /* rp_dino_* только явно — иначе scheduleSave затирает Result from DINO пустой строкой */
         if (extra && typeof extra === 'object') {
@@ -162,6 +252,18 @@
             }
             if (Object.prototype.hasOwnProperty.call(extra, 'rp_dino_annotated_url')) {
                 payload.rp_dino_annotated_url = extra.rp_dino_annotated_url;
+            }
+            if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_result')) {
+                payload.rp_sam2_result = extra.rp_sam2_result;
+            }
+            if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_preview_url')) {
+                payload.rp_sam2_preview_url = extra.rp_sam2_preview_url;
+            }
+            if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_auto_result')) {
+                payload.rp_sam2_auto_result = extra.rp_sam2_auto_result;
+            }
+            if (Object.prototype.hasOwnProperty.call(extra, 'rp_sam2_auto_preview_url')) {
+                payload.rp_sam2_auto_preview_url = extra.rp_sam2_auto_preview_url;
             }
             return Object.assign(payload, extra);
         }
@@ -189,6 +291,24 @@
         }
         if (prefs.rp_dino_annotated_url) {
             showAnnotatedPreview(prefs.rp_dino_annotated_url);
+        }
+        if (els.sam2ResultTa && prefs.rp_sam2_result != null) {
+            els.sam2ResultTa.value = prefs.rp_sam2_result;
+            setBadgeYesNo(els.sam2Badge, prefs.rp_sam2_result, 'Result from SAM2');
+            updateSam2ResultCounts();
+            syncSam2ResultWrapStatus();
+        }
+        if (prefs.rp_sam2_preview_url) {
+            showSam2Preview(prefs.rp_sam2_preview_url);
+        }
+        if (els.sam2AutoResultTa && prefs.rp_sam2_auto_result != null) {
+            els.sam2AutoResultTa.value = prefs.rp_sam2_auto_result;
+            setBadgeYesNo(els.sam2AutoBadge, prefs.rp_sam2_auto_result, 'Result SAM auto');
+            updateSam2AutoResultCounts();
+            syncSam2AutoResultWrapStatus();
+        }
+        if (prefs.rp_sam2_auto_preview_url) {
+            showSam2AutoPreview(prefs.rp_sam2_auto_preview_url);
         }
         if (!readPhotoDimsFromDinoResult()) readPhotoDimsFromPreview();
         renderDinoKeywordCheck();
@@ -394,29 +514,36 @@
         if (els.dinoAnnotatedWrap) els.dinoAnnotatedWrap.classList.remove('is-hidden');
     }
 
-    async function runDinoDraw() {
-        if (!API_OK || !els.dinoDrawBtn) return;
-        syncImageUrlFromPreview();
+    async function runDinoDraw(options) {
+        const auto = !!(options && options.auto);
+        if (!API_OK) return;
+        if (!auto && !els.dinoDrawBtn) return;
+        const activeImage = getActiveImageUrl();
         const dinoText = els.dinoResultTa ? (els.dinoResultTa.value || '').trim() : '';
         if (!dinoText) {
             alert('Сначала получите Result from DINO (↻).');
             return;
         }
-        if (!imageUrl) {
+        if (!activeImage) {
             alert('Загрузите фото в Remotion Preview Agent.');
             return;
         }
 
-        els.dinoDrawBtn.disabled = true;
-        setDinoLog(['Обрисовка элементов…', 'image: ' + imageUrl]);
+        if (els.dinoDrawBtn) els.dinoDrawBtn.disabled = true;
+        setDinoLog([
+            (auto ? 'Авто: обрисовка элементов…' : 'Обрисовка элементов…'),
+            'image: ' + activeImage,
+        ]);
 
         try {
             const r = await fetch('/overlay-text/api/remotion-preview/dino-draw', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    image_url: imageUrl,
+                    image_url: activeImage,
                     rp_dino_result: dinoText,
+                    rp_image_url: activeImage,
+                    rp_image_preview_url: activeImage,
                 }),
             });
             let data = {};
@@ -437,36 +564,39 @@
             showAnnotatedPreview(url);
             setDinoLog(data.log || ['Готово — превью ниже.']);
             if (data.prefs) applyPrefsFromServer(data.prefs);
-            else await savePrefs({ rp_dino_annotated_url: url, rp_dino_result: dinoText });
+            else await savePrefs({ rp_dino_annotated_url: url, rp_dino_result: dinoText, rp_image_url: activeImage, rp_image_preview_url: activeImage });
         } catch (e) {
             setDinoLog(['Ошибка: ' + String(e.message || e)]);
             alert(String(e.message || e));
         } finally {
-            els.dinoDrawBtn.disabled = !API_OK;
+            if (els.dinoDrawBtn) els.dinoDrawBtn.disabled = !API_OK;
         }
     }
 
     async function runGroundingDino() {
         if (!API_OK || !els.dinoRunBtn) return;
-        syncImageUrlFromPreview();
+        const activeImage = getActiveImageUrl();
         const parsed = parseDinoPromptFromResult();
         if (parsed.error) {
             alert(parsed.error);
             return;
         }
-        if (!imageUrl) {
+        if (!activeImage) {
             alert('Загрузите фото в Remotion Preview Agent.');
             return;
         }
 
         if (els.dinoRunBtn) els.dinoRunBtn.disabled = true;
+        if (els.dinoDrawBtn) els.dinoDrawBtn.disabled = true;
+        if (els.dinoAnnotatedWrap) els.dinoAnnotatedWrap.classList.add('is-hidden');
+        if (els.dinoAnnotatedPreview) els.dinoAnnotatedPreview.removeAttribute('src');
         if (els.dinoResultTa) els.dinoResultTa.classList.add('rewrite-stage-result--busy');
         if (els.dinoResultWrap) els.dinoResultWrap.setAttribute('data-status', 'generating');
         setDinoLog([
             'Grounding DINO работает…',
             'источник: Result → ключ dino_prompt',
             'dino_prompt: ' + parsed.prompt,
-            'image: ' + imageUrl,
+            'image: ' + activeImage,
         ]);
 
         try {
@@ -474,7 +604,9 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    image_url: imageUrl,
+                    image_url: activeImage,
+                    rp_image_url: activeImage,
+                    rp_image_preview_url: activeImage,
                     rp_result: els.resultTa ? els.resultTa.value : '',
                     box_threshold: 0.25,
                     text_threshold: 0.25,
@@ -498,13 +630,139 @@
             if (data.prefs) applyPrefsFromServer(data.prefs);
             else await savePrefs({ rp_dino_result: text });
             renderDinoKeywordCheck(data.keyword_check || null);
+            await runDinoDraw({ auto: true });
         } catch (e) {
             setDinoLog(['Ошибка: ' + String(e.message || e)]);
             alert(String(e.message || e));
         } finally {
             if (els.dinoRunBtn) els.dinoRunBtn.disabled = !API_OK;
+            if (els.dinoDrawBtn) els.dinoDrawBtn.disabled = !API_OK;
             if (els.dinoResultTa) els.dinoResultTa.classList.remove('rewrite-stage-result--busy');
             syncDinoResultWrapStatus();
+        }
+    }
+
+    async function runSam2Segment() {
+        if (!API_OK || !els.sam2RunBtn) return;
+        const activeImage = getActiveImageUrl();
+        const dinoText = els.dinoResultTa ? (els.dinoResultTa.value || '').trim() : '';
+        if (!dinoText) {
+            alert('Сначала получите Result from DINO (↻).');
+            return;
+        }
+        if (!activeImage) {
+            alert('Загрузите исходное фото в Remotion Preview Agent.');
+            return;
+        }
+
+        if (els.sam2RunBtn) els.sam2RunBtn.disabled = true;
+        if (els.sam2ResultTa) els.sam2ResultTa.classList.add('rewrite-stage-result--busy');
+        if (els.sam2ResultWrap) els.sam2ResultWrap.setAttribute('data-status', 'generating');
+        if (els.sam2PreviewWrap) els.sam2PreviewWrap.classList.add('is-hidden');
+        setSam2Log([
+            'SAM2 segmentation…',
+            'источник: исходное фото Remotion Preview (не обводка DINO)',
+            'detections: Result from DINO',
+            'image: ' + activeImage,
+        ]);
+
+        try {
+            const r = await fetch('/overlay-text/api/remotion-preview/sam2-segment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_url: activeImage,
+                    rp_image_url: activeImage,
+                    rp_image_preview_url: activeImage,
+                    rp_dino_result: dinoText,
+                    min_score: 0.35,
+                }),
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok) {
+                setSam2Log((data.log || []).concat([data.error || 'HTTP ' + r.status]));
+                alert((data && data.error) || 'SAM2 segmentation failed');
+                return;
+            }
+            const text = data.result_text || JSON.stringify(data.result, null, 2);
+            if (els.sam2ResultTa) els.sam2ResultTa.value = text;
+            setBadgeYesNo(els.sam2Badge, text, 'Result SAM2 (DINO)');
+            updateSam2ResultCounts();
+            syncSam2ResultWrapStatus();
+            setSam2Log(data.log || ['Готово.']);
+            const previewUrl = data.preview_url || data.image_preview_url || '';
+            if (previewUrl) showSam2Preview(previewUrl);
+            if (data.prefs) applyPrefsFromServer(data.prefs);
+            else await savePrefs({
+                rp_sam2_result: text,
+                rp_sam2_preview_url: previewUrl,
+            });
+        } catch (e) {
+            setSam2Log(['Ошибка: ' + String(e.message || e)]);
+            alert(String(e.message || e));
+        } finally {
+            if (els.sam2RunBtn) els.sam2RunBtn.disabled = !API_OK;
+            if (els.sam2ResultTa) els.sam2ResultTa.classList.remove('rewrite-stage-result--busy');
+            syncSam2ResultWrapStatus();
+        }
+    }
+
+    async function runSam2Auto() {
+        if (!API_OK || !els.sam2AutoRunBtn) return;
+        const activeImage = getActiveImageUrl();
+        if (!activeImage) {
+            alert('Загрузите исходное фото в Remotion Preview Agent.');
+            return;
+        }
+
+        if (els.sam2AutoRunBtn) els.sam2AutoRunBtn.disabled = true;
+        if (els.sam2RunBtn) els.sam2RunBtn.disabled = true;
+        if (els.sam2AutoResultTa) els.sam2AutoResultTa.classList.add('rewrite-stage-result--busy');
+        if (els.sam2AutoResultWrap) els.sam2AutoResultWrap.setAttribute('data-status', 'generating');
+        if (els.sam2AutoPreviewWrap) els.sam2AutoPreviewWrap.classList.add('is-hidden');
+        setSam2Log([
+            'SAM mask (auto)…',
+            'без DINO — automatic segmentation по всему кадру',
+            'image: ' + activeImage,
+        ]);
+
+        try {
+            const r = await fetch('/overlay-text/api/remotion-preview/sam2-auto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_url: activeImage,
+                    rp_image_url: activeImage,
+                    rp_image_preview_url: activeImage,
+                }),
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.ok) {
+                setSam2Log((data.log || []).concat([data.error || 'HTTP ' + r.status]));
+                alert((data && data.error) || 'SAM auto failed');
+                return;
+            }
+            const text = data.result_text || JSON.stringify(data.result, null, 2);
+            if (els.sam2AutoResultTa) els.sam2AutoResultTa.value = text;
+            setBadgeYesNo(els.sam2AutoBadge, text, 'Result SAM auto');
+            updateSam2AutoResultCounts();
+            syncSam2AutoResultWrapStatus();
+            setSam2Log(data.log || ['Готово.']);
+            const previewUrl = data.preview_url || data.image_preview_url || '';
+            if (previewUrl) showSam2AutoPreview(previewUrl);
+            if (data.prefs) applyPrefsFromServer(data.prefs);
+            else await savePrefs({
+                rp_sam2_auto_result: text,
+                rp_sam2_auto_preview_url: previewUrl,
+            });
+        } catch (e) {
+            setSam2Log(['Ошибка: ' + String(e.message || e)]);
+            alert(String(e.message || e));
+        } finally {
+            if (els.sam2AutoRunBtn) els.sam2AutoRunBtn.disabled = !API_OK;
+            if (els.sam2RunBtn) els.sam2RunBtn.disabled = !API_OK;
+            if (els.sam2AutoResultTa) els.sam2AutoResultTa.classList.remove('rewrite-stage-result--busy');
+            syncSam2AutoResultWrapStatus();
         }
     }
 
@@ -739,14 +997,28 @@
         if (!r.ok || !data.ok || !data.image_url) {
             throw new Error((data && data.error) || 'Ошибка загрузки');
         }
-        imageUrl = data.image_url;
+        const url = data.image_url;
+        const previewUrl = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+        imageUrl = url;
         if (els.photoPreview) {
-            els.photoPreview.src = data.image_url;
+            els.photoPreview.src = previewUrl;
             els.photoPreview.classList.remove('is-hidden');
         }
         setBadgeYesNo(els.photoBadge, imageUrl, 'Photo');
-        await savePrefs({ rp_image_url: imageUrl, rp_image_preview_url: imageUrl });
+        clearResultsForNewImage();
+        await savePrefs({
+            rp_image_url: url,
+            rp_image_preview_url: url,
+            rp_result: '',
+            rp_dino_result: '',
+            rp_dino_annotated_url: '',
+            rp_sam2_result: '',
+            rp_sam2_preview_url: '',
+            rp_sam2_auto_result: '',
+            rp_sam2_auto_preview_url: '',
+        });
         readPhotoDimsFromPreview();
+        window.dispatchEvent(new CustomEvent('overlay-rp-photo-updated', { detail: { url: url } }));
     }
 
     async function downloadExport(btn) {
@@ -794,15 +1066,14 @@
 
     async function runAgent() {
         if (!API_OK || generating) return;
+        const activeImage = getActiveImageUrl();
+        if (!activeImage) {
+            alert('Загрузите фото в Remotion Preview Agent.');
+            return;
+        }
         if (saveTimer) {
             clearTimeout(saveTimer);
             saveTimer = null;
-        }
-        try {
-            await savePrefs();
-        } catch (e) {
-            /* prefs всё равно уходят в POST /generate; не блокируем запуск */
-            console.warn('Remotion prefs save:', e);
         }
         abortController = new AbortController();
         runStartedAt = Date.now();
@@ -812,10 +1083,14 @@
         }, 1000);
 
         try {
+            const payload = collectPayload({
+                rp_image_url: activeImage,
+                rp_image_preview_url: activeImage,
+            });
             const r = await fetch('/overlay-text/api/remotion-preview/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(collectPayload()),
+                body: JSON.stringify(payload),
                 signal: abortController.signal,
             });
             const data = await r.json().catch(function () { return {}; });
@@ -831,6 +1106,10 @@
             setBadgeYesNo(els.resultBadge, els.resultTa && els.resultTa.value, 'Result');
             updateResultCounts();
             renderDinoKeywordCheck();
+            if (data.image_url_used) {
+                setDinoLog(['LLM vision image:', data.image_url_used]);
+            }
+            if (data.prefs) applyPrefsFromServer(data.prefs);
             clearStageStatus();
             syncResultWrapIdleStatus();
         } catch (e) {
@@ -905,6 +1184,46 @@
         runDinoDraw();
     });
 
+    els.sam2RunBtn?.addEventListener('click', function () {
+        runSam2Segment();
+    });
+
+    els.sam2AutoRunBtn?.addEventListener('click', function () {
+        runSam2Auto();
+    });
+
+    bindLockToggle(els.sam2ResultToggle, null, els.sam2ResultTa, function () {
+        setBadgeYesNo(els.sam2Badge, els.sam2ResultTa.value, 'Result SAM2 (DINO)');
+        updateSam2ResultCounts();
+        syncSam2ResultWrapStatus();
+        savePrefs({
+            rp_sam2_result: els.sam2ResultTa ? els.sam2ResultTa.value : '',
+        }).catch(function () { /* ignore */ });
+    }, { alwaysVisible: true });
+
+    bindLockToggle(els.sam2AutoResultToggle, null, els.sam2AutoResultTa, function () {
+        setBadgeYesNo(els.sam2AutoBadge, els.sam2AutoResultTa.value, 'Result SAM auto');
+        updateSam2AutoResultCounts();
+        syncSam2AutoResultWrapStatus();
+        savePrefs({
+            rp_sam2_auto_result: els.sam2AutoResultTa ? els.sam2AutoResultTa.value : '',
+        }).catch(function () { /* ignore */ });
+    }, { alwaysVisible: true });
+
+    els.sam2ResultCopy?.addEventListener('click', function () {
+        if (!els.sam2ResultTa) return;
+        const text = els.sam2ResultTa.value || '';
+        if (!text.trim()) return;
+        navigator.clipboard.writeText(text).catch(function () { /* ignore */ });
+    });
+
+    els.sam2AutoResultCopy?.addEventListener('click', function () {
+        if (!els.sam2AutoResultTa) return;
+        const text = els.sam2AutoResultTa.value || '';
+        if (!text.trim()) return;
+        navigator.clipboard.writeText(text).catch(function () { /* ignore */ });
+    });
+
     els.dinoResultCopy?.addEventListener('click', function () {
         if (!els.dinoResultTa) return;
         const text = els.dinoResultTa.value || '';
@@ -923,6 +1242,12 @@
     if (els.dinoResultTa) setBadgeYesNo(els.dinoBadge, els.dinoResultTa.value, 'Result from DINO');
     updateDinoResultCounts();
     syncDinoResultWrapStatus();
+    if (els.sam2ResultTa) setBadgeYesNo(els.sam2Badge, els.sam2ResultTa.value, 'Result SAM2 (DINO)');
+    updateSam2ResultCounts();
+    syncSam2ResultWrapStatus();
+    if (els.sam2AutoResultTa) setBadgeYesNo(els.sam2AutoBadge, els.sam2AutoResultTa.value, 'Result SAM auto');
+    updateSam2AutoResultCounts();
+    syncSam2AutoResultWrapStatus();
     updateResultCounts();
     renderDinoKeywordCheck();
     clearStageStatus();

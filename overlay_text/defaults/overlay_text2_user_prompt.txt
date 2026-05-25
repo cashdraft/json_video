@@ -1,0 +1,15 @@
+Сгенерируй overlay-текст для кадра (pass 2).
+
+Result from CM2:
+{{CM2_RESULT}}
+
+Основной текст:
+{{TEXT}}
+
+Стиль:
+{{STYLE}}
+
+Длительность оверлея (секунды):
+{{DURATION_SEC}}
+
+Верни только JSON по схеме из system prompt.
