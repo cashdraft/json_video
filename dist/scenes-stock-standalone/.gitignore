@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/scenes_stock/prefs.json
+data/scenes_stock/media/*
+!data/scenes_stock/media/.gitkeep

@@ -29,7 +29,10 @@ __pycache__/
 .Python
 *.egg-info/
 .eggs/
-dist/
+dist/*
+!dist/scenes-stock-standalone/
+!dist/scenes-stock-standalone/**
+!dist/scenes-stock-standalone.tar.gz
 build/
 
 # IDE
